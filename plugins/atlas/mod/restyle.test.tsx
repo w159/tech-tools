@@ -19,6 +19,8 @@ import {
   type ReceiptTracker,
 } from './restyle'
 import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
+import { runHex } from './atlas-ui'
+import { lookUi } from './look'
 import type { AtlasSnapshot } from './contract'
 import { formatDuration, textWidth } from './theme'
 import { memState } from './test_helpers'
@@ -152,17 +154,18 @@ test('critique 15 C1: at 110 the ATLAS and phase chips never shrink, whatever th
   }
 })
 
+const BLUE = runHex({ tone: 'blue' }, 'mocha', lookUi().color) // the colour depth the drawing takes from the environment
 test('critique 23: the lead header has no fill and no pastel: a bar in the phase colour, the word bold in 252, the state in 245', () => {
   const [bar, word, ...rest] = pillsOf('ATLAS | 🔧 implement 3/5 | shipping restyle', 120)
   expect(bar!.children[0]).toBe('▌')
-  expect(bar!.props.color).toBe('#af87ff') // 141, the one lavender
+  expect(bar!.props.color).toBe(BLUE) // implement has its own tone (operating-contract phases[].tone)
   expect(word!.children[0]).toBe(' ATLAS 🔧 implement')
-  expect(word!.props).toMatchObject({ color: '#af87ff', bold: true }) // the whole line takes the phase colour (17.27.1)
+  expect(word!.props).toMatchObject({ color: BLUE, bold: true }) // the whole line takes the phase colour (17.27.1)
   expect(rest.map((p) => p.children[0]).join('')).toBe(' 3/5 | shipping restyle')
   for (const p of [bar!, word!, ...rest]) expect(p.props.backgroundColor).toBeUndefined()
-  expect(rest.at(-1)!.props.color).toBe('#af87ff') // the state is in the phase colour too
-  expect(pillsOf('ATLAS | 🏁 done | all finished', 120)[0]!.props.color).toBe('#87d787') // 114
-  expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe('#ff5f5f') // 203: blocked is the error colour (critique 25: one bar colour per state)
+  expect(rest.at(-1)!.props.color).toBe(BLUE) // the state is in the phase colour too
+  expect(pillsOf('ATLAS | 🏁 done | all finished', 120)[0]!.props.color).toBe(runHex({ tone: 'ok' }, 'mocha', lookUi().color))
+  expect(pillsOf('ATLAS | ⛔ blocked | stuck', 120)[0]!.props.color).toBe(runHex({ tone: 'bad' }, 'mocha', lookUi().color)) // blocked is the error colour (critique 25: one bar colour per state)
 })
 
 test("critique 14 B2: the lead's sentence is never cut inside the chip; it wraps beside the pills", () => {
@@ -406,7 +409,7 @@ test('noisy badge is an inverse accent pill with the size; boundary is 8000', ()
   const base = { tool: 'Read', input: { file_path: '/a/b.ts' }, ...callBase }
   const tree = noisyTree({ ...base, output: 'x'.repeat(8000) })! as Extract<RenderElement, { type: string }> & { props: Record<string, unknown>; children: RenderElement[] }
   const badge = tree.children.at(-1)! as typeof tree
-  expect(badge.props).toMatchObject({ color: '#8a8a8a', inverse: true })
+  expect(badge.props).toMatchObject({ color: runHex({ tone: 'sub' }, 'mocha', lookUi().color), inverse: true })
   expect(stringsOf(badge)).toBe(' ▸ 8.0kB ')
   expect(stringsOf(tree)).toContain('Read /a/b.ts')
   expect(noisyTree({ ...base, output: 'x'.repeat(7999) })).toBeNull()
@@ -586,4 +589,19 @@ test('C1: before any turn.start the first draw still resolves to a chip, and mod
   const off = fake$({ env: 'off', snapshot: snap() }).$
   await offRegs[4]!.hook(off, {}, echoNext)
   expect(await offRegs[2]!.hook(off, fakeE('AssistantMessage', { text: 'ATLAS | 🏁 done | 5/5' }), engineNext)).toBe(SENTINEL)
+})
+
+
+test('classic.MessageDisplay keeps the plain streaming rewrite: the first header line leaves in the display form, any other batch is untouched', async () => {
+  const regs: Reg[] = []
+  registerRestyle(fakeOn(regs))
+  const reg = regs[regs.length - 1]!
+  const $ = fake$({ snapshot: snap() }).$
+  const none = async () => undefined
+  const shown = async (delta: string, index = 0) => ((await reg.hook($, { delta, index }, none)) as { displayContent?: string } | undefined)?.displayContent
+  expect(await shown('ATLAS | 🔧 implement 3/5 | wiring\nbody')).toBe('ATLAS 🔧 implement 3/5 | wiring\nbody')
+  expect(await shown('**ATLAS** | 🔧 implement | wiring')).toBe('ATLAS 🔧 implement | wiring')
+  expect(await shown('\nATLAS | 🏁 done | ok')).toBe('\nATLAS 🏁 done | ok')
+  expect(await shown('plain text')).toBeUndefined()
+  expect(await shown('ATLAS | 🔧 implement | wiring', 1)).toBeUndefined()
 })

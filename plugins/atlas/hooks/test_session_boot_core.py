@@ -184,13 +184,13 @@ class StatusContractLinesTest(unittest.TestCase):
             lines = session_boot.status_contract_lines(style)
             self.assertEqual(len(lines), 1, style)
             self.assertNotIn("STYLE OVERRIDE", lines[0])
-            self.assertIn(session_boot.header_template(), lines[0])
+            self.assertIn(session_boot.header_template().replace("ATLAS", "**ATLAS**", 1), lines[0])
 
     def test_other_style_adds_the_override_hedge(self):
         lines = session_boot.status_contract_lines("concise")
         self.assertIn("STYLE OVERRIDE: outputStyle is 'concise'", "\n".join(lines))
         self.assertIn("LEDGER", "\n".join(lines))
-        self.assertIn(session_boot.header_template(), "\n".join(lines))
+        self.assertIn(session_boot.header_template().replace("ATLAS", "**ATLAS**", 1), "\n".join(lines))
 
 
 def _git(root, *args):
@@ -377,6 +377,71 @@ class AnalyticsSessionStartTest(unittest.TestCase):
 
         with mock.patch.object(atlas_analytics, "on_session_start", side_effect=RuntimeError):
             session_boot._analytics_session_start({"source": "startup"})
+
+
+class HeaderFromContractTest(unittest.TestCase):
+    """H1: the injected header text is generated from contracts/operating-contract.json."""
+
+    def test_glyph_table_follows_the_contract_in_template_order(self):
+        doc = {"phases": [{"id": "alpha", "glyph": "A!"}, {"id": "beta", "glyph": "B!"}]}
+        with mock.patch.object(session_boot, "_contract", return_value=doc):
+            text = session_boot.status_contract_lines("")[0]
+        self.assertIn("A! alpha | B! beta", text)
+        self.assertNotIn("alpha A!", text)
+
+    def test_real_contract_prints_glyph_before_phase_and_asks_for_bold_brand(self):
+        text = session_boot.status_contract_lines("")[0]
+        self.assertIn("\U0001f50d research", text)
+        self.assertNotIn("research \U0001f50d", text)
+        self.assertIn("`**ATLAS** | <glyph> <phase> | <state>`", text)
+
+    def test_override_hedge_uses_the_same_table(self):
+        doc = {"phases": [{"id": "alpha", "glyph": "A!"}]}
+        with mock.patch.object(session_boot, "_contract", return_value=doc):
+            text = "\n".join(session_boot.status_contract_lines("concise"))
+        self.assertIn("A! alpha", text)
+        self.assertIn("**ATLAS**", text)
+
+
+class SnapshotPathSessionIdTest(unittest.TestCase):
+    """X7: a session id never escapes .atlas/.run."""
+
+    def test_traversal_id_stays_inside_run_dir(self):
+        root = os.path.join(os.sep, "proj")
+        p = session_boot.snapshot_path(root, "../../etc/x")
+        self.assertEqual(os.path.dirname(p), os.path.join(root, ".atlas", ".run"))
+        self.assertNotIn("..", os.path.basename(p))
+
+    def test_plain_id_is_unchanged(self):
+        p = session_boot.snapshot_path("/proj", "abc-123_x")
+        self.assertEqual(os.path.basename(p), "dirty-snapshot-abc-123_x.json")
+
+
+class ModSurfaceStatusTest(unittest.TestCase):
+    """H5: what repo code can observe about the mod surface (never the host's ui.render)."""
+
+    def test_cloud_session_is_not_confirmed(self):
+        ok, why = session_boot.mod_surface_status(
+            {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "cli"}
+        )
+        self.assertFalse(ok)
+        self.assertIn("cloud", why)
+
+    def test_sdk_and_unknown_entrypoints_are_not_confirmed(self):
+        for ep in ("sdk-cli", "sdk-ts", "claude-vscode", ""):
+            ok, why = session_boot.mod_surface_status({"CLAUDE_CODE_ENTRYPOINT": ep})
+            self.assertFalse(ok, ep)
+            self.assertTrue(why, ep)
+
+    def test_interactive_cli_is_assumed_active(self):
+        ok, _why = session_boot.mod_surface_status({"CLAUDE_CODE_ENTRYPOINT": "cli"})
+        self.assertTrue(ok)
+
+    def test_omp_is_out_of_scope(self):
+        ok, _why = session_boot.mod_surface_status(
+            {"ATLAS_HARNESS": "omp", "CLAUDE_CODE_REMOTE": "true"}
+        )
+        self.assertTrue(ok)
 
 
 if __name__ == "__main__":

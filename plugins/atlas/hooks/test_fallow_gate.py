@@ -759,5 +759,34 @@ class MainBranchTests(unittest.TestCase):
         self.assertIn("(fail-open)", err)
 
 
+class ManifestTimeoutTest(unittest.TestCase):
+    """P3: the hooks.json timeout is the in-code worst case plus margin, not a 300 s ceiling."""
+
+    HOOKS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hooks.json")
+    CODEX = os.path.join(os.path.dirname(os.path.abspath(__file__)), "hooks.codex.json")
+
+    def _timeouts(self, path):
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+        return [
+            h["timeout"]
+            for groups in doc["hooks"].values()
+            for g in groups
+            for h in g["hooks"]
+            if "fallow_gate.py" in h["command"]
+        ]
+
+    def test_timeout_covers_worst_case_with_margin_but_not_300(self):
+        worst = fg._NPX_PROBE_TIMEOUT + fg._VERSION_TIMEOUT + fg._AUDIT_TIMEOUT
+        for path in (self.HOOKS, self.CODEX):
+            got = self._timeouts(path)
+            self.assertEqual(len(got), 1, path)
+            self.assertGreater(got[0], worst, path)
+            self.assertLessEqual(got[0], worst + 15, path)
+
+    def test_claude_and_codex_manifests_agree(self):
+        self.assertEqual(self._timeouts(self.HOOKS), self._timeouts(self.CODEX))
+
+
 if __name__ == "__main__":
     unittest.main()

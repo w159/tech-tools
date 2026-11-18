@@ -29,6 +29,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import atlas_db  # noqa: E402
 import atlas_todo  # noqa: E402
 import completion_gate  # noqa: E402
+import completion_gate_core as cg  # noqa: E402
 
 for _worker_var in ("ATLAS_WORKER_NAME", "ATLAS_CREW_WORKER"):
     os.environ.pop(_worker_var, None)  # the gate skips (p)/(s) in worker sessions
@@ -43,6 +44,14 @@ from completion_gate import (
 )
 
 GATE = os.path.join(os.path.dirname(__file__), "completion_gate.py")
+
+
+def _empty_docs(root):
+    """CHANGELOG/ROADMAP/README present but empty: (c)/(d)/(e) block a repo that HAS the file."""
+    for rel in ("docs/CHANGELOG.md", "docs/ROADMAP.md", "README.md"):
+        p = Path(root, rel)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text("")
 
 
 def _run_gate(payload, env):
@@ -322,7 +331,7 @@ class GateOrchestrationTest(unittest.TestCase):
     def test_missing_roadmap_blocks_with_condition_d(self):
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("ROADMAP.md is missing", r.stdout)
@@ -330,7 +339,7 @@ class GateOrchestrationTest(unittest.TestCase):
     def test_missing_readme_blocks_with_condition_e(self):
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
         self._satisfy_all_conditions()
-        os.remove(os.path.join(self.tmp, "README.md"))
+        open(os.path.join(self.tmp, "README.md"), "w").close()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("README.md at the project root is missing", r.stdout)
@@ -809,6 +818,47 @@ class FindingsSelfStampTest(unittest.TestCase):
         self._row()
         self.assertFalse(self.check(self._transcript()))
         self.assertIn("self-stamp", completion_gate._FINDINGS_WHY["text"])
+
+    def _stamp_row(self, **kw):
+        row = {
+            "id": "S1",
+            "status": "verified",
+            "title": "t",
+            "verified_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "verified_by": "",
+            "verifier": "",
+            "stamped_by": "",
+        }
+        row.update(kw)
+        return row
+
+    def _write_rows(self, rows):
+        (self.root / ".atlas" / ".run" / "findings.json").write_text(json.dumps(rows))
+
+    def test_legacy_row_with_empty_verifier_neither_satisfies_nor_blocks(self):
+        old = datetime.fromtimestamp(self.started - 3600, timezone.utc).isoformat(timespec="seconds")
+        self._write_rows([self._stamp_row(verified_at=old)])
+        self.assertFalse(self.check(self._transcript()))
+        self.assertEqual(completion_gate._FINDINGS_WHY["text"], "")  # not counted as a self-stamp either
+
+    def test_legacy_row_does_not_hide_a_fresh_row_that_has_a_passing_test(self):
+        old = datetime.fromtimestamp(self.started - 3600, timezone.utc).isoformat(timespec="seconds")
+        self._write_rows(
+            [
+                self._stamp_row(id="S0", verified_at=old),
+                self._stamp_row(id="S1", reproduction="pytest hooks -q"),
+            ]
+        )
+        self.assertTrue(self.check(self._transcript(cmd="pytest hooks -q")))
+
+    def test_fresh_row_with_empty_verifier_and_no_test_is_a_self_stamp(self):
+        self._write_rows([self._stamp_row()])
+        self.assertFalse(self.check(self._transcript()))
+        self.assertIn("self-stamp", completion_gate._FINDINGS_WHY["text"])
+
+    def test_fresh_row_with_empty_verifier_counts_with_a_passing_test(self):
+        self._write_rows([self._stamp_row(reproduction="pytest hooks -q")])
+        self.assertTrue(self.check(self._transcript(cmd="pytest hooks -q")))
 
     def test_bare_stamp_by_another_agent_does_not_count(self):
         # a --by value is free text: only a hook-written record backs it (FindingsIdentityBackingTest)
@@ -1482,7 +1532,7 @@ class InProcessMainTest(unittest.TestCase):
     def test_missing_changelog_condition_c(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
-        os.remove(os.path.join(self.tmp, "docs", "CHANGELOG.md"))
+        open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("CHANGELOG.md is missing", out)
@@ -1490,7 +1540,7 @@ class InProcessMainTest(unittest.TestCase):
     def test_missing_roadmap_condition_d(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("ROADMAP.md is missing", out)
@@ -1498,7 +1548,7 @@ class InProcessMainTest(unittest.TestCase):
     def test_missing_readme_condition_e(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
-        os.remove(os.path.join(self.tmp, "README.md"))
+        open(os.path.join(self.tmp, "README.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         self.assertIn("README.md at the project root is missing", out)
@@ -1513,7 +1563,7 @@ class InProcessMainTest(unittest.TestCase):
     def test_block_records_stop_verdict_with_letters(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
         v = self._verdict()
@@ -1529,14 +1579,14 @@ class InProcessMainTest(unittest.TestCase):
         self.assertFalse(v["blocked"])
         self.assertEqual(v["letters"], [])
         self._log_run_write("src/app.py")
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertTrue(self._verdict()["blocked"])
 
     def test_stop_hook_active_continuation_is_rechecked(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertTrue(self._verdict()["blocked"])
         cont = {"session_id": "sess-orch", "cwd": self.tmp, "stop_hook_active": True}
@@ -1546,7 +1596,7 @@ class InProcessMainTest(unittest.TestCase):
     def test_verdicts_are_kept_per_session(self):
         self._satisfy_all()
         self._log_run_write("src/app.py")
-        os.remove(os.path.join(self.tmp, "docs", "ROADMAP.md"))
+        open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self._invoke({"session_id": "sess-chat", "cwd": self.tmp})
         self.assertTrue(self._verdict("sess-orch")["blocked"])
@@ -2481,12 +2531,31 @@ class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
         self._assert_cdeh_silent(r.stdout)
 
     def test_code_shipped_still_blocks_cde(self):
+        # the files exist but are empty: a repo that HAS them keeps the block (G4)
         self._log_run_write("src/app.py")
+        for rel in ("docs/CHANGELOG.md", "docs/ROADMAP.md", "README.md"):
+            Path(self.tmp, rel).write_text("")
         r = self._gate()
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn("CHANGELOG.md is missing", r.stdout)
         self.assertIn("ROADMAP.md is missing", r.stdout)
         self.assertIn("README.md at the project root is missing", r.stdout)
+
+    def test_code_shipped_never_had_the_files_is_not_blocked_on_them(self):
+        self._log_run_write("src/app.py")
+        r = self._gate()
+        self._assert_cdeh_silent(r.stdout)
+        self.assertIn("advisory: this repo has no", r.stderr)
+
+    def test_unreadable_todo_board_is_named_in_the_block(self):
+        self._log_run_write("src/app.py")
+        run = Path(self.tmp, ".atlas", ".run")
+        run.mkdir(parents=True, exist_ok=True)
+        (run / "todos.json").write_text("{not json")
+        r = self._gate()
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn("could not read", r.stdout)
+        self.assertIn("todo board", r.stdout)
 
     def test_code_shipped_still_blocks_h(self):
         self._log_run_write("src/app.py")
@@ -2494,6 +2563,282 @@ class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
             f.write("- [done] shipped thing\n")
         r = self._gate()
         self.assertIn("ROADMAP reconciliation", r.stdout)
+
+
+class StatusHeaderParserTest(unittest.TestCase):
+    """H3/H4: ONE parser, 'first non-empty line, stripped', pattern from the contract (no second copy)."""
+
+    def test_first_nonempty_line_stripped_matches(self):
+        m = cg.parse_status_header("\n\n  ATLAS | \U0001f50d research | go  \nbody")
+        self.assertIsNotNone(m)
+        self.assertEqual(m.group(1), "research")
+
+    def test_headerless_empty_and_non_string_give_none(self):
+        self.assertIsNone(cg.parse_status_header("just prose\nATLAS | \U0001f50d research | go"))
+        self.assertIsNone(cg.parse_status_header(""))
+        self.assertIsNone(cg.parse_status_header("   \n \n"))
+        self.assertIsNone(cg.parse_status_header(None))
+
+    def test_pattern_comes_from_the_contract_argument(self):
+        contract = {"headerFirstLinePattern": r"^X (\w+)"}
+        self.assertEqual(cg.parse_status_header("\n X foo", contract).group(1), "foo")
+        self.assertIsNone(cg.parse_status_header("ATLAS | \U0001f50d research | go", contract))
+
+    def test_condition_n_routes_through_the_one_parser(self):
+        contract = cg._contract_doc()
+        data = {"last_assistant_message": "ATLAS | ✅ verify | ok"}
+        self.assertFalse(cg._status_header_would_block(data, contract))
+        with mock.patch.object(cg, "parse_status_header", return_value=None):
+            self.assertTrue(cg._status_header_would_block(data, contract))
+            self.assertFalse(cg._reply_has_header(data))
+
+
+class GateBoardFaultTest(unittest.TestCase):
+    """S1: an unreadable todo board is a recorded, visible fault, never a silent 'no open items'."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / ".atlas" / ".run").mkdir(parents=True)
+        db = os.path.join(self.tmp, "atlas.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        conn.close()
+        patcher = mock.patch.dict(os.environ, {"ATLAS_DB": db})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        del cg._GATE_FAULTS[:]
+        self.addCleanup(cg._GATE_FAULTS.clear)
+
+    def test_corrupt_board_records_a_fault_and_notice(self):
+        (self.root / ".atlas" / ".run" / "todos.json").write_text("{not json")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertEqual(cg._board_open_todos(self.root, "s1"), 0)
+        self.assertTrue(cg._GATE_FAULTS)
+        self.assertIn("todo board", err.getvalue())
+        self.assertIn("could not read", cg._faults_notice())
+        self.assertIn("not zero", cg._faults_notice())
+
+    def test_exception_in_the_open_count_records_a_fault(self):
+        with mock.patch.object(atlas_todo, "open_items", side_effect=RuntimeError("boom")):
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(cg._board_open_todos(self.root, "s1"), 0)
+        self.assertTrue(any("boom" in f for f in cg._GATE_FAULTS))
+
+    def test_readable_board_records_no_fault(self):
+        atlas_todo.mirror(self.root, [{"content": "x", "status": "pending"}], "s1")
+        self.assertEqual(cg._board_open_todos(self.root, "s1"), 1)
+        self.assertEqual(cg._GATE_FAULTS, [])
+        self.assertEqual(cg._faults_notice(), "")
+
+    def test_plan_check_on_a_corrupt_board_records_a_fault(self):
+        (self.root / ".atlas" / ".run" / "todos.json").write_text("[]")
+        with contextlib.redirect_stderr(io.StringIO()):
+            self.assertTrue(cg._has_todo_plan("", self.root, "s1"))
+        self.assertTrue(cg._GATE_FAULTS)
+
+
+class GateLettersBlockPathTest(unittest.TestCase):
+    """Direct block-path tests for Stop letters (o), (p), (q), (s): the input that must block and the
+    adjacent input that must pass, through evaluate()."""
+
+    SESS = "sess-letters"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / "docs").mkdir()
+        db = os.path.join(self.tmp, "atlas.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        conn.close()
+        env = {
+            "ATLAS_DB": db,
+            "ATLAS_CONTRACT_GATE_DIR": os.path.join(self.tmp, "markers"),
+            "ATLAS_HOOKSTATE_DIR": os.path.join(self.tmp, "hookstate"),
+        }
+        p = mock.patch.dict(os.environ, env)
+        p.start()
+        self.addCleanup(p.stop)
+        for var in ("ATLAS_GATE_PHASES", "ATLAS_TEAM_GATE", "ATLAS_GATE_COLONY", "ATLAS_WT_GATE"):
+            os.environ.pop(var, None)
+        for target, val in (
+            (cg, ("_run_written_paths", ["src/app.py"])),
+            (cg, ("_shell_changed_code", [])),
+            (cg, ("_run_started_at", None)),
+            (cg.gate_rerun, ("valid_proof", None)),
+            (cg.gate_rerun, ("crew_proof", None)),
+        ):
+            pp = mock.patch.object(target, val[0], return_value=val[1])
+            pp.start()
+            self.addCleanup(pp.stop)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def ev(self):
+        data = {"session_id": self.SESS, "cwd": self.tmp, "transcript_path": ""}
+        with contextlib.redirect_stderr(io.StringIO()):
+            return cg.evaluate(data, self.root)
+
+    def test_o_blocks_without_phase_items_and_passes_with_them(self):
+        atlas_todo.mirror(self.root, [{"content": "[research] look", "status": "completed"}], self.SESS)
+        self.assertIn("o", self.ev()["failed"])
+        atlas_todo.mirror(
+            self.root,
+            [
+                {"content": "[implement] build", "status": "completed"},
+                {"content": "[verify] check", "status": "completed"},
+            ],
+            self.SESS,
+        )
+        self.assertNotIn("o", self.ev()["failed"])
+
+    def test_p_blocks_two_workers_without_channel_traffic(self):
+        chan = _lead_channel(self.root, self.SESS, ("w-a", "w-b"))
+        _team_record(self.root, self.SESS, chan, ["w-a", "w-b"])
+        ev = self.ev()
+        self.assertIn("p", ev["failed"])
+        self.assertEqual(ev["colony_workers"], 2)
+
+    def test_p_passes_once_each_worker_reported(self):
+        chan = _lead_channel(self.root, self.SESS, ("w-a", "w-b"))
+        _team_record(self.root, self.SESS, chan, ["w-a", "w-b"])
+        _seed_report_notes(self.root, ("w-a", "w-b"), self.SESS)
+        self.assertNotIn("p", self.ev()["failed"])
+
+    def test_p_passes_for_a_single_worker(self):
+        chan = _lead_channel(self.root, self.SESS, ("w-a",))
+        _team_record(self.root, self.SESS, chan, ["w-a"])
+        self.assertNotIn("p", self.ev()["failed"])
+
+    def _wt_script(self, merged: bool, dirty: bool = False):
+        script = self.root / "fake_wt.py"
+        rows = [{"branch": "worker/a", "merged": merged, "dirty": dirty, "ahead": 0 if merged else 2}]
+        script.write_text(f"import json\nprint(json.dumps({rows!r}))\n")
+        return mock.patch.object(cg, "_WT_SCRIPT", script)
+
+    def test_q_blocks_an_unmerged_worker_branch(self):
+        with self._wt_script(merged=False):
+            ev = self.ev()
+        self.assertIn("q", ev["failed"])
+        self.assertEqual(ev["wt_unmerged"][0]["branch"], "worker/a")
+
+    def test_q_blocks_a_dirty_merged_branch(self):
+        with self._wt_script(merged=True, dirty=True):
+            self.assertIn("q", self.ev()["failed"])
+
+    def test_q_passes_when_merged_and_clean(self):
+        with self._wt_script(merged=True):
+            self.assertNotIn("q", self.ev()["failed"])
+
+    def test_q_kill_switch_passes(self):
+        with self._wt_script(merged=False), mock.patch.dict(os.environ, {"ATLAS_WT_GATE": "off"}):
+            self.assertNotIn("q", self.ev()["failed"])
+
+    def _team_patches(self, count: int):
+        return (
+            mock.patch.object(cg, "_inprocess_working_dispatches", return_value=count),
+            mock.patch.object(cg, "_tmux_available", return_value=True),
+        )
+
+    def test_s_blocks_two_inprocess_workers_without_a_team(self):
+        a, b = self._team_patches(2)
+        with a, b:
+            ev = self.ev()
+        self.assertIn("s", ev["failed"])
+        self.assertEqual(ev["team_inprocess"], 2)
+
+    def test_s_passes_for_one_inprocess_worker(self):
+        a, b = self._team_patches(1)
+        with a, b:
+            self.assertNotIn("s", self.ev()["failed"])
+
+    def test_s_passes_when_a_team_record_exists(self):
+        chan = _lead_channel(self.root, self.SESS, ("w-a",))
+        _team_record(self.root, self.SESS, chan, ["w-a"])
+        a, b = self._team_patches(3)
+        with a, b:
+            self.assertNotIn("s", self.ev()["failed"])
+
+    def test_s_is_an_advisory_under_the_team_gate_switch(self):
+        a, b = self._team_patches(2)
+        with a, b, mock.patch.dict(os.environ, {"ATLAS_TEAM_GATE": "off"}):
+            ev = self.ev()
+        self.assertNotIn("s", ev["failed"])
+        self.assertEqual(ev["team_advisory"], 2)
+
+    def test_s_passes_without_tmux(self):
+        with mock.patch.object(cg, "_inprocess_working_dispatches", return_value=2), mock.patch.object(
+            cg, "_tmux_available", return_value=False
+        ):
+            self.assertNotIn("s", self.ev()["failed"])
+
+
+class DocsFilesNeverHadTest(unittest.TestCase):
+    """G4: (c)/(d)/(e) block only a repo that HAS the file (and left it empty); a repo that never had it
+    gets an advisory."""
+
+    SESS = "sess-docs"
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.root = Path(self.tmp)
+        (self.root / "docs").mkdir()
+        db = os.path.join(self.tmp, "atlas.db")
+        conn = atlas_db.connect(db)
+        atlas_db.init(conn)
+        conn.close()
+        p = mock.patch.dict(os.environ, {"ATLAS_DB": db, "ATLAS_HOOKSTATE_DIR": os.path.join(self.tmp, "hs")})
+        p.start()
+        self.addCleanup(p.stop)
+        for target, val in (
+            (cg, ("_run_written_paths", ["src/app.py"])),
+            (cg, ("_shell_changed_code", [])),
+            (cg, ("_run_started_at", None)),
+            (cg.gate_rerun, ("valid_proof", None)),
+            (cg.gate_rerun, ("crew_proof", None)),
+        ):
+            pp = mock.patch.object(target, val[0], return_value=val[1])
+            pp.start()
+            self.addCleanup(pp.stop)
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+
+    def ev(self):
+        data = {"session_id": self.SESS, "cwd": self.tmp, "transcript_path": ""}
+        with contextlib.redirect_stderr(io.StringIO()):
+            return cg.evaluate(data, self.root)
+
+    def test_absent_files_are_an_advisory_not_a_block(self):
+        ev = self.ev()
+        for letter in "cde":
+            self.assertNotIn(letter, ev["failed"])
+        self.assertEqual(ev["docs_advisory"], ["c", "d", "e"])
+
+    def test_present_but_empty_files_still_block(self):
+        (self.root / "docs" / "CHANGELOG.md").write_text("")
+        (self.root / "docs" / "ROADMAP.md").write_text("")
+        (self.root / "README.md").write_text("")
+        ev = self.ev()
+        for letter in "cde":
+            self.assertIn(letter, ev["failed"])
+        self.assertEqual(ev["docs_advisory"], [])
+
+    def test_only_the_absent_file_is_advisory(self):
+        (self.root / "docs" / "CHANGELOG.md").write_text("")
+        ev = self.ev()
+        self.assertIn("c", ev["failed"])
+        self.assertNotIn("d", ev["failed"])
+        self.assertEqual(ev["docs_advisory"], ["d", "e"])
+
+    def test_populated_files_pass_with_no_advisory(self):
+        (self.root / "docs" / "CHANGELOG.md").write_text("x\n")
+        (self.root / "docs" / "ROADMAP.md").write_text("x\n")
+        (self.root / "README.md").write_text("x\n")
+        ev = self.ev()
+        for letter in "cde":
+            self.assertNotIn(letter, ev["failed"])
+        self.assertEqual(ev["docs_advisory"], [])
 
 
 if __name__ == "__main__":
@@ -5564,6 +5909,7 @@ class GateDeltaReblockTest(GateOrchestrationTest):
 
     def _run(self):
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
+        _empty_docs(self.tmp)
         return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
 
     def test_first_stop_full_clause_then_delta(self):
@@ -5846,6 +6192,7 @@ class StopGateArmingTest(unittest.TestCase):
 
     def test_shell_code_edit_counts_as_shipped_code_for_cde(self):
         self.repo(docs=True)
+        _empty_docs(self.root)
         self.start(orchestrating=True)
         self.snapshot()
         self.sed_edit()
@@ -5991,6 +6338,7 @@ class GatePassAnalyticsTest(GateOrchestrationTest):
     def test_blocked_stop_records_the_block_and_no_pass(self):
         ah, env = self._gate_env()
         self._log_run_write("src/app.py")
+        _empty_docs(self.tmp)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
         self.assertIn('"decision": "block"', r.stdout)
         ev = self._events(ah)
@@ -6023,6 +6371,7 @@ class GateBlockAnalyticsTest(GateOrchestrationTest):
             capture_output=True,
         )
         self._log_run_write("src/app.py")
+        _empty_docs(self.tmp)
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, env)
         self.assertIn('"decision": "block"', r.stdout)
         ev = Path(ah, "analytics", "events.jsonl").read_text()

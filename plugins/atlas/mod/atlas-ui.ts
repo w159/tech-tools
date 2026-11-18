@@ -7,13 +7,13 @@
 // vocabulary, the brand capsule, ribbon, phase rail, eighth-quantised gauge, fixed-width chip, sparkline, spinner and
 // eased gauge. Source of truth for strings, widths and colours: docs design rev 4 (round2/design/evidence/gen4.py).
 
-import { DONE_GLYPH, textWidth } from './theme';
+import { DONE_GLYPH, ROLE_COLOUR, ROLE_TOKEN, textWidth } from './theme';
 
 // ---- tokens ---------------------------------------------------------------------------
 
 export type ThemeName = 'mocha' | 'latte';
 /** Design tokens (rev 4 section 3). `panel` is the surface every pair is measured against. */
-export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' | 'run' | 'warn' | 'bad' | 'block' | 'info' | 'accent' | 'queued_fill' | 'ink' | 'white';
+export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' | 'run' | 'warn' | 'bad' | 'block' | 'info' | 'accent' | 'queued_fill' | 'ink' | 'white' | 'cyan' | 'blue';
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
@@ -24,11 +24,11 @@ export const PALETTES: Record<ThemeName, Record<Token, string>> = {
   mocha: {
     // Round 3 palette (showcase brief): accent 141, ok 114, warn 179, error 203 (failed and blocked share it), neutrals 252 (body) and 245 (secondary and muted; 240 fails 4.5:1 as text); running reads in body text.
     base: '#1e1e2e', panel: '#181825', text: '#d0d0d0', sub: '#8a8a8a', muted: '#8a8a8a', line: '#585858', ok: '#87d787', run: '#d0d0d0',
-    warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', info: '#af87ff', accent: '#af87ff', queued_fill: '#8a8a8a', ink: '#1c1c1c', white: '#ffffff',
+    warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', info: '#af87ff', accent: '#af87ff', queued_fill: '#8a8a8a', ink: '#1c1c1c', white: '#ffffff', cyan: '#5fafd7', blue: '#5f87d7',
   },
   latte: {
     base: '#eff1f5', panel: '#e6e9ef', text: '#4c4f69', sub: '#5c5f77', muted: '#5c5f77', line: '#7c7f93', ok: '#40a02b', run: '#1e66f5',
-    warn: '#df8e1d', bad: '#d20f39', block: '#d20f39', info: '#179299', accent: '#8534ee', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff',
+    warn: '#df8e1d', bad: '#d20f39', block: '#d20f39', info: '#179299', accent: '#8534ee', queued_fill: '#bcc0cc', ink: '#11111b', white: '#ffffff', cyan: '#0a7ea4', blue: '#4a5fd6',
   },
 };
 
@@ -102,7 +102,9 @@ const CUBE_LEVELS = [0, 95, 135, 175, 215, 255] as const;
 /** Round 3 (showcase brief): the brief's colours are xterm indices, painted AS indices in 256-colour mode (never nearest-matched from a hex). The Claude Code host downsamples
  * a hex with hostTo256, so the hex handed to it is the index's pre-image (each channel k * 51, or the grey that rounds to the index); the direct ANSI painters read the pre-image back
  * to the index (sgrColor). 141 accent, 203 error, 179 warn, 114 ok, 252 body, 245 secondary, 240 dim. */
-const EXACT_256: Readonly<Record<string, number>> = { '#af87ff': 141, '#ff5f5f': 203, '#d7af5f': 179, '#87d787': 114, '#d0d0d0': 252, '#8a8a8a': 245, '#585858': 240 };
+const EXACT_256: Readonly<Record<string, number>> = { '#af87ff': 141, '#ff5f5f': 203, '#d7af5f': 179, '#87d787': 114, '#d0d0d0': 252, '#8a8a8a': 245, '#585858': 240, '#5fafd7': 74, '#5f87d7': 68,
+  // Latte: the same rule, so a 256-colour terminal keeps each token its hue (a nearest-stable match turned ok green and warn amber into greys and the panel into lavender 189).
+  '#eff1f5': 255, '#e6e9ef': 254, '#4c4f69': 240, '#5c5f77': 60, '#7c7f93': 243, '#40a02b': 28, '#1e66f5': 27, '#df8e1d': 172, '#d20f39': 125, '#179299': 24, '#8534ee': 93, '#bcc0cc': 250, '#11111b': 233, '#0a7ea4': 25, '#4a5fd6': 62 };
 /** The exact xterm index the brief names for a palette hex, if it names one. */
 export const exactIndex = (hex: string): number | undefined => EXACT_256[hex];
 export const preImage = (i: number): string => {
@@ -423,8 +425,8 @@ export const dataInk = (ui: Pick<Ui, 'theme'>): { body: string; peak: string; tr
 /** The tone a surface draws with, by role (use these, not hex): the accent for the wordmark, the active tab and focus only; body normal text; secondary quiet text; dim timestamps, counts and done rows. */
 export const TONE5 = { accent: 'accent', body: 'text', secondary: 'sub', dim: 'dim', ok: 'ok', warn: 'warn', error: 'bad' } as const satisfies Record<string, Tone>;
 /** The rev 5 glyph set. Rows the capture scorer reads in fmt 4 (TODO, SUBAGENTS, board and band worker rows) still draw STATE_GLYPHS: it maps only the old marks. */
-export const GLYPH5 = { running: '◐', done: DONE_GLYPH, queued: '○', blocked: '▲', failed: '■', /* the spec's ✗ measures two cells in the host's width table (theme.ts textWidth) and the capture scorer maps ■ */ idle: '○', meterOn: '▰', meterOff: '▱' } as const;
-export const GLYPH5_ASCII = { done: '+', queued: 'o', blocked: '!', failed: 'x', idle: '.', meterOn: '#', meterOff: '-' } as const;
+export const GLYPH5 = { running: STATE_GLYPHS.running, done: STATE_GLYPHS.done, queued: STATE_GLYPHS.queued, blocked: STATE_GLYPHS.blocked, failed: STATE_GLYPHS.failed, /* the spec's ✗ measures two cells in the host's width table (theme.ts textWidth) and the capture scorer maps ■ */ idle: '○', meterOn: '▰', meterOff: '▱' } as const; // one table: a state's mark is STATE_GLYPHS everywhere
+export const GLYPH5_ASCII = { done: STATE_ASCII.done, queued: STATE_ASCII.queued, blocked: STATE_ASCII.blocked, failed: STATE_ASCII.failed, idle: '.', meterOn: '#', meterOff: '-' } as const;
 
 /** `m:ss`, or `h:mm:ss` from an hour: the elapsed clock of a run. */
 export function elapsedClock(secs: number): string {
@@ -635,7 +637,7 @@ export const leadSpinnerGlyph = spinnerGlyph;
 /** Truth 41: the ONE glyph of a run state word, by frame index: the band's lead and the side panel's phase row both draw this and nothing else (`◓ working`, `● done`, `○ idle`, `▲ blocked`). A working run turns the spinner frame; the others do not move. */
 export function phaseGlyph(kind: 'working' | 'done' | 'blocked' | 'idle', frame: number, ascii = false): string {
   if (kind === 'working') return leadSpinnerGlyph(frame, ascii);
-  return ascii ? GLYPH5_ASCII[kind] : kind === 'done' ? STATE_GLYPHS.done : GLYPH5[kind];
+  return ascii ? GLYPH5_ASCII[kind] : GLYPH5[kind];
 }
 /** Spinner frame number at the shared clock reading `nowMs`: ONE phase for every surface in a frame. The `id` argument is kept for the callers that still pass an
  * agent's name and is ignored: per-row offsets read as spinners out of phase (critique, 17.13.0). */
@@ -699,4 +701,22 @@ export function emittedPairs(theme: ThemeName, mode: ColorMode = 'truecolor'): P
   for (const f of ['accent', 'ok', 'run', 'warn', 'bad', 'block', 'info', 'queued_fill'] as const) add('text', inkFor(f, theme, mode), f, `chip ${f}`);
   for (const st of UI_STATES) add('text', stateWordTone(st, { ascii: false, theme }), 'panel', `state word ${st}`);
   return out;
+}
+
+// ---- role colours and the sprite tile: hex lives in this token file; theme.ts draws no colour -------------------------------
+
+/** Backdrop for sprite cells that carry only a foreground: sprites are self-contained (fg + bg), so they stay legible whatever the terminal theme is. */
+export const spriteTile = '#1b1f27';
+
+/** Colour name -> its Mocha hex per colour depth: both are the palette token's own hex (each Mocha hex is an exact xterm-256 index, so a 256-colour run lands on the palette as is). */
+export const ROLE_HEX: Readonly<Record<string, { truecolor: string; x256: string }>> = Object.fromEntries(
+  Object.entries(ROLE_TOKEN).map(([name, tok]) => [name, { truecolor: PALETTES.mocha[tok], x256: PALETTES.mocha[tok] }]),
+);
+
+/** The hex a role's name is drawn in: its palette token's hex in the theme; undefined for `crew` (the neutral text colour) and under NO_COLOR. */
+export function roleHex(role: string, color: 'truecolor' | '256' | 'none', theme: ThemeName = 'mocha'): string | undefined {
+  if (color === 'none') return undefined;
+  const name = ROLE_COLOUR[role];
+  const tok = name === undefined ? undefined : ROLE_TOKEN[name];
+  return tok === undefined ? undefined : PALETTES[theme][tok];
 }

@@ -347,6 +347,67 @@ def _log_gate_fail_open(why: str) -> None:
     print(f"completion_gate (b): {why}; crediting the row fail-open", file=sys.stderr)
 
 
+# Faults of this evaluation (an unreadable surface the gate failed open on). Cleared per `evaluate`; main()
+# shows them, so "no open items" is never claimed for a board the gate could not read.
+_GATE_FAULTS: list = []
+
+
+def _record_gate_fault(where: str, exc: BaseException, session_id: str = "") -> None:
+    msg = f"{where}: {type(exc).__name__}: {exc}"
+    if msg not in _GATE_FAULTS:
+        _GATE_FAULTS.append(msg)
+    print(f"completion_gate: fault, failing open: {msg}", file=sys.stderr)
+    conn = None
+    try:
+        with contextlib.suppress(Exception):
+            import atlas_db
+
+            conn = atlas_db.connect()
+            atlas_db.record_friction(
+                conn, session_id, "gate_fault", weight=1.0, snippet=msg[:300]
+            )
+    finally:
+        if conn is not None:
+            with contextlib.suppress(Exception):
+                conn.close()
+
+
+def _faults_notice() -> str:
+    if not _GATE_FAULTS:
+        return ""
+    return (
+        "completion gate could not read: "
+        + "; ".join(_GATE_FAULTS)
+        + ". Open-item counts from that surface are unknown, not zero."
+    )
+
+
+def _load_board_strict(root: Path) -> dict:
+    """The todo board, raising when it exists but is unreadable: `atlas_todo.load` reads a corrupt board as
+    empty, which would turn a fault into 'no open items'."""
+    import atlas_todo
+
+    read_state = getattr(atlas_todo, "_read_state", None)
+    if read_state is None:
+        return atlas_todo.load(str(root))
+    board, corrupt = read_state(str(root))
+    if corrupt:
+        raise ValueError(f"{atlas_todo.board_path(str(root))} exists but is unreadable")
+    return board
+
+
+def parse_status_header(text, contract: dict | None = None):
+    """The one status-header parser (gate (n)/(r), reply-blocked, shared corpus test): first non-empty
+    line of the full reply, stripped, matched against `headerFirstLinePattern`. Match (group 1 = phase) or None."""
+    if not isinstance(text, str):
+        return None
+    first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
+    if not first:
+        return None
+    doc = contract if contract is not None else _contract_doc()
+    return re.match(doc["headerFirstLinePattern"], first)
+
+
 def _verifier_backing(root: Path, session_id: str, item: dict, started) -> bool | None:
     """(b) True when a hook- or mux-written record of THIS session backs the row's verifier identity,
     False when none does, None when the records could not be read (caller fails open, logged).
@@ -861,8 +922,9 @@ def _board_open_todos(root: Path, session_id: str) -> int:
 
         # the one open-work rule (atlas_todo.open_items): the gates rows and the todo helper's
         # `open` count read the same function
-        return len(atlas_todo.open_items(atlas_todo.load(str(root)), session_id))
-    except Exception:
+        return len(atlas_todo.open_items(_load_board_strict(root), session_id))
+    except Exception as exc:
+        _record_gate_fault("todo board", exc, session_id)  # recorded and shown, never silent
         return 0
 
 
@@ -995,7 +1057,7 @@ def _has_todo_plan(transcript_path: str, root: Path, session_id: str) -> bool:
     try:
         import atlas_todo
 
-        board = atlas_todo.load(str(root))
+        board = _load_board_strict(root)
         for item in board.get("items", []):
             if (
                 not item.get("archived")
@@ -1003,7 +1065,8 @@ def _has_todo_plan(transcript_path: str, root: Path, session_id: str) -> bool:
                 and item.get("session_id") == session_id
             ):
                 return True
-    except Exception:
+    except Exception as exc:
+        _record_gate_fault("todo board", exc, session_id)
         return True  # board unreadable -> fail open, never block on our own error
     return _has_ledger_line(transcript_path)
 
@@ -1718,6 +1781,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     no markers, no block records, no DB writes. main() and atlas_gates.py share
     it. Returns every computed value plus `failed`, the failing letters."""
     solo = _solo_mode()
+    del _GATE_FAULTS[:]
     session = str(data.get("session_id") or "")
     run_paths = _run_written_paths(data.get("session_id", ""), root)
     # Files a shell command changed (sed -i, cat >, git apply ...) leave no
@@ -1769,6 +1833,20 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     ok_c = _check_changelog(root) if docs_check else True
     ok_d = _check_roadmap(root) if docs_check else True
     ok_e = _check_readme(root) if docs_check else True
+    # A repo that never had CHANGELOG/ROADMAP/README is not blocked for lacking it: advisory only. A file
+    # that exists but is empty still blocks.
+    docs_advisory = [
+        letter
+        for letter, ok, rel in (
+            ("c", ok_c, Path("docs") / "CHANGELOG.md"),
+            ("d", ok_d, Path("docs") / "ROADMAP.md"),
+            ("e", ok_e, Path("README.md")),
+        )
+        if not ok and not (root / rel).exists()
+    ]
+    ok_c = ok_c or "c" in docs_advisory
+    ok_d = ok_d or "d" in docs_advisory
+    ok_e = ok_e or "e" in docs_advisory
     ok_h = _check_roadmap_reconciled(root) if docs_check else True
     # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
     # docs/CHANGELOG.md was not among them. The primary signal is
@@ -1919,6 +1997,8 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         "ok_d": ok_d,
         "ok_e": ok_e,
         "ok_h": ok_h,
+        "docs_advisory": docs_advisory,
+        "faults": list(_GATE_FAULTS),
         "drift": drift,
         "unverified": unverified,
         "open_todos": open_todos,
@@ -2282,6 +2362,14 @@ def _main() -> int:
                     + _team_reason_part(ev["team_advisory"]).strip()
                     + "\n"
                 )
+        if ev.get("docs_advisory"):
+            _missing = {"c": "docs/CHANGELOG.md", "d": "docs/ROADMAP.md", "e": "README.md"}
+            with contextlib.suppress(Exception):
+                sys.stderr.write(
+                    "[atlas] completion-gate advisory: this repo has no "
+                    + ", ".join(_missing[x] for x in ev["docs_advisory"])
+                    + "; not blocking on it\n"
+                )
         failed = ev["failed"]
         if not failed:
             # Silence on pass is the contract: the gate speaks only when it blocks.
@@ -2292,6 +2380,9 @@ def _main() -> int:
             if verify_reason:
                 _print_decision({"decision": "block", "reason": verify_reason})
                 return 0
+            fault_note = _faults_notice()
+            if fault_note:
+                print(json.dumps({"systemMessage": "atlas: " + fault_note}))
             _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
             return 0
@@ -2367,6 +2458,8 @@ def _main() -> int:
         notice = _block_loop_notice(count, failed)
         if notice:
             block_reason += "\n" + notice
+        if _faults_notice():
+            block_reason += "\n" + _faults_notice()
         _print_decision({"decision": "block", "reason": block_reason})
     except Exception as exc:  # noqa: BLE001 -- a Stop hook must never wedge the session
         # Fail-open, but surface the swallowed crash on stderr so a silent
@@ -3144,10 +3237,9 @@ def _status_header_would_block(data: dict, contract: dict | None) -> bool:
         text = data.get("last_assistant_message")
         if not isinstance(text, str):
             return False
-        first = next((ln for ln in text.splitlines() if ln.strip()), "")
-        if not first:
+        if not text.strip():
             return False
-        return re.match(contract["headerFirstLinePattern"], first.strip()) is None
+        return parse_status_header(text, contract) is None
     except Exception:
         return False
 
@@ -3159,9 +3251,7 @@ def _reply_is_blocked(data: dict) -> bool:
         text = data.get("last_assistant_message")
         if _payload_is_sidechain(data) or not isinstance(text, str):
             return False
-        contract = _contract_doc()
-        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
-        m = re.match(contract["headerFirstLinePattern"], first)
+        m = parse_status_header(text)
         return bool(m) and m.group(1) == "blocked"
     except Exception:
         return False
@@ -3196,8 +3286,7 @@ def _reply_has_header(data: dict) -> bool:
         text = data.get("last_assistant_message")
         if _payload_is_sidechain(data) or not isinstance(text, str):
             return False
-        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
-        return re.match(_contract_doc()["headerFirstLinePattern"], first) is not None
+        return parse_status_header(text) is not None
     except Exception:
         return False
 
@@ -3221,8 +3310,7 @@ def _done_claim_reason(data: dict, root: Path, session: str) -> str:
         text = data.get("last_assistant_message")
         if not isinstance(text, str):
             return ""
-        first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
-        m = re.match(contract["headerFirstLinePattern"], first)
+        m = parse_status_header(text, contract)
         # Group 1 is the phase word, glyph-first or phase-first.
         if not m or m.group(1) != "done":
             return ""

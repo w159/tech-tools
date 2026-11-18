@@ -667,5 +667,47 @@ class EvalWrappedCommitTest(unittest.TestCase):
         self.assertEqual(list(_git_subcommands('echo "eval git commit"')), [])
 
 
+class GitCommitEvasionFormsTest(unittest.TestCase):
+    """X1: variable indirection, pipe to a shell, find -exec and python os.system hide a commit from a
+    token-only matcher; each is closed conservatively. Anything built at runtime stays out of reach."""
+
+    COMMIT = (
+        "g=git; $g commit -m x",
+        "g=/usr/bin/git\n${g} commit -m x",
+        'G=git && "$G" commit -m x',
+        "echo git commit -m x | sh",
+        "echo 'git add -A && git commit -m x' | bash",
+        "printf 'git commit -m x\\n' | sh -s",
+        "find . -name a.txt -exec git commit -m x {} \\;",
+        "find . -maxdepth 1 -execdir git commit -m x +",
+        "python3 -c \"import os; os.system('git commit -m x')\"",
+        "python3 -c \"import subprocess; subprocess.run('git commit -m x', shell=True)\"",
+        "python3 -c \"import subprocess; subprocess.run(['git', 'commit', '-m', 'x'])\"",
+        "python -c 'import os; os.popen(\"git commit -m x\")'",
+    )
+    NOT_COMMIT = (
+        "g=git; $g status",
+        "g=ls; $g commit",
+        "echo git commit -m x | cat",
+        "echo git commit -m x > note.txt",
+        "ls | sh",
+        "find . -name a.txt -exec ls {} \\;",
+        "find . -exec echo git commit {} \\;",
+        "python3 -c \"print('git commit')\"",
+        "python3 -c \"import os; os.system('git status')\"",
+        "python3 -c \"import subprocess; subprocess.run(['git', 'status'])\"",
+    )
+
+    def test_evasion_forms_detected(self):
+        for cmd in self.COMMIT:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(_match_git_commit(cmd))
+
+    def test_lookalikes_ignored(self):
+        for cmd in self.NOT_COMMIT:
+            with self.subTest(cmd=cmd):
+                self.assertFalse(_match_git_commit(cmd))
+
+
 if __name__ == "__main__":
     unittest.main()

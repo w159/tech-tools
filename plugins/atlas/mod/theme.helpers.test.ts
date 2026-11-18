@@ -2,8 +2,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import {
   barParts, blink, chartRoom, contractGlyph, dim, fitText, formatDuration, glyph, isRawId, lerp, mix,
-  rangeWidth, spin, spriteTile, STATE_GLYPH, textWidth,
+  rangeWidth, spin, STATE_GLYPH, textWidth,
 } from './theme';
+import { spriteTile } from './atlas-ui';
 
 test('STATE_GLYPH and glyph tables', () => {
   expect(STATE_GLYPH).toEqual({ spawning: '▸', running: '▶', idle: '○', input: '◇', stuck: '■', parked: '·', finished: '●', failed: '■', dead: '·' });

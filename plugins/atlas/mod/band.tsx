@@ -13,7 +13,7 @@ import { openItems, openWork } from './data/core';
 import { blockedCount } from './board-model';
 import { deniedCalls } from './vocab';
 import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } from './data/runstate';
-import { fillHex, hostEnv, LINGER_MS, preImage, spinClock, surfaceHex, uiFromEnv, xtermHex, type Ui, runHex } from './atlas-ui';
+import { fillHex, LINGER_MS, preImage, spinClock, surfaceHex, xtermHex, type Ui, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
@@ -206,8 +206,8 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     core: coreCells(b.core, Math.max(1, b.columns), b.ui, total),
     boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
     ctx: s.contextPct > 0 && b.ranSecs === undefined ? Math.min(1, s.contextPct / 100) : undefined, // after a run the turn footer prints `ctx N%`: the band says it once (critique 28)
-    rich: b.rich ?? hostEnv().ATLAS_BAND_RICH === '1',
-    ui: b.ui ?? uiFromEnv(),
+    rich: b.rich ?? lookRich(),
+    ui: b.ui ?? lookUi(),
     turnSecs: b.hostOnly ? undefined : b.workSecs, ranSecs: b.ranSecs, ...(b.hostOnly ? { hostOnly: true } : {}), ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
     ...(b.health ? { health: healthOf(b, s, tally, progress, withCoreTally(b.gates, b.core)) } : {}),
     workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
@@ -285,7 +285,7 @@ const panel = (els: ClientElements, rows: Row[], cols: number, ui: Ui): RenderEl
 
 /** Any MissionModel as the band tree (the shared-world goldens and the renderer feed models directly). */
 export function missionTree(els: ClientElements, m: MissionModel, todoRows: (rows: number) => Segment[][] = () => [], on?: BandHandlers): RenderElement {
-  const ui = m.ui ?? uiFromEnv();
+  const ui = m.ui ?? lookUi();
   const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
   return panel(els, rows, m.cols, ui);
 }
@@ -293,32 +293,30 @@ export function missionTree(els: ClientElements, m: MissionModel, todoRows: (row
 /** Rows the HUD can have instead of the band's: the breathing blanks it draws at `b.maxRows` (rows of spaces only; a board slot or the key footer never counts),
  * plus the allotted rows it does not draw at all (an idle band stops short of its slot). */
 /** What the Motion observes of the band: each state's agent count (the counts the header draws). */
-export const bandCountItems = (b: BandModel): MotionItem[] => bandMotionItems(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }));
+export const bandCountItems = (b: BandModel): MotionItem[] => bandMotionItems(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? lookUi() }));
 
 export function bandSpareRows(b: BandModel): number {
   const maxRows = b.maxRows ?? 12;
   if (maxRows < 1) return 0;
-  const m = { ...missionModel({ ...b, maxRows, ui: b.ui ?? uiFromEnv() }), noWorkerRows: true }; // worker rows fill what the HUD leaves, so they are never counted as the band's reclaimable blanks
+  const m = { ...missionModel({ ...b, maxRows, ui: b.ui ?? lookUi() }), noWorkerRows: true }; // worker rows fill what the HUD leaves, so they are never counted as the band's reclaimable blanks
   const lines = missionLines(m);
   const blanks = lines.filter((l) => !l.board && !l.keys && l.runs.every((x) => x.t.trim() === '')).length;
   const drawn = lines.reduce((n, l) => n + (l.board ?? 1), 0); // a board slot counts as the rows it holds
   return blanks + Math.max(0, maxRows - drawn);
 }
 
-/** The band's lines and the model behind them. `on`: the handlers are wired. The idle footer then always holds its key row, so the row count of an idle band never depends on the width. */
+/** The band's lines and the model behind them. `on`: the handlers are wired. The idle footer holds its key row from 80 columns up; below that the band is its one row. */
 function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: MissionModel; lines: Line[] } | null {
   const cols = Math.max(1, b.columns);
   const maxRows = b.maxRows ?? 12;
-  const ui = b.ui ?? uiFromEnv();
+  const ui = b.ui ?? lookUi();
   if (maxRows < 1) return null; // the HUD can take the whole slot: draw nothing rather than a row past the budget
   const m0 = missionModel({ ...b, maxRows, ui });
   const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
   const keys = on && idle && !m.health; // round 2 (D9): with health the band is one row and the tabs live only in the panel: no key row at any width (no orphan row under the band)
-  // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
+  // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns there is no key row at all (the band is one row there)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
-  // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
-  if (keys && !lines.some((l) => l.keys) && lines.reduce((n, l) => n + (l.board ?? 1), 0) < maxRows) lines.push({ runs: [], keys: true });
   return { cols, ui, m, lines };
 }
 
@@ -334,14 +332,14 @@ export function bandRowCount(b: BandModel, on = false): number {
 
 export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): RenderElement {
   const plan = bandPlan(b, !!on);
-  if (!plan) return panel(els, [], Math.max(1, b.columns), b.ui ?? uiFromEnv());
+  if (!plan) return panel(els, [], Math.max(1, b.columns), b.ui ?? lookUi());
   const { cols, ui, m, lines } = plan;
   // State 38: note the spinner frame and the clock the band is drawing right now (motion.ts bandFrame).
   const kind = runStateOf(m).kind;
   noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? (m.hostOnly ? null : m.turnSecs ?? m.elapsedSecs ?? 0) : kind === 'blocked' ? m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs ?? null : m.ranSecs ?? m.lastRun?.secs ?? null, m.now, kind);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
-    if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
+    if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [];
     if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });
@@ -350,16 +348,16 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
 
 /** The band's first-row runs (text and tone) for a model: what the tree paints, for goldens and tone checks. `on`: with the handlers wired (the `▸ health` chip present). */
 export function bandRuns(b: BandModel, on = false): Run[] {
-  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() });
+  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? lookUi() });
   return bandLines(on && m.health ? { ...m, health: { ...m.health, button: true } } : m)[0]?.runs ?? []; // `on`: the handlers are wired, so the health chip is drawn
 }
 
 /** The band's run state word (`working`, `done`, `idle`, `blocked`) for a model: the one rule the HUD's idle dimming and the side panel's phase read. */
-export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() })).kind;
+export const bandKindOf = (b: BandModel) => runStateOf(missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? lookUi() })).kind;
 
 /** The blocked band's own reason and clock, as it prints them (`stop refused`, `1 failed`; the clock the lead segment shows): the blocked card says the same words (transcript/placed.ts noteBlocked). null when the band does not read blocked. */
 export function bandBlockedOf(b: BandModel): { reason: string; secs?: number } | null {
-  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() });
+  const m = missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? lookUi() });
   const st = runStateOf(m);
   if (st.kind !== 'blocked') return null;
   const secs = m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs;
@@ -368,5 +366,5 @@ export function bandBlockedOf(b: BandModel): { reason: string; secs?: number } |
 
 /** Wave 42: the idle health the band, the HUD card and the side panel share (band.tsx builds it from the band's own inputs); undefined when the caller passed none. */
 export function bandHealth(b: BandModel): Health | undefined {
-  return missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? uiFromEnv() }).health;
+  return missionModel({ ...b, maxRows: b.maxRows ?? 12, ui: b.ui ?? lookUi() }).health;
 }

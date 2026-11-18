@@ -2,7 +2,7 @@
 // file paints them as Segment rows. `boardTree` is the board pane (ribbon, header, one row per item); `todoRows` is the same
 // rows without the ribbon, for the band's inline slot, capped by the row budget with a `+N more` row. Pure: rows in, Segments out.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { hostEnv, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from './atlas-ui';
+import { surfaceHex, type Run, type Ui, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
 import type { MotionCtx } from './motion';
 import { boardBody, boardFolded, boardOpenFolded, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
 import { rowOf, type Segment } from './runs';
@@ -34,13 +34,13 @@ function capRows<T>(rows: readonly T[], max: number, more: (n: number) => T): T[
 }
 
 /** The rich form (chips, elapsed gauge) follows the band's switch. */
-const richEnv = (): boolean => hostEnv().ATLAS_BAND_RICH === '1';
+const richEnv = (): boolean => lookRich();
 const moreLine = (n: number): BoardLine => ({ runs: [{ t: `  +${n} more`, tone: 'muted' }] });
 
 /** Board rows for the band's inline slot: [] without items or room, else the header and one row per item, at most `maxRows`. */
 export function todoRows(items: readonly BoardSource[], o: TodoPanelOpts): Segment[][] {
   if (!items.length || o.maxRows < 1 || !o.expanded) return [];
-  const ui = o.ui ?? uiFromEnv();
+  const ui = o.ui ?? lookUi();
   const body = boardBody(boardRowsOf(items, o.now), { cols: o.cols, ui, rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion });
   return capRows(body, o.maxRows, moreLine).map((l) => rowOfLine(l, o.cols, ui));
 }
@@ -49,7 +49,7 @@ export type BoardTreeOpts = { /** Draw the BOARD ribbon (default true; the side 
 
 /** The board pane: the whole surface (ribbon, blank row, header, items), capped at `rows` with a `+N more` row. */
 export function boardTree(els: ClientElements, items: readonly BoardSource[], o: BoardTreeOpts): RenderElement {
-  const ui = o.ui ?? uiFromEnv();
+  const ui = o.ui ?? lookUi();
   const at = { cols: o.cols, ui, ribbon: o.ribbon !== false, ...(o.title === false ? { title: false } : {}), rich: o.rich ?? richEnv(), tick: o.tick, ...(o.nowMs !== undefined ? { nowMs: o.nowMs } : {}), motion: o.motion };
   const lines = items.length ? boardLines(boardRowsOf(items, o.now), { ...at, folded: boardFolded(items), openFolded: boardOpenFolded(items) }) : [...boardLines([], at), { runs: [{ t: '  (no state)', tone: 'muted' as const }] }];
   const rows = capRows(lines, Math.max(1, o.rows), moreLine).map((l) => rowOf(els, rowOfLine(l, o.cols, ui), o.cols));

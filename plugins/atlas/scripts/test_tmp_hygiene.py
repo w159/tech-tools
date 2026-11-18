@@ -37,10 +37,20 @@ class TmpHygieneTests(unittest.TestCase):
         self.assertEqual(out, conftest.SESSION_TMP)
 
     def test_product_marker_dirs_default_under_it(self):
-        import completion_gate_core as core
+        # The constant is computed at import time. Under `unittest discover` another module may import
+        # completion_gate_core before conftest repoints tempfile, so evaluate a fresh private copy
+        # instead of whichever import happened first.
+        import importlib.util
+        from unittest import mock
 
-        if not os.environ.get("ATLAS_CONTRACT_GATE_DIR"):
-            self.assertTrue(core.CONTRACT_GATE_MARKER_DIR.startswith(conftest.SESSION_TMP))
+        spec = importlib.util.spec_from_file_location(
+            "completion_gate_core_fresh", HERE.parent / "hooks" / "completion_gate_core.py"
+        )
+        core = importlib.util.module_from_spec(spec)
+        with mock.patch.dict(os.environ):
+            os.environ.pop("ATLAS_CONTRACT_GATE_DIR", None)
+            spec.loader.exec_module(core)
+        self.assertTrue(core.CONTRACT_GATE_MARKER_DIR.startswith(conftest.SESSION_TMP))
 
 
 if __name__ == "__main__":

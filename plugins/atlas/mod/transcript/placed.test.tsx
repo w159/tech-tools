@@ -5,7 +5,7 @@ import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import type { AtlasSnapshot, SquadAgent } from '../contract'
 import { registerRestyle } from '../restyle'
 import { memState } from '../test_helpers'
-import { uiFromEnv } from '../atlas-ui'
+import { runHex, surfaceHex, uiFromEnv } from '../atlas-ui'
 import { cardAged, finishedWorkers, forgetPlaced, hideNotification, placeFinished, placedTree } from './placed'
 
 const snap = (now: number, squad: SquadAgent[], over: Record<string, unknown> = {}): AtlasSnapshot => ({
@@ -260,10 +260,13 @@ test('C3: the Placed site draws an old card as a new one but for its bar, which 
   const at = (now: number) => ({ ...host(), state: memState({ 'atlas/snapshot': snap(now, []), 'atlas/orch': { activity: {}, comms: [], stage: {}, meta: {} } }) }) as unknown as EngineInterface
   const site = sites().Placed!
   const first = strings(await site(at(100_000), placedEvent('atlas', ids[0]!), next))
-  const bar = (x: string): string => x.replace(/"color":"#(af87ff|8a8a8a)"(,"backgroundColor":"#181825"\},"children":\["▌"\])/, '"color":"BAR"$2')
-  expect(first).toContain('"color":"#af87ff","backgroundColor":"#181825"},"children":["▌"]')
+  // The hexes follow the colour depth the environment gives (a 256-colour terminal fits them), so they are derived, not written out.
+  const ui = uiFromEnv()
+  const [accent, sub, panel] = [runHex({ tone: 'accent' }, ui.theme, ui.color), runHex({ tone: 'sub' }, ui.theme, ui.color), surfaceHex('panel', ui)]
+  const bar = (x: string): string => x.split(`"color":"${accent}"`).join('"color":"BAR"').split(`"color":"${sub}","backgroundColor":"${panel}"},"children":["▌"]`).join(`"color":"BAR","backgroundColor":"${panel}"},"children":["▌"]`)
+  expect(first).toContain(`"color":"${accent}","backgroundColor":"${panel}"},"children":["▌"]`)
   const later = strings(await site(at(110_000), placedEvent('atlas', ids[0]!), next))
-  expect(later).toContain('"color":"#8a8a8a","backgroundColor":"#181825"},"children":["▌"]')
+  expect(later).toContain(`"color":"${sub}","backgroundColor":"${panel}"},"children":["▌"]`)
   expect(bar(later)).toBe(bar(first))
   expect(bar(strings(await site(at(121_000), placedEvent('atlas', ids[0]!), next)))).toBe(bar(first))
 })

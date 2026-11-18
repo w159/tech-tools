@@ -890,14 +890,27 @@ class RealServeTests(unittest.TestCase):
         }
         p, port = self._start(home, env)
         try:
+            # The index no longer hands the token to an anonymous caller (X2): the owner reads the
+            # 0600 token file, then the index is served to a caller that already holds it.
+            token = (Path(home) / f"dashboard-{port}.token").read_text().strip()
+            anon = urllib.request.Request(f"http://127.0.0.1:{port}/")
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(anon, timeout=5)
+            self.assertEqual(ctx.exception.code, 401)
+            self.assertNotIn(token.encode(), ctx.exception.read())
             html = (
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5)
+                urllib.request.urlopen(
+                    urllib.request.Request(
+                        f"http://127.0.0.1:{port}/", headers={"X-Atlas-Token": token}
+                    ),
+                    timeout=5,
+                )
                 .read()
                 .decode()
             )
             m = re.search(r'name="atlas-token" content="([^"]+)"', html)
             assert m is not None
-            token = m.group(1)
+            self.assertEqual(m.group(1), token)
             legacy = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
             self.assertEqual(legacy.status, 403, "query token must be rejected")
             legacy.close()

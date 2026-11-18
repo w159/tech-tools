@@ -11,7 +11,6 @@ import { idleRamp } from './band-motion';
 import { blockSpark } from './chart';
 import { agoText, gatesSummary, promptedOf, type Health } from './idle-health';
 import { metricsOf } from './metrics';
-import { ctxLevel, latencyLevel } from './status-frame';
 import { fitText, textWidth } from './theme';
 
 /** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it (AA2: packed in one 28-cell state slot, `● done 6/6 · ended 18s`). */
@@ -54,6 +53,12 @@ export type BandFrameIn = {
   restSecs?: number;
   health: Health;
 };
+
+/** The context figure's colour (Y2d): green below 70 %, amber from 70 %, red from 90 %. */
+export const ctxLevel = (pct: number): 'ok' | 'warn' | 'bad' => (pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
+
+/** The latency colour on every surface (Z3): green up to 100 ms, amber above 100, red above 500. */
+export const latencyLevel = (ms: number): 'ok' | 'warn' | 'bad' => (ms > 500 ? 'bad' : ms > 100 ? 'warn' : 'ok');
 
 export const bandLook = (ui: Ui) => ui.theme === 'latte'
   ? { fill: PALETTES.latte.base, text: PALETTES.latte.text, dim: xtermHex(241), rule: xtermHex(250), chipBg: xtermHex(253), chipFg: xtermHex(54), litBg: xtermHex(147), litFg: xtermHex(54), alertBg: xtermHex(224), alertFg: xtermHex(124), ok: PALETTES.latte.ok, warn: PALETTES.latte.warn, bad: PALETTES.latte.bad, work: xtermHex(54), ramp: [xtermHex(97), xtermHex(98), xtermHex(54)] as const }

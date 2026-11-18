@@ -30,6 +30,7 @@ import tempfile
 import threading
 import time
 import traceback
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse, unquote
@@ -1400,6 +1401,37 @@ def _pidfile_path(port: int) -> Path:
     return STATE_DIR / f"dashboard-{int(port)}.pid"
 
 
+def _token_path(port: int) -> Path:
+    return STATE_DIR / f"dashboard-{int(port)}.token"
+
+
+def _write_token_file(port: int) -> Path:
+    """Owner-only (0600) copy of the per-daemon token: the one channel besides the launch URL
+    that reaches the owner, so another local user cannot learn it from the loopback port."""
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    path = _token_path(port)
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(DASH_TOKEN)
+    os.chmod(tmp, 0o600)  # a leftover tmp from an older umask keeps its mode otherwise
+    os.replace(tmp, path)
+    return path
+
+
+def _read_token_file(port: int | None = None) -> str:
+    try:
+        return _token_path(port or DEFAULT_PORT).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def launch_url(port: int | None = None) -> str:
+    """The URL the owner opens once: it carries the token, GET / trades it for an HttpOnly cookie."""
+    token = _read_token_file(port)
+    return f"{dashboard_url(port)}?launch={token}" if token else ""
+
+
 def _load_pidfile(path: Path):
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -1451,6 +1483,7 @@ def _clear_pidfile(only_pid: int | None = None, port: int | None = None):
             if int(info.get("pid") or 0) != only_pid:
                 return
         _pidfile_path(port).unlink(missing_ok=True)
+        _token_path(port).unlink(missing_ok=True)
         legacy = _load_pidfile(PID_PATH)
         if legacy is not None and int(legacy.get("port") or 0) == port:
             PID_PATH.unlink(missing_ok=True)
@@ -2015,8 +2048,10 @@ def _agent_reset(root, name):
 
 # --- v2 surface: security guard, static UI, route mounting, SSE -------------------
 
-# Per-daemon secret. Injected into index.html (<meta name="atlas-token">) and
+# Per-daemon secret. Injected into index.html (<meta name="atlas-token">) only for a caller that
+# already holds it (launch URL -> cookie, X-Atlas-Token header, or the 0600 token file), and
 # required as X-Atlas-Token on mutations, /api/v2/stream and sensitive GETs.
+COOKIE_NAME = "atlas_dash"
 DASH_TOKEN = secrets.token_urlsafe(32)
 STATIC_DIR = SCRIPTS_DIR / "dashboard_ui"
 TOKEN_PLACEHOLDER = "__ATLAS_TOKEN__"
@@ -2053,7 +2088,7 @@ def _redeem_stream_ticket(ticket: str) -> bool:
     return exp is not None and exp > time.monotonic()
 
 
-_SECRET_QUERY = re.compile(r"([?&](?:token|ticket)=)[^&\s\"]*", re.IGNORECASE)
+_SECRET_QUERY = re.compile(r"([?&](?:token|ticket|launch)=)[^&\s\"]*", re.IGNORECASE)
 _MIME = {
     ".html": "text/html; charset=utf-8",
     ".css": "text/css; charset=utf-8",
@@ -2555,9 +2590,51 @@ class Handler(BaseHTTPRequestHandler):
 
     # -- static UI --------------------------------------------------------------
 
-    def _serve_static(self, path: str, head_only: bool = False) -> bool:
+    def _index_authorized(self, query: dict) -> bool:
+        """True when the index (which embeds the token) may be served; otherwise the reply is sent.
+
+        Loopback is not a trust boundary on a shared host, so an anonymous GET / gets nothing.
+        """
+        launch = query.get("launch") or ""
+        token = DASH_TOKEN.encode()
+        if launch:
+            if hmac.compare_digest(launch.encode(), token):
+                self.send_response(302)
+                self.send_header("Location", "/")
+                self.send_header(
+                    "Set-Cookie",
+                    f"{COOKIE_NAME}={DASH_TOKEN}; HttpOnly; SameSite=Strict; Path=/",
+                )
+                self.send_header("Content-Length", "0")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Referrer-Policy", "no-referrer")
+                self.end_headers()
+                return False
+        else:
+            supplied = self.headers.get("X-Atlas-Token") or ""
+            if not supplied:
+                try:
+                    jar = SimpleCookie(self.headers.get("Cookie") or "")
+                    supplied = jar[COOKIE_NAME].value if COOKIE_NAME in jar else ""
+                except Exception:
+                    supplied = ""
+            if supplied and hmac.compare_digest(supplied.encode(), token):
+                return True
+        self._deny(
+            401,
+            "launch_required",
+            "the dashboard page is served only to its owner",
+            "open the URL printed by `atlas_dashboard.py launch`",
+        )
+        return False
+
+    def _serve_static(
+        self, path: str, head_only: bool = False, query: dict | None = None
+    ) -> bool:
         """Serve / and /ui/*. True when the path was a static route."""
         if path in ("/", "/index.html", "/dashboard", "/dashboard/"):
+            if not head_only and not self._index_authorized(query or {}):
+                return True
             target = _static_file("index.html")
             if target is None:
                 self._json(
@@ -2717,7 +2794,7 @@ class Handler(BaseHTTPRequestHandler):
         query = self._query(u)
         if not self._guard("GET", u.path, query):
             return
-        if self._serve_static(u.path):
+        if self._serve_static(u.path, query=query):
             return
         if u.path == "/api/v2/stream":
             return self._sse(query)
@@ -3345,6 +3422,10 @@ def serve(host: str, port: int):
     global _HTTPD
     _HTTPD = httpd
     _write_pidfile(os.getpid(), port, dashboard_db_path())
+    try:
+        _write_token_file(port)
+    except OSError as e:
+        sys.stderr.write(f"[atlas-dashboard] cannot write the 0600 token file: {e}\n")
     me = os.getpid()
     atexit.register(_clear_pidfile, me, port)
 
@@ -3385,6 +3466,8 @@ def main(argv=None):
     stp = sub.add_parser("stop")
     stp.add_argument("--port", type=int, default=DEFAULT_PORT)
     sub.add_parser("url")
+    lp = sub.add_parser("launch")
+    lp.add_argument("--port", type=int, default=DEFAULT_PORT)
     args = p.parse_args(argv)
 
     if args.cmd == "status":
@@ -3395,6 +3478,13 @@ def main(argv=None):
         if _port_open(LOOPBACK, DEFAULT_PORT):
             print(dashboard_url(DEFAULT_PORT))
             return 0
+        return 1
+    if args.cmd == "launch":
+        url = launch_url(args.port)
+        if url:
+            print(url)
+            return 0
+        sys.stderr.write("no token file: run `atlas_dashboard.py ensure` first\n")
         return 1
     if args.cmd == "ensure":
         result = ensure_daemon(args.port)

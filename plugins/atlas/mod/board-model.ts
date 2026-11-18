@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
+import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { KILLED, wordOf } from './pane/activity';
 
@@ -306,7 +306,7 @@ export function boardHeader(): Run[] {
 export type BoardLine = { runs: Run[] };
 
 /** The HUD's title rule is the light `─` in the line tone; atlas-ui's ribbon() fills with the heavy `━`. Every ribbon the board and the side panel draw swaps its fill for the HUD's (critique 22: two rule weights on one screen). */
-export const lightRibbon = (runs: Run[], ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? runs : runs.map((x) => (/^━+$/.test(x.t) ? { ...x, t: '─'.repeat(x.t.length), tone: 'line' as Run['tone'], fg: '#303030' } : x))); // wave 32 (critique 30): the divider is the 236 grey in every run state
+export const lightRibbon = (runs: Run[], ui: Pick<Ui, 'ascii'>): Run[] => (ui.ascii ? runs : runs.map((x) => (/^━+$/.test(x.t) ? { ...x, t: '─'.repeat(x.t.length), tone: 'line' as Run['tone'], fg: PALETTE5.rule } : x))); // wave 32 (critique 30): the divider is the 236 grey in every run state
 
 /** Column geometry of the compact and narrow forms for `rows` at `o.cols`: the state column, the owner column beside the rows (0: it does not fit) and whether a doubted done spells its words in the state cell. */
 function geometry(rows: readonly BoardRow[], o: BoardOpts): { compact: boolean; ownerAll: number; ownerW: number; wordW: number; stateColC: number | undefined; labelW: number; doubtWord: boolean } {
@@ -492,7 +492,7 @@ const barTone = (s: UiState): Run['tone'] => (s === 'running' ? 'accent' : s ===
 
 const BAR_GLYPH = '▇'; // wave 38: one row, seven eighths tall: a lane's bar sits on the same line as its tick marks
 const TICK_STEPS = [10, 20, 30, 60, 120, 300, 600, 900, 1800, 3600]; // wave 38 (critique 37): ticks every 10 s while they fit, then the next round step
-const RULE_FG = '#303030'; // 236: the divider grey (PALETTE5.rule), never the 240 text grey
+const RULE_FG = PALETTE5.rule; // 236: the divider grey (PALETTE5.rule), never the 240 text grey
 /** Wave 39 (critique 38: the 110 lane was 12 cells beside a 14-cell name and a time column): the label column is 13 cells whatever the pane (a margin, the state mark, a gap, a 9-cell name, a gap)
  * and the lane takes every cell right of it. The time moves under the bar (the calls caption) or to the bar's end; the mark moves to the front of the label. */
 const LABEL_W = 13;

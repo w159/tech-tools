@@ -3,7 +3,7 @@
 // refuted claim red, a partial tally amber). Cells are mission-layout runs, so the Claude band and the omp mission
 // panel paint identical text. Golden: contracts/core-golden.ts.
 import { type CoreModel, type Route, type Verdict, hasCore, plannedText, tok } from "./data/core";
-import { uiFromEnv, type Ui } from "./atlas-ui";
+import { type Ui } from "./atlas-ui"; import { lookUi } from "./look";
 import { type Run, runsText, runsWidth, type Tone } from "./mission-layout";
 
 /** Core cells are layout runs: a tone, not a colour (mission-layout.ts TONE_HEX paints them on both harnesses). */
@@ -74,7 +74,7 @@ const WIDEN: readonly number[] = [1, 0];
 /** The groups, compact, then each widened to its full form in WIDEN order while the row still fits `cols` (one leading cell). A group with nothing to say
  * (a route that ran as planned) is left out. Narrower than the groups together: contract + verdicts only. Empty without core data or room. `plan`: the
  * plan's item count, the denominator of the contract's evidence figure. */
-export function coreCells(m: CoreModel | null | undefined, cols: number, ui: Ui = uiFromEnv(), plan?: number): Cell[] {
+export function coreCells(m: CoreModel | null | undefined, cols: number, ui: Ui = lookUi(), plan?: number): Cell[] {
   if (!hasCore(m)) return [];
   const build = (full: readonly boolean[], groups: readonly Group[] = GROUPS): Cell[] =>
     [c(" "), ...groups.map((g, i) => g(m, full[i] ?? false, ui, plan)).filter((cs) => cs.length).flatMap((cs, i) => [...(i ? [gap] : []), ...cs])];

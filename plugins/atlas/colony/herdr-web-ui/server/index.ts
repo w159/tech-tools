@@ -8,7 +8,7 @@ import type { AgentKind, AgentStatus, ClientMessage, ClientRole, HealthAuth, Her
 import { paneTitle } from "../shared/notify-policy.ts";
 import { DEFAULT_PORT } from "../shared/protocol.ts";
 import { DEVICE_COOKIE, handleAuthRequest, isAuthenticated, parseCookies, requiresAuth, unauthorizedJson } from "./auth.ts";
-import { cameThroughProxy, decideAccess, isLoopbackAddress } from "./access.ts";
+import { cameThroughProxy, decideAccess, ensureLocalToken, isLoopbackAddress } from "./access.ts";
 import { DeviceStore, handleDeviceRequest } from "./devices.ts";
 import { remoteAccess, tailscaleIdentity } from "./tailscale.ts";
 import { paneCommands } from "./commands.ts";
@@ -311,6 +311,8 @@ export function createServer(
     port?: number;
     hostname?: string;
     token?: string;
+    /** HERDR_WEB_TRUST_LOCAL: let a bare loopback request in with no token; tests of the default leave it unset */
+    trustLocal?: boolean;
     /** where VAPID keys and push subscriptions persist; tests pass a temp dir */
     stateDir?: string;
     /** the PC's own Tailscale login, for the identity check; tests set it, otherwise `tailscale status` says */
@@ -371,8 +373,11 @@ export function createServer(
   /** when each pane last got keystrokes through its attach pty */
   const lastTyped = new Map<string, number>();
   const hostname = options.hostname ?? process.env["HOST"] ?? "127.0.0.1";
-  /** Empty token = gate disabled; every route then behaves exactly as it did before auth existed. */
-  const token = options.token ?? process.env["HERDR_WEB_TOKEN"] ?? "";
+  /** Opt-out for a trusted single-user host (HERDR_WEB_TRUST_LOCAL=1): a bare local request needs no token. Off by default. */
+  const trustLocal = options.trustLocal ?? process.env["HERDR_WEB_TRUST_LOCAL"] === "1";
+  const configuredToken = options.token ?? process.env["HERDR_WEB_TOKEN"] ?? "";
+  /** With no token configured and no opt-out, a per-install token lives in a 0600 file only the owner reads (scripts/plugin.ts reads it too). */
+  const token = configuredToken !== "" || trustLocal ? configuredToken : ensureLocalToken(options.stateDir ?? defaultStateDir());
   /** paired devices (server/devices.ts) and the PC's Tailscale login: the two ways in besides the token and this PC itself */
   const devices = new DeviceStore(options.stateDir ?? defaultStateDir());
   const usage = options.usage ?? new UsageService();
@@ -1022,6 +1027,7 @@ export function createServer(
         device: devices.match(parseCookies(request.headers.get("cookie")).get(DEVICE_COOKIE)),
         ...identityOf(),
         tokenConfigured: token !== "",
+        trustLocal,
         gated: devices.gated,
       });
       const authenticated = access.level === "full" || (bridgePath && bridgeAuthorized);

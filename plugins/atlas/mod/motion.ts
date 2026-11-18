@@ -10,7 +10,7 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
+import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTE5, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from './atlas-ui';
 
 /** The ONE spinner tick (wave 37): the frame index (0..3, an index into the one spinner's four frames) at the clock reading `now` (ms). The band lead, the titles and the side panel read this one clock; the
  * rows count the same beats unwrapped (`Math.floor(now / SPINNER_MS)`, atlas-ui spinFrameOf), which is the same frame modulo four, so every surface draws one glyph in a frame. */
@@ -235,7 +235,7 @@ export function easeSteps256(_accent: string, rest: string, theme: Ui['theme']):
   const hit = stepsCache.get(key);
   if (hit) return hit;
   const target = fitHex(rest, theme);
-  const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : '#ffffff', theme);
+  const lead = fitHex(theme === 'latte' ? PALETTES.latte.ink : PALETTES.mocha.white, theme);
   const steps = visible(lead, target) ? [lead] : [];
   stepsCache.set(key, steps);
   return steps;
@@ -303,7 +303,7 @@ const calm = new WeakSet<Run>();
 export const calmRun = (r: Run): Run => { calm.add(r); return r; };
 
 /** The done fade's two steps (xterm 231 and 151). */
-export const DONE_FADE = ['#ffffff', xtermHex(151)] as const; // xterm 231 then 151, named by index so no second hex literal is spelled
+export const DONE_FADE = [PALETTES.mocha.white, xtermHex(151)] as const; // xterm 231 then 151, named by index so no second hex literal is spelled
 
 const rampCache = new Map<string, readonly string[]>();
 /**
@@ -345,13 +345,13 @@ export function animateRow(runs: Run[], key: string, accent: MarkState, ctx: Mot
       out = out.map((r, i) => (wantsDone(r, i) ? weighted({ ...r, fg: fade }, beat) : r)); // the weight falls on the last beat, the colour on the frame after it
     } else if (ui.color !== 'none') {
       const palette = PALETTES[ui.theme];
-      const lead = mixHex(palette[markToken(accent)], '#ffffff', LEAD_WHITE);
+      const lead = mixHex(palette[markToken(accent)], PALETTES.mocha.white, LEAD_WHITE);
       // The weight falls on the last beat (`weighted`): the colour holds the previous beat's mix then, so one frame never moves both (critique 18: bold dropped as the text stepped 151 to 146).
       const t = easeOutCubic(beat >= MAX_BEATS - 1 ? Math.min(1, Math.max(0, ((beat - 1) * MOTION_STEP_MS) / MOTION_MS)) : pc);
       const wants = o.tint ?? ((r: Run) => r.bg === undefined && r.t.trim() !== '' && !calm.has(r));
       out = out.map((r, i) => {
         if (!wants(r, i)) return r;
-        const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : '#585858') : palette[r.tone]);
+        const rest = r.fg ?? (r.tone === 'dim' ? (ui.theme === 'latte' ? palette.muted : PALETTE5.dim) : palette[r.tone]);
         if (ui.color === '256') {
           const steps = ramp256(palette[markToken(accent)], rest, ui.theme, r.bold !== true);
           // No staircase for this pair: the row keeps its tone (the glyph pop still moves).

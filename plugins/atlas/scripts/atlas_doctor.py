@@ -746,6 +746,21 @@ def check_output_style(settings_path=None):
     )
 
 
+def check_mod_surface(env=None):
+    """(ok, one-line detail): same observable-env check session boot reports. ok False
+    means the mod cannot be confirmed here; the host skipping atlas handlers is not detectable."""
+    hooks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hooks")
+    if hooks_dir not in sys.path:
+        sys.path.insert(0, hooks_dir)
+    try:
+        import session_boot_core
+
+        ok, why = session_boot_core.mod_surface_status(env)
+    except Exception as exc:
+        return False, f"mod surface check failed ({exc!r})"
+    return ok, ("mod surface: " if ok else "atlas mod not confirmed active: ") + why
+
+
 OMP_MECHANIC_ROLES = ("atlas-mechanic", "atlas-worker")
 
 
@@ -2109,6 +2124,10 @@ def _content_checks(add, ctx, ip, clone, plugin_name):
     # C10: explicit user outputStyle must not hide Atlas Orchestrator headers
     style_ok, style_detail = check_output_style()
     add("output-style", style_ok, style_detail)
+
+    # H5: WARN-only; a surface property, not an install fault.
+    mod_ok, mod_detail = check_mod_surface()
+    add("mod-surface", mod_ok, mod_detail, severity="warn")
 
     # C11: the project this doctor runs in should carry the atlas-tooling
     # routing block. WARN-severity: it does not count toward `failed`/exit

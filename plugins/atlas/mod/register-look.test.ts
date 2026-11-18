@@ -114,3 +114,40 @@ test('B5 the HUD and the board both read elapsed from the snapshot clock (claime
   expect(await hud($)).toContain('elapsed 00:42');
   expect(await pane($, 'atlas-board', 'Board')).toContain('elapsed 00:42');
 });
+
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { clearLook, lookOf, lookRich, lookUi } from './look';
+
+const MOD_DIR = new URL('.', import.meta.url).pathname;
+const modSources = (dir = ''): string[] =>
+  readdirSync(join(MOD_DIR, dir)).flatMap((n) => {
+    const rel = dir ? `${dir}/${n}` : n;
+    if (statSync(join(MOD_DIR, rel)).isDirectory()) return modSources(rel);
+    return /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) ? [rel] : [];
+  });
+
+test('M2: only look.ts (and the token file that defines it) reads the theme from the environment', () => {
+  const stray: string[] = [];
+  for (const f of modSources()) {
+    if (f === 'look.ts' || f === 'atlas-ui.ts') continue;
+    const src = readFileSync(join(MOD_DIR, f), 'utf8');
+    if (/\buiFromEnv\b/.test(src)) stray.push(`${f}: uiFromEnv`);
+    if (/hostEnv\(\)\s*\.\s*(ATLAS_|NO_COLOR|COLORTERM|COLORFGBG|LC_|LANG\b|TERM\b)/.test(src)) stray.push(`${f}: hostEnv() read`);
+  }
+  expect(stray).toEqual([]);
+});
+
+test('M2: a caller that omits the ui gets the one session look (NO_COLOR, ASCII, rich)', async () => {
+  clearLook();
+  try {
+    const vals: Record<string, string> = { NO_COLOR: '1', ATLAS_ASCII: '1', ATLAS_BAND_RICH: '1' };
+    const look = await lookOf({ env: { get: async (k: string) => vals[k] } } as never);
+    expect(look.ui.color).toBe('none');
+    expect(look.ui.ascii).toBe(true);
+    expect(lookUi()).toEqual(look.ui);
+    expect(lookRich()).toBe(true);
+  } finally {
+    clearLook();
+  }
+});

@@ -175,3 +175,10 @@ describe('sidebar interactions', () => {
   });
   void pressable;
 });
+
+// These fixtures pin truecolor hexes; a tmux-style TERM=*256color with no COLORTERM would put the bare surfaces in 256-colour mode, so pin the depth for this file.
+import { clearLook } from '../look';
+import { afterAll as pinAfter, beforeAll as pinBefore } from 'bun:test';
+let pinnedColorterm: string | undefined;
+pinBefore(() => { clearLook(); pinnedColorterm = process.env.COLORTERM; process.env.COLORTERM = 'truecolor'; });
+pinAfter(() => { if (pinnedColorterm === undefined) delete process.env.COLORTERM; else process.env.COLORTERM = pinnedColorterm; });

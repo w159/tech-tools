@@ -17,7 +17,7 @@ const ascii: Ui = { theme: 'mocha', ascii: true, color: 'truecolor' };
 describe('tokens', () => {
   test('Mocha and Latte carry every token as #rrggbb, with the rev 4 values', () => {
     for (const theme of ['mocha', 'latte'] as const) {
-      expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'block', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
+      expect(Object.keys(PALETTES[theme]).sort()).toEqual(['accent', 'bad', 'base', 'block', 'blue', 'cyan', 'info', 'ink', 'line', 'muted', 'ok', 'panel', 'queued_fill', 'run', 'sub', 'text', 'warn', 'white']);
       for (const hex of Object.values(PALETTES[theme])) expect(hex).toMatch(/^#[0-9a-f]{6}$/);
     }
     expect(PALETTES.mocha).toMatchObject({ panel: '#181825', text: '#d0d0d0', run: '#d0d0d0', accent: '#af87ff', ok: '#87d787', warn: '#d7af5f', bad: '#ff5f5f', block: '#ff5f5f', ink: '#1c1c1c', line: '#585858' }); // round 3: 252, 141, 114, 179, 203, 234; the rule is the one dim grey (240)
@@ -324,4 +324,43 @@ test('live 6b7f637d: a struck name column strikes the name, never the padding sp
   const struck = runs.filter((x) => x.strike);
   expect(struck.map((x) => x.t)).toEqual(['T2 read']);
   expect(runs.map((x) => x.t).join('')).toContain('T2 read     '); // the column still pads to its width
+});
+
+import { GLYPH5_ASCII, paintAnsi, phaseGlyph } from './atlas-ui';
+
+describe('M1: one state-glyph table', () => {
+  test('GLYPH5 marks are the STATE_GLYPHS marks, not a second spelling', () => {
+    for (const s of ['running', 'done', 'failed', 'blocked', 'queued'] as const) expect([s, GLYPH5[s]]).toEqual([s, STATE_GLYPHS[s]]);
+  });
+  test('GLYPH5_ASCII marks are the STATE_ASCII marks', () => {
+    for (const s of ['done', 'failed', 'blocked', 'queued'] as const) expect([s, GLYPH5_ASCII[s]]).toEqual([s, STATE_ASCII[s]]);
+  });
+  test('the phase mark reads the same table as the row mark, in both alphabets', () => {
+    for (const k of ['done', 'blocked'] as const) {
+      expect([k, phaseGlyph(k, 0)]).toEqual([k, stateGlyph(k, mocha)]);
+      expect([k, phaseGlyph(k, 0, true)]).toEqual([k, stateGlyph(k, ascii)]);
+    }
+  });
+});
+
+describe('256-colour mode keeps each token its hue (Latte included)', () => {
+  const idx = (s: string, layer: 38 | 48): number => Number(new RegExp(`${layer};5;(\\d+)`).exec(s)![1]);
+  const chan = (hex: string): number[] => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  const spreadOf = (hex: string): number => Math.max(...chan(hex)) - Math.min(...chan(hex));
+  const domOf = (hex: string): number => chan(hex).indexOf(Math.max(...chan(hex)));
+  const clearDom = (hex: string): boolean => { const [a, b] = [...chan(hex)].sort((x, y) => y - x); return a! - b! >= 20; };
+  for (const theme of ['mocha', 'latte'] as const) {
+    test(`${theme}: a chromatic token stays chromatic in its own hue, a neutral one stays neutral`, () => {
+      const bad: string[] = [];
+      for (const tok of Object.keys(PALETTES[theme]) as (keyof typeof PALETTES.mocha)[]) {
+        const out = paintAnsi({ t: 'x', tone: tok }, { theme, ascii: false, color: '256' });
+        const [fg, bg] = [xtermHex(idx(out, 38)), xtermHex(idx(out, 48))];
+        for (const [name, want, got] of [[`${tok} fg`, PALETTES[theme][tok], fg], ['panel fill', PALETTES[theme].panel, bg]] as const) {
+          if (spreadOf(want) >= 60 && ((clearDom(want) && domOf(want) !== domOf(got)) || spreadOf(got) < 40)) bad.push(`${name}: ${want} drawn as ${got}`);
+          if (spreadOf(want) <= 24 && spreadOf(got) > 24) bad.push(`${name}: ${want} drawn as ${got}`);
+        }
+      }
+      expect(bad).toEqual([]);
+    });
+  }
 });

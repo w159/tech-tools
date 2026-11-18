@@ -5,10 +5,32 @@ const device = { id: "d1", label: "Phone", role: "drive" as const };
 const base: AccessInput = { loopback: true, forwarded: false, funnel: false, tailscaleLogin: null, tokenMatched: false, device: null, owner: null, tagged: false, tokenConfigured: false, gated: false };
 const via = (input: Partial<AccessInput>) => { const a = decideAccess({ ...base, ...input }); return a.level === "full" ? a.via : `refused:${a.reason}`; };
 
+describe("ensureLocalToken", () => {
+  it("creates one owner-only token and keeps it across restarts (X3)", async () => {
+    const { mkdtempSync, statSync, readFileSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { ensureLocalToken, LOCAL_TOKEN_FILE } = await import("./access.ts");
+    const dir = join(mkdtempSync(join(tmpdir(), "herdr-token-")), "state");
+    const first = ensureLocalToken(dir);
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    expect(ensureLocalToken(dir)).toBe(first);
+    expect(readFileSync(join(dir, LOCAL_TOKEN_FILE), "utf8").trim()).toBe(first);
+    expect(statSync(join(dir, LOCAL_TOKEN_FILE)).mode & 0o777).toBe(0o600);
+  });
+});
+
 describe("decideAccess", () => {
-  it("lets this PC in without a token, but not through a proxy", () => {
-    expect(via({})).toBe("local");
-    expect(via({ forwarded: true, gated: true })).toBe("refused:pairing_required");
+  it("refuses a bare loopback request with no token by default (X3)", () => {
+    expect(via({})).toBe("refused:token_required");
+    expect(via({ tagged: true })).toBe("refused:token_required");
+    expect(via({ tokenMatched: true })).toBe("token");
+  });
+
+  it("lets this PC in without a token only on the explicit trusted-host opt-out, and not through a proxy", () => {
+    expect(via({ trustLocal: true })).toBe("local");
+    expect(via({ trustLocal: true, tagged: true })).toBe("local");
+    expect(via({ trustLocal: true, forwarded: true, gated: true })).toBe("refused:pairing_required");
   });
 
   it("keeps everything open, as before, while no token and no device exist", () => {
@@ -42,7 +64,6 @@ describe("decideAccess", () => {
     expect(via({ forwarded: true, tagged: true })).toBe("refused:pairing_required");
     expect(via({ forwarded: true, tagged: true, tailscaleLogin: "me@example.com", tokenConfigured: true })).toBe("refused:token_required");
     expect(via({ forwarded: true, tagged: true, tailscaleLogin: "me@example.com", device })).toBe("device");
-    expect(via({ tagged: true })).toBe("local");
     // a login header alone marks a proxy: with no owner to refuse it against, it must not pass for this PC
     expect(cameThroughProxy(new Headers({ host: "localhost:7317", "tailscale-user-login": "them@example.com" }))).toBe(true);
     // a login named for the PC lets that person in as on any other node

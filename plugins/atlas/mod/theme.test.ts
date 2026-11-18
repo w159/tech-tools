@@ -89,3 +89,54 @@ test('textWidth: a skin tone after an emoji, variation selectors, combining mark
   expect(textWidth('ก้ำ')).toBe(2); // U+0E01 U+0E49 (mark) U+0E33 (spacing vowel)
   expect(textWidth('กัิฺ็๎')).toBe(1);
 });
+
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
+const MOD_ROOT = new URL('.', import.meta.url).pathname;
+const sourcesUnder = (dir = ''): string[] =>
+  readdirSync(join(MOD_ROOT, dir)).flatMap((n) => {
+    const rel = dir ? `${dir}/${n}` : n;
+    if (statSync(join(MOD_ROOT, rel)).isDirectory()) return sourcesUnder(rel);
+    return /\.tsx?$/.test(n) && !/\.test\.tsx?$/.test(n) && !/\.d\.ts$/.test(n) ? [rel] : [];
+  });
+
+/** The runtime (value) edges of one source file: `import type` and all-`type` specifier lists are erased, `export ... from` stays. */
+const runtimeEdges = (rel: string): string[] => {
+  const src = readFileSync(join(MOD_ROOT, rel), 'utf8');
+  const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
+  const out: string[] = [];
+  const add = (spec: string): void => {
+    const base = join('/', dir, spec).slice(1);
+    for (const ext of ['.ts', '.tsx', '/index.ts', '/index.tsx']) if (sourcesUnder_cache().includes(base + ext)) return void out.push(base + ext);
+  };
+  for (const m of src.matchAll(/^import\s+(?!type\b)([^;]*?)\s+from\s+'(\.[^']*)'/gm)) {
+    const names = m[1]!.replace(/[{}]/g, '').split(',').map((s) => s.trim()).filter(Boolean);
+    if (names.some((n) => !n.startsWith('type '))) add(m[2]!);
+  }
+  for (const m of src.matchAll(/^export\s+(?!type\b)(?:\{[^}]*\}|\*)\s+from\s+'(\.[^']*)'/gm)) add(m[1]!);
+  return out;
+};
+let cache: string[] | undefined;
+const sourcesUnder_cache = (): string[] => (cache ??= sourcesUnder());
+const reaches = (from: string, to: string): boolean => {
+  const seen = new Set<string>();
+  const walk = (f: string): boolean => runtimeEdges(f).some((n) => n === to || (!seen.has(n) && (seen.add(n), walk(n))));
+  return walk(from);
+};
+
+test('M4: band-frame.ts and status-frame.ts are not a runtime import cycle', () => {
+  expect(sourcesUnder_cache()).toContain('band-frame.ts');
+  expect(sourcesUnder_cache()).toContain('status-frame.ts');
+  expect([reaches('band-frame.ts', 'status-frame.ts'), reaches('status-frame.ts', 'band-frame.ts')]).not.toEqual([true, true]);
+  expect(reaches('band-frame.ts', 'band-frame.ts')).toBe(false);
+});
+
+test('M5: no hex colour literal outside the token file (atlas-ui.ts) and the files that own another palette', () => {
+  const OWN_PALETTE = (f: string): boolean => f === 'atlas-ui.ts' || f === 'contract.ts' || f === 'data/personas.ts' || f.startsWith('sprites/') || f.startsWith('fixtures/') || /golden-(fixture|cases)\.ts$/.test(f);
+  const stray: string[] = [];
+  for (const f of sourcesUnder_cache().filter((x) => !OWN_PALETTE(x))) {
+    for (const m of readFileSync(join(MOD_ROOT, f), 'utf8').matchAll(/#[0-9a-fA-F]{6}\b/g)) stray.push(`${f}: ${m[0]}`);
+  }
+  expect(stray).toEqual([]);
+});

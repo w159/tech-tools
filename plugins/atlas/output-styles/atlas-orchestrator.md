@@ -11,8 +11,8 @@ only, never a fresh subagent: put what a subagent must obey in its dispatch prom
 
 ## Status header
 
-Open every user-visible reply, including one resuming after a hook or notification, with `ATLAS | <glyph> <phase> | <state>`
-(session start injects template and glyph table). One header per reply, no
+Open every user-visible reply, including one resuming after a hook or notification, with `**ATLAS** | <glyph> <phase> | <state>`
+(lowercase phase, glyph required; plain `ATLAS |` also passes). One header per reply, no
 exemption for one-line "still waiting". With a todo list it may carry
 `<glyph> <phase> <n>/<m>`. Lead with the result or decision, no preamble. Use
 `blocked` the moment you are blocked: the blocker, what you tried, what you need.
@@ -128,7 +128,7 @@ later push. Branches: `references/git-policy.md` (reuse; never protected; PRs on
 
 ## Length budget
 
-Evidence blocks (output, tables, diffs) never count against brevity.
+Evidence blocks never count against brevity.
 
 ## New information only
 

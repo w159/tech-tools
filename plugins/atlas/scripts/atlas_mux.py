@@ -173,7 +173,13 @@ def worker_allow(tools_profile=None) -> tuple:
     subcommand each, the read pinned to `--to`. Without the note rule a read-profile worker had no python3 rule, `claude -p` denied the
     protocol note ("This command requires approval") and the worker never posted to the board."""
     todo = _todo_script()
-    allow = WORKER_MCP_ALLOW + (f"Bash(python3 {todo} note *)", f"Bash(python3 {todo} notes --to *)")
+    # `report` is the one sanctioned way a read-only worker hands back a long deliverable (body on stdin): without
+    # it those workers had no Write and no heredoc and could not return their file.
+    allow = WORKER_MCP_ALLOW + (
+        f"Bash(python3 {todo} note *)",
+        f"Bash(python3 {todo} notes --to *)",
+        f"Bash(python3 {todo} report *)",
+    )
     if tools_profile in ("read", "edit", "exec"):
         allow += WORKER_READ_ALLOW
     if tools_profile in ("edit", "exec"):
@@ -264,12 +270,12 @@ def _brief_wait(out: dict) -> str:
         running = sum(1 for m in rows if m["exit"] is None and not m["dead_without_report"])
         lines = [f"team {out['team_id']}: {done}/{len(rows)} finished, TIMED OUT after --timeout {out.get('timeout_s')}s; {running} still running (run wait again with a larger --timeout, or reap)"]
     else:
-        lines = [f"team {out['team_id']}: {done}/{len(rows)} finished after {out['elapsed_s']}s" + ("" if out["ok"] else (", FAILED" if out.get("outcome") == "failed" else ", NOT finished"))]
+        lines = [f"team {out['team_id']}: {done}/{len(rows)} finished" + (f" after {out['elapsed_s']}s" if out.get("elapsed_s") is not None else "") + ("" if out["ok"] else (", FAILED" if out.get("outcome") == "failed" else ", NOT finished"))]
     for m in rows:
         if m.get("never_launched"):
             state = f"never launched: {m.get('launch_error')}"
         elif m["exit"] is not None:
-            state = f"exit {m['exit']} {m['duration_s']}s" + (f" ({m['failure']})" if m.get("failure") else "")
+            state = f"exit {m['exit']}" + (f" {m['duration_s']}s" if m.get("duration_s") is not None else "") + (f" ({m['failure']})" if m.get("failure") else "")
         else:
             state = "dead without report" if m["dead_without_report"] else "running"
         lines.append(f"  {m['name']} {state}" + (f" {m['last_status']}" if m.get("last_status") else ""))
@@ -2256,6 +2262,9 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
         f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read: {cmd} notes --to {me} {flags}\n"
+        f"Report (long final output, body on stdin): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
+        "Give the report body as a heredoc on that command; it must hold a STATUS: DONE|FAILED|BLOCKED line or it is rejected. "
+        "A read-only worker has no Write tool: this is the only way to hand back a long deliverable.\n"
         f"1. After a first finding, note {lead}.\n"
         "2. Before finishing, note each peer once (found, changed, avoid).\n"
         "3. Reply once to any peer note.\n"
@@ -2659,6 +2668,20 @@ def _wait_outcome(members: list, finished: bool, timed_out: bool) -> str:
     return "done" if finished and not bad else "failed"
 
 
+def _start_time(rec: dict) -> float | None:
+    """The team's spawn time, or None when the record has none. A missing or zero start used to be subtracted
+    anyway, so duration_s came out as an epoch value (1794975365.8) instead of no duration."""
+    created = rec.get("created")
+    if isinstance(created, bool) or not isinstance(created, (int, float)) or created <= 0:
+        return None
+    return float(created)
+
+
+def _duration(end, start: float | None) -> float | None:
+    end = _num(float, end, None)
+    return None if start is None or end is None else round(end - start, 1)
+
+
 def _record_wait(rec: dict, members: list, finished: bool, timed_out: bool) -> None:
     """Anonymous analytics: how the team run ended (team.outcome.*) and its wall time since spawn (team.wall.*).
     Never raises; no I/O when disabled."""
@@ -2667,8 +2690,8 @@ def _record_wait(rec: dict, members: list, finished: bool, timed_out: bool) -> N
         import atlas_analytics
 
         atlas_analytics.record("team.outcome." + _wait_outcome(members, finished, timed_out))
-        created = rec.get("created")
-        if isinstance(created, (int, float)):
+        created = _start_time(rec)
+        if created is not None:
             atlas_analytics.record("team.wall." + atlas_analytics.wall_bucket(max(0.0, time.time() - created)))
     except Exception:  # noqa: BLE001 -- analytics never breaks a wait
         pass
@@ -2848,6 +2871,9 @@ def cmd_wait(args) -> int:
     names = [m["name"] for m in rec["members"]]
     t0 = time.time()
     since = rec.get("created")  # the latest spawn-team launch; older exit notes belong to a previous run
+    started = _start_time(rec)
+    progress_s = _num(float, getattr(args, "progress", 0), 0.0)
+    last_progress = t0
 
     never_launched = set(rec.get("failed_members") or {})
 
@@ -2866,6 +2892,19 @@ def cmd_wait(args) -> int:
         silent = dead_silent()
         if all(_exited(root, n, since) or n in silent for n in names):
             break
+        if progress_s > 0 and time.time() - last_progress >= progress_s:
+            # a long wait used to print nothing for the whole timeout; stderr keeps the --json stdout clean
+            last_progress = time.time()
+            states = [
+                f"{n} " + ("reported" if _exited(root, n, since) else "dead" if n in silent else "running")
+                for n in names
+            ]
+            reported = sum(1 for s in states if s.endswith("reported"))
+            print(
+                f"wait {args.team}: {int(last_progress - t0)}s, {reported}/{len(names)} reported: " + ", ".join(states),
+                file=sys.stderr,
+                flush=True,
+            )
         time.sleep(args.poll)
     silent = dead_silent()
     timed_out = not all(_exited(root, n, since) or n in silent for n in names)
@@ -2890,9 +2929,7 @@ def cmd_wait(args) -> int:
                 "exit": _num(int, found.group(1), None) if found else None,
                 "dead_without_report": n in silent and not found,
                 **({"never_launched": True, "launch_error": rec["failed_members"][n]} if n in never_launched else {}),
-                "duration_s": round(_num(float, mine[-1]["ts"], rec["created"]) - rec["created"], 1)
-                if found
-                else None,
+                "duration_s": _duration(mine[-1].get("ts"), started) if found else None,
                 "last_status": status,
                 **({"failure": why.group(1)} if found and (why := _EXIT_REASON_RE.search(found.group(0))) else {}),
             }
@@ -2911,9 +2948,12 @@ def cmd_wait(args) -> int:
             "members": members,
             "notes_worker_to_worker": w2w,
             # the team own wall time (spawn to the last member end), not how long this wait ran
-            "elapsed_s": max((m["duration_s"] for m in members if m["duration_s"] is not None), default=0.0)
+            "elapsed_s": max(
+                (m["duration_s"] for m in members if m["duration_s"] is not None),
+                default=0.0 if started is not None else None,
+            )
             if finished
-            else round(time.time() - rec["created"], 1),
+            else (round(time.time() - started, 1) if started is not None else None),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
             **({"timed_out": True, "timeout_s": args.timeout} if timed_out else {}),
         },
@@ -3183,6 +3223,12 @@ def _parser() -> argparse.ArgumentParser:
         sp.add_argument("--timeout", type=float, default=600)
         sp.add_argument("--poll", type=float, default=1.0)
         if name == "wait":
+            sp.add_argument(
+                "--progress",
+                type=float,
+                default=60.0,
+                help="seconds between per-member state lines on stderr while waiting (0 = off)",
+            )
             sp.add_argument(
                 "--kill-on-timeout",
                 action="store_true",

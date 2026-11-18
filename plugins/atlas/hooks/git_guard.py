@@ -12,6 +12,11 @@ What it decides, per tool call:
   MCP `push_files|create_or_update_file|delete_file` on a protected branch -> on_protected policy
   Agent/Task with isolation "worktree"                                    -> max_worktrees
 
+Commands are matched statically (bash_advisor._git_invocations): wrappers, sh -c, eval, `g=git; $g`,
+`echo ... | sh`, find -exec and python -c os.system/subprocess are seen through. Not seen: a command
+built at run time (substitution output, `eval "$x"`, a script written then run), other interpreters,
+shell functions and aliases. Only real git pre-commit/pre-push hooks close those.
+
 Decisions are Claude Code permissionDecision values: deny (Claude reads the reason), ask (the human
 gets a permission prompt), or nothing. Fail-open: any error lets the call through, like every atlas
 hook. ATLAS_GIT_GUARD=off disables it.

@@ -3,7 +3,7 @@
 // surface (band, HUD, side panel, board, cards, toasts, notifications) takes its Ui from this one read. `hostEnv()` stays
 // only as the fallback for a host that does have a process (bun, omp) when `$.env` has nothing to say.
 import type { EngineInterface } from 'claude-code';
-import { hostEnv, uiFromEnv, type Ui } from './atlas-ui';
+import { hostEnv, uiFromEnv, type Ui, type UiEnv } from './atlas-ui';
 
 export type Look = { ui: Ui; rich: boolean };
 
@@ -35,3 +35,10 @@ export async function lookOf($: EngineInterface): Promise<Look> {
 	return cached;
 }
 
+
+/** The Ui for a surface whose caller passed none: the session look once read, else the process environment (bun, omp, a fixture). The one door, so NO_COLOR and ASCII agree on every surface. */
+export const lookUi = (): Ui => cached?.ui ?? uiFromEnv();
+/** The rich switch for a surface whose caller passed none, from the same read as `lookUi`. */
+export const lookRich = (): boolean => cached?.rich ?? hostEnv().ATLAS_BAND_RICH === '1';
+/** A Ui from an explicit environment (a fixture or a demo that must not follow the process). */
+export const uiFrom = (env: UiEnv): Ui => uiFromEnv(env);

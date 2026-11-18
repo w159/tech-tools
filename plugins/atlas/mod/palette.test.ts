@@ -44,7 +44,7 @@ describe('critique 25: one palette', () => {
       for (const m of src.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
         const hex = m[0].toLowerCase();
         if (ALLOWED.has(hex)) continue;
-        if (f === 'mod/theme.ts' && hex === SPRITE_TILE) continue;
+        if (f === 'mod/atlas-ui.ts' && hex === SPRITE_TILE) continue;
         stray.push(`${f}: ${hex}`);
       }
     }
@@ -58,12 +58,13 @@ describe('critique 25: one palette', () => {
     }
     expect(raw).toEqual([]);
   });
-  test('the lead-line bar takes four values: accent for an active phase, ok for done, error for blocked (quiet and note bars use the secondary grey)', () => {
-    const tones = new Set((['research', 'plan', 'build', 'verify', 'done', 'blocked'] as const).map((p) => leadTone(p as never)));
-    expect([...tones].sort()).toEqual(['accent', 'bad', 'ok']);
-    expect(leadTone('done' as never)).toBe('ok');
-    expect(leadTone('blocked' as never)).toBe('bad');
+  test('the lead-line bar takes one tone per phase, read from the contract phase table; an unknown phase falls back to accent (quiet and note bars use the secondary grey)', () => {
+    const phases = ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'] as const;
+    expect(new Set(phases.map((p) => leadTone(p))).size).toBe(8);
+    expect(leadTone('done')).toBe('ok');
+    expect(leadTone('blocked')).toBe('bad');
     expect(leadTone('build' as never)).toBe('accent');
+    for (const p of phases) expect(Object.keys(PALETTES.mocha)).toContain(leadTone(p));
   });
   test('the retired off-palette greys and pastels are gone from the Mocha tokens', () => {
     const mocha = new Set(hexes(PALETTES.mocha));

@@ -8,7 +8,7 @@
 // Overflow (2.8): HOOKS rows shrink first (one row stays), then RUNS goes, then gate child rows collapse to group rows. NOW and the denial line never shrink.
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
-import { bandLook } from './band-frame';
+import { bandLook, ctxLevel, latencyLevel } from './band-frame';
 import { WIRED_HOOKS } from './hook-log';
 import { agoText, gatesSummary, promptedOf, severityOf, teamOf, tokenText, type Health } from './idle-health';
 import { bucketLabel, chartSeries, CHART_AXIS_MIN, chartMinutes, metricsOf, P95_MIN_SAMPLES, PANEL_CHART_COLS, ROUND_BUCKETS, roundBucket, runFigures, runsOf, STATUS_BUCKETS, type ChartData } from './metrics';
@@ -16,6 +16,9 @@ import { ctxDelta, ctxRunway } from './pulse';
 import { blockSpark } from './chart';
 import { fitText, textWidth } from './theme';
 import { gateCounts } from './vocab';
+
+// The level helpers live in band-frame.ts (it cannot import this file back); re-exported for the callers that import them from here.
+export { ctxLevel, latencyLevel };
 
 // AA1: the figures live in metrics.ts; the frames only format them (re-exported here for the callers that always imported them from this file).
 export { bucketLabel, chartSeries, CHART_AXIS_MIN, chartMinutes, P95_MIN_SAMPLES, PANEL_CHART_COLS, ROUND_BUCKETS, roundBucket, runFigures, runsOf, STATUS_BUCKETS, type ChartData };
@@ -207,9 +210,6 @@ export function statusActivityRows(kit: Kit, h: Health, rows: number): Run[][] {
   return out;
 }
 
-/** The context figure's colour (Y2d): green below 70 %, amber from 70 %, red from 90 %. */
-export const ctxLevel = (pct: number): 'ok' | 'warn' | 'bad' => (pct >= 90 ? 'bad' : pct >= 70 ? 'warn' : 'ok');
-
 /** CONTEXT (E): the ribbon carries the runway; one row, the gauge and `6% · 64k of 1M · +12k/turn` (the delta from two measures on). The gauge and the percentage take the ramp (Y2d: green, amber from 70 %, red from 90 %); the token figures are neutral. Absent before the first measure. */
 export function statusContextRows(kit: Kit, h: Health): Run[][] {
   const { dim, txt, amber, green, red, row, ribbon, metaText, g } = kit;
@@ -397,9 +397,6 @@ export function hookTable(h: Health): HookRow[] {
     return { name, n, ...(ms.length ? { p50: rank(0.5), p95: rank(0.95), samples: ms.length } : {}), ...(mine.length ? { lastSecs: Math.min(...mine.map((e) => e.ageSecs)) } : {}) };
   });
 }
-
-/** The latency colour on every surface (Z3): green up to 100 ms, amber above 100, red above 500. */
-export const latencyLevel = (ms: number): 'ok' | 'warn' | 'bad' => (ms > 500 ? 'bad' : ms > 100 ? 'warn' : 'ok');
 
 /** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. Z2: a hook with fewer than 5 samples shows its single or median value in p50 and `—` in p95, so one number is never printed as two statistics. Z3: p50 and p95 take the latency colours (green to 100 ms, amber above, red above 500) whatever the session; the rule states the two thresholds once. `rows` cuts the table from the end on a short pane. */
 export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {

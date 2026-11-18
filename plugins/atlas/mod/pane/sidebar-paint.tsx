@@ -1,7 +1,7 @@
 // sidebar-paint.tsx: PanelLines (mod/panel-layout.ts) as Claude Code elements. A row with a press is a plain Button; every
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { fillHex, surfaceHex, uiFromEnv, type Run, type Ui, runHex } from '../atlas-ui';
+import { fillHex, surfaceHex, type Run, type Ui, runHex } from '../atlas-ui'; import { lookUi } from '../look';
 import { hoverStyle } from '../clickable';
 import { bodyLines, fillRows, frameTabOf, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
@@ -61,7 +61,7 @@ export const inputEl = (els: ClientElements, m: SidebarModel, on: SidebarHandler
 /** One tab's body as elements (no strip): the rows, then the message field on team and channel. `pm` is the panel model the
  * caller already built for this frame (sidebarTree builds it once for the ribbon and the body); without it the model is built here. */
 export function viewRows(tab: PanelTab, els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, pm?: PanelModel): RenderElement[] {
-  const ui = m.look ?? uiFromEnv();
+  const ui = m.look ?? lookUi();
   const model = pm ?? panelModelOf({ ...m, ui: { ...m.ui, view: tab } }, ui, inner);
   const body = bodyLines(model);
   const fill = fillRows(model, body.length).map((l) => lineEl(els, l.runs.length ? l : { runs: [{ t: ' ', tone: 'text' }] }, m, on, ui)); // the panel surface down to the foot row

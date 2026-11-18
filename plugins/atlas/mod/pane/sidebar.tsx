@@ -3,7 +3,7 @@
 // in mod/panel-layout.ts that the omp painter prints too). Each tab is a click chip (wave 43: no key letters are drawn or bound); the strip wraps only where the chips do not fit and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { cells, markOf, runHex, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { cells, markOf, runHex, spinClock, type Ui, type UiState } from '../atlas-ui'; import { lookUi } from '../look';
 import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
 import { backWord, bodyLines, boardEmptyRows, centred, chipText, frameTabOf, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
@@ -170,7 +170,7 @@ function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols
 }
 
 export function sidebarTree(els: ClientElements, model: SidebarModel, on: SidebarHandlers): RenderElement {
-  const ui = model.look ?? uiFromEnv(); // the host's one read (register.ts); the process environment only where a fixture sets none
+  const ui = model.look ?? lookUi(); // the host's one read (register.ts); the process environment only where a fixture sets none
   const cols = Math.max(10, model.columns - 1);
   const pm = panelModelOf(model, ui, cols);
   noteRunSecs(model.run?.secs); // the run card prints the band's clock (transcript/placed.ts)

@@ -46,6 +46,12 @@ def __getattr__(name):
         mod = importlib.import_module(name)
         globals()[name] = mod
         return mod
+    if name == "READ_ONLY_ROLES":
+        # completion_gate_core costs 7-14 ms of import on every tool call; only the role checks need it.
+        from completion_gate_core import READ_ONLY_ROLES
+
+        globals()[name] = READ_ONLY_ROLES
+        return READ_ONLY_ROLES
     raise AttributeError(name)
 
 
@@ -143,7 +149,7 @@ def _stash_findings_count(root, session, slot):
     stashes; a different session's state is discarded."""
     if root is None:
         return
-    with contextlib.suppress(Exception):
+    try:
         path = _watch_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         state = {}
@@ -161,6 +167,8 @@ def _stash_findings_count(root, session, slot):
             json.dumps({"session_id": session, "counts": counts}),
             encoding="utf-8",
         )
+    except Exception as exc:  # fail open (no baseline: verdict check stays silent) but leave a trace
+        _record_fault(exc, hook="dispatch_tripwire.verifier_baseline")
 
 
 def _verdict_missing(root, session, slot):
@@ -489,10 +497,13 @@ _CHEAP_MODEL = lre(r"(?i)(?<![a-z])(?:haiku|sonnet)(?![a-z])")
 
 
 def _cheap_exploration(tinput):
-    """True for a READ_ONLY_ROLES dispatch whose `model` string names haiku or sonnet (also `claude-sonnet-5`)."""
-    return _is_read_only_role(tinput.get("subagent_type")) and bool(
-        _CHEAP_MODEL.search(str(tinput.get("model") or ""))
-    )
+    """True for a READ_ONLY_ROLES dispatch whose role pins a haiku or sonnet model (`model:` in agents/<role>.md).
+    The pin decides, not the dispatch's `model` param: the docs tell the lead never to pass one."""
+    agent = _norm_agent(tinput.get("subagent_type"))
+    if not _is_read_only_role(agent):
+        return False
+    role = agent.split(":", 1)[-1] if agent.startswith("atlas:") else agent[len("atlas-") :]
+    return bool(_CHEAP_MODEL.search(_frontmatter_model(role) or ""))
 
 
 def _burst_note(root, session, exempt=False, tool_use_id=None):
@@ -564,10 +575,12 @@ CLOSING_ROLES = frozenset(
 # the team deny: the deny exists so editing subagents run as a tmux team with isolated files, and a
 # read-only role cannot edit, cannot conflict with a teammate, and is the cheapest lookup there is. Denying
 # a lone `SCOPE: audit/*` explorer forced a tmux team for a grep. verifier is already in CLOSING_ROLES.
-from completion_gate_core import READ_ONLY_ROLES  # noqa: E402  (one definition, shared with the Stop gate)
+# READ_ONLY_ROLES (one definition, shared with the Stop gate) is imported lazily: see __getattr__.
 
 
 def _is_read_only_role(subagent_type):
+    from completion_gate_core import READ_ONLY_ROLES
+
     agent = _norm_agent(subagent_type)
     for prefix in ("atlas:", "atlas-"):
         if agent.startswith(prefix):
@@ -847,8 +860,9 @@ def _close_dispatch(payload):
                 if slot in st.get("open", []):
                     st["open"].remove(slot)  # its own slot; already expired by the window: nothing to free
                 st["owners"] = owners
-            elif st.get("open"):
-                st["open"].pop(0)
+            elif not tuid and st.get("open"):
+                st["open"].pop(0)  # no id at all (non-Claude harness): oldest slot
+            # an id nobody recorded belongs to a denied dispatch: it must not free a running worker's slot
     except Exception as exc:
         _record_fault(exc)
 
@@ -890,7 +904,7 @@ def _lean_ctx_reachable(root=None):
         return True
     import shutil
 
-    with contextlib.suppress(Exception):
+    try:
         if not shutil.which("lean-ctx"):
             return False
         base = Path(root) if root else None
@@ -898,6 +912,8 @@ def _lean_ctx_reachable(root=None):
             cwd = Path(_PAYLOAD_CWD[0] or os.getcwd())
             base = find_root(cwd) or cwd
         return bool(_lean_ctx_server_key(base))
+    except Exception as exc:  # fail open (nothing demanded) but leave a trace
+        _record_fault(exc, hook="dispatch_tripwire.lean_ctx_probe")
     return False
 
 
@@ -969,7 +985,9 @@ def _toolkit_gap_reason(tool, gap):
         "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
         "includes lean-ctx (ctx_compose/ctx_search/ctx_read), plus "
         "context-mode for noisy output. The subagent must run that before "
-        "Read/Grep/Bash, never Bash grep. "
+        "Read/Grep/Bash, never Bash grep. Write exactly this line in the task: "
+        "`TOOLS: ToolSearch lean-ctx (ctx_compose, ctx_search, ctx_read); context-mode for noisy output.` "
+        "(Where lean-ctx is not loadable the gate does not ask for it; a `TOOLS: Grep, Glob, Read` line is enough.) "
         f"Without it {gap} greps the tree."
     )
 
@@ -1658,6 +1676,32 @@ def _is_read_only_bash(command):
     return True
 
 
+_RUN_OUTPUT_DIRS = (".atlas/.run/board", ".atlas/.run/briefs")
+_RUN_OUTPUT_READERS = frozenset({"cat", "ls", "head", "tail", "jq", "grep", "wc", "stat", "cut"})
+
+
+def _reads_run_output(command):
+    """True when a shell command only reads worker output under .atlas/.run/board/ or briefs/ (collecting a
+    team's results is not investigation drift): readers only, no redirect, no substitution, no other binary."""
+    if not isinstance(command, str):
+        return False
+    command = _unwrap_lean_ctx(command)
+    if not any(d in command.replace("\\", "/") for d in _RUN_OUTPUT_DIRS):
+        return False
+    if _SHELL_SUBSTITUTION.search(command):
+        return False
+    stripped = _HARMLESS_REDIRECT.sub(" ", command)
+    if ">" in stripped or "<" in stripped:
+        return False
+    segments = [s.split() for s in _SEGMENT_SPLIT.split(stripped)]
+    segments = [s for s in segments if s]
+    while segments and segments[0][0] == "cd":
+        segments.pop(0)
+    if not segments:
+        return False
+    return all(s[0].rsplit("/", 1)[-1] in _RUN_OUTPUT_READERS for s in segments)
+
+
 def _is_read_only_call(tool, tinput):
     """True for read-only investigation: Read/Grep/Glob, or a read-only Bash
     command. Such calls are not inline ops for the threshold; edits, writes and
@@ -1667,7 +1711,7 @@ def _is_read_only_call(tool, tinput):
     if tool != "Bash":
         return False
     command = (tinput or {}).get("command")
-    if _is_read_only_bash(command):
+    if _is_read_only_bash(command) or _reads_run_output(command):
         return True
     # Test runners, linters and type checks: the completion gate demands them, so they
     # are never inline drift (atlas_scope.is_verification_command).
@@ -3043,7 +3087,8 @@ def _run(payload):
             return
         if tool not in INLINE_TOOLS:
             return  # MultiEdit/NotebookEdit are logged for the footprint only
-        count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
+        # The same count the PreToolUse deny reads (docs/ and .atlas/ edits excluded): one rule, one number.
+        count = atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, run_id)
 
         edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(
             path, payload.get("cwd")

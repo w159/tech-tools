@@ -2,7 +2,7 @@
 //
 // Two forms of the same line reach the AssistantMessage site: the contract's own form, and the display form this mod writes through the classic `MessageDisplay` hook.
 // Why the display form exists (critique 23, 37 raw frames in 11 of 12 runs): while a reply streams, the host paints each flushed batch of whole lines itself and
-// does not ask `ui.render` for the message until it is complete (live-110-513bb41c-1 f0062-f0064: the raw `● ATLAS | 🔍 research | ...` row stands three 0.5 s frames
+// does not ask `ui.render` for the message until it is complete (live-110-513bb41c-1 f0062-f0064: the raw the raw `● ATLAS` pipe row row stands three 0.5 s frames
 // while the body streams under it, and the chip arrives at f0065). `MessageDisplay` is the one host event that sees those batches and may rewrite them for the screen
 // alone, so the first batch is rewritten to `research 1/3 · state`: never a pipe, never an emoji. The stored message, the model and the Stop gate keep the contract form.
 //
@@ -12,23 +12,26 @@ import type { RenderElement, RenderNode } from 'claude-code'
 import { PHASES } from '../intents'
 import { blockedText } from '../data/runstate'
 import type { PhaseId } from '../contract'
-import { runHex, stateRun, type Ui } from '../atlas-ui'
+import { runHex, stateRun, type Tone, type Ui } from '../atlas-ui'
+import { PHASE_TABLE, firstHeaderLine } from '../contract-pattern'
 
-export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display' }
+export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display'; /** The text after the header line (the line is the first non-empty one, so a leading blank line is not part of `rest`). */ rest: string }
 
 const PHASE_ALT = PHASES.join('|')
-/** operating-contract.json `phases[].glyph`, inline because the host loader refuses a .json import from a mod module (mod/contract-pattern.ts); header-brand.test.tsx reads the JSON to keep this equal. */
-const PHASE_GLYPH: Record<PhaseId, string> = { research: '🔍', theory: '💡', test: '🧪', validate: '📋', implement: '🔧', verify: '✅', done: '🏁', blocked: '⛔' }
+/** The phase table comes from mod/contract-pattern.ts (a code copy of operating-contract.json `phases`, kept equal by contract-pattern.test.ts); this file holds no glyph, label or tone of its own. */
+const PHASE_GLYPH = Object.fromEntries(PHASE_TABLE.map((p) => [p.id, p.glyph])) as Record<PhaseId, string>
+const PHASE_LABEL = Object.fromEntries(PHASE_TABLE.map((p) => [p.id, p.label])) as Record<PhaseId, string>
+const PHASE_TONE = Object.fromEntries(PHASE_TABLE.map((p) => [p.id, p.tone])) as Record<string, Tone>
 const PHASE_IN_LINE = new RegExp(`\\b(${PHASE_ALT})\\b`)
 /** The display form: `research 3/5 · state`, which the host paints after its own `●` bullet. The bar form `▌ research 3/5 · state` (what an earlier build wrote) is still read; the form with no bar needs the
  * count or the ` · ` so that a plain first line that is only a phase word (`done`) is no header. */
-const DISPLAY_RE = new RegExp(`^(?:▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?|(${PHASE_ALT})(?: (\\d+/\\d+)(?: · (.*))?| · (.*))|ATLAS (?:\\S+ )?(${PHASE_ALT})(?: (\\d+/\\d+))?(?: \\| (.*))?)$`)
+const DISPLAY_RE = new RegExp(`^(?:▌ (${PHASE_ALT})(?: (\\d+/\\d+))?(?: · (.*))?|(${PHASE_ALT})(?: (\\d+/\\d+)(?: · (.*))?| · (.*))|ATLAS (?:[^\\s|]+ )?(${PHASE_ALT})(?: (\\d+/\\d+))?(?: \\| (.*))?)$`)
 
 /** The header the first line of `text` pins, in either form; null when the first line is neither. `pattern` is the contract's `headerFirstLinePattern`. */
 export function leadOf(text: string, pattern: string): Lead | null {
-  const first = text.split('\n', 1)[0] ?? ''
+  const { line: first, rest } = firstHeaderLine(text) // the gate's rule: first non-empty line, stripped (audit-C9)
   const shown = DISPLAY_RE.exec(first)
-  if (shown) return { phase: (shown[1] ?? shown[4] ?? shown[8]) as PhaseId, count: shown[2] ?? shown[5] ?? shown[9] ?? '', sentence: (shown[3] ?? shown[6] ?? shown[7] ?? shown[10] ?? '').trim(), first, form: 'display' }
+  if (shown) return { phase: (shown[1] ?? shown[4] ?? shown[8]) as PhaseId, count: shown[2] ?? shown[5] ?? shown[9] ?? '', sentence: (shown[3] ?? shown[6] ?? shown[7] ?? shown[10] ?? '').trim(), first, form: 'display', rest }
   if (pattern === '') return null
   let re: RegExp
   try { re = new RegExp(pattern) } catch { return null }
@@ -36,7 +39,7 @@ export function leadOf(text: string, pattern: string): Lead | null {
   const phase = PHASE_IN_LINE.exec(first)?.[1]
   if (phase === undefined) return null
   const [, mid = '', ...tail] = first.split('|')
-  return { phase: phase as PhaseId, count: /(\d+)\s*\/\s*(\d+)/.exec(mid)?.slice(1, 3).join('/') ?? '', sentence: tail.join('|').trim(), first, form: 'contract' }
+  return { phase: phase as PhaseId, count: /(\d+)\s*\/\s*(\d+)/.exec(mid)?.slice(1, 3).join('/') ?? '', sentence: tail.join('|').trim(), first, form: 'contract', rest }
 }
 
 /** `research 3/5 · state`: the header as the host's own streaming row shows it (plain text: that row takes no colour). The host draws its own `●` before the row, so the line carries no bar of its own:
@@ -45,10 +48,12 @@ export const displayLine = (l: Lead, ascii = false): string => `ATLAS ${ascii ? 
 
 /** A MessageDisplay batch with its first line rewritten from the contract form to the display form; null when the batch holds no header (or already the display form). */
 export function displayDelta(delta: string, pattern: string, ascii = false): string | null {
-  const nl = delta.indexOf('\n')
-  const first = nl < 0 ? delta : delta.slice(0, nl)
+  const lead0 = /^(?:[ \t]*\r?\n)*/.exec(delta)?.[0] ?? '' // blank lines before the header stay as they are
+  const body = delta.slice(lead0.length)
+  const nl = body.indexOf('\n')
+  const first = nl < 0 ? body : body.slice(0, nl)
   const lead = leadOf(first, pattern)
-  return lead && lead.form === 'contract' ? displayLine(lead, ascii) + (nl < 0 ? '' : delta.slice(nl)) : null
+  return lead && lead.form === 'contract' ? lead0 + displayLine(lead, ascii) + (nl < 0 ? '' : body.slice(nl)) : null
 }
 
 // ---- the chip -------------------------------------------------------------------------------------------------------------
@@ -60,7 +65,7 @@ const fixed = { wrap: 'truncate-end' }
 
 /** The bar colour of a lead status line: four values and no others (critique 25: five bar colours on one screen). Accent 141 for an active phase, ok 114 for done, error 203 for blocked; the quiet
  * and superseded bars and the notes' bars take the secondary grey (245). */
-export const leadTone = (phase: PhaseId): 'accent' | 'ok' | 'bad' => (phase === 'done' ? 'ok' : phase === 'blocked' ? 'bad' : 'accent')
+export const leadTone = (phase: PhaseId): Tone => PHASE_TONE[phase] ?? 'accent'
 
 /** Wave 33 (critique 31: a green `▌ done all finished` over a failed worker and an open dispatch row): what the run really closed with. `done` with a failure reads `▌ done · 1 failed` in the warn amber (179); when the
  * run is blocked it reads the band's own words, `▌ ▲ blocked · stop refused` in the error red (203). State 38: the blocked text is data/runstate.ts blockedText, the very function the band calls, so the card and the band print one string.
@@ -77,7 +82,7 @@ export interface LeadOpts { ui: Ui; columns: number; /** The run's real close (v
 
 /** The chip's row: `▌ research 3/5 state`, the phase word in lower case like the band's. No background. Under 40 columns the bar and the word only. */
 export function leadRow(l: Lead, o: LeadOpts): RenderElement {
-  const paint = (tone: 'accent' | 'ok' | 'bad' | 'warn' | 'text' | 'sub' | 'dim'): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
+  const paint = (tone: Tone): Props => (o.ui.color === 'none' ? {} : { color: runHex({ tone }, o.ui.theme, o.ui.color) })
   const dead = o.superseded === true
   // Wave 30 (critique 28: `▌ done 4/5` in the done green): a `done` header over a partial count is a progress note, the accent and the word `working`; the done green and the word are for a complete count or none.
   const part = /^(\d+)\/(\d+)$/.exec(l.count)
@@ -94,7 +99,7 @@ export function leadRow(l: Lead, o: LeadOpts): RenderElement {
   if (!dead && !o.quiet) {
     const line = paint(progress ? 'accent' : leadTone(l.phase))
     const glyph = o.ui.ascii ? '' : ` ${PHASE_GLYPH[l.phase]}`
-    const head = keep(txt({ ...fixed, ...line, bold: true }, ` ATLAS${glyph} ${progress ? 'working' : l.phase}`))
+    const head = keep(txt({ ...fixed, ...line, bold: true }, ` ATLAS${glyph} ${progress ? 'working' : PHASE_LABEL[l.phase]}`))
     const tail = o.columns > 0 && o.columns < 40 ? [] : [...(l.count ? [keep(txt({ ...fixed, ...line }, ` ${l.count}`))] : []), ...(l.sentence ? [txt({ wrap: 'wrap', ...line }, ` | ${l.sentence}`)] : [])]
     return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: [keep(bar), head, ...tail] }
   }
@@ -108,13 +113,14 @@ export function leadRow(l: Lead, o: LeadOpts): RenderElement {
   return { type: 'Box', props: { flexDirection: 'row', flexShrink: 0 }, children: kids }
 }
 
-/** A header still streaming in (`ATLAS |`, `ATLAS | 🏁 do`): the bar, and the word once it is whole. A finished first line that is no header is not this. */
+/** A header still streaming in (`ATLAS |`, then the glyph and a partial phase word): the bar, and the word once it is whole. A finished first line that is no header is not this. */
 export function partialLead(text: string, ui: Ui): RenderElement | null {
-  if (text.includes('\n') || !text.startsWith('ATLAS |')) return null
-  const pipes = text.split('|')
+  const t = text.trimStart()
+  if (t.includes('\n') || !/^(?:ATLAS|\*\*ATLAS\*\*) \|/.test(t)) return null
+  const pipes = t.split('|')
   if (pipes.length >= 3 && pipes.slice(2).join('|').trim() !== '') return null // the state has begun: the strict pattern decides
   const words = (pipes[1] ?? '').trim().split(/\s+/).filter(Boolean) // `<glyph> <phase>` or `<phase> <glyph>`
   const word = words.slice(0, 2).find(w => (PHASES as readonly string[]).includes(w))
   const phase = word !== undefined ? (word as PhaseId) : null
-  return leadRow({ phase: phase ?? 'research', count: '', sentence: '', first: text, form: 'contract' }, { ui, columns: 0, ...(phase ? {} : { quiet: true }) })
+  return leadRow({ phase: phase ?? 'research', count: '', sentence: '', first: t, form: 'contract', rest: '' }, { ui, columns: 0, ...(phase ? {} : { quiet: true }) })
 }

@@ -9,7 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
-import { atColumn, clipEll, hostEnv, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, uiFromEnv, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui';
+import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTE5, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui'; import { lookUi } from './look';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
@@ -24,7 +24,7 @@ export type { Run, Tone };
 export type Line = { runs: Run[]; keys?: boolean; board?: number; /** The key row sits under the idle health band: its chips share the health button's fill and the band's right edge. */ edge?: boolean };
 
 /** Mocha hexes for each tone (the default theme); the hosts paint the live theme through atlas-ui `toneHex`. */
-export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: '#585858' };
+export const TONE_HEX: Record<Tone, string> = { ...PALETTES.mocha, dim: PALETTE5.dim };
 
 export type WorkerState = 'running' | 'thinking' | 'queued' | 'waiting' | 'failed' | 'done';
 /** `agoSecs`: for a done or failed worker, seconds since it ended (snapshot.now less its stamped finish); absent reads as just ended. */
@@ -170,7 +170,7 @@ const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n =
 const isRunning = (m: MissionModel): boolean => m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
 /** A worker that is genuinely alive (wave 34): running, thinking or waiting. A queued one (dispatched, the host never listed it) does no work: once the host turn is over nothing will start it, so it never holds the band `working`. */
 export const isAlive = (m: MissionModel): boolean => m.workers.some((w) => w.state === 'running' || w.state === 'thinking' || w.state === 'waiting' || (w.state === 'queued' && !m.queuedIdle)); // omp has no host turn: its queued member is starting; the Claude Code band sets `queuedIdle` (a queued dispatch the host never listed starts nothing once the turn is over)
-const uiOf = (m: MissionModel): Ui => m.ui ?? uiFromEnv();
+const uiOf = (m: MissionModel): Ui => m.ui ?? lookUi();
 /** A mission worker's place in the six-word vocabulary. */
 export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'running' : s);
 

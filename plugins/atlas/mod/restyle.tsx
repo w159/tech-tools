@@ -20,7 +20,8 @@ import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
 import { barFade, cardAged, cardFade, hideNotification, placedTree, runCardPlaced, runSecs } from './transcript/placed'
 import { noteDoneChip, onSuperseded } from './transcript/superseded'
 import { lookOf } from './look'
-import { elapsedClock, hexIn, PALETTE5, uiFromEnv, type Ui } from './atlas-ui'
+import { elapsedClock, hexIn, PALETTE5, type Ui } from './atlas-ui'
+import { lookUi } from './look'
 import { displayDelta, leadOf, leadRow, partialLead, verdictOf } from './transcript/leadheader'
 import type { Outcome } from './transcript/outcome'
 
@@ -114,7 +115,7 @@ const toolTarget = (input: unknown): string =>
 
 
 /** `Bash npm test ▸ 48.2kB` for a finished call whose output is huge; null keeps the engine's row. */
-export function noisyTree(props: ToolUsePropsLike & { output?: unknown }, ui: Ui = uiFromEnv()): RenderElement | null {
+export function noisyTree(props: ToolUsePropsLike & { output?: unknown }, ui: Ui = lookUi()): RenderElement | null {
   if (!isNoisyCandidate(props)) return null
   const size = outputSize(props.output)
   if (size < NOISY_BYTES) return null
@@ -157,7 +158,7 @@ function agentStatus(
 
 /** Deployment card: bordered `◆ impl-auth · implementer · sonnet·low ● running`. Null keeps the engine's row. */
 export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0, extra: CardExtra = {}): RenderElement | null {
- if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props, extra.ui ?? uiFromEnv())
+ if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props, extra.ui ?? lookUi())
  const input = (props.input ?? {}) as { subagentType?: string; subagent_type?: string; name?: string; description?: string }
  const persona = personaFor(snap, input.subagentType ?? input.subagent_type)
  if (!persona) return null
@@ -251,11 +252,11 @@ const BARE_DONE = /^(?:(?:all|run|everything|work)\s+)?(?:\d+\/\d+\s+)?(?:done|c
 
 /** The lead's header as a chip drawn from either form of the line (contract or display, mod/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
  * `quiet` (the previous header was this phase) drops the word; `superseded` is a done chip a Stop refusal overturned. A finished first line that is no header stays the host's own row. */
-export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false, ui: Ui = uiFromEnv(), quiet = false): RenderElement | null {
+export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false, ui: Ui = lookUi(), quiet = false): RenderElement | null {
  if (props.isSummary || !props.text) return null
  const lead = leadOf(props.text, snap?.contract.headerFirstLinePattern ?? '')
  if (lead === null) return partialLead(props.text, ui)
- const rest = props.text.slice(lead.first.length).replace(/^\n/, '')
+ const rest = lead.rest
  const h = healthOf(snap)
  // Wave 35 (critique 34: a 179 `done · 1 failed · 1 dispatch open` over a 203 `▲ blocked` band): an open dispatch row with nothing running is what the band calls blocked (dispatchHeld), so the card says it too, Stop refusal or not.
  const blocked = superseded || (h.open > 0 && h.idle)
@@ -270,7 +271,7 @@ export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, co
 
 // ---- TurnDuration: `▸ +3 done` (no run time: the band's `done 4:12` says it once; an un-clocked turn keeps `turn 4:12`) ----
 
-export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = uiFromEnv(), band?: number): RenderElement {
+export function durationTree(snap: AtlasSnapshot, props: TurnDurationPropsLike, tracker: ReceiptTracker, now: number | null = null, ui: Ui = lookUi(), band?: number): RenderElement {
  // The host figure has been seen reading 9m02s for a 77s turn: the mod's own clock caps it.
  const measured = tracker.turnStart != null && now != null ? Math.max(0, now - tracker.turnStart) : null
  const durationMs = measured === null ? props.durationMs : Math.min(props.durationMs, measured)
@@ -361,7 +362,7 @@ export function registerRestyle(on: On): void {
    const pattern = snap?.contract.headerFirstLinePattern ?? ''
    const superseded = snap && !e.props.isSummary && leadOf(e.props.text, pattern)?.phase === 'done' ? noteDoneChip(e.requestId) : false
    const quiet = snap && !e.props.isSummary ? quietLead(e.requestId, e.props.text, pattern) : false
-   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded, leadUi ?? uiFromEnv(), quiet) ?? next(e)) : next(e)
+   return snap ? (assistantTree(snap, e.props, e.viewport?.columns ?? 0, superseded, leadUi ?? lookUi(), quiet) ?? next(e)) : next(e)
   }
   try {
    // A message drawn before anything primed the env read (a session's first reply, a turn the engine started without our turn.start) used to wait on `ready`'s promise and
@@ -447,7 +448,7 @@ export function registerRestyle(on: On): void {
   try {
    await primeEnv($, cache)
    if (cache.envOff || e.index !== 0) return base
-   const shown = displayDelta(base?.displayContent ?? e.delta, headerPattern, uiFromEnv().ascii)
+   const shown = displayDelta(base?.displayContent ?? e.delta, headerPattern, lookUi().ascii)
    return shown === null ? base : { ...base, displayContent: shown }
   } catch { return base }
  })

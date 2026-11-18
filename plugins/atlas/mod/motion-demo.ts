@@ -6,14 +6,14 @@
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
-import { colorMode, paintAnsi, uiFromEnv, type Ui } from './atlas-ui';
+import { colorMode, paintAnsi, type Ui } from './atlas-ui'; import { uiFrom } from './look';
 import type { TodoItem } from './contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
 import { Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 
 /** The demo draws through the live HUD (hudLines) and paints with the live ANSI painter (paintAnsi): same builder, same options, same
  * strike on done titles, so a recorded frame is what the terminal shows. `forced` is the colour depth the CLI asks for. */
-const uiOf = (color: Ui['color']): Ui => ({ ...uiFromEnv({}), color });
+const uiOf = (color: Ui['color']): Ui => ({ ...uiFrom({}), color });
 
 /** The demo agent's name (the spinner phase and the row key derive from it). */
 export const DEMO_AGENT = 'implementer-band';

@@ -7,7 +7,7 @@ import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from '
 import { FN_TAIL, isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
 import { ownerOutcome } from './board-model';
-import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, hostEnv, fillHex, uiFromEnv, type Run, type Ui, type UiState, runHex } from './atlas-ui';
+import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, fillHex, type Run, type Ui, type UiState, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
 import { fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion';
 import type { Segment } from './runs';
@@ -380,11 +380,11 @@ function surfaces(input: HudInput, opts: HudOpts): { s: { todos: TodoRow[]; agen
   // lost the block after DONE while the stop runs kept all three rows). Only an agent that is neither running, done nor failed (parked) is left out.
   const shown = shownAgents(input.agents, input.todos);
   const agents = shown.length > 0 ? agentModel(shown, input.todos, input.root, opts.clock !== undefined && opts.now !== undefined ? Math.max(opts.clock, opts.now) : opts.clock ?? opts.now) : (resetAgentSeq(), []); // no agent listed: the dispatch order starts over with the next run
-  const ui = opts.ui ?? uiFromEnv();
+  const ui = opts.ui ?? lookUi();
   const keyed = <R extends { key?: string }>(surface: string, rows: R[], name: (r: R) => string): R[] => { const k = keysOf(surface, rows.map(name)); return rows.map((r, i) => ({ ...r, key: k[i]! })); };
   return {
     s: { todos: keyed('todo', todoModel(plan, opts.now ?? Date.now(), ownerStatesOf(input.agents), opts.settled === true && opts.merge !== false, opts.working === true), (r) => r.label), agents: keyed('agent', agents, (r) => r.name) },
-    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? hostEnv().ATLAS_BAND_RICH === '1', tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}), ...(opts.healthLine ? { healthLine: opts.healthLine } : {}), ...(opts.merge === false ? { merge: false } : {}) },
+    o: { cols: Math.max(1, opts.cols), ui, rich: opts.rich ?? lookRich(), tick: opts.tick ?? 0, ...(input.phases ? { phases: input.phases } : {}), ...(opts.now !== undefined ? { now: opts.now } : {}), ...(opts.motion ? { motion: opts.motion } : {}), ...(opts.reserve ? { reserve: true } : {}), ...(opts.healthLine ? { healthLine: opts.healthLine } : {}), ...(opts.merge === false ? { merge: false } : {}) },
   };
 }
 
@@ -420,7 +420,7 @@ export function segmentOf(x: Run, ui: Ui): Segment {
 
 /** The HUD rows above the band: TODO tree and Subagents block; [] when there is nothing to show. */
 export function hudRows(input: HudInput, opts: HudOpts): Segment[][] {
-  const ui = opts.ui ?? uiFromEnv();
+  const ui = opts.ui ?? lookUi();
   return hudLines(input, { ...opts, ui }).map((r) => r.filter((x) => x.t !== '').map((x) => segmentOf(x, ui)));
 }
 

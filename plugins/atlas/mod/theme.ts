@@ -171,10 +171,6 @@ export const chartRoom = {
  border: 'promptBorder',
 } as const;
 
-/** Backdrop for sprite cells that carry only a foreground: sprites are self-contained
- * (fg + bg), so they stay legible whatever the terminal theme is. */
-export const spriteTile = '#1b1f27';
-
 /** The one done mark: every surface (band, HUD, board, side panel, omp) takes it from here. */
 export const DONE_GLYPH = '✓';
 const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '🧪': '⚗', '📋': '☰', '🔧': '⚒', '✅': DONE_GLYPH, '🏁': '⚑', '⛔': '■' };
@@ -214,12 +210,12 @@ export const ROLE_COLOUR: Readonly<Record<string, string>> = {
 }
 
 /** The palette tokens a role colour may land on. */
-type RoleToken = 'ok' | 'bad' | 'warn' | 'accent' | 'info'
+export type RoleToken = 'ok' | 'bad' | 'warn' | 'accent' | 'info'
 
 /** Colour name -> the existing palette token it lands on (atlas-ui.ts PALETTES): the nearest chromatic token, never a new colour
  * value (critique 25 and 26: one palette, every surface on the palette indices). cyan and blue take `info` (Latte's teal, Mocha's
  * accent), so an explorer never reads as an implementer; pink is nearest to `bad`, orange to `warn`. */
-const ROLE_TOKEN: Readonly<Record<string, RoleToken>> = {
+export const ROLE_TOKEN: Readonly<Record<string, RoleToken>> = {
  green: 'ok',
  red: 'bad',
  yellow: 'warn',
@@ -229,18 +225,6 @@ const ROLE_TOKEN: Readonly<Record<string, RoleToken>> = {
  blue: 'info',
  cyan: 'info',
 }
-
-/** The token hexes, mirroring atlas-ui.ts PALETTES (read at load it would be a circular import). Each Mocha hex is an exact
- * xterm-256 index (ok 114, bad 203, warn 179, accent and info 141): a 256-colour run lands on the palette as is. */
-const TOKEN_HEX: Readonly<Record<'mocha' | 'latte', Readonly<Record<RoleToken, string>>>> = {
- mocha: { ok: '#87d787', bad: '#ff5f5f', warn: '#d7af5f', accent: '#af87ff', info: '#af87ff' },
- latte: { ok: '#40a02b', bad: '#d20f39', warn: '#df8e1d', accent: '#8534ee', info: '#179299' },
-}
-
-/** Colour name -> its Mocha hex per colour depth: both are the palette token's own hex. */
-export const ROLE_HEX: Readonly<Record<string, { truecolor: string; x256: string }>> = Object.fromEntries(
- Object.entries(ROLE_TOKEN).map(([name, tok]) => [name, { truecolor: TOKEN_HEX.mocha[tok], x256: TOKEN_HEX.mocha[tok] }]),
-)
 
 /** The role word of a worker that names no known role (a crew worker with a free name such as `notes`). */
 const CREW_ROLE = 'crew'
@@ -284,14 +268,6 @@ function nameRole(n: string): string | undefined {
   if (role !== undefined) return role
  }
  return undefined
-}
-
-/** The hex a role's name is drawn in: its palette token's hex in the theme; undefined for `crew` (the neutral text colour) and under NO_COLOR. */
-export function roleHex(role: string, color: 'truecolor' | '256' | 'none', theme: 'mocha' | 'latte' = 'mocha'): string | undefined {
- if (color === 'none') return undefined
- const name = ROLE_COLOUR[role]
- const tok = name === undefined ? undefined : ROLE_TOKEN[name]
- return tok === undefined ? undefined : TOKEN_HEX[theme][tok]
 }
 
 /** The ways a lower-cased name already carries its role word. */

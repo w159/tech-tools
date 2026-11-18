@@ -6,7 +6,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFrontmatter, personaColor, PERSONA_COLORS } from './data/personas';
 import { agentRows, agentTable, type AgentRow, type SurfaceOpts } from './hud-surface';
-import { ROLE_COLOUR, ROLE_HEX, roleHex, roleOf } from './theme';
+import { ROLE_COLOUR, roleOf } from './theme';
+import { ROLE_HEX, roleHex } from './atlas-ui';
 import type { Run } from './atlas-ui';
 import { agentModel } from './hud';
 

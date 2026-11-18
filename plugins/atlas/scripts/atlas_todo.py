@@ -971,17 +971,59 @@ def note_max_bytes() -> int:
     return _env_int("ATLAS_NOTE_MAX_BYTES", NOTE_MAX_BYTES)
 
 
-def _fit_note_text(text: str, kind: str) -> str:
-    """Enforce the body cap: refuse human/agent notes, keep the tail of machine reports."""
+_EXIT_TAIL_RE = re.compile(r"^exit -?\d")
+_REPORT_STATUS_RE = re.compile(r"^STATUS: (DONE|FAILED|BLOCKED)\s*$", re.M)
+
+
+def _save_full_report(root: Optional[str], owner: str, text: str) -> Optional[str]:
+    """Write the untruncated body under board/notes/reports (0600); return its path, None on failure.
+    The path goes into the truncation marker so the lead reads the report instead of parsing jsonl."""
+    try:
+        d = notes_dir(root) / "reports"
+        d.mkdir(parents=True, exist_ok=True)
+        path = d / f"{owner}-{time.time_ns()}.txt"
+        fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(text.encode("utf-8"))
+        return str(path)
+    except OSError as exc:
+        sys.stderr.write(f"atlas_todo.py: could not save the full report: {exc}\n")
+        return None
+
+
+def _fit_note_text(text: str, kind: str, full_path: Optional[str] = None) -> str:
+    """Enforce the body cap: refuse human/agent notes; machine reports keep their START (STATUS and the findings
+    lead) plus the closing `exit <n>` line wait reads, with a marker naming where the full body was saved."""
     limit = note_max_bytes()
     raw = text.encode("utf-8")
     if len(raw) <= limit:
         return text
     if kind not in _NOTE_TRUNCATE_KINDS:
         raise NoteTooLarge(len(raw), limit)
-    marker = f"[truncated {len(raw) - limit} bytes]\n"
-    keep = raw[-(limit - len(marker.encode())) :]
-    return marker + keep.decode("utf-8", errors="ignore")
+    where = f"full report: {full_path}" if full_path else "full report not saved"
+    marker = f"\n[truncated {len(raw) - limit} bytes; {where}]\n"
+    last = text.rstrip().rsplit("\n", 1)[-1]
+    tail = last if _EXIT_TAIL_RE.match(last) else ""
+    budget = max(0, limit - len(marker.encode()) - len(tail.encode()))
+    return raw[:budget].decode("utf-8", errors="ignore") + marker + tail
+
+
+def report_status_error(text: str) -> Optional[str]:
+    """None when a final report carries a STATUS line, else what to add (a progress note is not a report)."""
+    if _REPORT_STATUS_RE.search(text):
+        return None
+    return (
+        "report_missing_status: a final report needs a line `STATUS: DONE`, `STATUS: FAILED` or "
+        "`STATUS: BLOCKED`; add it and post again. Do not post a progress or waiting message as the final report."
+    )
+
+
+def _report_with_exit(text: str) -> str:
+    """Append the closing `exit` line wait reads, derived from STATUS, when the body has none."""
+    if _EXIT_TAIL_RE.match(text.rstrip().rsplit("\n", 1)[-1]):
+        return text
+    done = re.search(r"^STATUS: DONE\s*$", text, re.M)
+    return text.rstrip() + ("\nexit 0" if done else "\nexit 1 [failed: see STATUS]")
 
 
 def notes_dir(root: Optional[str] = None) -> Path:
@@ -1083,7 +1125,11 @@ def note(
     records the dashboard's own send outcome on the line; it is omitted when unset.
     Returns the record as written."""
     name = _sanitize_owner(owner)
-    text = _fit_note_text(str(text or ""), kind)
+    text = str(text or "")
+    full_path = None
+    if kind in _NOTE_TRUNCATE_KINDS and len(text.encode("utf-8")) > note_max_bytes():
+        full_path = _save_full_report(root, name, text)
+    text = _fit_note_text(text, kind, full_path)
     chan = (channel or "").strip()
     # A launched worker (env ATLAS_WORKER_NAME == owner) is a member only if its lead
     # registered it; a channel it merely inherited from a lead's env is dropped.
@@ -1117,7 +1163,7 @@ def note(
             path
         ):  # a crash mid-append: don't glue this note onto the torn tail
             line = b"\n" + line
-        fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600)
         try:
             os.write(fd, line)
         finally:
@@ -2333,7 +2379,7 @@ _USAGE = """usage: atlas_todo.py <command> [flags]
 commands:
   list, counts, add, set, scaffold, claim, complete, status, remove, carry
   member-finish, claim-paths, release-paths, claims, conflicts
-  note, notes, inbox, channels, channel-open, channel-reap, channel-board
+  note, report (final report from --file, default stdin), notes, inbox, channels, channel-open, channel-reap, channel-board
   help
 
 common flags: --root --session --id --owner --status --evidence --to --item
@@ -2382,6 +2428,7 @@ def _cli(argv: Optional[List[str]] = None) -> int:
             or a == "--message"
             or a == "--origin"
             or a == "--owner-token"
+            or a == "--file"
         ):
             flags[a[2:]] = args[i + 1] if i + 1 < len(args) else ""
             i += 2
@@ -2533,12 +2580,24 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                 _claim_paths_arg(flags.get("paths")),
                 channel=flags.get("channel") or None,
             )
-        elif cmd == "note":
+        elif cmd in ("note", "report"):
             # a launched worker's pane pins ROOT/CHANNEL/WORKER_NAME: root and channel already default
-            # from env inside note(), so only the owner needs the same fallback here
+            # from env inside note(), so only the owner needs the same fallback here.
+            # `report` is the sanctioned hand-back for read-only workers: body from --file (default stdin).
             owner = (
                 flags.get("owner") or os.environ.get("ATLAS_WORKER_NAME") or ""
             ).strip()
+            kind = "report" if cmd == "report" else (flags.get("kind") or "note")
+            if cmd == "report":
+                src = flags.get("file") or "-"
+                body = (
+                    sys.stdin.read()
+                    if src == "-"
+                    else Path(src).read_text(encoding="utf-8")
+                )
+            else:
+                body = positional[1] if len(positional) > 1 else ""
+            bad = report_status_error(body) if kind == "report" else None
             if not owner:
                 out = {"ok": False, "error": "owner_required"}
             elif owner_token_issued(root, owner) and not verify_owner_token(
@@ -2555,17 +2614,19 @@ def _cli(argv: Optional[List[str]] = None) -> int:
                     "ok": False,
                     "error": "owner_token_invalid" if given else "owner_token_required",
                 }
+            elif bad:
+                out = {"ok": False, "error": "report_missing_status", "message": bad}
             else:
                 out = {
                     "ok": True,
                     "note": note(
                         root,
                         owner,
-                        positional[1] if len(positional) > 1 else "",
-                        to=flags.get("to") or "all",
+                        _report_with_exit(body) if cmd == "report" else body,
+                        to=flags.get("to") or ("lead" if cmd == "report" else "all"),
                         item=flags.get("item") or None,
                         channel=flags.get("channel") or None,
-                        kind=flags.get("kind") or "note",
+                        kind=kind,
                         paths=_claim_paths_arg(flags.get("paths")) or None,
                     ),
                 }

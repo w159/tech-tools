@@ -31,12 +31,12 @@ class StatusContractLinesTest(unittest.TestCase):
     def test_header_rule_always_emitted(self):
         for style in ("", "Atlas Orchestrator"):
             blob = "\n".join(session_boot.status_contract_lines(style))
-            self.assertIn("ATLAS | <glyph>", blob)
+            self.assertIn("**ATLAS** | <glyph>", blob)
             self.assertNotIn("STYLE OVERRIDE", blob)
 
     def test_override_warns_on_concise(self):
         blob = "\n".join(session_boot.status_contract_lines("concise"))
-        self.assertIn("ATLAS |", blob)
+        self.assertIn("ATLAS** |", blob)
         self.assertIn("concise", blob)
         self.assertIn("Atlas Orchestrator", blob)
 
@@ -118,7 +118,7 @@ class BootMainStyleTest(unittest.TestCase):
                 self.assertEqual(e.code, 0)
         data = json.loads(stdout.getvalue())
         ctx = data["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("ATLAS |", ctx)
+        self.assertIn("ATLAS** |", ctx)
         self.assertIn("LOOP", ctx)
         self.assertIn("STYLE OVERRIDE", ctx)
         self.assertIn("concise", data["systemMessage"])

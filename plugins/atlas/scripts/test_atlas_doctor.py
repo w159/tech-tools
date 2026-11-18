@@ -1498,6 +1498,19 @@ class AtlasDoctorTest(unittest.TestCase):
             self.assertFalse(c["ok"])
 
 
+    def test_mod_surface_is_one_warn_line_naming_the_reason(self):
+        with mock.patch.dict(
+            os.environ, {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "cli"}
+        ):
+            ok, detail = atlas_doctor.check_mod_surface()
+            row = self.by_check(atlas_doctor.run_checks("atlas")[0])["mod-surface"]
+        self.assertFalse(ok)
+        self.assertIn("cloud", detail)
+        self.assertNotIn("\n", detail)
+        self.assertEqual(row.get("severity"), "warn")
+        self.assertFalse(row["ok"])
+
+
 class CloneFreshTest(unittest.TestCase):
     """clone-fresh: a marketplace clone behind GitHub makes `claude plugin update` say "already latest".
     git and the network are mocked; nothing here may reach the real network."""

@@ -315,7 +315,7 @@ function phaseRow(m0: PanelModel, named = true): PanelLine {
   if (m.phase === 'done') return line([label('phase', m.cols), mark('done', m, 'phase'), r('done', rowWordTone('done'))]);
   // Critique 17 A5: the phase word alone (`phase implement`): a rail number beside it (`research 1/5`) read as the same kind of figure as the todo `n/m` and went stale beside the chip.
   if (working) return line([label('phase', m.cols), mark('running', m, 'phase'), r(m.phase)]);
-  return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued} `, 'muted'), r('idle', 'muted'), r(` ${dot(m.ui)} ${m.phase}`, 'muted')]);
+  return line([label('phase', m.cols), r(`${m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.idle} `, 'muted'), r('idle', 'muted'), r(` ${dot(m.ui)} ${m.phase}`, 'muted')]);
 }
 
 /** `gates   ● lint   ● test   ▲ doctor   ok`; names that do not fit fold to the word alone: `ok` or `1 denied`, never a pass ratio (round 2, D4). */
@@ -695,7 +695,7 @@ function stepperRows(m: PanelModel): PanelLine[] {
   const ink = PENDING_INK[m.ui.theme === 'latte' ? 'latte' : 'mocha'];
   const dim = (t: string): Run => ({ t, tone: 'dim', ...(m.ui.color === 'none' ? {} : { fg: ink }) });
   const skipped = (i: number): boolean => seen !== null && kind !== 'idle' && lit !== i && !entered(m.phases[i]!, i) && i < Math.max(lastEntered, lit);
-  const glyph = (p: string, i: number): Run => (lit === i ? (kind === 'blocked' ? stateRun('blocked', m.ui) : { t: phaseGlyph('working', spinIdx(m), m.ui.ascii), tone: 'accent' }) : entered(p, i) ? stateRun('done', m.ui) : skipped(i) ? dim(m.ui.ascii ? '-' : '–') : dim(m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.queued));
+  const glyph = (p: string, i: number): Run => (lit === i ? (kind === 'blocked' ? stateRun('blocked', m.ui) : { t: phaseGlyph('working', spinIdx(m), m.ui.ascii), tone: 'accent' }) : entered(p, i) ? stateRun('done', m.ui) : skipped(i) ? dim(m.ui.ascii ? '-' : '–') : dim(m.ui.ascii ? GLYPH5_ASCII.queued : GLYPH5.idle));
   const named = (p: string, i: number): Run => (lit === i ? r(p, 'text', { bold: true }) : entered(p, i) ? r(p, 'sub') : dim(p));
   const items = m.phases.map((p, i): Run[] => [{ ...glyph(p, i), t: `${glyph(p, i).t} ` }, named(p, i)]);
   const room = Math.max(8, m.cols - 1 - ROW_AT);

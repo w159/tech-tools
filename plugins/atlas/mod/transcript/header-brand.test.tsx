@@ -59,3 +59,35 @@ test('the streaming line and the final chip show the same brand, glyph and phase
   for (const part of ['ATLAS', glyphOf('implement'), 'implement']) expect([part, streamed.includes(part), chip.includes(part)]).toEqual([part, true, true])
   expect(displayDelta(raw, HEADER_FIRST_LINE_PATTERN, true)).toBe('ATLAS implement 3/5 | wiring the gate')
 })
+
+
+test('the bold-brand markdown form draws the same chip as the plain form', () => {
+  const chip = (text: string) => {
+    forgetDrawnHeaders()
+    const tree = assistantTree(snap, { text, isFirstOfReply: true }, 120, false, { theme: 'mocha', ascii: false, color: 'truecolor' })!
+    return texts(tree as Node).filter((x) => x.t.trim() !== '')
+  }
+  expect(chip('**ATLAS** | 🔧 implement 3/5 | wiring the gate')).toEqual(chip('ATLAS | 🔧 implement 3/5 | wiring the gate'))
+})
+
+test('a leading blank line or space still draws the chip, and the body after the header is kept', () => {
+  forgetDrawnHeaders()
+  const text = '\n  ATLAS | 🔧 implement | wiring the gate\nbody line'
+  const tree = assistantTree(snap, { text, isFirstOfReply: true }, 120, false, { theme: 'mocha', ascii: false, color: 'truecolor' })!
+  const line = JSON.stringify(tree) // the body is a Markdown element, which `texts` does not walk
+  for (const want of ['ATLAS', '🔧', 'implement', 'wiring the gate', 'body line']) expect(line).toContain(want)
+})
+
+test('a header with no glyph is no chip', () => {
+  forgetDrawnHeaders()
+  expect(assistantTree(snap, { text: 'ATLAS | implement | wiring the gate', isFirstOfReply: true }, 120, false, { theme: 'mocha', ascii: false, color: 'truecolor' })).toBeNull()
+})
+
+test('each of the eight phases draws in its own colour (latte has a distinct hex per tone)', () => {
+  const colours = (contract as { phases: { id: string; glyph: string }[] }).phases.map(({ id, glyph }) => {
+    forgetDrawnHeaders()
+    const tree = assistantTree(snap, { text: `ATLAS | ${glyph} ${id} | s`, isFirstOfReply: true }, 120, false, { theme: 'latte', ascii: false, color: 'truecolor' })!
+    return texts(tree as Node).filter((x) => x.t.trim() !== '')[0]!.color
+  })
+  expect(new Set(colours).size).toBe(8)
+})

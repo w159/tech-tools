@@ -4,7 +4,8 @@
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import type { AgentState } from '../contract'
-import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, uiFromEnv, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
+import { lookUi } from '../look'
 import { CARD_W, cardBarTone, toastRuns } from '../panel-layout'
 import { cells } from '../atlas-ui'
 import { clipE as clip, ELLIPSIS } from '../board-model'
@@ -116,7 +117,7 @@ function lastOf(c: CallLike, running: boolean, extra: CardExtra, word: string, r
 
 /** Closed worker card for an atlas:* dispatch (the border carries the state word, the name and the model tier); null leaves
  * non-atlas calls to the engine. `width` is the room the card has (0 = unknown): the card is `min(44, width)` wide. */
-export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, word = '', extra: CardExtra = {}, ui: Ui = extra.ui ?? uiFromEnv()): RenderElement | null {
+export function workerCard(c: CallLike, state: AgentState, width = 0, name?: string, word = '', extra: CardExtra = {}, ui: Ui = extra.ui ?? lookUi()): RenderElement | null {
  if (!isAtlasWorker(c)) return null
  const i = inputOf(c)
  const role = typeOf(i).slice('atlas:'.length)
@@ -152,7 +153,7 @@ export function waveTree(calls: ReadonlyArray<CallLike>, n: number, columns: num
  if (calls.length < 2 || !calls.every(isAtlasWorker)) return null
  const { side, w } = waveLayout(columns, calls.length)
  const cards = calls.map((c) => workerCard(c, phaseOf(c, 'finished').state, w, undefined, '', { wave: n, ...(ui ? { ui } : {}) }) as RenderElement)
- return el('Box', { flexDirection: 'column' }, waveHeader(calls, n, ui ?? uiFromEnv()),
+ return el('Box', { flexDirection: 'column' }, waveHeader(calls, n, ui ?? lookUi()),
   el('Box', { flexDirection: side ? 'row' : 'column', flexWrap: 'wrap' }, ...cards))
 }
 
@@ -199,12 +200,12 @@ const timeOf = (text: string): string => {
 }
 
 /** The blocked card (truth 39): `▌ ◆ ATLAS  ▲ blocked · stop refused  0:36`, a 203 bar, printed once when the band first reads blocked. `reason` is the band's own wording (data/runstate blockedText); `time` the band's clock. */
-export function blockedTree(reason: string, time: string, ui: Ui = uiFromEnv(), o: FinishOpts = {}): RenderElement {
+export function blockedTree(reason: string, time: string, ui: Ui = lookUi(), o: FinishOpts = {}): RenderElement {
  return finishRow('blocked', reason ? `\u00b7 ${reason}` : '', '', time, ui, { ...o, blocked: true, run: false })
 }
 
 /** One row for a background atlas worker's task-notification: `● done  wave-a  explorer finished  0:15` (state, name, role, time). The worker's result line lives in the HUD's RESULT column, not on a second row. */
-export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = uiFromEnv(), _aged = false, o: FinishOpts = {}): RenderElement {
+export function notificationTree(name: string, role: string, outcome: string, failed: boolean, ui: Ui = lookUi(), _aged = false, o: FinishOpts = {}): RenderElement {
  const text = stripStatus(outcome)
  if (o.run) return finishRow('done', o.fact ?? '', '', '', ui, o) // the run's duration is the band's alone (`done 0:05`): the card keeps the other facts (stages, workers) and never prints a time
  if (failed) return finishRow('failed', displayName(name, ''), '', timeOf(text), ui, { ...o, who: name })
@@ -212,7 +213,7 @@ export function notificationTree(name: string, role: string, outcome: string, fa
 }
 
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
-export function bubbleTree(text: string, from: string | undefined, to = 'lead', columns = 0, ui: Ui = uiFromEnv()): RenderElement | null {
+export function bubbleTree(text: string, from: string | undefined, to = 'lead', columns = 0, ui: Ui = lookUi()): RenderElement | null {
  if (!from || !text) return null
  const lines = text.split('\n').slice(0, 8)
  const bar = Array(lines.length + 1).fill('▌').join('\n')

@@ -3,7 +3,7 @@ import type { ChannelNote } from '../contract';
 import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../data/live';
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../data/todos';
 import { lastText } from '../data/lasttext';
-import { DONE_DOUBT, RETURNED, spinClock, uiFromEnv, type Ui, type UiState } from '../atlas-ui';
+import { DONE_DOUBT, RETURNED, spinClock, type Ui, type UiState } from '../atlas-ui'; import { lookUi } from '../look';
 import { forgetStamps, type PanelGate, type PanelModel, type PanelNote, type PanelTodo, type PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
@@ -107,7 +107,7 @@ export function enteredOf(channel: string, ids: readonly string[], phase: string
 
 const MOOD_STATE: Record<Mood, UiState> = { working: 'running', thinking: 'running', blocked: 'blocked', failed: 'failed', done: 'done', celebrate: 'done', idle: 'waiting' };
 
-export function panelModelOf(m: SidebarModel, ui: Ui = uiFromEnv(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
+export function panelModelOf(m: SidebarModel, ui: Ui = lookUi(), cols: number = Math.max(10, m.columns - 1)): PanelModel {
   const s = m.snapshot;
   const now = m.clock !== undefined ? Math.max(m.clock, s.now) : s.now; // the HUD's own reading (hud.ts: max of the shared clock and the snapshot's)
   const rail = railOf(contractRail(s.contract), s.phase);
