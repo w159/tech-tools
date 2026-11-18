@@ -2,7 +2,7 @@
 // uses one control idiom (carets on expandable rows only, one row of tabs, `more ›` swapping the set in place), keeps one stepper form at every width, empty tabs are skeletons, and the card is a capped two-column layout.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Ui } from './atlas-ui';
-import { healthCardRows } from './hud-surface';
+import { healthCardRows } from './view/hud/hud-surface';
 import { bodyLines, headerRows, lineText, panelLines, tabRows, MORE_KEY, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { NOW } from './live_fixture';

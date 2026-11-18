@@ -8,7 +8,7 @@
 // that the mod's tsconfig (which has no node types) never resolves.
 import { colorMode, paintAnsi, type Ui } from '../atlas-ui'; import { uiFrom } from '../look';
 import type { TodoItem } from '../contract';
-import { hudLines, hudMotionItems, type HudAgent, type HudInput } from '../hud';
+import { hudLines, hudMotionItems, type HudAgent, type HudInput } from '../view/hud/hud';
 import { Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 
 /** The demo draws through the live HUD (hudLines) and paints with the live ANSI painter (paintAnsi): same builder, same options, same

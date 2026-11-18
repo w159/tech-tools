@@ -9,7 +9,7 @@ import { bandTree, type BandModel } from './band';
 import type { TodoItem, SquadAgent } from '../../contract';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
-import { hudAgents, hudListsAgents, isRunning, type HudInput } from '../../hud';
+import { hudAgents, hudListsAgents, isRunning, type HudInput } from '../hud/hud';
 import { hudPhases } from './band';
 import { composeSlot, type SlotPlan } from './slot';
 import { busySnap, NOW } from '../../live_fixture';
@@ -213,7 +213,7 @@ describe('5. the band says each thing once', () => {
 
 describe('6. one glyph and one word for the failed worker', () => {
   test('TODO, SUBAGENTS and the band all read `■ ... failed`', async () => {
-    const { hudLines } = await import('../../hud');
+    const { hudLines } = await import('../hud/hud');
     const todos: TodoItem[] = [{ id: 't1', content: 'T1 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' } as TodoItem];
     const agent = { name: 'ghost-explorer', role: 'explorer', state: 'failed', ui: 'failed', model: 'haiku', tool: null, lastTool: 'Read', startedAt: NOW - 5000, since: NOW - 1000 } as never;
     const rows = hudLines({ todos: ownTodos(todos), agents: [agent] }, { cols: 120, maxRows: 14, ui, rich: false, now: NOW, merge: false }).map(runsString); // wave 32: the SUBAGENTS box this pins is the two-box shape

@@ -17,9 +17,9 @@ import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './view/board
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';
-import { displayName } from './hud';
-import { sectionRibbon, sortAgents } from './hud-surface';
-import { GOTO_PREFIX, statusFrame } from './status-frame';
+import { displayName } from './view/hud/hud';
+import { sectionRibbon, sortAgents } from './view/hud/hud-surface';
+import { GOTO_PREFIX, statusFrame } from './view/hud/status-frame';
 import { tabFrame, type TabId } from './tabs-frame';
 import type { GateGroup } from './pane/sidebar-types';
 import { ageWord, KILLED, sparkBraille, sparkOf, sparkOver, totalsOf, wordOf } from './pane/activity';
@@ -193,7 +193,7 @@ const coreMark = (s: UiState, ui: Ui): Run => (s === 'blocked' ? warnMark(ui) : 
 /** A working mark is the accent (141) on every row of the panel, the colour of the band's own spinner (critique 28: the panel's spinners were 252). */
 const accentRun = (x: Run, s: MarkState, ui: Ui): Run => (s === 'running' && !ui.ascii ? { ...x, tone: 'accent' } : x);
 const stateMark = (s: MarkState, m: Pick<PanelModel, 'ui' | 'now' | 'tick' | 'run'>, id = ''): Run => accentRun(stateRun(s, m.ui, id === 'phase' ? spinIdx(m) : frameOf(m, id)), s, m.ui); // truth 41: the phase mark turns the frame the run was built with (the band's own index), never a reading of its own
-/** The one name every surface shows for an agent (mod/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
+/** The one name every surface shows for an agent (mod/view/hud/hud.ts displayName); the real name stays the key, the recipient and the spinner id. */
 const nameOf = (w: PanelWorker): string => oneLine(displayName(w.name, w.role ?? '', w.goal)) || ELLIPSIS; // a worker is never a blank cell: whole name, or `…` (critique 22: `◐ running` with no AGENT)
 /** Widest name column an agent row may take: the whole name is kept, the columns after it give way (a name is never cut in the middle). */
 const nameCap = (cols: number): number => Math.max(18, Math.min(40, cols - GRID_LEAD - 2 - 7 - 6));
@@ -726,7 +726,7 @@ const footerLine = (m: PanelModel, h?: Health): PanelLine | null => {
   return line(fitRuns([r(' '.repeat(HEAD_AT)), r(t, 'dim'), ...(cost && gap >= 2 ? [r(' '.repeat(gap)), r(cost, 'dim')] : [])], m.cols));
 };
 
-/** The status view (spec frames S1-S8): NOW, ACTIVITY, CONTEXT, RUNS, GATES and the elastic HOOKS, the footer on the last row (mod/status-frame.ts). */
+/** The status view (spec frames S1-S8): NOW, ACTIVITY, CONTEXT, RUNS, GATES and the elastic HOOKS, the footer on the last row (mod/view/hud/status-frame.ts). */
 function statusLines(m: PanelModel, h: Health): PanelLine[] {
   const rows = statusFrame({
     cols: m.cols, room: m.rows > 0 ? m.rows - headerRows(m).length : 0, ui: m.ui, kind: m.run?.kind ?? 'idle', phases: m.phases, phase: m.phase,

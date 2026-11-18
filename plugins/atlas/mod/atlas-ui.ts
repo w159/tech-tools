@@ -470,7 +470,7 @@ export function meter(width: number, value: number, ui: Pick<Ui, 'ascii'>): Run[
 }
 
 /** The plan meter every surface draws (round 3, critique 23: the side panel's was lavender over 10 cells beside the HUD's green over 8): 8 cells, `ok` filled and `muted` empty; full only when everything is done, never empty once one
- * is. mod/hud-surface.ts `meterRuns` is the same figure (todo-meter.test.ts pins them equal). ASCII: `#` and `-`. */
+ * is. mod/view/hud/hud-surface.ts `meterRuns` is the same figure (todo-meter.test.ts pins them equal). ASCII: `#` and `-`. */
 export const TODO_METER_W = 8;
 export function todoMeter(done: number, total: number, ui: Pick<Ui, 'ascii'>): Run[] {
   const w = TODO_METER_W;

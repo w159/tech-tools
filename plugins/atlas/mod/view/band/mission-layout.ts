@@ -14,7 +14,7 @@ import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedCloc
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
 import { blockedText, STOP_REFUSED } from '../../data/runstate';
 import { tallyOf, type Tally } from '../../data/live';
-import { displayName } from '../../hud';
+import { displayName } from '../hud/hud';
 import { fitText, textWidth } from '../../theme';
 import { bandFrameRuns } from './band-frame';
 import type { Health } from '../../data/idle-health';

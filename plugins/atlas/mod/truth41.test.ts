@@ -10,7 +10,7 @@ import { lineText, panelLines, bodyLines } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { forgetRefusals } from './data/channels';
-import { agentModel, hudAgents } from './hud';
+import { agentModel, hudAgents } from './view/hud/hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
@@ -170,10 +170,10 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   });
 });
 
-import { hudLines, type HudAgent, type HudInput } from './hud';
+import { hudLines, type HudAgent, type HudInput } from './view/hud/hud';
 import { runsString } from './atlas-ui';
 import { ownTodos } from './data/todos';
-import { functionsIn } from './hud';
+import { functionsIn } from './view/hud/hud';
 import { blockedText } from './data/runstate';
 import { beatDue, KIND_HOLD_MS, newKindHold, stepKind, type KindWord } from './view/band/band-motion';
 

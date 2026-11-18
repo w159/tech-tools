@@ -5,7 +5,7 @@ import type { TodoItem } from './contract';
 import { currentPhase, dispatchOpen } from './data/todos';
 import { finalSecsOf, newRunClock, stepRun } from './view/band/band-motion';
 import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
-import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './hud';
+import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './view/hud/hud';
 import { RETURNED, markToken, rowWordTone, runsString, stateGlyph, type Ui } from './atlas-ui';
 import { DONE_HOLD_MS, MOTION_FRAME_MS, MOTION_STEP_MS, Motion, animateRow, trackBusy, windowOf, type MotionItem } from './motion/motion';
 import * as reg from './register';

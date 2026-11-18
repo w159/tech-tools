@@ -1,7 +1,7 @@
-// Plain-text goldens of the TODO and SUBAGENTS surfaces, regenerated from mod/hud-surface.ts (round 5: closed boxes, a k9s table). Rev 4 rows came from round2/design/evidence/golden (gen4.py).
+// Plain-text goldens of the TODO and SUBAGENTS surfaces, regenerated from mod/view/hud/hud-surface.ts (round 5: closed boxes, a k9s table). Rev 4 rows came from round2/design/evidence/golden (gen4.py).
 // `@SPIN@` stands for the shared spinner glyph at frame 0 (hud-surface.test.ts swaps it in). Each block is a closed rounded box: the top edge `╭─ ◖ ◆ ATLAS ◗ ▸ TITLE` carries the count, the meter (TODO) or the
 // spinner and counts (SUBAGENTS) INSIDE the rule, which runs to the last cell and ends in `╮`; a `╰───╯` edge closes the block under its rows in every state. The host draws its own `[-]` in the five cells
-// it adds to the right of the tree's first row, so the corners stand against those cells (mod/hud-surface.ts titleRow).
+// it adds to the right of the tree's first row, so the corners stand against those cells (mod/view/hud/hud-surface.ts titleRow).
 // Rows have no side border (the capture scorer reads a row by its glyph, which must start the line). The brand stays, quiet (no fill, 240), because the capture scorer locates a block by it.
 // SUBAGENTS is a table: AGENT STATE [MODEL from 120 columns] TASK LAST, then RESULT when width allows; LAST is always the elapsed clock (the world worker's age), RESULT the dim last tool or outcome.
 // Trailing spaces are trimmed; the surface is padded to its width when painted. Update only by regenerating from the code (the generator is the test: hud-surface.test.ts compares these rows).

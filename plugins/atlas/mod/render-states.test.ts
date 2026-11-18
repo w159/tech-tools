@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { boardRowsOf, itemState } from './view/board/board-model';
 import { STATE_GLYPHS, cells } from './atlas-ui';
 import { todoState } from './data/todos';
-import { hudLines, type HudAgent, type HudInput } from './hud';
+import { hudLines, type HudAgent, type HudInput } from './view/hud/hud';
 import type { SquadAgent, TodoItem } from './contract';
 import { busySnap } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';

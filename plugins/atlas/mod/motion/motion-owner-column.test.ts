@@ -2,7 +2,7 @@
 // text went 151 to 146 in one step (:4-5). An owner that does not change keeps its tone; a frame never changes weight and colour at once.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Run, type Ui } from '../atlas-ui';
-import { hudLines, hudMotionItems } from '../hud';
+import { hudLines, hudMotionItems } from '../view/hud/hud';
 import { DEMO_AGENT, demoInput } from './motion-demo';
 import { deltaE, Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 

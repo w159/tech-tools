@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { leadSpinnerGlyph, LEAD_FRAMES, SPIN_FRAMES, spinnerGlyph, type Ui } from '../../atlas-ui';
 import { bandTree } from './band';
 import { ARM_MS, END_GRACE_MS, FRAME_MS, newRunClock, ranSecsOf, restSecsOf, stepRun, workSecsOf } from './band-motion';
-import { hudAgents, hudCompactRows, hudFloorRows, hudLines, hudListsAgents, type HudAgent, type HudInput } from '../../hud';
+import { hudAgents, hudCompactRows, hudFloorRows, hudLines, hudListsAgents, type HudAgent, type HudInput } from '../hud/hud';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';

@@ -9,7 +9,7 @@
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { boardRoot, sessionTodos } from "./channel-view";
 import { hudText, paintHud } from "./hud-paint";
-import { hudMotionItems } from "../mod/hud";
+import { hudMotionItems } from "../mod/view/hud/hud";
 import { Motion, reducedMotion } from "../mod/motion/motion";
 import type { TodoItem } from "../mod/contract";
 

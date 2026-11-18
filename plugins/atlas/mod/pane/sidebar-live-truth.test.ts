@@ -9,7 +9,7 @@ import { bodyLines, lineText } from '../panel-layout';
 import type { Ui } from '../atlas-ui';
 import { panelWorld } from '../../contracts/panel-world';
 import type { CoreModel } from '../data/core';
-import { hudAgents, hudLines } from '../hud';
+import { hudAgents, hudLines } from '../view/hud/hud';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { panelModelOf } from './sidebar-model';

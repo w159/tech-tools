@@ -1,6 +1,6 @@
 // motion-feed.ts: the keys the feed reports are the keys the surfaces look up, on a snapshot that carries a plan and workers.
 import { describe, expect, test } from 'claude-code/testing';
-import { hudAgents, hudLines, type HudInput } from '../hud';
+import { hudAgents, hudLines, type HudInput } from '../view/hud/hud';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { hudPhases } from '../view/band/band';

@@ -1,7 +1,7 @@
 // y2.test.ts: round Y2 (critics/spec-y.md Y2a-Y2f): whole sections only under any row budget with a `+N more ›` chip, each tab its own body, chips visibly raised, colour that carries meaning, round chart buckets.
 import { describe, expect, test } from 'claude-code/testing';
-import { cardFrame } from './card-frame';
-import { CARD_MORE_KEY, GOTO_PREFIX, ROUND_BUCKETS, bucketLabel, ctxLevel, roundBucket } from './status-frame';
+import { cardFrame } from './view/hud/card-frame';
+import { CARD_MORE_KEY, GOTO_PREFIX, ROUND_BUCKETS, bucketLabel, ctxLevel, roundBucket } from './view/hud/status-frame';
 import { tabFrame, tabText, type TabId, type TabIn } from './tabs-frame';
 import { hexTo256, uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { bandLook } from './view/band/band-frame';

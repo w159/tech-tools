@@ -6,7 +6,7 @@ import { bandTree, type BandHandlers, type BandModel } from '../view/band/band';
 import { liveWorkers } from './live';
 import { busySnap, NOW } from '../live_fixture';
 import { uiFromEnv } from '../atlas-ui';
-import { healthCardRows, todoRows, agentRows } from '../hud-surface';
+import { healthCardRows, todoRows, agentRows } from '../view/hud/hud-surface';
 import { bodyLines, lineText, type PanelModel } from '../panel-layout';
 import { panelWorld } from '../../contracts/panel-world';
 import { textWidth } from '../theme';

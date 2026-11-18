@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface } from 'claude-code';
 import type { Ui } from '../atlas-ui';
 import { stopRefusal } from '../data/runstate';
-import { hudAgents, isRunning, type HudInput } from '../hud';
+import { hudAgents, isRunning, type HudInput } from '../view/hud/hud';
 import { bandKindOf, bandTree, hudPhases, type BandModel } from '../view/band/band';
 import type { SquadAgent, TodoItem } from '../contract';
 import { liveWorkers, queuedMembers } from '../data/live';

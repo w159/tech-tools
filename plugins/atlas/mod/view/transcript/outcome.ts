@@ -11,7 +11,7 @@ import { spin } from '../../theme'
 import { msClock } from '../../atlas-ui'
 import { notificationTree, resultLine, stripStatus } from './cards'
 import { lookOf } from '../../look'
-import { agentName } from '../../hud'
+import { agentName } from '../hud/hud'
 import type { CardExtra } from './cards'
 
 // Read-only views of register.ts's atoms (same plugin/key): the spinner clock and spawn metadata.

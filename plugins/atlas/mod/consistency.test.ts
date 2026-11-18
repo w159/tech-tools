@@ -15,7 +15,7 @@ import { stateRun, type Ui, type UiState } from './atlas-ui';
 import { bandTree, hudPhases } from './view/band/band';
 import { coreModel } from './data/core';
 import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from './data/live';
-import { hudAgents, hudLines } from './hud';
+import { hudAgents, hudLines } from './view/hud/hud';
 import { panelModelOf } from './pane/sidebar-model';
 import { panelText, type PanelTab } from './panel-layout';
 import { boardTree } from './view/board/todo-panel';

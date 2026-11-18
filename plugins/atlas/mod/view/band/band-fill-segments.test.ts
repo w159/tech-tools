@@ -11,7 +11,7 @@ import { busySnap } from '../../live_fixture';
 import { textWidth } from '../../theme';
 import type { Pulse } from '../../data/pulse';
 import { activitySection, contextSection, type Health } from '../../data/idle-health';
-import { healthCardRows } from '../../hud-surface';
+import { healthCardRows } from '../hud/hud-surface';
 import { lineText, panelLines, type PanelModel, type PanelTab } from '../../panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';

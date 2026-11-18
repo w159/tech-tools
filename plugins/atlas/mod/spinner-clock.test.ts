@@ -5,8 +5,8 @@ import { describe, expect, test } from 'claude-code/testing';
 import { worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { liveWorkers } from './data/live';
 import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from './atlas-ui';
-import { hudAgents, hudLines } from './hud';
-import { rowSpinnerGlyph } from './hud-surface';
+import { hudAgents, hudLines } from './view/hud/hud';
+import { rowSpinnerGlyph } from './view/hud/hud-surface';
 import { panelModelOf } from './pane/sidebar-model';
 import { bodyLines, lineText } from './panel-layout';
 

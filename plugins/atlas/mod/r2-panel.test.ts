@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface, On } from 'claude-code';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { chipStyle } from './input/clickable';
-import { healthCardRows } from './hud-surface';
+import { healthCardRows } from './view/hud/hud-surface';
 import { bodyLines, headerRows, lineText, panelLines, ribbonRow, tabRows, type PanelLine, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { goldenModel } from './pane/sidebar.golden-cases';

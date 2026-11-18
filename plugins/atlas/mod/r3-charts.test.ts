@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { runsCells } from './atlas-ui';
 import { areaChart, areaChartRuns, blockSpark, blockSparkRuns, chartFrame, runBars, runsSummary } from './chart';
-import { sectionRibbon } from './hud-surface';
+import { sectionRibbon } from './view/hud/hud-surface';
 import { activityStats, ctxDelta, ctxSeries, ctxText, type Pulse } from './data/pulse';
 import { ctxInk, ctxTone, gaugeRuns } from './spark';
 import { checkOff, gateDot } from './vocab';

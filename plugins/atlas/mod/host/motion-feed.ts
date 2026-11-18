@@ -5,7 +5,7 @@
 import type { BandModel } from '../view/band/band';
 import { bandCountItems, hudPhases } from '../view/band/band';
 import { boardMotionItems, boardRowsOf } from '../view/board/board-model';
-import { hudAgents, hudMotionItems } from '../hud';
+import { hudAgents, hudMotionItems } from '../view/hud/hud';
 import { liveWorkers, queuedMembers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
 import type { CoreModel } from '../data/core';

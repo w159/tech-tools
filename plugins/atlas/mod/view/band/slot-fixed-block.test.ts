@@ -8,7 +8,7 @@ import type { SquadAgent, TodoItem } from '../../contract';
 import { gateTally, stopRefusal } from '../../data/runstate';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
-import { hudAgents, hudLines, hudRows, isRunning, type HudInput } from '../../hud';
+import { hudAgents, hudLines, hudRows, isRunning, type HudInput } from '../hud/hud';
 import { busySnap, NOW } from '../../live_fixture';
 import { bandLines } from './mission-layout';
 import { DONE_FADE, MOTION_STEP_MS, type MotionCtx } from '../../motion/motion';

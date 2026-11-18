@@ -14,7 +14,7 @@ import type { TodoItem } from './contract';
 import { coreModel } from './data/core';
 import { ownTodos } from './data/todos';
 import { liveWorkers } from './data/live';
-import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './hud';
+import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './view/hud/hud';
 import { busySnap, NOW } from './live_fixture';
 import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';

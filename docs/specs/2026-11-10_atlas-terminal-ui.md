@@ -106,7 +106,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
   (`mod/pane/sidebar-model.ts`), the panel layout (`mod/panel-layout.ts`) and the omp mission panel
   (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
 - Gauges need an estimate. The Board and the HUD TODO draw `of mm:ss` and the elapsed gauge only for an item that carries
-  `estimate_s` (`mod/view/board/board-model.ts` line 78 and `mod/hud.ts` line 73). Any other running item reads
+  `estimate_s` (`mod/view/board/board-model.ts` line 78 and `mod/view/hud/hud.ts` line 73). Any other running item reads
   `elapsed 00:42` with no gauge; there is no default budget.
 - One tab list. `STRIP_TABS` (`mod/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
   the list the Claude Code side panel strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
@@ -117,7 +117,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
   (`stateCol` in `mod/view/board/board-model.ts`, shared with omp).
 - HUD Subagents block. It is back on Claude Code (the older note above that it is dropped no longer holds). With nothing
   running, a done agent stays for `LINGER_MS` (15 s, exported from `mod/atlas-ui.ts`, the band's own window) and a failed
-  agent stays until it is cleared (`mod/hud.ts` lines 113 to 115).
+  agent stays until it is cleared (`mod/view/hud/hud.ts` lines 113 to 115).
 - Channel tab. The roster falls back to the project's main channel key (`<folder>` or `<folder>@<ref>`) when no candidate
   key matches the lead's session (`mod/data/channels.ts`).
 - Route tab. Running agents that own no plan row are listed under the plan, in the HUD Subagents state words

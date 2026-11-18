@@ -5,8 +5,8 @@ import { LEAD_FRAMES, leadSpinnerGlyph, SPINNER_MS, spinFrameOf, spinnerGlyph, t
 import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 import { sharedSpinFrame } from './motion/motion';
 import { lineText, bodyLines, type PanelModel } from './panel-layout';
-import { rowSpinnerGlyph } from './hud-surface';
-import { hudLines } from './hud';
+import { rowSpinnerGlyph } from './view/hud/hud-surface';
+import { hudLines } from './view/hud/hud';
 import type { TodoItem } from './contract';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

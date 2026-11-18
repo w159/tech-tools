@@ -9,7 +9,7 @@ import type { SquadAgent, TodoItem } from '../../contract';
 import { stopRefusal } from '../../data/runstate';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
-import { hudAgents, hudRows, isRunning, type HudInput } from '../../hud';
+import { hudAgents, hudRows, isRunning, type HudInput } from '../hud/hud';
 import { busySnap, NOW } from '../../live_fixture';
 import { bandLines } from './mission-layout';
 import type { LiveSnapshot } from '../../orchestra-types';

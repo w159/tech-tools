@@ -6,7 +6,7 @@ import { hudPhases } from './view/band/band';
 import type { SquadAgent } from './contract';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
-import { hudAgents, isRunning, type HudInput } from './hud';
+import { hudAgents, isRunning, type HudInput } from './view/hud/hud';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
 import { composeSlot } from './view/band/slot';

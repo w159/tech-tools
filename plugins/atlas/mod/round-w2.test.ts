@@ -6,7 +6,7 @@ import { hostEnv, uiFromEnv, xtermHex, type Run, type Ui } from './atlas-ui';
 import { busySnap } from './live_fixture';
 import { bodyLines, lineText, panelLines, type PanelModel } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
-import { gateLastSecs } from './status-frame';
+import { gateLastSecs } from './view/hud/status-frame';
 import { textWidth } from './theme';
 import { NOW } from './live_fixture';
 import type { Health } from './data/idle-health';

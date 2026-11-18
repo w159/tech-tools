@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { easedFrames, EASE_MS, type Ui } from '../../atlas-ui';
 import { bandTree, hudPhases, railPhase } from './band';
 import { displayed, gaugeTargets, retarget, settled, type Move } from './band-motion';
-import { hudAgents, hudListsAgents, hudRows } from '../../hud';
+import { hudAgents, hudListsAgents, hudRows } from '../hud/hud';
 import { liveWorkers, queuedMembers, type LiveWorker } from '../../data/live';
 import { busySnap, NOW } from '../../live_fixture';
 

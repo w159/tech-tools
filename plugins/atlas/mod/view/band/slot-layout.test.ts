@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { runsString, type Ui } from '../../atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
-import { hudLines, hudRunRows, hudWantRows, type HudAgent, type HudInput } from '../../hud';
+import { hudLines, hudRunRows, hudWantRows, type HudAgent, type HudInput } from '../hud/hud';
 import { bandLines, runsText, type MissionModel } from './mission-layout';
 import { bandRowCount } from './band';
 import { busySnap } from '../../live_fixture';

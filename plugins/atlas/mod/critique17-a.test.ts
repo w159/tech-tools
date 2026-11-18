@@ -7,8 +7,8 @@ import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STA
 import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './view/board/board-model';
 import { openRowName, ownPlan, todoState } from './data/todos';
 import { plannedText } from './data/core';
-import { hudLines, type HudAgent } from './hud';
-import { CLOSED_KILLED } from './hud-surface';
+import { hudLines, type HudAgent } from './view/hud/hud';
+import { CLOSED_KILLED } from './view/hud/hud-surface';
 import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

@@ -8,7 +8,7 @@ import type { AtlasSnapshot, SquadAgent, TodoItem } from './contract';
 import * as runstate from './data/runstate';
 import { liveWorkers, queuedMembers, resetWorkerFacts, workerFacts } from './data/live';
 import { clipEvidence, ownTodos } from './data/todos';
-import { hudAgents, hudLines, isRunning, outcomeOf, type HudAgent, type HudInput } from './hud';
+import { hudAgents, hudLines, isRunning, outcomeOf, type HudAgent, type HudInput } from './view/hud/hud';
 import { busySnap, NOW } from './live_fixture';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { bandFrame, forgetBandFrame, noteBandFrame } from './motion/motion';
@@ -18,7 +18,7 @@ import { composeSlot } from './view/band/slot';
 import { notificationTree } from './view/transcript/cards';
 import { verdictOf } from './view/transcript/leadheader';
 import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './view/transcript/placed';
-import { planWindow } from './hud-surface';
+import { planWindow } from './view/hud/hud-surface';
 import { runsString } from './atlas-ui';
 
 type Node = { kind: string; props: Record<string, unknown> };

@@ -1045,11 +1045,11 @@ response's input tokens over the model window (the host's `session.measure`), no
 a session total. With the pane closed, a `▸ health` chip opens the HEALTH card above
 the prompt; the card's title (`▾ HEALTH`) and the band's `▾ health` chip close it.
 Below 144 columns the host does not dock the side pane at rest, so a two-row idle
-strip above the band (`mod/strip-frame.ts`) shows the last run, run count and
+strip above the band (`mod/view/hud/strip-frame.ts`) shows the last run, run count and
 median, gates, hook p95, context and a spark; a click anywhere on it opens the card.
 
 The status tab, the card and the other tabs draw the same sections from
-`mod/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
+`mod/view/hud/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
 with a y axis, baseline and time axis; the rule names the bucket, `peak 3 / 5s`),
 CONTEXT, RUNS (bars, `N runs · med 0:41 · 1 failed`), GATES (a table with `pass`,
 `deny` and `last` columns) and HOOKS (`n`, `p50` and `last` per hook; the rule says
@@ -1087,7 +1087,7 @@ the message input is labelled `✎ to lead`. No surface prints key hints; the
 `Enter sends` placeholder were removed because the keys do not work in Claude
 Code. Click a chip to switch tabs and a `▸` row to expand it.
 
-**TODO and SUBAGENTS.** `mod/hud.ts` and `mod/hud-surface.ts` draw the HUD under
+**TODO and SUBAGENTS.** `mod/view/hud/hud.ts` and `mod/view/hud/hud-surface.ts` draw the HUD under
 the band as closed rounded boxes with one blank row between them. The slot above
 the prompt is exactly the rows drawn: the band row, then the HUD rows, with no
 spacer rows above or below (`composeFixed` in `mod/view/band/slot.ts`). The HUD takes every

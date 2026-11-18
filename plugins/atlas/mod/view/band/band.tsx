@@ -8,7 +8,7 @@ import type { CoreModel } from '../../data/core';
 import type { LiveSnapshot } from '../../orchestra-types';
 import { endedAt, queuedMembers, workerStates, withOwnerStates, type LiveWorker } from '../../data/live';
 import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from '../../data/todos';
-import { agentTally, hudAgents, planProgress } from '../../hud';
+import { agentTally, hudAgents, planProgress } from '../hud/hud';
 import { openItems, openWork } from '../../data/core';
 import { blockedCount } from '../board/board-model';
 import { deniedCalls } from '../../vocab';

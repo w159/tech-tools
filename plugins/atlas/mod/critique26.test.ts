@@ -8,7 +8,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { bandTree } from './view/band/band';
 import { bandLines } from './view/band/mission-layout';
-import { hudAgents, hudRows } from './hud';
+import { hudAgents, hudRows } from './view/hud/hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';

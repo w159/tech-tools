@@ -3,12 +3,12 @@
 // Unicode, ASCII, truecolor and 256 colours; `returned` has its own mark; and no step of the deterministic ramp repeats the one before it.
 import { describe, expect, test } from 'claude-code/testing';
 import { bodyLines, type PanelModel } from './panel-layout';
-import { hudAgents, hudLines, type HudInput } from './hud';
+import { hudAgents, hudLines, type HudInput } from './view/hud/hud';
 import { hudPhases } from './view/band/band';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';
-import { rowSpinnerGlyph } from './hud-surface';
+import { rowSpinnerGlyph } from './view/hud/hud-surface';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion/motion';
 import { motionFeed } from './host/motion-feed';

@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { cells, runsString, type Ui } from '../../atlas-ui';
 import { boardBody, boardFolded, boardLines, boardRowsOf, boardText, itemState, planFigure } from './board-model';
 import { ownTodos, todoState } from '../../data/todos';
-import { todoRows, type TodoRow } from '../../hud-surface';
+import { todoRows, type TodoRow } from '../hud/hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const plan = [

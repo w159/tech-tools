@@ -14,7 +14,7 @@ import { bandLook } from './view/band/band-frame';
 import { runHex } from './atlas-ui';
 import type { Health, HealthCheck } from './data/idle-health';
 import type { CoreModel } from './data/core';
-import { healthCardRows } from './hud-surface';
+import { healthCardRows } from './view/hud/hud-surface';
 import { bandLines } from './view/band/mission-layout';
 import { panelModelOf } from './pane/sidebar-model';
 import { busySnap } from './live_fixture';

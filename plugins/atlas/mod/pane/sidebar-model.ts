@@ -7,7 +7,7 @@ import { DONE_DOUBT, RETURNED, spinClock, type Ui, type UiState } from '../atlas
 import { forgetStamps, type PanelGate, type PanelModel, type PanelNote, type PanelTodo, type PanelWorker } from '../panel-layout';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
-import { agentModel, hudAgents, lastOf, ownerStatesOf } from '../hud';
+import { agentModel, hudAgents, lastOf, ownerStatesOf } from '../view/hud/hud';
 import { ownerOutcome } from '../view/board/board-model';
 import { failureNotes, firstSeen, isoTs, noteRefusal, refusalNotes } from '../data/channels';
 import { gateTally } from '../data/runstate';

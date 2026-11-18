@@ -1,9 +1,9 @@
 // round-x.test.ts: round X (critics/spec-x.md X1-X7): every Atlas view draws the status tab's widget set, no view invents data, idle is never empty, the pill breathes visibly in 256 colours and a chevron lives only in a chip.
 import { describe, expect, test } from 'claude-code/testing';
 import { readMod } from './fixtures/source-tree';
-import * as statusFrame from './status-frame';
-import { statusFrame as buildStatus } from './status-frame';
-import { cardFrame } from './card-frame';
+import * as statusFrame from './view/hud/status-frame';
+import { statusFrame as buildStatus } from './view/hud/status-frame';
+import { cardFrame } from './view/hud/card-frame';
 import { tabFrame, tabText, type TabIn, type TabId } from './tabs-frame';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import type { Health, HealthCheck } from './data/idle-health';

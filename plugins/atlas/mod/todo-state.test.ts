@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { todoState } from './data/todos';
 import { liveWorkers, queuedMembers } from './data/live';
-import { agentModel, hudAgents, hudLines } from './hud';
+import { agentModel, hudAgents, hudLines } from './view/hud/hud';
 import { hudPhases } from './view/band/band';
 import { panelModelOf } from './pane/sidebar-model';
 import { panelText } from './panel-layout';
