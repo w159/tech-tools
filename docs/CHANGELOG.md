@@ -8,6 +8,7 @@ Atlas prompt text follows Anthropic's guide "Prompting Claude Fable 5.2". Wordin
 - Memory capture adds a ` [noted YYYY-MM-DD]` date to corrections and assumptions; the recall dedupe key ignores it.
 - New page `docs/architecture/atlas-fable-5-2-prompting.md` maps each guide section to what atlas does and lists open follow-ups; contract test `plugins/atlas/hooks/test_fable52_guide.py`.
 - Version 17.28.1 to 17.29.0. Details: `plugins/atlas/CHANGELOG.md`.
+- Verified on the final tree: `python3 -m pytest -q plugins/atlas/hooks` (3316 passed, 4 skipped), `python3 -m pytest -q plugins/atlas/scripts` (6343 passed, 2 skipped), `bun test omp` in `plugins/atlas` (839 pass, 0 fail).
 
 ## atlas 17.28.1 - 2026-11-17
 
