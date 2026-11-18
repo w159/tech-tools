@@ -9,7 +9,7 @@
 import type { MotionCtx, MotionItem } from "../mod/motion/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
-import { gatesError, parseGates } from "../mod/gates";
+import { gatesError, parseGates } from "../mod/host/gates";
 import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";

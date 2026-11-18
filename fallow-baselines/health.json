@@ -990,7 +990,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/notify.ts": {
+    "plugins/atlas/mod/host/notify.ts": {
       "complexity_critical": {
         "count": 2
       },
@@ -1036,7 +1036,7 @@
         "count": 2
       }
     },
-    "plugins/atlas/mod/register.test.ts": {
+    "plugins/atlas/mod/host/register.test.ts": {
       "crap_moderate": {
         "count": 1
       }
@@ -1108,7 +1108,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/worker-live.test.ts": {
+    "plugins/atlas/mod/host/agent-spawn-names.test.ts": {
       "crap_moderate": {
         "count": 1
       }
@@ -1851,8 +1851,8 @@
     "plugins/atlas/omp/hook-bridge.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/operate-dom-stub.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/send-path.js:high impact",
-    "plugins/atlas/mod/notify.ts:complexity",
-    "plugins/atlas/mod/gates.ts:high impact",
+    "plugins/atlas/mod/host/notify.ts:complexity",
+    "plugins/atlas/mod/host/gates.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/app.js:complexity",
     "plugins/atlas/scripts/dashboard_ui/js/herdr-actions.js:high impact",
     "plugins/atlas/mod/sprites/api.ts:high impact",

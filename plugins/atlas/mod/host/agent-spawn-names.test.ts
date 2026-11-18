@@ -2,13 +2,13 @@
 // line, as the live run showed) reaches the snapshot as one working worker under that label, and the channel header counts it.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface, On } from 'claude-code';
-import { liveWorkers } from './data/live';
-import type { LiveSnapshot } from './orchestra-types';
-import { channelRows } from './pane/sidebar-channel';
-import type { SidebarHandlers } from './pane/sidebar-types';
-import { promptName } from './input/routing';
-import { register } from './register';
-import { memState } from './test_helpers';
+import { liveWorkers } from '../data/live';
+import type { LiveSnapshot } from '../orchestra-types';
+import { channelRows } from '../pane/sidebar-channel';
+import type { SidebarHandlers } from '../pane/sidebar-types';
+import { promptName } from '../input/routing';
+import { register } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

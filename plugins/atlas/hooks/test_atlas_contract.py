@@ -1914,7 +1914,7 @@ class HeaderSsotTests(unittest.TestCase):
         "hooks/completion_gate_core.py",
         "omp/style.ts",
         # Prose only (toast text, doc comment); neither builds or checks the header.
-        "mod/discipline.ts",
+        "mod/host/discipline.ts",
         "mod/register.ts",
     }
 

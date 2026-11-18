@@ -4,7 +4,7 @@
 import type { On } from 'claude-code';
 import { expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
-import { gaugeText } from './atlas-ui';
+import { gaugeText } from '../atlas-ui';
 
 const CHANNELS = JSON.stringify({ channels: { 'lead-abcdef': { members: [{ name: 'impl-a', role: 'implementer' }] } } });
 

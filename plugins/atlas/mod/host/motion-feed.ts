@@ -2,19 +2,19 @@
 // surface, built from the same models the surfaces draw (hud.ts, board-model.ts, panel-layout.ts, band.tsx), so a key the feed
 // reports is a key a builder looks up. register.ts calls it from its tick (never from a render) and hands each list to
 // `Motion.observe`; the omp hosts call it the same way.
-import type { BandModel } from './band';
-import { bandCountItems, hudPhases } from './band';
-import { boardMotionItems, boardRowsOf } from './view/board/board-model';
-import { hudAgents, hudMotionItems } from './hud';
-import { liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
-import { ownTodos } from './data/todos';
-import type { CoreModel } from './data/core';
-import type { MotionItem } from './motion/motion';
-import type { LiveSnapshot } from './orchestra-types';
-import { panelModelOf } from './pane/sidebar-model';
-import type { GateGroup } from './pane/sidebar-types';
-import { panelMotionItems } from './panel-layout';
-import type { Ui } from './atlas-ui';
+import type { BandModel } from '../band';
+import { bandCountItems, hudPhases } from '../band';
+import { boardMotionItems, boardRowsOf } from '../view/board/board-model';
+import { hudAgents, hudMotionItems } from '../hud';
+import { liveWorkers, queuedMembers, withOwnerStates, workerStates } from '../data/live';
+import { ownTodos } from '../data/todos';
+import type { CoreModel } from '../data/core';
+import type { MotionItem } from '../motion/motion';
+import type { LiveSnapshot } from '../orchestra-types';
+import { panelModelOf } from '../pane/sidebar-model';
+import type { GateGroup } from '../pane/sidebar-types';
+import { panelMotionItems } from '../panel-layout';
+import type { Ui } from '../atlas-ui';
 
 /** The surfaces' observed names (the keys of the result). */
 export type MotionFeed = { 'hud-todo': MotionItem[]; 'hud-agents': MotionItem[]; board: MotionItem[]; panel: MotionItem[]; band: MotionItem[] };

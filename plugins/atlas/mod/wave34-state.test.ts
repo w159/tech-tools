@@ -23,7 +23,7 @@ import { composeSlot } from './slot';
 import { memState } from './test_helpers';
 import { FRAME_MS } from './band-motion';
 import { animateRow, DONE_FADE } from './motion/motion';
-import { motionFeed } from './motion-feed';
+import { motionFeed } from './host/motion-feed';
 
 type Node = { kind: string; props: Record<string, unknown> };
 const mk = (kind: string) => (props: Record<string, unknown>): Node => ({ kind, props });

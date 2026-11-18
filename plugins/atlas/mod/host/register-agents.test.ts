@@ -4,11 +4,11 @@
 // (null until session.measure carries a value; a measured 0 stays a 0).
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { publishHudState, readStatuslineRows, register, resetHudStateSig, syncAgentsFromList } from './register';
-import { hudAgents } from './hud';
-import { liveWorkers } from './data/live';
-import { busySnap } from './live_fixture';
-import { memState } from './test_helpers';
+import { publishHudState, readStatuslineRows, register, resetHudStateSig, syncAgentsFromList } from '../register';
+import { hudAgents } from '../hud';
+import { liveWorkers } from '../data/live';
+import { busySnap } from '../live_fixture';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

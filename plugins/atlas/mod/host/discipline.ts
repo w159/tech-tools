@@ -5,15 +5,15 @@
 // model-only context or a rate-limited toast; it never rewrites user text.
 // register.ts owns the single turn.complete / session.measure registrations and
 // calls afterAnswer / onMeasure from them (an event may register once per matcher).
-import { firstHeaderLine } from './contract-pattern';
-import { dataWord } from './data/datastate';
+import { firstHeaderLine } from '../contract-pattern';
+import { dataWord } from '../data/datastate';
 import { atom, read, update } from 'claude-code';
 import type { On, EngineInterface } from 'claude-code';
-import type { AtlasSnapshot } from './contract';
-import { headerPhaseOf } from './view/transcript/restyle';
+import type { AtlasSnapshot } from '../contract';
+import { headerPhaseOf } from '../view/transcript/restyle';
 import type { HeaderCheck } from './gates';
 import { hookDone, hookStamp, noteHook } from './hook-log';
-import { EMPTY_ORCH, LEAD, onStep, onToolEnd, onToolStart } from './data/orchestration';
+import { EMPTY_ORCH, LEAD, onStep, onToolEnd, onToolStart } from '../data/orchestration';
 
 /** Inline tool output at or above this many chars (~1k tokens) counts as heavy. */
 export const HEAVY_CHARS = 4000;

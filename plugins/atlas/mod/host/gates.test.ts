@@ -1,4 +1,4 @@
-// Tests for mod/gates.ts: atlas_gates.py JSON shaping, header group, open-gate count.
+// Tests for mod/host/gates.ts: atlas_gates.py JSON shaping, header group, open-gate count.
 import { describe, expect, test } from 'claude-code/testing';
 import { gatesError, headerGroup, openGateCount, parseGates } from './gates';
 

@@ -10,7 +10,7 @@
 import { dataCell, dataStateOf, type DataState } from './data/datastate';
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { bandLook, ctxLevel, latencyLevel } from './band-frame';
-import { WIRED_HOOKS } from './hook-log';
+import { WIRED_HOOKS } from './host/hook-log';
 import { agoText, gatesSummary, promptedOf, severityOf, teamOf, tokenText, type Health } from './data/idle-health';
 import { bucketLabel, chartSeries, CHART_AXIS_MIN, chartMinutes, metricsOf, P95_MIN_SAMPLES, PANEL_CHART_COLS, ROUND_BUCKETS, roundBucket, runFigures, runsOf, STATUS_BUCKETS, type ChartData } from './data/metrics';
 import { ctxDelta, ctxRunway } from './data/pulse';

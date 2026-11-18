@@ -1,9 +1,11 @@
-// The 500 ms rebuild tick never waits on a gate run (atlas_gates.py): the todo state reaches the snapshot while the run is pending.
-// A gate-file change starts the run without awaiting it; gatesBusy keeps a second run from starting meanwhile.
+// Fresh data on the next poll, with an injected clock and no node: imports.
+// Step 2: a todos.json rewrite that keeps its mtime (a coarse clock, or a torn read cached under the bad mtime) still reaches the
+//   snapshot, because the todo cache keys on mtime AND size, as the poll fingerprint does.
+// Step 3: a change to a gate file (todos.json, findings.json, the gate DB) re-runs the gates on the next poll, not after the 30 s backstop.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { rebuildTick, register, resetCore } from './register';
-import { memState } from './test_helpers';
+import { rebuildTick, register, resetCore } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
@@ -18,7 +20,7 @@ function captureOn() {
   return { on, one: (event: string): AnyHandler => handlers.find((h) => h.event === event)!.hook };
 }
 
-const ROOT = '/tmp/proj-nowait';
+const ROOT = '/tmp/proj-fresh';
 const RUN = `${ROOT}/.atlas/.run`;
 const TODOS = `${RUN}/todos.json`;
 const FINDINGS = `${RUN}/findings.json`;
@@ -31,7 +33,6 @@ function stubEngine() {
   let now = 1_800_000_000_000; // below every other register test clock: the worktree-status throttle (wtAt) is module state
   const every: { ms: number; fn: () => void }[] = [];
   const gateRuns: number[] = [];
-  const hold = { on: false, release: [] as (() => void)[] };
   const $ = {
     plugin: { name: 'atlas', root: '/plugins/atlas' },
     env: { get: async (k: string) => (k === 'ATLAS_DB' ? DB : undefined) },
@@ -41,13 +42,10 @@ function stubEngine() {
       after: () => ({ cancel() {} }),
       sleep: async () => {},
     },
-    session: { id: async () => 'sess-nowait' },
+    session: { id: async () => 'sess-fresh' },
     process: {
       run: async (argv: string[]) => {
-        if (argv.some((a) => a.endsWith('atlas_gates.py'))) {
-          gateRuns.push(now);
-          if (hold.on) await new Promise<void>((resolve) => hold.release.push(resolve));
-          return { exitCode: 0, stdout: '{"groups":[]}', stderr: '' }; }
+        if (argv.some((a) => a.endsWith('atlas_gates.py'))) { gateRuns.push(now); return { exitCode: 0, stdout: '{"groups":[]}', stderr: '' }; }
         return { exitCode: 0, stdout: 'main', stderr: '' };
       },
     },
@@ -65,7 +63,7 @@ function stubEngine() {
   };
   return {
     $: $ as unknown as EngineInterface,
-    files, mtimes, every, gateRuns, hold,
+    files, mtimes, every, gateRuns,
     /** Write `text` to `p`; `touch` false keeps the mtime (one mtime tick, or a coarse filesystem clock). */
     write: (p: string, text: string, touch = true) => { files[p] = text; if (touch) mtimes[p] = (mtimes[p] ?? 0) + 1; },
     advance: (ms: number) => { now += ms; },
@@ -86,42 +84,81 @@ async function boot(s: ReturnType<typeof stubEngine>) {
 
 const poll = async (s: ReturnType<typeof stubEngine>): Promise<void> => { s.advance(500); await rebuildTick(s.$); await settle(); };
 
-
-/** True when rebuildTick returned within a settle (the stub engine is all microtasks); false when it is still waiting. */
-const returnsPromptly = (s: ReturnType<typeof stubEngine>): Promise<boolean> =>
-  Promise.race([rebuildTick(s.$).then(() => true), settle().then(() => false)]);
-
-describe('rebuildTick does not wait on a gate run', () => {
-  test('a pending gate run neither holds the tick nor stops a todo change reaching the snapshot, and is not started twice', async () => {
+describe('step 2: the snapshot is current one poll after a todos.json write', () => {
+  test('a rewrite inside the same mtime tick, with a new size, shows on the next poll', async () => {
     const s = stubEngine();
     await boot(s);
-    await poll(s); // records the gate signature
-    s.hold.on = true;
-    const base = s.gateRuns.length;
-    try {
-      s.write(DB, 'db-new-longer');
-      s.write(TODOS, items(3));
-      s.advance(6000); // past the minimum gap between two gate runs
-      expect(await returnsPromptly(s)).toBe(true);
-      await settle();
-      expect(s.gateRuns.length - base).toBe(1); // the run started and is still pending
-      expect((await snapOf(s)).todos).toHaveLength(3);
+    expect((await snapOf(s)).todos).toHaveLength(1);
+    await poll(s); // records the fingerprint
+    s.write(TODOS, items(3), false); // same mtime, bigger file
+    await poll(s);
+    expect((await snapOf(s)).todos).toHaveLength(3);
+  });
 
-      s.write(DB, 'db-newer-still-longer');
-      s.write(TODOS, items(4));
-      s.advance(6000);
-      expect(await returnsPromptly(s)).toBe(true);
-      await settle();
-      expect(s.gateRuns.length - base).toBe(1); // gatesBusy: no second run while the first is pending
-      expect((await snapOf(s)).todos).toHaveLength(4);
-    } finally {
-      s.hold.on = false;
-      s.hold.release.splice(0).forEach((r) => r());
-      await settle();
+  test('a torn read cached under an mtime is replaced when the complete file lands with that mtime', async () => {
+    const s = stubEngine();
+    await boot(s);
+    await poll(s);
+    s.write(TODOS, '{"items": [', true); // the poll catches the writer mid-write
+    await poll(s);
+    expect((await snapOf(s)).todos).toHaveLength(1); // the last good board stays up
+    s.write(TODOS, items(4), false); // the write finishes inside the same mtime tick
+    await poll(s);
+    expect((await snapOf(s)).todos).toHaveLength(4);
+  });
+});
+
+describe('step 3: a gate file change re-runs the gates on the next poll', () => {
+  test('findings.json, todos.json and the gate DB each invalidate the gates; a quiet poll does not', async () => {
+    const s = stubEngine();
+    await boot(s);
+    await poll(s); // first sight records the signature
+    const base = s.gateRuns.length;
+    for (let i = 0; i < 4; i++) await poll(s); // 2 s of quiet polls (inside the gap)
+    expect(s.gateRuns.length).toBe(base);
+    for (const [path, text] of [[FINDINGS, '[{"id":"a"}]'], [TODOS, items(2)], [DB, 'db1-longer']] as const) {
+      s.write(path, text);
+      await poll(s);
+      s.advance(5000); // past the 5 s minimum gap between two runs
+      await poll(s);
     }
-    // The finished run frees the guard: the next gate change runs again.
-    s.write(DB, 'db-after-release');
-    s.advance(6000);
+    expect(s.gateRuns.length - base).toBe(3);
+  });
+
+  test('a new Stop verdict runs the gates on that very poll, inside the minimum gap (critique 9: BLOCKED lagged Stop by 3.5 s)', async () => {
+    const s = stubEngine();
+    await boot(s);
+    await poll(s);
+    s.advance(5000);
+    await poll(s);
+    s.write(DB, 'db-a'); // a hook wrote the gate DB: the run happens now
+    await poll(s);
+    const base = s.gateRuns.length;
+    s.write(`${RUN}/stop-verdict.json`, '{"sessions":{}}'); // Stop refused, inside the 5 s gap
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(1);
+    s.write(`${RUN}/stop-verdict.json`, '{"sessions":{"a":{"blocked":true}}}'); // and again on the next refusal
+    await poll(s);
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(2);
+    for (let i = 0; i < 4; i++) await poll(s); // quiet polls add nothing
+    expect(s.gateRuns.length - base).toBe(2);
+  });
+
+  test('a burst of changes inside the minimum gap runs the gates once, then once more after the gap', async () => {
+    const s = stubEngine();
+    await boot(s);
+    await poll(s);
+    s.advance(5000);
+    await poll(s);
+    const base = s.gateRuns.length;
+    s.write(DB, 'db-a');
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(1); // the change is seen on this very poll
+    s.write(DB, 'db-bb');
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(1); // inside the gap: held, not dropped
+    s.advance(5000);
     await poll(s);
     expect(s.gateRuns.length - base).toBe(2);
   });

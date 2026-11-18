@@ -12,7 +12,7 @@ import { textWidth } from './theme';
 import { composeSlot } from './slot';
 import * as ih from './data/idle-health';
 import type { Health } from './data/idle-health';
-import { hookStats, noteHook, resetHookLog } from './hook-log';
+import { hookStats, noteHook, resetHookLog } from './host/hook-log';
 import { sidebarTree, type SidebarHandlers } from './pane/sidebar';
 import { activeChipStyle } from './input/clickable';
 

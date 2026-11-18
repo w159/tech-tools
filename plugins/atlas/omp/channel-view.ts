@@ -28,7 +28,7 @@ import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
 import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
-import { openGateCount } from "../mod/gates";
+import { openGateCount } from "../mod/host/gates";
 import type { CoreModel } from "../mod/data/core";
 import { asksUser, ranWorkers } from "../mod/data/runstate";
 import { ownTodos, planCounts, planPhase, settleDispatch, type Outcome } from "../mod/data/todos";

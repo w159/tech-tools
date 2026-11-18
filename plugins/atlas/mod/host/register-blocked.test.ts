@@ -3,8 +3,8 @@
 // The engine stub resolves real element builders, so the AbovePrompt handler returns the band's tree.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register, resetBlockedDebounce, resetCore } from './register';
-import { memState } from './test_helpers';
+import { register, resetBlockedDebounce, resetCore } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

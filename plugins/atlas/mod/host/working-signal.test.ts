@@ -3,8 +3,8 @@
 import type { On } from 'claude-code';
 import { expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
-import { isWorkingNow } from './register';
-import type { LiveSnapshot } from './orchestra-types';
+import { isWorkingNow } from '../register';
+import type { LiveSnapshot } from '../orchestra-types';
 
 const CONTRACT = JSON.stringify({
   phases: ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'].map((id) => ({ id, glyph: '.' })),

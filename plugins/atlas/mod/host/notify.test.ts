@@ -2,10 +2,10 @@
 // lead/human with 60-char preview, todo completed, phase advance), no-change and
 // first-sight (null prev) yielding [], and malformed snapshots never throwing.
 import { describe, expect, test } from 'claude-code/testing';
-import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from './contract';
+import type { AtlasSnapshot, ChannelNote, SquadAgent, TodoItem } from '../contract';
 import type { EngineInterface, On } from 'claude-code';
-import { memState } from './test_helpers';
-import { cells } from './atlas-ui';
+import { memState } from '../test_helpers';
+import { cells } from '../atlas-ui';
 import { diffSnapshots, isOlder, mergeToasts, nextStepSuggestion, registerNotify, TOAST_MAX, TOAST_MS } from './notify';
 
 function snap(over: Partial<AtlasSnapshot> = {}): AtlasSnapshot {

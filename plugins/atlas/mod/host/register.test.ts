@@ -1,13 +1,13 @@
 // Tests for register.ts — run with `bun test --preload /tmp/cc_testing_preload.ts
-// plugins/atlas/mod/register.test.ts` (shim maps 'claude-code/testing' to bun:test)
+// plugins/atlas/mod/host/register.test.ts` (shim maps 'claude-code/testing' to bun:test)
 // or `claude plugin test plugins/atlas`. Covers the three required behaviors:
 // the ATLAS_MOD=off kill switch, exact intent argv passthrough, and headless
 // inertness (no ui.*, no timers, no commands). A fourth case pins the stop
 // confirmation: $.ui.ask gates the atlas_mux kill.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { headerPhaseOf, register } from './register';
-import { memState } from './test_helpers';
+import { headerPhaseOf, register } from '../register';
+import { memState } from '../test_helpers';
 
 // ---- structural event shapes (d.ts: SessionStartInput, RenderInputOf, UiMessageArgument) ----
 

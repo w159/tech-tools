@@ -2,11 +2,11 @@
 // no status-line entry, logs re-read when size or mtime changes, /atlas-core, and the header tally.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { coreMatrix } from '../contracts/core-fixture';
-import { buildCore, coreTick, headerTallyOf, register, resetCore, resetSessionStart } from './register';
-import { memState } from './test_helpers';
-import { withHeaderTally } from './data/runstate';
-import { forgetDrawnHeaders } from './view/transcript/restyle';
+import { coreMatrix } from '../../contracts/core-fixture';
+import { buildCore, coreTick, headerTallyOf, register, resetCore, resetSessionStart } from '../register';
+import { memState } from '../test_helpers';
+import { withHeaderTally } from '../data/runstate';
+import { forgetDrawnHeaders } from '../view/transcript/restyle';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

@@ -1,10 +1,10 @@
 // L19 under bun: the board key's real path without the host engine. register()'s own AbovePrompt hook draws the band, the
 // test presses the band's real `o` Button, and the recorded engine must see `ui.open` for the Board pane; the Pane hook then draws
-// the board from todos.json. (mod/board-key.test.ts runs the same path through the host kit under `claude plugin test`.)
+// the board from todos.json. (mod/host/board-key.test.ts runs the same path through the host kit under `claude plugin test`.)
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register, resetCore } from './register';
-import { memState } from './test_helpers';
+import { register, resetCore } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

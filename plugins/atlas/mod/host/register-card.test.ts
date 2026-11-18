@@ -2,9 +2,9 @@
 // injected clock reading, so the card cannot trail the HUD row (live: 5.07 s against 1.03 s when the host's own notification row was the card).
 import { expect, test } from 'claude-code/testing';
 import type { AgentInfo, EngineInterface, On } from 'claude-code';
-import { rebuild, register, resetCore } from './register';
-import { forgetPlaced } from './view/transcript/placed';
-import { memState } from './test_helpers';
+import { rebuild, register, resetCore } from '../register';
+import { forgetPlaced } from '../view/transcript/placed';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

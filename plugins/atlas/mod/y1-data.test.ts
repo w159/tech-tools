@@ -6,7 +6,7 @@ import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { bandFrameRuns } from './band-frame';
 import { cardFrame } from './card-frame';
 import { composeHistory, emptyHistory, flushHistory, HIST_LAT, HIST_MINUTES, HIST_RUNS, historyView, loadHistory, noteHistoryCtx, noteHistoryRun, parseHistory, resetHistory, serializeHistory, type History } from './data/history';
-import { eventMinutes, hookStats, noteHook, noteHookMs, resetHookLog, seedHookLatency } from './hook-log';
+import { eventMinutes, hookStats, noteHook, noteHookMs, resetHookLog, seedHookLatency } from './host/hook-log';
 import type { Health, HealthCheck } from './data/idle-health';
 import { bucketLabel, chartMinutes, roundBucket, chartSeries, frameKit, runFigures, statusActivityRows, statusFrame, statusHooksRows, statusRunsRows, type StatusIn } from './status-frame';
 import { healthStripRows, STRIP_BELOW_COLS, stripWanted } from './strip-frame';

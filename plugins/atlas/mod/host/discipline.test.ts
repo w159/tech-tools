@@ -3,8 +3,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { BIG_TURN_TOKENS, HEAVY_CHARS, HEAVY_LIMIT, TOAST_GAP_MS, factsLine, isVague, disciplinePrompt, reinforceLine, registerDiscipline } from './discipline';
-import { memState } from './test_helpers';
-import { leadBusy } from './data/runstate';
+import { memState } from '../test_helpers';
+import { leadBusy } from '../data/runstate';
 
 describe('reinforceLine', () => {
   test('carries the contract template and phase, never the regex', () => {

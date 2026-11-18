@@ -7,7 +7,7 @@ import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { coreReport } from "../mod/core-row";
 import { hasCore } from "../mod/data/core";
-import { openGateCount, parseGates } from "../mod/gates";
+import { openGateCount, parseGates } from "../mod/host/gates";
 import { type CoreSource, createCoreSource } from "./core-source";
 import { spawnText } from "./mission-panel";
 import { pluginScript } from "./plugin-path";

@@ -11,7 +11,7 @@ import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, s
 import { rowSpinnerGlyph } from './hud-surface';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion/motion';
-import { motionFeed } from './motion-feed';
+import { motionFeed } from './host/motion-feed';
 import { panelModelOf } from './pane/sidebar-model';
 import type { TodoItem } from './contract';
 import type { LiveSnapshot } from './orchestra-types';

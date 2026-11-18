@@ -4,8 +4,8 @@
 // /atlas-cc pane stay dead and the builder keeps the old session id.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { register } from './register';
-import { memState } from './test_helpers';
+import { register } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

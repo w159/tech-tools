@@ -4,7 +4,7 @@ import type { Run, Ui } from './atlas-ui';
 import { dataInk } from './atlas-ui';
 import { newKindHold, stepKind } from './band-motion';
 import { bandFrameRuns } from './band-frame';
-import { eventBuckets, noteHook, resetHookLog } from './hook-log';
+import { eventBuckets, noteHook, resetHookLog } from './host/hook-log';
 import { bandLines, runsText, runStateOf, type MissionModel } from './mission-layout';
 import { healthCardRows } from './hud-surface';
 import { fitFields, gateOf, healthDetail, healthRows, type Health } from './data/idle-health';

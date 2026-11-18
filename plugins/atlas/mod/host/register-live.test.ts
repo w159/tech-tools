@@ -3,8 +3,8 @@
 // session schedules no rebuild. Recording engine stub with an injected clock, no node: imports.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { rebuild, rebuildTick, register, resetCore } from './register';
-import { memState } from './test_helpers';
+import { rebuild, rebuildTick, register, resetCore } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

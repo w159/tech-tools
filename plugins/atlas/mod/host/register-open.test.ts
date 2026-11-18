@@ -1,8 +1,8 @@
 // The sidebar opens at rest at every width (X5: the first render with a viewport notes it, the next tick opens it; below 144 the engine draws it when the first prompt asks); /atlas-cc opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { dockTick, register, shouldDockAsked, shouldDockRest } from './register';
-import { memState } from './test_helpers';
+import { dockTick, register, shouldDockAsked, shouldDockRest } from '../register';
+import { memState } from '../test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

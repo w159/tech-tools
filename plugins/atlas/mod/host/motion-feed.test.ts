@@ -1,14 +1,14 @@
 // motion-feed.ts: the keys the feed reports are the keys the surfaces look up, on a snapshot that carries a plan and workers.
 import { describe, expect, test } from 'claude-code/testing';
-import { hudAgents, hudLines, type HudInput } from './hud';
-import { liveWorkers, queuedMembers } from './data/live';
-import { ownTodos } from './data/todos';
-import { hudPhases } from './band';
-import { runsString, type Ui } from './atlas-ui';
-import { busySnap, NOW } from './live_fixture';
-import { Motion, windowOf } from './motion/motion';
+import { hudAgents, hudLines, type HudInput } from '../hud';
+import { liveWorkers, queuedMembers } from '../data/live';
+import { ownTodos } from '../data/todos';
+import { hudPhases } from '../band';
+import { runsString, type Ui } from '../atlas-ui';
+import { busySnap, NOW } from '../live_fixture';
+import { Motion, windowOf } from '../motion/motion';
 import { motionFeed } from './motion-feed';
-import type { TodoItem } from './contract';
+import type { TodoItem } from '../contract';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const todo = (id: string, content: string, status: string, extra: Partial<TodoItem> = {}): TodoItem => ({ id, content, status, session_id: 's', origin: 'session', ...extra }) as TodoItem;

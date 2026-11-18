@@ -2,7 +2,7 @@
 // It holds only what the mod really has; a figure it does not have is left out, never made up.
 import { elapsedClock, stateRun, type Run, type Ui } from '../atlas-ui';
 import { fitText, textWidth } from '../theme';
-import type { HookStats } from '../hook-log';
+import type { HookStats } from '../host/hook-log';
 import type { HistView } from './history';
 import { activityStats, BUCKETS, BUCKET_MS, ctxSeries, ctxText as pulseCtxText, RATE_BUCKETS, rateLabel, type Pulse } from './pulse';
 import { ctxInk, gaugeRuns, sparkRuns } from '../spark';

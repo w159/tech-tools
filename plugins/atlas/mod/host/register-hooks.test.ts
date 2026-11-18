@@ -2,7 +2,7 @@
 // matcher") and drops the WHOLE mod: no band, no HUD, no cards, no chip (wave 15 build baf27d46). The fake `on` here refuses the same way.
 import { describe, expect, test } from 'claude-code/testing';
 import type { On } from 'claude-code';
-import { register } from './register';
+import { register } from '../register';
 
 describe('register: one unmatched hook per event, as the live host requires', () => {
   test('no event is registered twice without a matcher', async () => {

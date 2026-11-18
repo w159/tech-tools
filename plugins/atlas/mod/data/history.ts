@@ -7,7 +7,7 @@
 // Everything in it is something a handler or the run clock really recorded; a missing, unreadable or corrupt file is an empty history (never an error), and what is drawn from the persisted part is
 // labelled `prev` by the surfaces. Pure functions (parse, compose, view) plus the two IO calls the boot and the tick make; the file is never written under plugins/**.
 import type { EngineInterface } from 'claude-code';
-import { eventMinutes, hookLatencyRings, seedHookLatency } from '../hook-log';
+import { eventMinutes, hookLatencyRings, seedHookLatency } from '../host/hook-log';
 
 export type HistRun = { secs: number; ok: boolean; tools: number; at: number };
 export type HistCtx = { at: number; pcts: number[] };

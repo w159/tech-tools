@@ -3,11 +3,11 @@
 // gates. Plain unit tests of the exports plus the real hooks on a recording engine stub; no node: imports.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
-import { EMPTY_ORCH, onSpawn, onToolStart } from './data/orchestration';
-import { busySnap } from './live_fixture';
-import { coreTick, inlineBelowRows, mapListed, register, resetCore, syncAgentsFromList } from './register';
-import type { SquadAgent } from './contract';
-import { memState } from './test_helpers';
+import { EMPTY_ORCH, onSpawn, onToolStart } from '../data/orchestration';
+import { busySnap } from '../live_fixture';
+import { coreTick, inlineBelowRows, mapListed, register, resetCore, syncAgentsFromList } from '../register';
+import type { SquadAgent } from '../contract';
+import { memState } from '../test_helpers';
 
 // ---- mapListed: labels and personas ----
 

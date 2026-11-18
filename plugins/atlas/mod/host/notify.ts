@@ -1,17 +1,17 @@
 // notify.ts - turn-boundary notifications: one toast per turn for workers spawning/finishing/failing/blocked,
 // notes addressed to the lead or the human, completed todos, and phase advances
 // (advance.wav when sound is on); the one prompt.suggest: reply to a blocked worker, else the in-progress todo.
-import { dataWord } from './data/datastate';
+import { dataWord } from '../data/datastate';
 import { atom, read } from 'claude-code';
 import type { On } from 'claude-code';
-import type { AtlasSnapshot, PhaseId } from './contract';
-import { endedAt, liveWorkers } from './data/live';
-import type { LiveWorker } from './data/live';
-import type { LiveSnapshot } from './orchestra-types';
-import { cells, msClock, type Ui } from './atlas-ui';
-import { clipE as clip } from './view/board/board-model';
-import { lookOf } from './look';
-import { noteToastText, toastText } from './panel-layout';
+import type { AtlasSnapshot, PhaseId } from '../contract';
+import { endedAt, liveWorkers } from '../data/live';
+import type { LiveWorker } from '../data/live';
+import type { LiveSnapshot } from '../orchestra-types';
+import { cells, msClock, type Ui } from '../atlas-ui';
+import { clipE as clip } from '../view/board/board-model';
+import { lookOf } from '../look';
+import { noteToastText, toastText } from '../panel-layout';
 
 export type NotifyEvent =
 	| { type: 'agent-spawn'; name: string }

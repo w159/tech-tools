@@ -11,7 +11,7 @@ import { fitFields, gatesSummary, promptedOf, type Health, type HealthField } fr
 import { metricsOf, runFigures, runsOf } from './data/metrics';
 import { frameKit, latencyLevel } from './status-frame';
 import { textWidth } from './theme';
-import { WIRED_HOOKS } from './hook-log';
+import { WIRED_HOOKS } from './host/hook-log';
 
 /** The side pane docks at rest from this width (register.ts DOCK_MIN_COLUMNS); below it the strip stands in for it. */
 export const STRIP_BELOW_COLS = 144;

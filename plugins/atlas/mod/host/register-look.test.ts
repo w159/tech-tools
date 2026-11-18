@@ -115,7 +115,7 @@ test('B5 the HUD and the board both read elapsed from the snapshot clock (claime
   expect(await pane($, 'atlas-board', 'Board')).toContain('elapsed 00:42');
 });
 
-import { clearLook, lookOf, lookRich, lookUi } from './look';
+import { clearLook, lookOf, lookRich, lookUi } from '../look';
 
 test('M2: a caller that omits the ui gets the one session look (NO_COLOR, ASCII, rich)', async () => {
   clearLook();

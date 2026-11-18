@@ -8,7 +8,7 @@ import { panelWorld } from '../contracts/panel-world';
 import { NOW } from './live_fixture';
 import { textWidth } from './theme';
 import { BLOCKS } from './chart';
-import { hookStats, noteHook, noteHookMs, resetHookLog, WIRED_HOOKS } from './hook-log';
+import { hookStats, noteHook, noteHookMs, resetHookLog, WIRED_HOOKS } from './host/hook-log';
 import { ctxRunway } from './data/pulse';
 import { chartSeries, hookTable } from './status-frame';
 import type { Health, HealthCheck } from './data/idle-health';

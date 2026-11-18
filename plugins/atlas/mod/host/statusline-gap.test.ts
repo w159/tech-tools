@@ -3,18 +3,18 @@
 // status line script then shrank to one row. These tests render the whole slot (slot.ts composeSlot) at 150x45 and 110x40 through every state, SUBAGENTS folded included.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface } from 'claude-code';
-import type { Ui } from './atlas-ui';
-import { stopRefusal } from './data/runstate';
-import { hudAgents, isRunning, type HudInput } from './hud';
-import { bandKindOf, bandTree, hudPhases, type BandModel } from './band';
-import type { SquadAgent, TodoItem } from './contract';
-import { liveWorkers, queuedMembers } from './data/live';
-import { ownTodos } from './data/todos';
-import { busySnap, NOW } from './live_fixture';
-import type { LiveSnapshot } from './orchestra-types';
-import { publishHudState, resetHudStateSig } from './register';
-import type { Segment } from './runs';
-import { composeSlot, type SlotPlan } from './slot';
+import type { Ui } from '../atlas-ui';
+import { stopRefusal } from '../data/runstate';
+import { hudAgents, isRunning, type HudInput } from '../hud';
+import { bandKindOf, bandTree, hudPhases, type BandModel } from '../band';
+import type { SquadAgent, TodoItem } from '../contract';
+import { liveWorkers, queuedMembers } from '../data/live';
+import { ownTodos } from '../data/todos';
+import { busySnap, NOW } from '../live_fixture';
+import type { LiveSnapshot } from '../orchestra-types';
+import { publishHudState, resetHudStateSig } from '../register';
+import type { Segment } from '../runs';
+import { composeSlot, type SlotPlan } from '../slot';
 
 type Node = { kind: string; props: Record<string, unknown> };
 const mk = (kind: string) => (props: Record<string, unknown>): Node => ({ kind, props });

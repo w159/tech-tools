@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { bandRuns, bandTree, type BandModel } from './band';
 import { hostEnv, PALETTES, uiFromEnv, xtermHex, type Run, type Ui } from './atlas-ui';
 import { busySnap } from './live_fixture';
-import { hookStats, noteHook, noteHookMs, resetHookLog } from './hook-log';
+import { hookStats, noteHook, noteHookMs, resetHookLog } from './host/hook-log';
 import { denyAgeSecs, noteDenied, resetPulse } from './data/pulse';
 import { deniedCalls } from './vocab';
 import { textWidth } from './theme';
