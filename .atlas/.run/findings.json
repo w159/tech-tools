@@ -13874,5 +13874,23 @@
     "verified_at": "2026-11-18T14:10:49+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "blumira-removal-verify-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Blumira removal d2185df9 leaves no dangling refs; 71 JSON parse; gateway 223 tests pass",
+    "evidence": [
+      "plugins/armada/.mcp.json, plugins/armada/mcp/bundles.lock.json, mcp_servers/mcp-gateway/catalog/catalog.json, plugins/armada/skills/armada/departments/security/department-config.json"
+    ],
+    "doc_refs": [],
+    "reproduction": "git grep -n -i -E 'blumira|siem-investigator|compliance-reporter' (excl CHANGELOG/docs history/.atlas) = 0 hits; node JSON.parse over 71 files = 0 bad; npx vitest run in mcp-gateway = 223 passed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T14:11:32+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

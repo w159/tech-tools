@@ -91,6 +91,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | crew-command-spec-guard | verified | crew_command emits a crew command only when the spec has section headings for the planned files | [2026-11-18_crew-command-spec-guard.md](2026-11-18_crew-command-spec-guard.md) |
 | 2026-11-18 | codeql-dismissals-1118 | rejected | CodeQL dismissals: 14 of 16 confirmed; blumira 61/62 refuted (env-persisted credentials reused across callers) | [2026-11-18_codeql-dismissals-1118.md](2026-11-18_codeql-dismissals-1118.md) |
 | 2026-11-18 | ci-cleanup-1118 | verified | Workflow trim, 2 CI-only bun test isolation fixes, Dependabot lockfile bumps, CodeQL fixes | [2026-11-18_ci-cleanup-1118.md](2026-11-18_ci-cleanup-1118.md) |
+| 2026-11-18 | blumira-removal-verify-1118 | verified | Blumira removal d2185df9 leaves no dangling refs; 71 JSON parse; gateway 223 tests pass | [2026-11-18_blumira-removal-verify-1118.md](2026-11-18_blumira-removal-verify-1118.md) |
 | 2026-11-18 | blumira-removal-1118 | verified | Blumira connector removed; connectwise-manage and threatlocker gateway credentials per request | [2026-11-18_blumira-removal-1118.md](2026-11-18_blumira-removal-1118.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
