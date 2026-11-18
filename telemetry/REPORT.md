@@ -4,12 +4,12 @@ Anonymous usage counts, aggregated per ISO week. A key, version, OS or Python bu
 
 ## Latest week: 2026-W46
 
-- Submissions (install-weeks): 110
-- Atlas versions: 17.22.0 (24), 17.21.0 (16), 17.24.1 (16), 17.19.0 (8), 17.21.1 (8), 17.23.0 (8), 17.24.0 (8), 17.24.2 (8), 17.25.0 (8), 17.20.0 (4)
-- OS: linux (108)
-- Python: 3.14 (108)
-- Hook denies: 0, asks: 0
-- Completion gate: 0 block, 361 pass
+- Submissions (install-weeks): 112
+- Atlas versions: 17.22.0 (24), 17.21.0 (16), 17.24.1 (16), 17.19.0 (8), 17.21.1 (8), 17.23.0 (8), 17.24.0 (8), 17.24.2 (8), 17.25.0 (8), 17.20.0 (4), other (4)
+- OS: linux (109), darwin (3)
+- Python: 3.14 (108), other (4)
+- Hook denies: 128, asks: 0
+- Completion gate: 779 block, 393 pass
 - Team outcomes: done 0, failed 0, timeout 0
 
 ### Top 15 skills
@@ -18,11 +18,20 @@ No published data.
 
 ### Top agents
 
-No published data.
+| Name | Uses | Installs |
+| --- | --- | --- |
+| `implementer` | 53 | 3 |
+| `explorer` | 17 | 3 |
+| `docs-curator` | 12 | 3 |
 
 ### Dispatch latency buckets
 
-No published data.
+| Event.bucket | Calls |
+| --- | --- |
+| `PostToolUse.50to200` | 1793 |
+| `PostToolUse.lt50` | 9655 |
+| `PreToolUse.50to200` | 199 |
+| `PreToolUse.lt50` | 12548 |
 
 ### Slow hooks
 
@@ -32,6 +41,6 @@ No published data.
 
 | Week | Submissions | Top version | Hook deny / ask | Gate block / pass | Team done / failed / timeout | Top 3 skills |
 | --- | --- | --- | --- | --- | --- | --- |
-| 2026-W46 | 110 | 17.22.0 (10 buckets) | 0 / 0 | 0 / 361 | 0 / 0 / 0 | - |
+| 2026-W46 | 112 | 17.22.0 (11 buckets) | 128 / 0 | 779 / 393 | 0 / 0 / 0 | - |
 | 2026-W45 | 2 | - | - | - | - | - |
 | 2026-W44 | 0 | - | - | - | - | - |
