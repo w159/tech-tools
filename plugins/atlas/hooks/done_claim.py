@@ -644,10 +644,11 @@ def _gh_state(status: str, conclusion: str) -> str:
     return "ok" if conclusion.strip().lower() in ("success", "skipped", "neutral") else "bad"
 
 
-def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str]], list[str]]:
-    """(runs, other lines). A run is (workflow name, run id or None, 'ok'|'bad', raw text), read from `gh run list`
-    tab-separated rows (status, conclusion, title, workflow, branch, event, id, elapsed, age) or its --json list;
-    every other line is returned for the generic status-word reading."""
+def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str, tuple | None]], list[str]]:
+    """(runs, other lines). A run is (workflow name, run id or None, 'ok'|'bad', raw text, recency key), read from `gh run
+    list` tab-separated rows (status, conclusion, title, workflow, branch, event, id, elapsed, age) or its --json list;
+    every other line is returned for the generic status-word reading. The recency key is set for --json rows only (their
+    order is whatever a jq sort left): (createdAt, id) or (id,); None for table rows, which gh prints newest first."""
     text = out.strip()
     if text.startswith("["):
         try:
@@ -661,38 +662,51 @@ def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str]], list[str
                 if "status" not in d or not wf:
                     return [], out.splitlines()
                 rid = d.get("databaseId")
-                runs.append((wf, rid if isinstance(rid, int) else None,
-                             _gh_state(str(d.get("status") or ""), str(d.get("conclusion") or "")), json.dumps(d)))
+                rid = rid if isinstance(rid, int) and not isinstance(rid, bool) else None
+                made = d.get("createdAt")
+                key = (made if isinstance(made, str) and made else "", rid if rid is not None else -1)
+                runs.append((wf, rid, _gh_state(str(d.get("status") or ""), str(d.get("conclusion") or "")),
+                             json.dumps(d), key if key != ("", -1) else None))
             return runs, []
     runs, rest = [], []
     for ln in out.splitlines():
         f = ln.split("\t")
         if len(f) >= 7 and f[0].strip().lower() in _GH_STATUS and f[3].strip():
             rid = f[6].strip()
-            runs.append((f[3].strip(), int(rid) if rid.isdigit() else None, _gh_state(f[0], f[1]), ln))
+            runs.append((f[3].strip(), int(rid) if rid.isdigit() else None, _gh_state(f[0], f[1]), ln, None))
         elif ln.strip():
             rest.append(ln)
     return runs, rest
 
 
-def _ci_verdict(rec: dict, scope: list[str]) -> str | None:
+def _ci_verdict(rec: dict, scope: list[str], workflows: frozenset = frozenset()) -> str | None:
     """Latest status per workflow in one CI output: 'bad' when some workflow's latest run concluded failure or
     cancelled, 'pending' when none did but a latest run is queued or in_progress (not concluded), 'ok' when every
     latest run is success, None when it carries no status (or is only an error echo). `gh run list` rows (and its
     JSON) are grouped by workflow name and the newest run decides, so an old failure behind a later success does not
-    count and an old success behind a newer in_progress run backs nothing. gh prints newest first, so the first row
-    of a workflow is its newest run (a run id's magnitude is not trusted); other lines are keyed by their text
-    without status words, first line first. "0 failed" counts as success."""
+    count and an old success behind a newer in_progress run backs nothing. A --json row's newest run is the one with the
+    latest createdAt, else the highest databaseId (a jq sort may have reordered the list); a table row has neither,
+    and gh prints it newest first, so the first row of a workflow is its newest. Other lines are keyed by their text
+    without status words, first line first. "0 failed" counts as success. `workflows` (lowercase names the claim
+    scopes itself to, see _ci_claim_verdicts) restricts the runs to those workflows."""
     out = str(rec.get("out", ""))
     if "tool_use_error" in out:
         return None  # the harness echoing the command back, not a CI result
     runs, lines = _gh_runs(out)
+    if workflows:
+        runs = [r for r in runs if r[0].lower() in workflows]
+        lines = []
     if scope:
         runs = [r for r in runs if any(t in r[3].lower() for t in scope)]
         lines = [ln for ln in lines if any(t in ln.lower() for t in scope)]
     latest: dict[str, str] = {}
-    for wf, _rid, state, _raw in runs:
-        latest.setdefault("wf:" + wf, state)
+    newest: dict[str, tuple] = {}
+    for wf, _rid, state, _raw, key in runs:
+        k = "wf:" + wf
+        if k not in latest or (key is not None and (k not in newest or key > newest[k])):
+            latest[k] = state  # first row stands until a keyed (--json) row is newer
+            if key is not None:
+                newest[k] = key
     for ln in lines:
         clean = _ZERO_FAIL.sub(" ", ln)
         state = "bad" if _CI_BAD.search(clean) else "pending" if _CI_PENDING.search(clean) else "ok" if _CI_GOOD.search(clean) else None
@@ -718,8 +732,10 @@ def _ci_claim_verdicts(sents: list[str], tools: list[dict]) -> list[str]:
         return []
     blob = "\n".join(str(r.get("out", "")) for r in recs).lower()
     named: dict[int, str] = {}
+    wfs: set[str] = set()
     for r in recs:
-        for _wf, rid, state, _raw in _gh_runs(str(r.get("out", "")))[0]:
+        for wf, rid, state, _raw, _key in _gh_runs(str(r.get("out", "")))[0]:
+            wfs.add(wf.lower())
             if rid is not None:
                 named[rid] = state  # the latest record of that run wins
     res = []
@@ -728,7 +744,12 @@ def _ci_claim_verdicts(sents: list[str], tools: list[dict]) -> list[str]:
             continue
         words = {w for w in re.findall(r"[a-z][\w-]{2,}", s.lower()) if w not in _CI_STOP}
         scope = sorted(w for w in words if w in blob)
-        verdicts = [v for v in (_ci_verdict(r, scope) for r in recs) if v]
+        # "CI passed on the ci workflow" / "the workflow ci": the claim names one workflow, so another one's run is not its
+        wf_named = frozenset(
+            w for w in wfs
+            if re.search(r"\b" + re.escape(w) + r"\s+workflow\b|\bworkflow\s+[\"'`]?" + re.escape(w) + r"\b", s.lower())
+        )
+        verdicts = [v for v in (_ci_verdict(r, scope, wf_named) for r in recs) if v]
         last = verdicts[-1] if verdicts else "ok"
         if last == "bad" or any(named.get(int(i), "ok") != "ok" for i in _RUN_ID.findall(s)):
             res.append("contradicted")

@@ -853,10 +853,82 @@ class RoundSixDefectTest(unittest.TestCase):
         import json
 
         out = json.dumps([
-            {"workflowName": "checks", "status": "in_progress", "conclusion": "", "databaseId": 1},
-            {"workflowName": "checks", "status": "completed", "conclusion": "success", "databaseId": 2},
+            {"workflowName": "checks", "status": "in_progress", "conclusion": "", "databaseId": 2},
+            {"workflowName": "checks", "status": "completed", "conclusion": "success", "databaseId": 1},
         ])
         gh = _bash("gh run list --json workflowName,status,conclusion,databaseId", out)
+        self.assertIn("ci_unbacked", _kinds("Released. CI is green.", [gh]))
+
+    # phase G: --json rows may be in any order (a jq sort or reverse); createdAt, else the highest id, picks the newest run.
+    def _json_gh(self, rows):
+        import json
+
+        return _bash("gh run list --json workflowName,status,conclusion,databaseId,createdAt", json.dumps(rows))
+
+    def test_json_oldest_first_newest_success_backs_the_claim(self):  # probe F
+        gh = self._json_gh([
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 10, "createdAt": "2026-11-01T00:00:00Z"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 11, "createdAt": "2026-11-02T00:00:00Z"},
+        ])
+        kinds = _kinds("Released. CI is green.", [gh])
+        self.assertNotIn("ci_contradicted", kinds)
+        self.assertNotIn("ci_unbacked", kinds)
+
+    def test_json_oldest_first_newest_failure_contradicts(self):  # probe G
+        gh = self._json_gh([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 10, "createdAt": "2026-11-01T00:00:00Z"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 11, "createdAt": "2026-11-02T00:00:00Z"},
+        ])
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [gh]))
+
+    def test_json_without_created_at_uses_the_highest_id(self):
+        import json
+
+        ok_last = _bash("gh run list --json workflowName,status,conclusion,databaseId", json.dumps([
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 10},
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 11},
+        ]))
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [ok_last]))
+        bad_last = _bash("gh run list --json workflowName,status,conclusion,databaseId", json.dumps([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 10},
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 11},
+        ]))
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [bad_last]))
+
+    def test_json_created_at_beats_id_order(self):
+        gh = self._json_gh([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 5, "createdAt": "2026-11-05T00:00:00Z"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 9, "createdAt": "2026-11-01T00:00:00Z"},
+        ])
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [gh]))
+
+    def test_table_output_first_row_is_still_newest(self):
+        gh = self._list(
+            self._run("completed", "success", "New", "ci", "90101000"),  # table ids are not trusted: print order decides
+            self._run("completed", "failure", "Old", "ci", "90101001"),
+        )
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [gh]))
+
+    def test_newest_in_progress_json_oldest_first_is_unbacked(self):  # dcm2-083 shape
+        gh = self._json_gh([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 10, "createdAt": "2026-11-01T00:00:00Z"},
+            {"workflowName": "ci", "status": "in_progress", "conclusion": "", "databaseId": 11, "createdAt": "2026-11-02T00:00:00Z"},
+        ])
+        self.assertIn("ci_unbacked", _kinds("Released. CI is green.", [gh]))
+        kinds = _kinds("Released. CI is green: run 11 completed with success.", [gh])
+        self.assertIn("ci_unbacked", kinds)
+        gh2 = self._json_gh([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 1234567, "createdAt": "2026-11-01T00:00:00Z"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 1234568, "createdAt": "2026-11-02T00:00:00Z"},
+        ])
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green: run 1234568 passed.", [gh2]))
+
+    def test_claim_naming_a_workflow_ignores_an_unrelated_pending_workflow(self):
+        gh = self._list(
+            self._run("completed", "success", "A", "ci", "30"),
+            self._run("in_progress", "", "B", "deploy", "31"),
+        )
+        self.assertNotIn("ci_unbacked", _kinds("CI passed on the ci workflow.", [gh]))
         self.assertIn("ci_unbacked", _kinds("Released. CI is green.", [gh]))
 
     def test_named_run_whose_recorded_status_is_not_success_contradicts(self):
