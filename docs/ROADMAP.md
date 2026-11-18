@@ -195,8 +195,7 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.29.0); audit and per-finding status:
 - [planned] Command Center iframe token prompt: the frame loads a bare herdr URL, so a browser with no herdr cookie shows the token prompt once. Check it in a live browser, then pick one: the dashboard mints the herdr cookie, or document the one-time prompt. Putting the token in the URL would leak it.
 - [planned] Live-host checks of the mod (need a live session): mod load, clicks, omp parity, `claude --bg` provider env, the render after `/clear`, the 256-colour mapping in a real 256-colour terminal, and the phase emoji width at 80 columns.
 - [planned] Pins for published benchmark numbers: crew benchmarks, hook latency and verifier catch rates have no pinning test (the router score is pinned in `hooks/test_prompt_optimizer.py`).
-- [planned] Split `mod/view/panel/panel-layout.ts` (still one file) per the optional stage S14 of `docs/plans/2026-11-18_atlas-mod-reorg-plan.md`; the plan notes no cycle analysis was done.
-- [planned] Rewrite `plugins/atlas/mod/TESTING.md` from measured numbers (it still describes atlas 17.1.0) and add a full CI typecheck; `.github/workflows/tests.yml` gates only unresolved relative imports because the host types are not in a checkout.
+- [planned] Full CI typecheck of the mod: `.github/workflows/tests.yml` gates only unresolved relative imports because the host types are not in a checkout (890 `error TS` lines locally, 369 from the missing host types).
 
 ### Atlas 17.24.0 follow-ups (added 2026-11-15)
 

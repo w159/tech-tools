@@ -13582,5 +13582,23 @@
     "verified_at": "2026-11-18T06:46:43+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "tdf12a538",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod reorg S0-S11 + register split: layout only, no test lost (stale paths in 11-18 audit doc noted)",
+    "evidence": [
+      "bun test mod 4311 pass-or-skip at 5915e79 vs 4329 at d03ac81, 0 fail; omp 839 pass; pytest 485 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "git worktree add --detach <dir> HEAD; cd plugins/atlas; bun test mod; bun test omp; pytest subset",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T08:03:09+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

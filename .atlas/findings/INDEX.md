@@ -79,6 +79,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | w2-herdr-x3 | verified | herdr resolveToken, owner login, anonymous loopback refused, atlas_remote probe fixed | [2026-11-18_w2-herdr-x3.md](2026-11-18_w2-herdr-x3.md) |
 | 2026-11-18 | w2-dash-x2 | verified | dash X2 follow-ups (url, ensure, token readers, fail-closed serve, pty not-a-bug) fixed | [2026-11-18_w2-dash-x2.md](2026-11-18_w2-dash-x2.md) |
 | 2026-11-18 | w2-ci | rejected | ci worker changed no CI file: no tiers, no typecheck, TESTING.md stale, no per-agent or router pin | [2026-11-18_w2-ci.md](2026-11-18_w2-ci.md) |
+| 2026-11-18 | tdf12a538 | verified | mod reorg S0-S11 + register split: layout only, no test lost (stale paths in 11-18 audit doc noted) | [2026-11-18_tdf12a538.md](2026-11-18_tdf12a538.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
 | 2026-11-18 | audit-C7 | rejected | eager import true but 7-14 ms not 40; event_dispatch 38-44 ms | [2026-11-18_audit-c7.md](2026-11-18_audit-c7.md) |
