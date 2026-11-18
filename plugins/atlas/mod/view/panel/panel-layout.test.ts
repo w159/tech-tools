@@ -10,6 +10,9 @@ import { world } from '../../../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from '../../atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
 import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelGateLine, type PanelModel, type PanelTab } from './panel-layout';
+import { leadSpinnerGlyph } from '../../atlas-ui';
+import { forgetBandFrame, sharedSpinFrame } from '../../motion/motion';
+import { panelLines } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -441,4 +444,33 @@ describe('hud110: the route tab names the running agents in a 40 row terminal wi
     const out = rows('route', 55, { todos: plan, workers: running, rows: 18 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
     expect(out).not.toMatch(/[◐◓◑◒] alpha-explorer\s+running/);
   });
+});
+
+describe('wave38-follow', () => {
+// Wave 38 follow-ups. A: the side panel's phase row shows the glyph and the clock the band last drew. B: the 110x40 HUD shows every running row.
+
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const SPIN_MARK = /[◐◓◑◒]/;
+
+describe('follow-up A: the side panel tick is the band tick', () => {
+  const phaseRowOf = (over: Partial<PanelModel>): string => {
+    const m = panelWorld('route', 110, ui, { rows: 40, now: 1_000_000, run: { kind: 'working', secs: 41 }, phase: 'implement', ...over });
+    const t = panelLines(m).map(lineText);
+    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; // slice S3: the stepper row
+  };
+  test('a run that carries frame f and 0:42 prints that spinner glyph and that clock, whatever now is (truth 41: no copy of the band\'s last note)', () => {
+    const now = 1_000_000;
+    const other = (sharedSpinFrame(now) + 3) % 10; // a frame the shared clock does not give at `now`
+    const row = phaseRowOf({ now, run: { kind: 'working', secs: 42, frame: other } });
+    expect(row.match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
+    expect(row).not.toContain('0:42'); // slice S4: no clock on the panel's phase row
+    expect(row).not.toContain('0:41');
+    expect(phaseRowOf({ now: now + 50, run: { kind: 'working', secs: 42, frame: other } }).match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
+  });
+  test('before the band ever drew, the panel falls back to the shared clock and its own seconds', () => {
+    forgetBandFrame();
+    const row = phaseRowOf({ now: 1_000_000 });
+    expect(row).not.toContain('0:41');
+  });
+});
 });

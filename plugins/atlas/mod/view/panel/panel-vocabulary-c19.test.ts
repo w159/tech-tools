@@ -1,10 +1,10 @@
 // Critique 19 C4: the route, gates and core tabs say what the HUD and the transcript say (live-150-232567af-1 tab-gates / tab-core, stoprun-150-232567af-1 mod-todo_tree).
 import { describe, expect, test } from 'claude-code/testing';
-import { coreFixture, coreMatrix } from '../contracts/core-fixture';
-import { panelWorld } from '../contracts/panel-world';
-import { cells, DONE_DOUBT, type Ui } from './atlas-ui';
-import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, lineText, type PanelModel, type PanelTab } from './view/panel/panel-layout';
+import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
+import { panelWorld } from '../../../contracts/panel-world';
+import { cells, DONE_DOUBT, type Ui } from '../../atlas-ui';
+import { coreModel, type CoreModel } from '../../data/core';
+import { bodyLines, lineText, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
