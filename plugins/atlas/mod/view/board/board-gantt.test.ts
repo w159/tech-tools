@@ -4,12 +4,12 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../live_fixture';
 import { forgetRefusals } from '../../data/channels';
-import { cells, type Ui } from '../../atlas-ui';
+import { cells, type Ui } from '../../design/atlas-ui';
 import { forgetPhases } from '../panel/pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from '../panel/pane/sidebar';
 import { boardRowsOf, boardText, boardTimeline, toBoardRow } from './board-model';
 import { noteRefusal, refusalNotes } from '../../data/channels';
-import { TODO_METER_W, todoMeter } from '../../atlas-ui';
+import { TODO_METER_W, todoMeter } from '../../design/atlas-ui';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

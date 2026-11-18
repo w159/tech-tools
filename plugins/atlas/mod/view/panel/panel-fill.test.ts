@@ -3,10 +3,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld } from '../../../contracts/panel-world';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { coreModel } from '../../data/core';
 import { panelLines, type PanelTab } from './panel-layout';
-import { cells, uiFromEnv } from '../../atlas-ui';
+import { cells, uiFromEnv } from '../../design/atlas-ui';
 import { bodyLines, lineText, type PanelModel } from './panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

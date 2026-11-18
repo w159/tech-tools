@@ -10,12 +10,12 @@
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
 import { phaseFigure, workerTally } from '../../data/tally';
-import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTE5, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from '../../atlas-ui'; import { lookUi } from '../../look';
+import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTE5, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from '../../design/atlas-ui'; import { lookUi } from '../../design/look';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
 import { blockedText, STOP_REFUSED } from '../../data/runstate';
 import { tallyOf, type Tally } from '../../data/live';
 import { displayName } from '../hud/hud';
-import { fitText, textWidth } from '../../theme';
+import { fitText, textWidth } from '../../design/theme';
 import { bandFrameRuns } from './band-frame';
 import type { Health } from '../../data/idle-health';
 

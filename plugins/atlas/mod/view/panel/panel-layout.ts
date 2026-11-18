@@ -9,9 +9,9 @@
 import { phaseFigure, workerTally } from '../../data/tally';
 import { chipRun, tileOf } from '../../input/clickable';
 import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from '../../data/idle-health';
-import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from '../../vocab';
+import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from '../../design/vocab';
 import { chevron } from '../../input/clickable';
-import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from '../../atlas-ui';
+import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from '../../design/atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from '../board/board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from '../../data/core';
@@ -230,7 +230,7 @@ export const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
 /** A channel as a person reads it: a generated id (`lc-opl0e60i`, a launch code, with or without its `@master` branch) is no name, so it reads `this run`; a named channel keeps its `#name` (critique 12). */
 export const channelLabel = (name: string | undefined, fallback = 'channel'): string => (name && /^lc-[\w-]{4,}(@[\w./-]+)?$/i.test(name) ? 'this run' : `#${name ?? fallback}`);
 
-/** The gates in the one vocabulary (mod/vocab.ts): denials summed over the groups that fired, `ok` or `N denied`; never a pass ratio. `fired` counts the groups that hold lines. */
+/** The gates in the one vocabulary (mod/design/vocab.ts): denials summed over the groups that fired, `ok` or `N denied`; never a pass ratio. `fired` counts the groups that hold lines. */
 function gatesFigure(m: Pick<PanelModel, 'gates' | 'core'>): { text: string; tone: Tone; deny: number; fired: number } {
   const t = gatesTotal(countedGates(gatesOf(m)).map((g) => gateCounts({ ok: groupOk(g), pending: groupPending(g), lines: g.lines.length, pass: g.lines.length - groupFailing(g) })));
   return { text: t.text, tone: t.tone, deny: t.deny, fired: t.fired };
@@ -1188,7 +1188,7 @@ function gateLineRows(m: PanelModel, ln: PanelGateLine): PanelLine[] {
 }
 
 const GATE_WORD_W = 7; // `passing` and `warning`
-/** `8 pass · 0 deny`: the group's checks in the one vocabulary (mod/vocab.ts), the value column of every group (a count per group, dim while the group passes, warn while it fails). */
+/** `8 pass · 0 deny`: the group's checks in the one vocabulary (mod/design/vocab.ts), the value column of every group (a count per group, dim while the group passes, warn while it fails). */
 const gateValue = (g: PanelGate, ui: Ui): string => {
   if (!g.lines.length) return '';
   // Critique 19 C4: the header contract is judged over replies, not lines: its own tally (the transcript's), never `0/1` beside 7 chips. Round 2 (D4): the one vocabulary, `8 pass · 0 deny`, never a ratio.

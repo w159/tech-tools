@@ -14,9 +14,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { worldHudAgents, worldPhases, worldPlan } from '../../../contracts/hud-world';
 import { hudRows, reclaimBlanks, segmentOf, todoModel, type HudInput } from './hud';
-import { hostEnv, spinFrameOf, type Ui } from '../../atlas-ui';
+import { hostEnv, spinFrameOf, type Ui } from '../../design/atlas-ui';
 import { rowSpinnerGlyph } from './hud-surface';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const input = (): HudInput => ({ todos: worldPlan(), agents: worldHudAgents(), phases: worldPhases() });

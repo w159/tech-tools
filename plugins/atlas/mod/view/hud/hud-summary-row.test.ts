@@ -1,6 +1,6 @@
 // State 40: the TODO summary row, the lead item, the SUBAGENTS table while agents run, its LAST text and TIME clock (critique 39).
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Run, type Ui } from '../../atlas-ui';
+import { runsString, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { hudLines, resetLeadItems, type HudAgent, type HudInput } from './hud';
 

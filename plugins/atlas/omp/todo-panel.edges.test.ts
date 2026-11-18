@@ -2,7 +2,7 @@
 // colour and plain blanks under NO_COLOR, and a one-line budget is `+N more` alone.
 import { expect, test } from "bun:test";
 import { WORLD_NOW, worldItems } from "../contracts/board-golden";
-import { PALETTES, sgrColor, type Ui } from "../mod/atlas-ui";
+import { PALETTES, sgrColor, type Ui } from "../mod/design/atlas-ui";
 import { boardLines, todoLines } from "./todo-panel";
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };

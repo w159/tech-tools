@@ -6,7 +6,7 @@ import { busySnap, NOW } from '../../../live_fixture';
 import type { LiveSnapshot } from '../../../orchestra-types';
 import type { SquadAgent, TodoItem } from '../../../contract';
 import { bodyLines, lineText } from '../panel-layout';
-import type { Ui } from '../../../atlas-ui';
+import type { Ui } from '../../../design/atlas-ui';
 import { panelWorld } from '../../../../contracts/panel-world';
 import type { CoreModel } from '../../../data/core';
 import { hudAgents, hudLines } from '../../hud/hud';

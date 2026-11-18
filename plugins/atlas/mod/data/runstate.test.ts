@@ -1,7 +1,7 @@
 // One run-state model: the band, the checks row and the side panel's gates count read the same derived values.
 import { describe, expect, test } from 'claude-code/testing';
-import type { Ui } from '../atlas-ui';
-import { textWidth } from '../theme';
+import type { Ui } from '../design/atlas-ui';
+import { textWidth } from '../design/theme';
 import { gateTally, blockReasons, warningText, ranWorkers } from './runstate';
 import { endedOf, settleDispatch } from './todos';
 import { bandLines, runsText, missionLines, type MissionModel } from '../view/band/mission-layout';

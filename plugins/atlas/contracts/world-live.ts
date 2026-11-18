@@ -17,7 +17,7 @@ export const SESSION = "world";
 export const CHANNEL = "atlas-board-mod";
 
 /** The contract phase list as a host reads it: the world's steps with the three ids that are not steps (`validate`, `done`, `blocked`),
- * so a surface that counts them in its rail disagrees with the world (mod/rail.ts is the one rail). */
+ * so a surface that counts them in its rail disagrees with the world (mod/design/rail.ts is the one rail). */
 export const worldContractPhases = (): string[] => [world.phases[0]!.id, "validate", ...world.phases.slice(1).map((p) => p.id), "done", "blocked"];
 /** The world's contract: its rail is `world.phases`; the extra ids are the contract's non-steps. */
 export const worldContract = () => ({ ...FIXTURE_CONTRACT, phases: worldContractPhases().map((id) => ({ id: id as never, glyph: "·" })), todoPhases: worldContractPhases().filter((id) => id !== "blocked") as never[] });

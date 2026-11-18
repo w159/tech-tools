@@ -3,7 +3,7 @@
 // the default run (3 explorers), the stop run (one worker killed, its dispatch row left open, the lead claims done) and a resumed native agent.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface, On } from 'claude-code';
-import { PALETTES, type Ui } from '../../atlas-ui';
+import { PALETTES, type Ui } from '../../design/atlas-ui';
 import { bandKindOf, bandRuns, bandTree, hudPhases, type BandModel } from './band';
 import type { SquadAgent, TodoItem } from '../../contract';
 import { stopRefusal } from '../../data/runstate';
@@ -18,7 +18,7 @@ import { panelModelOf } from '../panel/pane/sidebar-model';
 import { bodyLines, lineText } from '../panel/panel-layout';
 import type { SidebarModel } from '../panel/pane/sidebar';
 import { hostTurnRunning, register, resetCore, STOP_SETTLE_MS, turnEnded } from '../../register';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 import { composeSlot } from './slot';
 import { memState } from '../../test_helpers';
 import { FRAME_MS } from './band-motion';

@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import { panelWorld } from '../../contracts/panel-world';
-import { cells, type Ui } from '../atlas-ui';
+import { cells, type Ui } from '../design/atlas-ui';
 import { clipWords, lastText } from '../data/lasttext';
 import { EMPTY_ORCH, onSpawn } from '../data/orchestration';
 import { blockReasons, gateTally } from '../data/runstate';

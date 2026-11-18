@@ -3,7 +3,7 @@
 // (missing `·`), live-150-562576ed-1 tab-core.png (core words).
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../contracts/panel-world';
-import { cells, type Ui } from '../atlas-ui';
+import { cells, type Ui } from '../design/atlas-ui';
 import type { CoreModel } from '../data/core';
 import { asksUser, blockReasons, gateTally } from '../data/runstate';
 import { bodyLines, lineText, panelText } from './panel/panel-layout';

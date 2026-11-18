@@ -7,10 +7,10 @@ import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from '
 import { FN_TAIL, isPlanItem } from '../../data/todos';
 import { todoState } from '../../data/todos';
 import { ownerOutcome } from '../board/board-model';
-import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, fillHex, type Run, type Ui, type UiState, runHex } from '../../atlas-ui'; import { lookUi, lookRich } from '../../look';
+import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, fillHex, type Run, type Ui, type UiState, runHex } from '../../design/atlas-ui'; import { lookUi, lookRich } from '../../design/look';
 import { fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from '../../motion/motion';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 
 /** One subagent as the HUD shows it. `state` is the LiveWorker state; only working/blocked count as running. */
 export type HudAgent = {

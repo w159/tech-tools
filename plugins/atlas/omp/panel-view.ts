@@ -6,7 +6,7 @@
  * kept as the omp half of the shared layout (mod/view/panel/panel-layout.ts) so a future mount paints the same rows; until then
  * omp/panel-view.test.ts is a painter parity test, NOT evidence that any omp surface shows a side panel, card or toast.
  */
-import { cells, paintAnsi, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
+import { cells, paintAnsi, uiFromEnv, type Run, type Ui } from "../mod/design/atlas-ui";
 import { cardLines, panelLines, toastRuns, type CardModel, type PanelModel } from "../mod/view/panel/panel-layout";
 
 

@@ -7,10 +7,10 @@ import { panelWorld, worldCard } from '../../../contracts/panel-world';
 import { padStrip } from '../../golden-pad';
 import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } from '../../../contracts/panel-golden';
 import { world } from '../../../contracts/band-world';
-import { cells, runsString, stateWordTone, UI_STATES, type Ui } from '../../atlas-ui';
+import { cells, runsString, stateWordTone, UI_STATES, type Ui } from '../../design/atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
 import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelGateLine, type PanelModel, type PanelTab } from './panel-layout';
-import { leadSpinnerGlyph } from '../../atlas-ui';
+import { leadSpinnerGlyph } from '../../design/atlas-ui';
 import { forgetBandFrame, sharedSpinFrame } from '../../motion/motion';
 import { panelLines } from './panel-layout';
 

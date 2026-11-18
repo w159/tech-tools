@@ -2,7 +2,7 @@
 // the same phase ids and light the same one, because they all ask this module. A rail is the operating contract's phases
 // without the three that are not steps: `validate` (an optional pass, not every plan has it), `blocked` (a state) and
 // `done` (the end: every step reads complete, the lit index is the rail's length).
-import type { Contract } from './contract';
+import type { Contract } from '../contract';
 
 /** Phases that are not rail steps. */
 export const RAIL_SKIP: ReadonlySet<string> = new Set(['validate', 'blocked', 'done']);

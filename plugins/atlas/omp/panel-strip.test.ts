@@ -5,7 +5,7 @@ import type { ClientElements } from "claude-code";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { panelWorld } from "../contracts/panel-world";
 import { worldSidebar } from "../contracts/world-live";
-import type { Ui } from "../mod/atlas-ui";
+import type { Ui } from "../mod/design/atlas-ui";
 import { BAND_BUTTONS } from "../mod/view/band/band";
 import { coreModel } from "../mod/data/core";
 import * as L from "../mod/view/panel/panel-layout";

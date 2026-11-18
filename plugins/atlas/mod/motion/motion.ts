@@ -10,7 +10,7 @@
 //
 // The surfaces call `animateRow(runs, key, accent, ctx, ui)` on rows they already built; the host calls `Motion.observe` from its
 // tick (never from a render) and writes redraw state only while `Motion.animating` says so. No Date.now() here: callers pass the clock.
-import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTE5, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from '../atlas-ui';
+import { cells, contrast, drawnHex, easeOutCubic, fitHex, hostEnv, LEAD_FRAMES, luminance, markToken, PALETTE5, PALETTES, RETURNED, SPINNER_MS, stable256, stateGlyph, surfaceHex, xtermHex, UI_STATES, type MarkState, type Run, type Ui, type UiEnv } from '../design/atlas-ui';
 
 /** The ONE spinner tick (wave 37): the frame index (0..3, an index into the one spinner's four frames) at the clock reading `now` (ms). The band lead, the titles and the side panel read this one clock; the
  * rows count the same beats unwrapped (`Math.floor(now / SPINNER_MS)`, atlas-ui spinFrameOf), which is the same frame modulo four, so every surface draws one glyph in a frame. */
@@ -190,7 +190,7 @@ export const revealProgress = (e: Entry, now: number): number => Math.min(1, Mat
 /** The glyph pop: a dotted ring, then a half-filled one, across the first two thirds of the window, then the state's own disc lands. No
  * frame is drawn anywhere else in Atlas or the host: not a state mark, a spinner frame, a bar track (`░`), the focus mark, the capsule,
  * a role eye or the middle dot (the host's separator), so it never reads as another state, a gauge or a separator
- * (mod/glyph-unique.test.ts lists every table). ASCII: `@` (not a state mark, spinner frame, gauge character or box corner). */
+ * (mod/design/glyph-unique.test.ts lists every table). ASCII: `@` (not a state mark, spinner frame, gauge character or box corner). */
 export const POP_UNICODE = ['◌', '◍'] as const;
 export const POP_ASCII = ['@', '@'] as const;
 

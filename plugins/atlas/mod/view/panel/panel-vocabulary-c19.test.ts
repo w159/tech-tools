@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld } from '../../../contracts/panel-world';
-import { cells, DONE_DOUBT, type Ui } from '../../atlas-ui';
+import { cells, DONE_DOUBT, type Ui } from '../../design/atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
 import { bodyLines, lineText, type PanelModel, type PanelTab } from './panel-layout';
 

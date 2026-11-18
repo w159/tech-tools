@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { bandKindOf, bandRuns, bandTree, type BandModel } from './band';
 import { newRunClock, restSecsOf, runLive, stepRun } from './band-motion';
 import { runsText } from './mission-layout';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { forgetBandFrame, bandFrame } from '../../motion/motion';
 import { busySnap, NOW } from '../../live_fixture';
 

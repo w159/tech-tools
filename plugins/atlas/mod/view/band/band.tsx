@@ -11,18 +11,18 @@ import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } fro
 import { agentTally, hudAgents, planProgress } from '../hud/hud';
 import { openItems, openWork } from '../../data/core';
 import { blockedCount } from '../board/board-model';
-import { deniedCalls } from '../../vocab';
+import { deniedCalls } from '../../design/vocab';
 import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } from '../../data/runstate';
-import { fillHex, LINGER_MS, preImage, spinClock, surfaceHex, xtermHex, type Ui, runHex } from '../../atlas-ui'; import { lookUi, lookRich } from '../../look';
+import { fillHex, LINGER_MS, preImage, spinClock, surfaceHex, xtermHex, type Ui, runHex } from '../../design/atlas-ui'; import { lookUi, lookRich } from '../../design/look';
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
-import type { UiState } from '../../atlas-ui';
+import type { UiState } from '../../design/atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
 import type { GateGroup, SidebarView } from '../panel/pane/sidebar-types';
-import { fitRuns, rowOf, type Segment } from '../../runs';
+import { fitRuns, rowOf, type Segment } from '../../design/runs';
 import { todoRows } from '../board/todo-panel';
-import { contractRail, railOf, type Rail } from '../../rail';
+import { contractRail, railOf, type Rail } from '../../design/rail';
 import { chipText, STRIP_TABS } from '../panel/panel-layout';
-import { fitText, textWidth } from '../../theme';
+import { fitText, textWidth } from '../../design/theme';
 import { chipStyle, hoverStyle } from '../../input/clickable';
 import type { Health, HealthIn } from '../../data/idle-health';
 import { BAND_GATES_KEY } from './band-frame';
@@ -50,7 +50,7 @@ const KEYS_W = BAND_BUTTONS.reduce((n, b) => n + buttonWidth(b), 0) + BAND_BUTTO
 /** `mcp__lean-ctx__ctx_shell` and `mcp__plugin_x_srv__tool` both read as the bare tool name. */
 export const shortTool = (tool: string): string => tool.replace(/^mcp__.*__/, '');
 
-/** The snapshot's rail (mod/rail.ts, the one rail every surface asks): ids, the lit step and its index. */
+/** The snapshot's rail (mod/design/rail.ts, the one rail every surface asks): ids, the lit step and its index. */
 const railFor = (s: LiveSnapshot, lastPhase?: string | null): Rail => railOf(contractRail(s.contract), s.phase, lastPhase);
 
 /** `HudInput.phases`: the rail ids and the lit index (`ids.length` once the run is done), the band's own rail for the HUD's rich form. */

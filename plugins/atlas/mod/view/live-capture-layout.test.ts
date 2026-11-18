@@ -8,7 +8,7 @@ import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import { worldCard } from '../../contracts/panel-world';
 import { paintHud } from '../../omp/hud-paint';
 import { paintPanel } from '../../omp/panel-view';
-import { runsString, type Ui } from '../atlas-ui';
+import { runsString, type Ui } from '../design/atlas-ui';
 import { bandSpareRows, bandTree } from './band/band';
 import type { TodoItem } from '../contract';
 import { coreModel } from '../data/core';
@@ -18,7 +18,7 @@ import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type
 import { busySnap, NOW } from '../live_fixture';
 import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './panel/panel-layout';
 import { panelWorld } from '../../contracts/panel-world';
-import { textWidth } from '../theme';
+import { textWidth } from '../design/theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]/g;

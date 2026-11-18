@@ -1,7 +1,7 @@
 // Critique 18, slice C4 (motion-562576ed/todo-strip.ans): the TODO owner column flashed 231 though it never changes (:2), and at 600 ms the weight dropped and the
 // text went 151 to 146 in one step (:4-5). An owner that does not change keeps its tone; a frame never changes weight and colour at once.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv, type Run, type Ui } from '../atlas-ui';
+import { uiFromEnv, type Run, type Ui } from '../design/atlas-ui';
 import { hudLines, hudMotionItems } from '../view/hud/hud';
 import { DEMO_AGENT, demoInput } from './motion-demo';
 import { deltaE, Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';

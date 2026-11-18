@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../live_fixture';
 import { forgetRefusals } from '../../data/channels';
 import { forgetBandFrame } from '../../motion/motion';
-import { cells, type Ui } from '../../atlas-ui';
+import { cells, type Ui } from '../../design/atlas-ui';
 import { bodyLines, lineText } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';

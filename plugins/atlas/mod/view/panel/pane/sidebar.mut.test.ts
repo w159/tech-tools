@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../../live_fixture';
-import { leadSpinnerGlyph, spinClock, spinFrameOf } from '../../../atlas-ui';
+import { leadSpinnerGlyph, spinClock, spinFrameOf } from '../../../design/atlas-ui';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 type Node = { kind: string; props: Record<string, any> };

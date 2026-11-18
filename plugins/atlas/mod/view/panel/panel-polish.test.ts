@@ -4,8 +4,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld, worldCard } from '../../../contracts/panel-world';
-import * as UI from '../../atlas-ui';
-import { cells, contrast, PALETTES, UI_STATES, type Ui } from '../../atlas-ui';
+import * as UI from '../../design/atlas-ui';
+import { cells, contrast, PALETTES, UI_STATES, type Ui } from '../../design/atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
 import * as L from './panel-layout';
 import { bodyLines, cardLines, lineText, panelText, type PanelModel, type PanelTab } from './panel-layout';

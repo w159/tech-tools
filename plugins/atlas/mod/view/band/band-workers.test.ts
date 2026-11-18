@@ -7,8 +7,8 @@
 // `^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { SPIN_FRAMES, leadSpinnerGlyph, spinClock, spinFrameOf, type Ui } from '../../atlas-ui';
-import { textWidth as textWidthOf } from '../../theme';
+import { SPIN_FRAMES, leadSpinnerGlyph, spinClock, spinFrameOf, type Ui } from '../../design/atlas-ui';
+import { textWidth as textWidthOf } from '../../design/theme';
 import { bandTree } from './band';
 import { runsText, missionLines, type MissionModel } from './mission-layout';
 import { liveWorkers, type LiveWorker } from '../../data/live';

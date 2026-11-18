@@ -5,12 +5,12 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRows, bandTree, missionTree, planRows, railPhase, shortTool } from './band';
 import { worldModel } from '../../../contracts/band-world';
-import { PALETTE5, PALETTES, xtermHex, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from '../../atlas-ui';
+import { PALETTE5, PALETTES, xtermHex, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from '../../design/atlas-ui';
 import { computeCounts, groupTodos } from '../../data/todos';
 import { liveWorkers } from '../../data/live';
 import { busySnap, NOW } from '../../live_fixture';
 import { bandLines, runsText, TONE_HEX } from './mission-layout';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

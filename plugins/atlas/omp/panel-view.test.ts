@@ -6,7 +6,7 @@ import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { cardDesign, tabGolden, toastDesign } from "../contracts/panel-golden";
 import { padStrip } from "../mod/golden-pad";
 import { panelWorld, worldCard } from "../contracts/panel-world";
-import { type Ui } from "../mod/atlas-ui";
+import { type Ui } from "../mod/design/atlas-ui";
 import { coreModel } from "../mod/data/core";
 import { headerRows, PANEL_TABS } from "../mod/view/panel/panel-layout";
 import { goldenModel, goldenText } from "../mod/view/panel/pane/sidebar.golden-cases";

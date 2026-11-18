@@ -4,7 +4,7 @@
  * capped by the line budget with `+N more`); `boardLines` is the whole surface with its ribbon. Each Run is painted in ANSI
  * from the shared tokens and every line is filled with the panel background to exactly `width` cells. Pure.
  */
-import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
+import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/design/atlas-ui";
 import { boardBody, boardFolded, boardOpenFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/view/board/board-model";
 import type { MotionCtx } from "../mod/motion/motion";
 import { RST } from "./panel-paint";

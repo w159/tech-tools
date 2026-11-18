@@ -8,9 +8,9 @@ import type { AtlasSnapshot, PhaseId } from '../contract';
 import { endedAt, liveWorkers } from '../data/live';
 import type { LiveWorker } from '../data/live';
 import type { LiveSnapshot } from '../orchestra-types';
-import { cells, msClock, type Ui } from '../atlas-ui';
+import { cells, msClock, type Ui } from '../design/atlas-ui';
 import { clipE as clip } from '../view/board/board-model';
-import { lookOf } from '../look';
+import { lookOf } from '../design/look';
 import { noteToastText, toastText } from '../view/panel/panel-layout';
 
 export type NotifyEvent =

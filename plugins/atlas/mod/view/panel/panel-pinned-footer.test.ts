@@ -2,7 +2,7 @@
 // phases and gates without cryptic forms at any width, each tab owns its body, and the health card shows only while the panel is closed.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface, On } from 'claude-code';
-import { uiFromEnv, type Run, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Run, type Ui } from '../../design/atlas-ui';
 import { chipStyle } from '../../input/clickable';
 import { healthCardRows } from '../hud/hud-surface';
 import { bodyLines, headerRows, lineText, panelLines, ribbonRow, tabRows, type PanelLine, type PanelModel, type PanelTab } from './panel-layout';
@@ -13,7 +13,7 @@ import { bandTree, type BandHandlers, type BandModel } from '../band/band';
 import { busySnap, NOW } from '../../live_fixture';
 import { register, resetCore } from '../../register';
 import { memState } from '../../test_helpers';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import type { Health } from '../../data/idle-health';
 import type { Pulse } from '../../data/pulse';
 

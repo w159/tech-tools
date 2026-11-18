@@ -4,13 +4,13 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { worldSidebar, worldSnapshot } from '../../contracts/world-live';
 import { liveWorkers } from '../data/live';
-import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from '../atlas-ui';
+import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from '../design/atlas-ui';
 import { hudAgents, hudLines } from './hud/hud';
 import { rowSpinnerGlyph } from './hud/hud-surface';
 import { panelModelOf } from './panel/pane/sidebar-model';
 import { bodyLines, lineText } from './panel/panel-layout';
 import { panelWorld } from '../../contracts/panel-world';
-import { LEAD_FRAMES, spinnerGlyph } from '../atlas-ui';
+import { LEAD_FRAMES, spinnerGlyph } from '../design/atlas-ui';
 import { bandLines, runsText, type MissionModel } from './band/mission-layout';
 import { sharedSpinFrame } from '../motion/motion';
 import { type PanelModel } from './panel/panel-layout';

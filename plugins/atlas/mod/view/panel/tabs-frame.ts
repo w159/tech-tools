@@ -10,12 +10,12 @@
 // Overflow (2.8, Y2a): the content collapses its expanded rows first (the oldest done item first); then the shared section goes whole (never cut mid-way) and the body ends in a chip `+N more ›` that opens the
 // view holding it; spare rows go to the shared section (the chart grows, the RECENT log lengthens); two blank rows (three on chat) stay above the footer.
 import { dataWord } from '../../data/datastate';
-import { elapsedClock, type Run, type Ui, type UiState } from '../../atlas-ui';
+import { elapsedClock, type Run, type Ui, type UiState } from '../../design/atlas-ui';
 import type { CoreModel } from '../../data/core';
 import { teamOf, type Health } from '../../data/idle-health';
 import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, lastCellText, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type ReadInfo, type StatusGate, type StatusIn } from '../hud/status-frame';
-import { fitText, textWidth } from '../../theme';
-import { checkOff, gateCounts } from '../../vocab';
+import { fitText, textWidth } from '../../design/theme';
+import { checkOff, gateCounts } from '../../design/vocab';
 
 export type TabId = 'team' | 'channel' | 'gates' | 'core' | 'board';
 export type TabPress = { kind: 'flip' | 'compose' | 'goto'; key: string; name?: string };

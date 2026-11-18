@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { diffSnapshots } from '../host/notify';
 import { factsLine } from '../host/discipline';
-import { uiFromEnv, type Run } from '../atlas-ui';
+import { uiFromEnv, type Run } from '../design/atlas-ui';
 import type { Health, HealthCheck } from './idle-health';
 import { frameKit, statusFrame, statusGatesRows, statusHooksRows, type GateSrc, type StatusIn } from '../view/hud/status-frame';
 import { tabFrame, tabText, type TabIn } from '../view/panel/tabs-frame';

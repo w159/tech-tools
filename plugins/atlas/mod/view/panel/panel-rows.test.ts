@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
 import { teamLiveGolden } from '../../../contracts/panel-golden';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import type { CoreModel } from '../../data/core';
 import { bodyLines, lineText, panelText, type PanelModel, type PanelNote, type PanelTab, type PanelTodo, type PanelWorker } from './panel-layout';
 

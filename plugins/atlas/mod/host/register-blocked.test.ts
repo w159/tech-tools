@@ -12,7 +12,7 @@ import { bandTree } from '../view/band/band';
 import { liveWorkers } from '../data/live';
 import { panelModelOf } from '../view/panel/pane/sidebar-model';
 import { bodyLines, lineText } from '../view/panel/panel-layout';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

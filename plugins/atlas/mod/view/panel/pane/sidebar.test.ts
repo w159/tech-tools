@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../../live_fixture';
-import { PALETTES, uiFromEnv } from '../../../atlas-ui';
+import { PALETTES, uiFromEnv } from '../../../design/atlas-ui';
 import { stripRows } from './sidebar';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
 import { activeChipStyle } from '../../../input/clickable';
@@ -177,7 +177,7 @@ describe('sidebar interactions', () => {
 });
 
 // These fixtures pin truecolor hexes; a tmux-style TERM=*256color with no COLORTERM would put the bare surfaces in 256-colour mode, so pin the depth for this file.
-import { clearLook } from '../../../look';
+import { clearLook } from '../../../design/look';
 import { afterAll as pinAfter, beforeAll as pinBefore } from 'bun:test';
 let pinnedColorterm: string | undefined;
 pinBefore(() => { clearLook(); pinnedColorterm = process.env.COLORTERM; process.env.COLORTERM = 'truecolor'; });

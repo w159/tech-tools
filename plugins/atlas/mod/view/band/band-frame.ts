@@ -6,12 +6,12 @@
 // right-anchored. Every figure is fixed width so the dividers never move when digits change. Narrowing order (2.7): state slot, gates chip, spark or count, health chip, detail slot, extras from the end.
 // Colour (2.4): band bg 235, text 252, dim 244, rules 238, chips bg 239 fg 183, alert chip bg 52 fg 210, ok green 78 only on the done head, amber 214 for ctx >= 70 % and hook p50 >= 50 ms, red 203 for
 // the denial mark. The only thing that changes colour with time is the heartbeat glyph (97 to 183).
-import { contrast, elapsedClock, PALETTES, xtermHex, type Run, type Ui } from '../../atlas-ui';
+import { contrast, elapsedClock, PALETTES, xtermHex, type Run, type Ui } from '../../design/atlas-ui';
 import { idleRamp } from './band-motion';
-import { blockSpark } from '../../chart';
+import { blockSpark } from '../../design/chart';
 import { agoText, gatesSummary, promptedOf, type Health } from '../../data/idle-health';
 import { metricsOf } from '../../data/metrics';
-import { fitText, textWidth } from '../../theme';
+import { fitText, textWidth } from '../../design/theme';
 
 /** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it (AA2: packed in one 28-cell state slot, `● done 6/6 · ended 18s`). */
 const HEAD_W = 17;

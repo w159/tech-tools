@@ -1,4 +1,4 @@
-// Edge pins for mod/atlas-ui.ts that the main atlas-ui tests leave open (surviving mutants of the 553a9bce run): the env read,
+// Edge pins for mod/design/atlas-ui.ts that the main atlas-ui tests leave open (surviving mutants of the 553a9bce run): the env read,
 // the default spinner frame, the empty cut, the 3-cell middle-cut boundary, and the pad and column arithmetic.
 import { describe, expect, test } from 'claude-code/testing';
 import { atColumn, brandMark, clip, clipMiddle, countRuns, hostEnv, padEnd, runsCells, type Ui } from './atlas-ui';

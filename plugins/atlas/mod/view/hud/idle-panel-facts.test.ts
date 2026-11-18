@@ -1,6 +1,6 @@
 // Idle polish, round 3: what the third hostile critic found on the idle panel, the run facts, the recent list, the tab chips and the health card. One describe per defect.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv } from '../../atlas-ui';
+import { uiFromEnv } from '../../design/atlas-ui';
 import { healthCardRows } from './hud-surface';
 import { bodyLines, headerRows, lineText, tabRows, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';

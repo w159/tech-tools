@@ -1,7 +1,7 @@
 // Round 2 data and primitive rules (spec-r2 D3-D7): done holds at every width, gates report denials, one fixed-scale wall-clock event series, a semantic context gauge, run outcome dots.
 import { describe, expect, test } from 'claude-code/testing';
-import type { Run, Ui } from '../../atlas-ui';
-import { dataInk } from '../../atlas-ui';
+import type { Run, Ui } from '../../design/atlas-ui';
+import { dataInk } from '../../design/atlas-ui';
 import { newKindHold, stepKind } from '../band/band-motion';
 import { bandFrameRuns } from '../band/band-frame';
 import { eventBuckets, noteHook, resetHookLog } from '../../host/hook-log';
@@ -11,8 +11,8 @@ import { fitFields, gateOf, healthDetail, healthRows, type Health } from '../../
 import { bodyLines, lineText } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { BUCKETS, rateLabel } from '../../data/pulse';
-import { sparkOf } from '../../spark';
-import { gatesTotal } from '../../vocab';
+import { sparkOf } from '../../design/spark';
+import { gatesTotal } from '../../design/vocab';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (rs: readonly Run[]): string => rs.map((x) => x.t).join('');

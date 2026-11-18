@@ -80,7 +80,7 @@ Below 80 columns the band is one row: `◆ ATLAS  implement · 1/6 tasks · 2 wo
 One restrained palette (critique 25). Accent `#af87ff` (141), ok `#87d787` (114), warn `#d7af5f` (179), error
 `#ff5f5f` (203), neutrals 236 `#303030` (rules), 240 `#585858` (dim: the brand mark, rules, idle gate segment), 245
 `#8a8a8a` (secondary text), 252 `#d0d0d0` (body). Panel `#181825`, raised header `#1e1e2e`. Defined once in
-`PALETTES` and `PALETTE5` (`mod/atlas-ui.ts`); `mod/palette.test.ts` fails on any other literal colour in a surface
+`PALETTES` and `PALETTE5` (`mod/design/atlas-ui.ts`); `mod/palette.test.ts` fails on any other literal colour in a surface
 file. `◆ ATLAS` appears only on the band chip, the block ribbons, the panel title and the finish cards (240). The
 band agents count, the SUBAGENTS title and the panel agent rows turn the band's braille frame; rows the capture
 scorer parses by glyph (TODO, board, plan and band worker rows) keep the circle quarters. A killed worker reads
@@ -101,7 +101,7 @@ scorer parses by glyph (TODO, board, plan and band worker rows) keep the circle 
 
 Every statement below is backed by the file named beside it (paths under `plugins/atlas/`).
 
-- One phase rail. `mod/rail.ts` (`railIds`, `railOf`, `railNo`) is the only place a rail is cut from the contract phases
+- One phase rail. `mod/design/rail.ts` (`railIds`, `railOf`, `railNo`) is the only place a rail is cut from the contract phases
   (`RAIL_SKIP` drops `validate`, `blocked`, `done`). The band (`mod/view/band/band.tsx`), the side panel model
   (`mod/view/panel/pane/sidebar-model.ts`), the panel layout (`mod/view/panel/panel-layout.ts`) and the omp mission panel
   (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
@@ -116,14 +116,14 @@ Every statement below is backed by the file named beside it (paths under `plugin
 - Compact board. At 60 to 99 cells the state column is set from the widest label, not fixed at 26, so a label is not cut
   (`stateCol` in `mod/view/board/board-model.ts`, shared with omp).
 - HUD Subagents block. It is back on Claude Code (the older note above that it is dropped no longer holds). With nothing
-  running, a done agent stays for `LINGER_MS` (15 s, exported from `mod/atlas-ui.ts`, the band's own window) and a failed
+  running, a done agent stays for `LINGER_MS` (15 s, exported from `mod/design/atlas-ui.ts`, the band's own window) and a failed
   agent stays until it is cleared (`mod/view/hud/hud.ts` lines 113 to 115).
 - Channel tab. The roster falls back to the project's main channel key (`<folder>` or `<folder>@<ref>`) when no candidate
   key matches the lead's session (`mod/data/channels.ts`).
 - Route tab. Running agents that own no plan row are listed under the plan, in the HUD Subagents state words
   (`mod/view/panel/panel-layout.ts`, comment at "Agents that work but hold no plan row").
-- Widths are terminal cells. `cells`, `clip` and `clipMiddle` in `mod/atlas-ui.ts` count wide characters as two cells
-  through `textWidth` (`mod/theme.ts`).
+- Widths are terminal cells. `cells`, `clip` and `clipMiddle` in `mod/design/atlas-ui.ts` count wide characters as two cells
+  through `textWidth` (`mod/design/theme.ts`).
 - The `[-]` beside the first HUD row is the host's own collapse mark in the five cells it reserves (`bodyColumns`). The
   plugin cannot remove it.
 - Unmounted omp painters. `paintPanel`, `paintCard` and `paintToast` in `omp/panel-view.ts` are marked UNMOUNTED in the

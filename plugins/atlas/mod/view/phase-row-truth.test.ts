@@ -9,7 +9,7 @@ import type { AtlasSnapshot } from '../contract';
 import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree, placeFinished } from './transcript/placed';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './band/mission-layout';
 import { panelWorld } from '../../contracts/panel-world';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 import { bandFrame, forgetBandFrame, noteBandFrame } from '../motion/motion';
 import { lineText, panelLines, type PanelModel } from './panel/panel-layout';
 

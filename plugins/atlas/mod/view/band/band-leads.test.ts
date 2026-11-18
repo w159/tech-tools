@@ -1,9 +1,9 @@
 // Round 3, slice A: one spinner, one palette, the four band leads, the closed count, the pill and the band's worker rows.
 import { describe, expect, test } from 'claude-code/testing';
-import { ATLAS_GLYPHS, GLYPH5, LEAD_FRAMES, PALETTES, SPIN_FRAMES, STATE_GLYPHS, spinnerGlyph, wordmark, type Ui } from '../../atlas-ui';
+import { ATLAS_GLYPHS, GLYPH5, LEAD_FRAMES, PALETTES, SPIN_FRAMES, STATE_GLYPHS, spinnerGlyph, wordmark, type Ui } from '../../design/atlas-ui';
 import { BLOCKED_TEXT, bandLines, missionLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { withStopVerdict } from '../../register';
-import { spin } from '../../theme';
+import { spin } from '../../design/theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;

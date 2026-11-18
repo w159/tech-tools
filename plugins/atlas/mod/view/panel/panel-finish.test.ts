@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld } from '../../../contracts/panel-world';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { boardBody, boardText, type BoardRow } from '../board/board-model';
 import { coreModel } from '../../data/core';
 import { bodyLines, lineText, panelText, tabRows, type PanelModel, type PanelTab } from './panel-layout';

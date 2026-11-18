@@ -2,7 +2,7 @@
 // stays while the grid shows, and a LAST that is never blank. Live shape: stoprun-150-4b5b5a94-1/frames/f0075.ans:24-35 (TODO 0/5 with two
 // running rows out of phase, SUBAGENTS without its column header, ragged `killed`).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, leadSpinnerGlyph, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from '../../atlas-ui';
+import { cells, leadSpinnerGlyph, rowWordTone, runsString, spinClock, spinFrameOf, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { hudLines, type HudAgent } from './hud';
 import { rowSpinnerGlyph } from './hud-surface';

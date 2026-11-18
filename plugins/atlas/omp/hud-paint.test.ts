@@ -5,7 +5,7 @@
 import { expect, test } from "bun:test";
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from "../contracts/hud-golden";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
-import type { Ui } from "../mod/atlas-ui";
+import type { Ui } from "../mod/design/atlas-ui";
 import { hudRows } from "../mod/view/hud/hud";
 import { hudText as rawHudText, paintHud } from "./hud-paint";
 

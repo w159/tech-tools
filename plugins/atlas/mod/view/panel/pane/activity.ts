@@ -1,6 +1,6 @@
 // activity.ts: the small pure helpers the wave 30 surfaces share (board timeline, team tab, channel tab, finish cards): the one failure word, a relative age,
 // an activity sparkline over a worker's own run, and the team's totals. Host free; nothing here draws.
-import type { UiState } from '../../../atlas-ui';
+import type { UiState } from '../../../design/atlas-ui';
 
 /** The one word for a worker that did not finish (critique 28: `closed`, `worker killed`, `failed` and `killed` named one fact four ways). Wave 33 (critique 31: the SUBAGENTS title said `1 failed`, the row said `killed`):
  * the word is `failed` on every surface, with the `■` mark, in error 203. The export keeps its wave 30 name. */

@@ -3,7 +3,7 @@
 // refuted claim red, a partial tally amber). Cells are mission-layout runs, so the Claude band and the omp mission
 // panel paint identical text. Golden: contracts/core-golden.ts.
 import { type CoreModel, type Route, type Verdict, hasCore, plannedText, tok } from "../../data/core";
-import { type Ui } from "../../atlas-ui"; import { lookUi } from "../../look";
+import { type Ui } from "../../design/atlas-ui"; import { lookUi } from "../../design/look";
 import { type Run, runsText, runsWidth, type Tone } from "./mission-layout";
 
 /** Core cells are layout runs: a tone, not a colour (mission-layout.ts TONE_HEX paints them on both harnesses). */

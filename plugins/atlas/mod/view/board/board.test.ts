@@ -4,14 +4,14 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world, worldModel } from '../../../contracts/band-world';
 import { board_120, board_120_rich, board_80, worldBoardRows } from '../../../contracts/board-golden';
 import { band_120 } from '../../../contracts/band-world-golden';
-import { cells, chipCount, contrast, DECOR_TONES, NEED, PALETTES, runKind, toneHex, type Ui } from '../../atlas-ui';
+import { cells, chipCount, contrast, DECOR_TONES, NEED, PALETTES, runKind, toneHex, type Ui } from '../../design/atlas-ui';
 import { bandLines, runsWidth } from '../band/mission-layout';
-import type { UiState } from '../../atlas-ui';
+import type { UiState } from '../../design/atlas-ui';
 import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
 import { endedOf, settleDispatch } from '../../data/todos';
 import type { SquadAgent } from '../../contract';
 import { type BoardRow } from './board-model';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import { boardFolded, type BoardSource } from './board-model';
 
 const ui = (theme: 'mocha' | 'latte'): Ui => ({ theme, ascii: false, color: 'truecolor' });

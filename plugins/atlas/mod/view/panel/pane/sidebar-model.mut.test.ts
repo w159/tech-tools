@@ -11,7 +11,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { busySnap, NOW } from '../../../live_fixture';
 import type { LiveSnapshot } from '../../../orchestra-types';
 import type { SquadAgent } from '../../../contract';
-import type { Ui } from '../../../atlas-ui';
+import type { Ui } from '../../../design/atlas-ui';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarModel } from './sidebar-types';
 

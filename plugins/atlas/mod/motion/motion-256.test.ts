@@ -2,7 +2,7 @@
 // both downsamplers (Atlas's and the host's) map to the same distinct indices, the done pop never reuses another state's glyph, and the
 // panel fill is the neutral grey of the host's tone family (the raw hex reached the terminal as navy 17).
 import { describe, expect, test } from 'claude-code/testing';
-import { contrast, emittedPairs, fitHex, hexTo256, hostTo256, luminance, PALETTES, runsString, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, surfaceHex, UI_STATES, xtermHex, type Run, type ThemeName, type Token, type Ui } from '../atlas-ui';
+import { contrast, emittedPairs, fitHex, hexTo256, hostTo256, luminance, PALETTES, runsString, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, surfaceHex, UI_STATES, xtermHex, type Run, type ThemeName, type Token, type Ui } from '../design/atlas-ui';
 import { animateRow, deltaE, easeSteps256, MAX_STEPS_256, MIN_STEPS_256, MIN_STEP_DE, MIN_STEP_DL, STRONG_STEP_DE, Motion, MOTION_MS, windowOf, POP_ASCII, POP_UNICODE } from './motion';
 
 const RESTS: readonly Token[] = ['text', 'sub', 'muted', 'line', 'ok', 'run', 'warn', 'bad', 'info', 'accent'];

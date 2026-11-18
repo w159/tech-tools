@@ -1,7 +1,7 @@
 // Unit tests for the ATLAS design primitives (atlas-ui.ts): tokens, env switches, contrast, the state vocabulary, capsule,
 // ribbon, rail, the eighth-quantised gauge (property test), chip, sparkline, spinner and the eased gauge.
 import { describe, expect, test } from 'claude-code/testing';
-import { world } from '../contracts/band-world';
+import { world } from '../../contracts/band-world';
 import {
   asciiMode, ATLAS_GLYPHS, capsule, GLYPH5, SPIN_FRAMES, CHIP_W, chip, chipCount, clip, colorMode, contrast, countRuns, easedFrames, easedValue, easeOutCubic,
   emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, hostTo256, inkFor, stable256Indices, xtermHex, luminance, PALETTES, percent, rail, ribbon,
@@ -381,8 +381,8 @@ describe('256-colour mapping: the exact xterm index of each token', () => {
 });
 
 import { surfaceHex as surfaceHexW, cells as cellsW } from './atlas-ui';
-import { PHASE_TABLE as PHASES_W } from './contract-pattern';
-import { leadRow as leadRowW } from './view/transcript/leadheader';
+import { PHASE_TABLE as PHASES_W } from '../contract-pattern';
+import { leadRow as leadRowW } from '../view/transcript/leadheader';
 
 
 describe('phase glyph width at 80 columns (audit UX item 9)', () => {

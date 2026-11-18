@@ -2,7 +2,7 @@
 // model, the blank row between them and the rows the slot holds. Pure: nothing here reads the host or keeps state (the caller keeps `held`).
 import { bandKindOf, bandRowCount, bandSpareRows, type BandModel } from './band';
 import { hudBudget, hudCompactRows, hudFloorRows, hudHoldRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, reclaimBlanks, type HudInput, type HudOpts } from '../hud/hud';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 
 /** The Mission Control band keeps at least this many rows; the HUD takes the rest of the budget. */
 export const BAND_MIN_ROWS = 7;

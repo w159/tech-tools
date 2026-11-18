@@ -1,7 +1,7 @@
 // Critique 18, slice C1: the SUBAGENTS column-name row shows in every frame the block shows (stoprun-150-562576ed-1/f0080.ans:31-34 lost it
 // while beta ran), the MODEL and TASK cells keep a gap (`haiku T1` ran together), and MODEL is never blank (stoprun-110-562576ed-1/tab-route.png).
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
 import { hudCompactRows, hudFloorRows, hudLines, agentModel, type HudAgent, type HudInput } from './hud';

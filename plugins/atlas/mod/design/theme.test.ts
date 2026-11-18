@@ -1,8 +1,8 @@
 // Self-check for the band's theme helpers (run: claude plugin test <dir>).
 import { expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, capsule, gauge, rail, ribbon, runsString, sparkline, stateRun, UI_STATES } from './atlas-ui';
-import { DEJAVU_SANS_MONO_HAS } from './fixtures/dejavu-sans-mono-glyphs';
-import { PHASE_TABLE } from './contract-pattern';
+import { DEJAVU_SANS_MONO_HAS } from '../fixtures/dejavu-sans-mono-glyphs';
+import { PHASE_TABLE } from '../contract-pattern';
 import { DONE_GLYPH, bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, STATE_GLYPH } from './theme';
 
 test('bar clamps and rounds', () => {

@@ -2,12 +2,12 @@
 // (tier 'min'), so live-110 frames showed the TODO box and the band but no `▸ SUBAGENTS` title while an agent ran (workers_any_surface 0.0).
 // The block now shows at every width: its ribbon, the column names and a row per agent, with the counts giving way before the row overflows.
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
 import { hudCompactRows, hudFloorRows, hudLines, type HudAgent, type HudInput } from './hud';
 import { hudSlotCap } from '../../register';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PLAN = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the final summary'].map((c, i): TodoItem => ({ id: `t${i + 1}`, content: c, status: 'pending' }));

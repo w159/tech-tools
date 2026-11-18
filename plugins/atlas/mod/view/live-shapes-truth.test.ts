@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import { panelWorld } from '../../contracts/panel-world';
 import { bandTree } from './band/band';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 import { coreModel, type CoreModel } from '../data/core';
 import { gateTally } from '../data/runstate';
 import { busySnap } from '../live_fixture';

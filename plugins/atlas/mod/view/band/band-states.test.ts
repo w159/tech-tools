@@ -1,8 +1,8 @@
 // Slice A2: the band's four states (working, idle, done, needs-you) by glyph AND word, an elapsed clock, at 150 and 110 columns; and the rule that
 // the band's own text never says something runs without a spinner glyph beside it (live-150 f0077-f0085: `3 explorers running`, no glyph).
 import { describe, expect, test } from 'claude-code/testing';
-import type { Ui } from '../../atlas-ui';
-import { cells, sweepIndex, WORDMARK } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
+import { cells, sweepIndex, WORDMARK } from '../../design/atlas-ui';
 import { reducedMotion } from '../../motion/motion';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 

@@ -6,13 +6,13 @@ import { world } from '../../../contracts/band-world';
 import { worldHudAgents, worldPhases, worldPlan as worldPlanOf } from '../../../contracts/hud-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../../../contracts/hud-golden';
 import type { TodoItem } from '../../contract';
-import type { Ui } from '../../atlas-ui';
-import { PALETTES } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
+import { PALETTES } from '../../design/atlas-ui';
 import { agentModel, agentName, lastAction, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from '../../data/todos';
 import { effectiveRows, inlineBelowRows } from '../../register';
-import type { Segment } from '../../runs';
-import { textWidth } from '../../theme';
+import type { Segment } from '../../design/runs';
+import { textWidth } from '../../design/theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');

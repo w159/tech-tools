@@ -21,10 +21,10 @@ import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './host/h
 import { denyAgeSecs, noteBilling, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './data/pulse';
 import { healthStripRows, STRIP_ROWS, stripWanted } from './view/hud/strip-frame';
 import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './data/history';
-import { deniedCalls, gateCounts } from './vocab';
+import { deniedCalls, gateCounts } from './design/vocab';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './view/band/band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './view/hud/hud';
-import { rowOf, type Segment } from './runs';
+import { rowOf, type Segment } from './design/runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './view/panel/pane/sidebar';
 import type { GateLine } from './view/panel/pane/sidebar-types';
@@ -42,9 +42,9 @@ import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDep
 import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern, registerRestyle } from './view/transcript/restyle';
 import { isOlder, registerNotify } from './host/notify';
 import { cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placeFinished } from './view/transcript/placed';
-import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './atlas-ui';
+import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './design/atlas-ui';
 import { IDLE_AFTER_SECS } from './view/band/mission-layout';
-import { clearLook, lookOf } from './look';
+import { clearLook, lookOf } from './design/look';
 import { hoverStyle } from './input/clickable';
 import { Motion, MotionDriver, reducedMotion } from './motion/motion';
 import { motionFeed } from './host/motion-feed';

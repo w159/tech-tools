@@ -1,7 +1,7 @@
 // Round 5: the selected row of the TODO and SUBAGENTS blocks is a full-width bar (the 236 fill, the name bold, the `▸ ` cursor text kept so the capture scorer still reads
 // the row), the fill survives 256-colour mode through the same stable mapping as every other fill, NO_COLOR draws none, and an unselected row never has one.
 import { describe, expect, test } from 'claude-code/testing';
-import { fillHex, paintAnsi, runsCells, runsString, type Run, type Ui } from '../../atlas-ui';
+import { fillHex, paintAnsi, runsCells, runsString, type Run, type Ui } from '../../design/atlas-ui';
 import { agentRows, todoRows, type AgentRow, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

@@ -1,13 +1,13 @@
 // Round 3 panel and card rules (spec-r3 E1-E9, E11, E12): the status view is an instrument (a focal ACTIVITY chart with axes, context trend, run bars, ribbon headers on one grid), fills its height with a pinned footer,
 // uses one control idiom (carets on expandable rows only, one row of tabs, `more ›` swapping the set in place), keeps one stepper form at every width, empty tabs are skeletons, and the card is a capped two-column layout.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Ui } from '../../design/atlas-ui';
 import { healthCardRows } from '../hud/hud-surface';
 import { bodyLines, headerRows, lineText, panelLines, tabRows, MORE_KEY, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';
 import * as model from './pane/sidebar-model';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import type { Health } from '../../data/idle-health';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };

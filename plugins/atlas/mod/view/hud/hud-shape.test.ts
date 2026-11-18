@@ -2,7 +2,7 @@
 // Every rule is checked at 150 and 110 columns (and at 57, the width the live 110-column transcript leaves beside the docked pane) with a scorer-shaped parser
 // (round2/tools/live_capture.py parse_frame, rev 4 locators: is_block_header, a TODO row is `<glyph> T<n> `, a SUBAGENTS row is `<glyph> <name> <state word>`).
 import { describe, expect, test } from 'claude-code/testing';
-import { PALETTE5, SPIN_FRAMES, cells, leadSpinnerGlyph, runsString, spinClock, spinFrameOf, type Run, type Ui } from '../../atlas-ui';
+import { PALETTE5, SPIN_FRAMES, cells, leadSpinnerGlyph, runsString, spinClock, spinFrameOf, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { agentModel, hudLines, type HudAgent, type HudInput } from './hud';
 import { agentRows, type AgentRow } from './hud-surface';

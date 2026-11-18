@@ -8,7 +8,7 @@ import { agentModel, hudAgents, hudLines } from './hud/hud';
 import { hudPhases } from './band/band';
 import { panelModelOf } from './panel/pane/sidebar-model';
 import { panelText } from './panel/panel-layout';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 import type { LiveSnapshot } from '../orchestra-types';
 import type { TodoItem } from '../contract';
 

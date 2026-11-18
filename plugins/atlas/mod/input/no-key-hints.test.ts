@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { bandTree, type BandHandlers, type BandModel } from '../view/band/band';
 import { liveWorkers } from '../data/live';
 import { busySnap, NOW } from '../live_fixture';
-import { uiFromEnv } from '../atlas-ui';
+import { uiFromEnv } from '../design/atlas-ui';
 import { fillRows, headerRows, lineText, panelLines } from '../view/panel/panel-layout';
 import * as panelLayout from '../view/panel/panel-layout';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from '../view/panel/pane/sidebar';

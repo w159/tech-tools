@@ -13,7 +13,7 @@ import { worldModel } from '../../../contracts/band-world';
 import { bandSpareRows, bandTree, missionTree } from './band';
 import { liveWorkers } from '../../data/live';
 import { busySnap, NOW } from '../../live_fixture';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

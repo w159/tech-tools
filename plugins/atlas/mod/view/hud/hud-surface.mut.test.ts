@@ -7,7 +7,7 @@
 //  - fitStack hideTodo try `extras: false` -> `true` (line 250): that try empties the todos, todoRows([]) returns [] (line 69), and agentRows never
 //    reads `extras` (only `cap` and `spacers`), so the stack is identical.
 import { describe, expect, test } from 'claude-code/testing';
-import { runsCells, runsString, type Ui } from '../../atlas-ui';
+import { runsCells, runsString, type Ui } from '../../design/atlas-ui';
 import { agentRows, fitStack, todoRows, type AgentRow, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: true, color: 'truecolor' };

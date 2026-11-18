@@ -2,7 +2,7 @@
 // last cell, the selection cursor is accent 141 on every frame, LAST gets the spare width (MODEL goes first), and a changed board shows on the next draw.
 // Live shapes: live-150-513bb41c-1 f0060:24 (`2 more todos not shown` with spare room), live-110 f0039 (`2 funct…`), stoprun-150-513bb41c-1 f0107:24-26.
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, paintAnsi, runsString, type Run, type Ui } from '../../atlas-ui';
+import { cells, paintAnsi, runsString, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { hudLines, hudWantRows, type HudAgent, type HudInput } from './hud';
 import { Motion } from '../../motion/motion';

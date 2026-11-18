@@ -10,7 +10,7 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from '../../atlas-ui';
+import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from '../../design/atlas-ui';
 import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
 import { KILLED, wordOf } from '../panel/pane/activity';
 

@@ -3,11 +3,11 @@
 // the stop path, LAST is never blank, and the 110-column SUBAGENTS title keeps its tally and folds to one row.
 import { describe, expect, test } from 'claude-code/testing';
 import { worldHudAgents, worldPhases, worldPlan } from '../../../contracts/hud-world';
-import { runsString, type Run, type Ui } from '../../atlas-ui';
+import { runsString, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { functionsIn, hudLines, type HudAgent, type HudInput } from './hud';
 import { overflowText } from './hud-surface';
-import { stateRun } from '../../atlas-ui';
+import { stateRun } from '../../design/atlas-ui';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const NOW = 5_000_000;

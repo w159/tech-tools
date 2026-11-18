@@ -3,10 +3,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { board_120, board_120_rich, board_80, WORLD_NOW, worldItems } from '../../../contracts/board-golden';
-import { hexTo256, hostTo256, PALETTE5, PALETTES, sgrColor, toneHex, type Ui } from '../../atlas-ui';
+import { hexTo256, hostTo256, PALETTE5, PALETTES, sgrColor, toneHex, type Ui } from '../../design/atlas-ui';
 import { boardTree, runSegment, todoRows } from './todo-panel';
-import { textWidth } from '../../theme';
-import type { Segment } from '../../runs';
+import { textWidth } from '../../design/theme';
+import type { Segment } from '../../design/runs';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };

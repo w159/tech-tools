@@ -4,7 +4,7 @@
 // file, computeCounts, currentPhase precedence.
 import { describe, expect, test } from 'claude-code/testing';
 import type { Contract, FsLike, TodoItem } from '../contract';
-import { contractGlyph } from '../theme';
+import { contractGlyph } from '../design/theme';
 import { DEPT, computeCounts, currentPhase, groupTodos, isPlanItem, planCounts, readTodos, routeCounts } from './todos';
 import * as todosMod from './todos';
 

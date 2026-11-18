@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { readHostEntry } from '../fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { closedTotal, newRunClock, readRun, runKey, stepRun, type ClockHold, type RunClock } from './band/band-motion';
-import { elapsedClock, phaseGlyph, type Ui } from '../atlas-ui';
+import { elapsedClock, phaseGlyph, type Ui } from '../design/atlas-ui';
 import { bandLines, runsText, type MissionModel } from './band/mission-layout';
 import { panelWorld } from '../../contracts/panel-world';
 import { lineText, panelLines, bodyLines } from './panel/panel-layout';
@@ -171,7 +171,7 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
 });
 
 import { hudLines, type HudAgent, type HudInput } from './hud/hud';
-import { runsString } from '../atlas-ui';
+import { runsString } from '../design/atlas-ui';
 import { ownTodos } from '../data/todos';
 import { functionsIn } from './hud/hud';
 import { blockedText } from '../data/runstate';

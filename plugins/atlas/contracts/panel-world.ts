@@ -1,6 +1,6 @@
 // The side panel, worker card and toast of the fixture world (contracts/band-world.ts): every number derives from `world`.
 // Goldens: contracts/panel-golden.ts. Both hosts feed these models to the shared layout (mod/view/panel/panel-layout.ts).
-import type { Ui } from "../mod/atlas-ui";
+import type { Ui } from "../mod/design/atlas-ui";
 import type { CardModel, PanelModel, PanelTab } from "../mod/view/panel/panel-layout";
 import { world } from "./band-world";
 

@@ -2,12 +2,12 @@
 // correct axis (C), no dead rows (D: the wired-hooks table, the RECENT log, chart growth) and the one-row CONTEXT / one-bar-per-run RUNS (E). The rows are read from the panel the way the host draws
 // them: `panelLines` from the NOW ribbon down to the pinned footer, the host border removed. The tab strip and the ribbon above NOW are shared chrome and not part of this slice.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Ui } from '../../design/atlas-ui';
 import { lineText, panelLines, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';
-import { textWidth } from '../../theme';
-import { BLOCKS } from '../../chart';
+import { textWidth } from '../../design/theme';
+import { BLOCKS } from '../../design/chart';
 import { hookStats, noteHook, noteHookMs, resetHookLog, WIRED_HOOKS } from '../../host/hook-log';
 import { ctxRunway } from '../../data/pulse';
 import { chartSeries, hookTable } from './status-frame';

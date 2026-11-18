@@ -5,13 +5,13 @@
 // The tab strip and the ribbon above the content are shared chrome (every tab, omp, the goldens) and are not part of this slice; the frames are cut at the content ribbon.
 // One spec figure is not measured by the mod and is left out rather than made up: a worker's `ctx N%` (the detail row of the team tab reads `model · last call` where the spec adds `· ctx N%`).
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Ui } from '../../design/atlas-ui';
 import { NOW } from '../../live_fixture';
 import { lineText, panelLines, type PanelGate, type PanelModel, type PanelNote, type PanelTab, type PanelTodo, type PanelWorker } from './panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import { bandLook } from '../band/band-frame';
-import { runHex } from '../../atlas-ui';
+import { runHex } from '../../design/atlas-ui';
 import type { Health, HealthCheck } from '../../data/idle-health';
 import type { CoreModel } from '../../data/core';
 import { healthCardRows } from '../hud/hud-surface';

@@ -6,7 +6,7 @@
 // as a value, so no input reaches it. (Dead code; deleting it is a behaviour-neutral cleanup outside this tests-only pass.)
 import { describe, expect, test } from 'claude-code/testing';
 import { worldModel } from '../../../contracts/band-world';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { bandLines, isMessageKind, missionLines, runsText, type MissionModel } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

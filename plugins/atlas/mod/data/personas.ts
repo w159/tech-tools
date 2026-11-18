@@ -4,7 +4,7 @@
 // test kit can drive them from memory. No Node imports: mod modules run sandboxed.
 import type { Contract, FsLike, Persona, PhaseId } from '../contract';
 import { BRAND } from '../contract';
-import { contractGlyph, ROLE_COLOUR } from '../theme';
+import { contractGlyph, ROLE_COLOUR } from '../design/theme';
 
 /** Frontmatter colour name -> hex, mirroring the dashboard token palette (dashboard_ui/css/tokens.css). */
 export const PERSONA_COLORS: Record<string, string> = {

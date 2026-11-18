@@ -2,7 +2,7 @@
 // current glide: the value it started from, the value it heads for and the clock reading when it began. The ticks in
 // register.ts retarget a Move when the figure changes and ask `settled` when to stop; the render only reads
 // `displayed`. Nothing here keeps a timer, so an unchanged gauge costs nothing.
-import { EASE_MS, easedValue, hostEnv, PALETTES, xtermHex, type Ui, type UiEnv } from '../../atlas-ui';
+import { EASE_MS, easedValue, hostEnv, PALETTES, xtermHex, type Ui, type UiEnv } from '../../design/atlas-ui';
 import { reducedMotion } from '../../motion/motion';
 import { todoCounts } from '../../data/todos';
 import type { LiveSnapshot } from '../../orchestra-types';

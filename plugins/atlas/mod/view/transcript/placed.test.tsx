@@ -5,7 +5,7 @@ import type { AgentInfo, EngineInterface, On } from 'claude-code'
 import type { AtlasSnapshot, SquadAgent } from '../../contract'
 import { registerRestyle } from './restyle'
 import { memState } from '../../test_helpers'
-import { uiFromEnv } from '../../atlas-ui'
+import { uiFromEnv } from '../../design/atlas-ui'
 import { cardAged, finishedWorkers, forgetPlaced, hideNotification, placeFinished, placedTree } from './placed'
 
 const snap = (now: number, squad: SquadAgent[], over: Record<string, unknown> = {}): AtlasSnapshot => ({

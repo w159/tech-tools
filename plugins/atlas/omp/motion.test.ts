@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
 import { worldBoardRows } from "../contracts/board-golden";
-import { runHex, sgrColor, type Ui } from "../mod/atlas-ui";
+import { runHex, sgrColor, type Ui } from "../mod/design/atlas-ui";
 import { boardBody, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { hudLines, hudMotionItems, hudRows, type HudInput } from "../mod/view/hud/hud";
 import { Motion, MOTION_MS, sinceChange, windowOf } from "../mod/motion/motion";

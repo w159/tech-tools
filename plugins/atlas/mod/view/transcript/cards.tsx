@@ -4,14 +4,14 @@
 
 import type { RenderElement, RenderNode } from 'claude-code'
 import type { AgentState } from '../../contract'
-import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../../atlas-ui'
-import { lookUi } from '../../look'
+import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../../design/atlas-ui'
+import { lookUi } from '../../design/look'
 import { CARD_W, cardBarTone, toastRuns } from '../panel/panel-layout'
-import { cells } from '../../atlas-ui'
+import { cells } from '../../design/atlas-ui'
 import { clipE as clip, ELLIPSIS } from '../board/board-model'
 import { displayName } from '../hud/hud'
 import { workerFacts, type WorkerFacts } from '../../data/live'
-import { fitText } from '../../theme'
+import { fitText } from '../../design/theme'
 import { wordOf } from '../panel/pane/activity'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }

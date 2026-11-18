@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { panelWorld } from '../../../contracts/panel-world';
 import { worldGates, worldSidebar, worldSnapshot } from '../../../contracts/world-live';
-import { leadSpinnerGlyph, spinFrameOf, spinnerGlyph, type Ui, type UiState } from '../../atlas-ui';
+import { leadSpinnerGlyph, spinFrameOf, spinnerGlyph, type Ui, type UiState } from '../../design/atlas-ui';
 import { bandTree } from '../band/band';
 import { liveWorkers } from '../../data/live';
 import { gateTally } from '../../data/runstate';

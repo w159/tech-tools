@@ -1,10 +1,10 @@
 // Shared sidebar model types and the one padding helper the section builders use.
 import type { Health } from '../../../data/idle-health';
 import type { CoreModel } from '../../../data/core';
-import type { Ui } from '../../../atlas-ui';
+import type { Ui } from '../../../design/atlas-ui';
 import type { MotionCtx } from '../../../motion/motion';
 import type { LiveSnapshot } from '../../../orchestra-types';
-import { textWidth } from '../../../theme';
+import { textWidth } from '../../../design/theme';
 
 export type GateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string };
 export type GateGroup = { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: GateLine[]; error?: string };
@@ -15,7 +15,7 @@ export type SidebarModel = {
   /** The Atlas core (contract, verdicts, offload, routes); the g view draws it above the gate groups. */
   core?: CoreModel | null;
   ui: { recipient: string | null; expanded: string | null; draft: string; view: SidebarView; /** Rows flipped from their default open or closed state (tabs-frame.ts), kept for the session. */ flips?: readonly string[] };
-  /** Theme, ASCII and colour depth as the host reported them once (mod/look.ts); absent in fixtures, which read the host environment. */
+  /** Theme, ASCII and colour depth as the host reported them once (mod/design/look.ts); absent in fixtures, which read the host environment. */
   look?: Ui;
   columns: number;
   rows: number;

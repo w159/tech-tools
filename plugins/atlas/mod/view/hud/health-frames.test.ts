@@ -2,7 +2,7 @@
 // The live wiring (boot read, writes, the strip in the slot, the click) is y1-live.test.ts.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface } from 'claude-code';
-import { uiFromEnv, type Run, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Run, type Ui } from '../../design/atlas-ui';
 import { bandFrameRuns } from '../band/band-frame';
 import { cardFrame } from './card-frame';
 import { composeHistory, emptyHistory, flushHistory, HIST_LAT, HIST_MINUTES, HIST_RUNS, historyView, loadHistory, noteHistoryCtx, noteHistoryRun, parseHistory, resetHistory, serializeHistory, type History } from '../../data/history';

@@ -3,7 +3,7 @@
 // and the spinner frame the band turns.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import { DONE_DOUBT, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from '../../atlas-ui';
+import { DONE_DOUBT, leadSpinnerGlyph, spinClock, spinFrameOf, spinnerGlyph, type Ui } from '../../design/atlas-ui';
 import { boardLines, boardText, boardTimeline, type BoardRow } from '../board/board-model';
 import { bodyLines, channelLabel, lineText, panelLines, panelText, ribbonRow, type PanelModel, type PanelNote, type PanelTab } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';

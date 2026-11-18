@@ -3,10 +3,10 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandTree, type BandHandlers, type BandModel } from './band';
 import { beatDue, idleLevel, idlePhase, idleRamp, IDLE_PHASES, IDLE_RAMP_256 } from './band-motion';
-import { runHex, uiFromEnv, xtermHex, type Ui } from '../../atlas-ui';
+import { runHex, uiFromEnv, xtermHex, type Ui } from '../../design/atlas-ui';
 import { busySnap, NOW } from '../../live_fixture';
 import { durationTree } from '../transcript/restyle';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import type { Health } from '../../data/idle-health';
 import type { Pulse } from '../../data/pulse';
 

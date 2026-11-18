@@ -922,7 +922,7 @@ most 10 redraws a second, the host's cap. The band, the HUD and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
 screen shows the same frame. One glyph set turns on it: the band, the TODO and
 SUBAGENTS rows and titles, the side panel, the board and the dispatch cards all
-draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/atlas-ui.ts`); ASCII
+draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/design/atlas-ui.ts`); ASCII
 mode draws `|/-\`. The capture scorer reads a row's state from these marks.
 `ATLAS_REDUCED_MOTION` and `NO_COLOR` stop the row transitions; the spinner still
 steps.
@@ -935,7 +935,7 @@ steps.
 | `○` | idle | `△` | a gate warning |
 | `▰▱` | a meter, filled and empty cells | | |
 
-The row marks are `STATE_GLYPHS` in `mod/atlas-ui.ts`. No row is struck through:
+The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`. No row is struck through:
 a done row is dim and keeps its green `●`.
 
 **The band.** The band is one row above the prompt, drawn as three filled
@@ -1367,18 +1367,18 @@ the same invariant in the contract suite.
 
 ### Terminal variables
 
-These are read by the mod (`mod/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/look.ts`,
+These are read by the mod (`mod/design/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/design/look.ts`,
 `mod/register.ts`) and by the omp extension (`omp/`). Unset means the default.
 
 | Variable | Default | Effect |
 | -------- | ------- | ------ |
 | `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/register.ts`) |
 | `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/register.ts`) |
-| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/look.ts`) |
-| `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/atlas-ui.ts`) |
-| `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/atlas-ui.ts`) |
-| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts`; `reducedMotion`, `mod/motion/motion.ts`) |
-| `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/atlas-ui.ts`) |
+| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/design/look.ts`) |
+| `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/design/atlas-ui.ts`) |
+| `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/design/atlas-ui.ts`) |
+| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/design/atlas-ui.ts`; `reducedMotion`, `mod/motion/motion.ts`) |
+| `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/design/atlas-ui.ts`) |
 | `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion/motion.ts`) |
 | `ATLAS_PROJECT_ROOT` | unset | A project root that contains `.atlas`; it wins over the search. Unset, the mod walks up from the working directory to the nearest `.git` or `.atlas` (`mod/data/root.ts`) |
 | `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/register.ts`) |

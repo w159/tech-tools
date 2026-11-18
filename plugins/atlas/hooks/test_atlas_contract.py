@@ -2199,7 +2199,7 @@ class HeaderCorpusContract(unittest.TestCase):
 
     def test_phase_table_has_fixed_case_label_and_distinct_known_tone(self) -> None:
         phases = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))["phases"]
-        ui = (PLUGIN_ROOT / "mod" / "atlas-ui.ts").read_text(encoding="utf-8")
+        ui = (PLUGIN_ROOT / "mod" / "design" / "atlas-ui.ts").read_text(encoding="utf-8")
         tokens = set(re.findall(r"'(\w+)'", re.search(r"export type Token = ([^;]+);", ui).group(1)))
         for p in phases:
             with self.subTest(phase=p["id"]):

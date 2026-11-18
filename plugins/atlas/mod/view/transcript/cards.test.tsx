@@ -1,7 +1,7 @@
 // Golden tests for transcript/cards.tsx: worker cards, wave strips, channel bubbles.
 import { expect, test } from 'claude-code/testing'
-import { fitText, textWidth } from '../../theme'
-import { hexTo256, hostTo256, runHex, uiFromEnv } from '../../atlas-ui'
+import { fitText, textWidth } from '../../design/theme'
+import { hexTo256, hostTo256, runHex, uiFromEnv } from '../../design/atlas-ui'
 import { bubbleTree, notificationTree, waveTree, workerCard, goalLine, resultLine, phaseOf, stripStatus } from './cards'
 import type { CallLike } from './cards'
 import contract from '../../../contracts/operating-contract.json';

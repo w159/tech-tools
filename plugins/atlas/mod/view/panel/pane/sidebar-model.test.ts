@@ -6,7 +6,7 @@ import { busySnap, NOW } from '../../../live_fixture';
 import type { LiveSnapshot } from '../../../orchestra-types';
 import type { SquadAgent } from '../../../contract';
 import { bodyLines, lineText, panelText } from '../panel-layout';
-import type { Ui } from '../../../atlas-ui';
+import type { Ui } from '../../../design/atlas-ui';
 import { forgetRefusals } from '../../../data/channels';
 import { panelModelOf } from './sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './sidebar';

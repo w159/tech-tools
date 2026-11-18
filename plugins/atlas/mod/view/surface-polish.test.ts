@@ -13,7 +13,7 @@ import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { busySnap, NOW } from '../live_fixture';
 import { Motion } from '../motion/motion';
-import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from '../atlas-ui';
+import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from '../design/atlas-ui';
 import { sidebarTree } from './panel/pane/sidebar';
 import { boardTimeline } from './board/board-model';
 import { notificationTree } from './transcript/cards';

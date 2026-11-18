@@ -4,7 +4,7 @@
  * the way omp/mission-panel.ts paints the band. omp draws its own native Subagents widget; `paintHud` is the shared
  * draw for any Atlas widget that shows agents (the TODO fallback passes none).
  */
-import { paintAnsi, runsString, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
+import { paintAnsi, runsString, uiFromEnv, type Run, type Ui } from "../mod/design/atlas-ui";
 import { hudLines, type HudInput, type HudOpts } from "../mod/view/hud/hud";
 
 /** One run in ANSI: bold/strike, the tone foreground on the run's fill or the rev 4 panel; NO_COLOR keeps bold and strike only. */

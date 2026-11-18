@@ -3,7 +3,7 @@
 // cells of body) and at the undocked widths through 0, 1, 3 and 5 running agents, a return, blocked, done and idle, and replay the host's Stop event order.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements, EngineInterface, On } from 'claude-code';
-import { PALETTE5, PALETTES, hostTo256, type Ui } from '../../atlas-ui';
+import { PALETTE5, PALETTES, hostTo256, type Ui } from '../../design/atlas-ui';
 import { bandKindOf, bandTree, hudPhases, type BandModel } from './band';
 import type { SquadAgent, TodoItem } from '../../contract';
 import { gateTally, stopRefusal } from '../../data/runstate';
@@ -15,7 +15,7 @@ import { bandLines } from './mission-layout';
 import { DONE_FADE, MOTION_STEP_MS, type MotionCtx } from '../../motion/motion';
 import type { LiveSnapshot } from '../../orchestra-types';
 import { resetCore, register, STOP_SETTLE_MS } from '../../register';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 import { composeSlot, type SlotPlan } from './slot';
 import { memState } from '../../test_helpers';
 import { FRAME_MS } from './band-motion';

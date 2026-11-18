@@ -4,7 +4,7 @@
 // stoprun-110-a4fad2f9-2/tab-route.png (`T1 read alpha.py` / `(alpha-explorer) done`).
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import { cells, runsString, type Ui } from '../../atlas-ui';
+import { cells, runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { hudBudget, hudCompactRows, hudFloorRows, hudWantRows, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
 import { Motion } from '../../motion/motion';

@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { readHostEntry } from '../../fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import { bandTree, type BandModel } from './band';
 import type { TodoItem, SquadAgent } from '../../contract';
 import { liveWorkers, queuedMembers } from '../../data/live';
@@ -14,8 +14,8 @@ import { hudPhases } from './band';
 import { composeSlot, type SlotPlan } from './slot';
 import { busySnap, NOW } from '../../live_fixture';
 import type { LiveSnapshot } from '../../orchestra-types';
-import { rowOf } from '../../runs';
-import type { Segment } from '../../runs';
+import { rowOf } from '../../design/runs';
+import type { Segment } from '../../design/runs';
 
 type Node = { kind: string; props: Record<string, unknown> };
 const mk = (kind: string) => (props: Record<string, unknown>): Node => ({ kind, props });

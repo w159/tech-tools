@@ -5,7 +5,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent, TodoItem } from './contract';
 import type { LiveSnapshot } from './orchestra-types';
-import { hostTo256, spinClock, withSpinFrame, type Ui } from './atlas-ui';
+import { hostTo256, spinClock, withSpinFrame, type Ui } from './design/atlas-ui';
 import { bandTree } from './view/band/band';
 import { hudAgents, hudRows } from './view/hud/hud';
 import { liveWorkers, queuedMembers } from './data/live';
@@ -16,7 +16,7 @@ import { sidebarTree, type SidebarHandlers, type SidebarModel } from './view/pan
 import { leadOf, leadRow } from './view/transcript/leadheader';
 import { bubbleTree, notificationTree, workerCard, type CallLike } from './view/transcript/cards';
 import { noteToastRuns, toastRuns } from './view/panel/panel-layout';
-import { paintAnsi } from './atlas-ui';
+import { paintAnsi } from './design/atlas-ui';
 
 export const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 

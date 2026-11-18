@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { panelWorld } from '../../contracts/panel-world';
 import { bandTree } from './band/band';
-import { STATE_GLYPHS, STATE_TOKEN, warnMark, type Ui } from '../atlas-ui';
+import { STATE_GLYPHS, STATE_TOKEN, warnMark, type Ui } from '../design/atlas-ui';
 import { blockReasons, gateTally, withCoreTally } from '../data/runstate';
 import { busySnap, NOW } from '../live_fixture';
 import { bodyLines, lineText } from './panel/panel-layout';

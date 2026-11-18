@@ -19,10 +19,10 @@ import {
   type ReceiptTracker,
 } from './restyle'
 import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
-import { runHex } from '../../atlas-ui'
-import { lookUi } from '../../look'
+import { runHex } from '../../design/atlas-ui'
+import { lookUi } from '../../design/look'
 import type { AtlasSnapshot } from '../../contract'
-import { formatDuration, textWidth } from '../../theme'
+import { formatDuration, textWidth } from '../../design/theme'
 import { memState } from '../../test_helpers'
 import { noteRunSecs } from './placed'
 

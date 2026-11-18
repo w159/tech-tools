@@ -1,7 +1,7 @@
 // Round 3, slice B (critique 21): the HUD as two boxes. A gutter before STATE, `…` and never `...`, a LAST that is never blank or raw at 110, a closing rule and a blank
 // between the blocks at 110, and a SUBAGENTS row on the first snapshot that names a worker (hud_subagents 89.5% at 150).
 import { describe, expect, test } from 'claude-code/testing';
-import { runsCells, runsString, type Run, type Ui } from '../../atlas-ui';
+import { runsCells, runsString, type Run, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { agentRows, clipEll, fitStack, todoRows, type AgentRow, type TodoRow } from './hud-surface';
 import { hudLines, namedAgents, type HudAgent } from './hud';

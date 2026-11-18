@@ -4,7 +4,7 @@ import { hudAgents, hudLines, type HudInput } from '../view/hud/hud';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
 import { hudPhases } from '../view/band/band';
-import { runsString, type Ui } from '../atlas-ui';
+import { runsString, type Ui } from '../design/atlas-ui';
 import { busySnap, NOW } from '../live_fixture';
 import { Motion, windowOf } from '../motion/motion';
 import { motionFeed } from './motion-feed';

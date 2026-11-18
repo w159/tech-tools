@@ -1,6 +1,6 @@
 // C4 (critique 7, reversed by critique 14): the TODO header states its count in one format at every width, `N/M` like the band, the board and the panel, never `N of M done`.
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import { hudLines } from './hud';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

@@ -8,15 +8,15 @@
 // Overflow (2.8): HOOKS rows shrink first (one row stays), then RUNS goes, then gate child rows collapse to group rows. NOW and the denial line never shrink.
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
 import { dataCell, dataStateOf, type DataState } from '../../data/datastate';
-import { elapsedClock, type Run, type Ui } from '../../atlas-ui';
+import { elapsedClock, type Run, type Ui } from '../../design/atlas-ui';
 import { bandLook, ctxLevel, latencyLevel } from '../band/band-frame';
 import { WIRED_HOOKS } from '../../host/hook-log';
 import { agoText, gatesSummary, promptedOf, severityOf, teamOf, tokenText, type Health } from '../../data/idle-health';
 import { bucketLabel, chartSeries, CHART_AXIS_MIN, chartMinutes, metricsOf, P95_MIN_SAMPLES, PANEL_CHART_COLS, ROUND_BUCKETS, roundBucket, runFigures, runsOf, STATUS_BUCKETS, type ChartData } from '../../data/metrics';
 import { ctxDelta, ctxRunway } from '../../data/pulse';
-import { blockSpark } from '../../chart';
-import { fitText, textWidth } from '../../theme';
-import { gateCounts } from '../../vocab';
+import { blockSpark } from '../../design/chart';
+import { fitText, textWidth } from '../../design/theme';
+import { gateCounts } from '../../design/vocab';
 
 // The level helpers live in band-frame.ts (it cannot import this file back); re-exported for the callers that import them from here.
 export { ctxLevel, latencyLevel };

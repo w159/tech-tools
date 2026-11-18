@@ -2,8 +2,8 @@
 // failure counts while running or idle, the lit phase of an unknown phase, the thinking mark, the name column, the footer's
 // key flag, the "+N more" slot rule, attention order, the board slot and the one-row threshold.
 import { describe, expect, test } from 'claude-code/testing';
-import type { Ui } from '../../atlas-ui';
-import { COUNT_ORDER, spinnerGlyph } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
+import { COUNT_ORDER, spinnerGlyph } from '../../design/atlas-ui';
 import { bandLines, missionLines, planRows, runsText, type MissionModel, type MissionWorker, type WorkerState } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

@@ -3,10 +3,10 @@
 // builders) packed in columns: Z7: the status tab's order (ACTIVITY, CONTEXT, RUNS, GATES, HOOKS) at both widths: two equal columns from 120 cells split it left (ACTIVITY, CONTEXT, RUNS) and right (GATES, HOOKS), one column below it. Columns are `u` usable cells wide with a 3-cell gutter; the second section of every column
 // starts on the same row (a shorter first section is padded), and no cell is cut: a row that does not fit is shortened at its end by the kit, never mid-word by the column. The title is a chip that closes the card
 // (`▾ HEALTH ───`; the band right under it already carries the pill), and so does the band's `▾ health` chip.
-import { type Run, type Ui } from '../../atlas-ui';
+import { type Run, type Ui } from '../../design/atlas-ui';
 import type { Health } from '../../data/idle-health';
 import { CARD_MORE_KEY, frameKit, moreRow, promptedOf, statusActivityRows, statusContextRows, statusGatesRows, statusHooksRows, statusRunsRows } from './status-frame';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 
 const GUTTER = 3; // blank cells between the two columns
 /** Two columns from this width; below it one. */

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld } from '../../../contracts/panel-world';
-import { GRID_LEAD, PALETTES, type Ui } from '../../atlas-ui';
+import { GRID_LEAD, PALETTES, type Ui } from '../../design/atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
 import { bodyLines, fillRows, headerRows, lineText, panelLines, type PanelModel, type PanelTab } from './panel-layout';
 

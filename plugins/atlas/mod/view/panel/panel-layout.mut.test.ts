@@ -8,7 +8,7 @@
 //    gridRow clips it again to wordW (atlas-ui.ts:278), so a 13-cell clip shows the same cells. The test below pins the shown text.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import type { CoreModel } from '../../data/core';
 import { bodyLines, headerRows, type PanelModel } from './panel-layout';
 

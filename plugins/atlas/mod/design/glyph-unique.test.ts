@@ -2,7 +2,7 @@
 // marks, the sparkline, the theme glyph tables, the role eyes and mouths) and not one of the host's own marks, in Unicode and in ASCII.
 import { describe, expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, RETURNED_ASCII, RETURNED_GLYPH, gaugeParts, gauge, sparkline, spinnerGlyph, STATE_ASCII, STATE_GLYPHS, type Ui } from './atlas-ui';
-import { POP_ASCII, POP_UNICODE } from './motion/motion';
+import { POP_ASCII, POP_UNICODE } from '../motion/motion';
 import { MOUTHS, ROLE_EYES } from './roles';
 import { barParts, glyph, STATE_GLYPH } from './theme';
 

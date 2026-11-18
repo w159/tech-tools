@@ -4,13 +4,13 @@
 //   gates 4 armed · hooks p95 13ms · ctx 6% · ▁▁▂▁ 1 ev/5m
 // The whole strip is one clickable area: every run carries the card's press key (the band's `▸ health` toggle), so a press anywhere on it opens the card, and `▸ details` is the visible chip.
 // A figure from an earlier session is labelled `prev`. Values wear the semantic colours (green ok, amber warn, red fail); labels are grey. Pure.
-import { elapsedClock, type Run, type Ui } from '../../atlas-ui';
-import { blockSpark } from '../../chart';
+import { elapsedClock, type Run, type Ui } from '../../design/atlas-ui';
+import { blockSpark } from '../../design/chart';
 import { CARD_KEY } from './card-frame';
 import { fitFields, gatesSummary, promptedOf, type Health, type HealthField } from '../../data/idle-health';
 import { metricsOf, runFigures, runsOf } from '../../data/metrics';
 import { frameKit, latencyLevel } from './status-frame';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import { WIRED_HOOKS } from '../../host/hook-log';
 
 /** The side pane docks at rest from this width (register.ts DOCK_MIN_COLUMNS); below it the strip stands in for it. */

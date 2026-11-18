@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { cardFrame } from '../hud/card-frame';
 import { CARD_MORE_KEY, GOTO_PREFIX, ROUND_BUCKETS, bucketLabel, ctxLevel, roundBucket } from '../hud/status-frame';
 import { tabFrame, tabText, type TabId, type TabIn } from './tabs-frame';
-import { hexTo256, uiFromEnv, type Run, type Ui } from '../../atlas-ui';
+import { hexTo256, uiFromEnv, type Run, type Ui } from '../../design/atlas-ui';
 import { bandLook } from '../band/band-frame';
 import { chipStyle, tileOf } from '../../input/clickable';
 import type { Health, HealthCheck } from '../../data/idle-health';

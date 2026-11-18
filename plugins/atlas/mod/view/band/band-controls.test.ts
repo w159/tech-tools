@@ -138,7 +138,7 @@ describe('mutation kills (round 2): idle means no worker is still going; a given
   test('missionTree paints in the model\'s own theme, not the environment\'s', async () => {
     const { missionTree } = await import('./band');
     const { worldModel } = await import('../../../contracts/band-world');
-    const { PALETTES } = await import('../../atlas-ui');
+    const { PALETTES } = await import('../../design/atlas-ui');
     const tree = missionTree(els, worldModel(120, { theme: 'latte', ascii: false, color: 'truecolor' })) as unknown as Node;
     expect(tree.props.backgroundColor).toBe(PALETTES.latte.panel);
     expect(tree.props.backgroundColor).not.toBe(PALETTES.mocha.panel);

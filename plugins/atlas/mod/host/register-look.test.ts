@@ -1,6 +1,6 @@
 // B2 and B5 through the claude-code/testing kit. The kit has no process, so the old hostEnv() read is empty there: a surface that
 // honoured NO_COLOR or ATLAS_ASCII only through a process global would ignore mock.env. Every surface below must follow the one
-// `$.env` read (mod/look.ts). B5: the HUD and the board count elapsed from the snapshot clock, not Date.now().
+// `$.env` read (mod/design/look.ts). B5: the HUD and the board count elapsed from the snapshot clock, not Date.now().
 import type { On } from 'claude-code';
 import { expect, mock, test } from 'claude-code/testing';
 import type { Engine } from 'claude-code/testing';
@@ -115,7 +115,7 @@ test('B5 the HUD and the board both read elapsed from the snapshot clock (claime
   expect(await pane($, 'atlas-board', 'Board')).toContain('elapsed 00:42');
 });
 
-import { clearLook, lookOf, lookRich, lookUi } from '../look';
+import { clearLook, lookOf, lookRich, lookUi } from '../design/look';
 
 test('M2: a caller that omits the ui gets the one session look (NO_COLOR, ASCII, rich)', async () => {
   clearLook();

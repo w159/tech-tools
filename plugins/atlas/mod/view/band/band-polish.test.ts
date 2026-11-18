@@ -2,7 +2,7 @@
 // "idle", the live phase rail needs HudInput.phases, and the gauges ease on frame functions that stop when nothing moves.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { easedFrames, EASE_MS, type Ui } from '../../atlas-ui';
+import { easedFrames, EASE_MS, type Ui } from '../../design/atlas-ui';
 import { bandTree, hudPhases, railPhase } from './band';
 import { displayed, gaugeTargets, retarget, settled, type Move } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows } from '../hud/hud';
@@ -81,7 +81,7 @@ describe('idle band', () => {
 describe('the live phase rail for the HUD', () => {
   test('hudPhases is the rail ids and the lit index; done lights every phase; blocked keeps the last phase', () => {
     const s = busySnap();
-    const ids = s.contract.phases.map((p) => p.id as string).filter((id) => id !== 'validate' && id !== 'blocked' && id !== 'done'); // the one rail (mod/rail.ts): done is the end of the rail, not a step
+    const ids = s.contract.phases.map((p) => p.id as string).filter((id) => id !== 'validate' && id !== 'blocked' && id !== 'done'); // the one rail (mod/design/rail.ts): done is the end of the rail, not a step
     expect(hudPhases(s)).toEqual({ ids, active: ids.indexOf('implement') });
     expect(hudPhases({ ...s, phase: 'done' } as never).active).toBe(ids.length);
     const blocked = { ...s, phase: 'blocked' } as never;

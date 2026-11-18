@@ -2,7 +2,7 @@
 // every 150 run, because the HUD's row floor (hudCompactRows) leaves it out, and the band butts against the last agent row. The slot the
 // register gives the HUD keeps the header and one blank row under the agents whenever the band can still keep its title row.
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
 import { hudBudget, hudCompactRows, hudFloorRows, hudLines, hudWantRows, type HudAgent, type HudInput } from './hud';

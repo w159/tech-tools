@@ -1,8 +1,8 @@
 // Current, structured state: the HUD channel line is built from who/to/kind (never message text); the todo cache keys on
 // mtime AND size; a change to a gate file reaches the gates on the next poll; spinner frames come from the shared clock.
 import { describe, expect, test } from 'claude-code/testing';
-import type { Ui } from '../atlas-ui';
-import { spinFrameOf, spinnerGlyph } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
+import { spinFrameOf, spinnerGlyph } from '../design/atlas-ui';
 import { missionLines, runsText, type MissionModel, type MissionWorker } from '../view/band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

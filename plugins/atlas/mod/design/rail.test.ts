@@ -1,4 +1,4 @@
-// mod/rail.ts: the one phase rail every surface asks.
+// mod/design/rail.ts: the one phase rail every surface asks.
 import { describe, expect, test } from 'claude-code/testing';
 import { RAIL_DEFAULT, railIds, railNo, railOf } from './rail';
 

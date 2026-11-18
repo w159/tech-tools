@@ -12,7 +12,7 @@ import type { RenderElement, RenderNode } from 'claude-code'
 import { PHASES } from '../../input/intents'
 import { blockedText } from '../../data/runstate'
 import type { PhaseId } from '../../contract'
-import { runHex, stateRun, type Tone, type Ui } from '../../atlas-ui'
+import { runHex, stateRun, type Tone, type Ui } from '../../design/atlas-ui'
 import { PHASE_TABLE, firstHeaderLine } from '../../contract-pattern'
 
 export interface Lead { phase: PhaseId; count: string; sentence: string; first: string; form: 'contract' | 'display'; /** The text after the header line (the line is the first non-empty one, so a leading blank line is not part of `rest`). */ rest: string }

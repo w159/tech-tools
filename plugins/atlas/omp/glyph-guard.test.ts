@@ -1,5 +1,5 @@
 // Guard (design system rev 4, R5): no source hardcodes a check mark, a bullet or an ellipsis; state marks come from the
-// glyph map in mod/atlas-ui.ts (an omp test: it reads the source tree, which the mod test host cannot) (stateGlyph / UI_STATES) so ASCII and NO_COLOR modes can swap them. The surfaces this
+// glyph map in mod/design/atlas-ui.ts (an omp test: it reads the source tree, which the mod test host cannot) (stateGlyph / UI_STATES) so ASCII and NO_COLOR modes can swap them. The surfaces this
 // redesign owns must be at zero. Every other file may only shrink its count: DEBT is the ratchet (lower it, never raise it).
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -30,8 +30,8 @@ const OWNED = [
 
 /** Known debt in files this work does not own: the count of non-comment marks today. Tighten when a file is cleaned. */
 const DEBT: Record<string, number> = {
-  'mod/theme.ts': 2, // DONE_GLYPH and fitText's ellipsis: omp/done-glyph.test.ts pins DONE_GLYPH to the check mark
-  'mod/roles.ts': 2,
+  'mod/design/theme.ts': 2, // DONE_GLYPH and fitText's ellipsis: omp/done-glyph.test.ts pins DONE_GLYPH to the check mark
+  'mod/design/roles.ts': 2,
   'mod/data/channels.ts': 1,
   'mod/data/todos.ts': 1,
   'mod/data/orchestration.ts': 5,

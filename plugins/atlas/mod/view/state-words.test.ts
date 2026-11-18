@@ -2,7 +2,7 @@
 // One test group per step of the slice. The harness renders the whole slot (slot.ts composeSlot) the way wave37-band.test.ts does.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { xtermHex, type Ui } from '../atlas-ui';
+import { xtermHex, type Ui } from '../design/atlas-ui';
 import { bandTree, hudPhases, type BandModel } from './band/band';
 import type { AtlasSnapshot, SquadAgent, TodoItem } from '../contract';
 import * as runstate from '../data/runstate';
@@ -19,7 +19,7 @@ import { notificationTree } from './transcript/cards';
 import { verdictOf } from './transcript/leadheader';
 import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './transcript/placed';
 import { planWindow } from './hud/hud-surface';
-import { runsString } from '../atlas-ui';
+import { runsString } from '../design/atlas-ui';
 
 type Node = { kind: string; props: Record<string, unknown> };
 const mk = (kind: string) => (props: Record<string, unknown>): Node => ({ kind, props });

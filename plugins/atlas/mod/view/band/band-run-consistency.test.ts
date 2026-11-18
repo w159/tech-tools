@@ -2,7 +2,7 @@
 // The harness renders the whole slot (slot.ts composeSlot) at the live widths (150 and 110 columns with the side pane docked: 93 and 56 cells of body).
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { LEAD_FRAMES, SPINNER_MS, hostTo256, xtermHex, type Ui } from '../../atlas-ui';
+import { LEAD_FRAMES, SPINNER_MS, hostTo256, xtermHex, type Ui } from '../../design/atlas-ui';
 import { BAND_BUTTONS, bandRuns, bandTree, hudPhases, type BandModel } from './band';
 import type { SquadAgent, TodoItem } from '../../contract';
 import * as runstate from '../../data/runstate';
@@ -14,7 +14,7 @@ import { busySnap, NOW } from '../../live_fixture';
 import { BLOCKED_TEXT, runStateOf, type MissionModel } from './mission-layout';
 import { sharedSpinFrame } from '../../motion/motion';
 import type { LiveSnapshot } from '../../orchestra-types';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 import { composeSlot } from './slot';
 
 type Node = { kind: string; props: Record<string, unknown> };

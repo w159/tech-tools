@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../live_fixture';
 import { forgetRefusals } from '../../data/channels';
-import { DONE_DOUBT, type Ui } from '../../atlas-ui';
+import { DONE_DOUBT, type Ui } from '../../design/atlas-ui';
 import { agentModel, hudAgents, resetAgentSeq } from '../hud/hud';
 import { meterRuns } from '../hud/hud-surface';
 import { liveWorkers, queuedMembers } from '../../data/live';

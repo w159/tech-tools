@@ -1,7 +1,7 @@
 // tally.ts: the ONE worker and phase tally. The band (mission-layout), the side panel (panel-layout) and the HUD (hud-surface) each
 // counted workers on their own and disagreed: the band folded `thinking` into running, the panel did not; the panel listed states
 // in a different order than the HUD. Every surface now calls these.
-import type { UiState } from '../atlas-ui';
+import type { UiState } from '../design/atlas-ui';
 import { tallyOf, type Tally } from './live';
 
 /** A worker state as a surface may hold it: `thinking` is a running worker. */

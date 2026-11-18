@@ -2,9 +2,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../../../contracts/band-world';
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../../../contracts/hud-golden';
-import { chipCount, elapsedClock, leadSpinnerGlyph, runsCells, runsString, type Run, type Ui } from '../../atlas-ui';
-import { COUNT_ORDER, type UiState } from '../../atlas-ui';
-import { textWidth } from '../../theme';
+import { chipCount, elapsedClock, leadSpinnerGlyph, runsCells, runsString, type Run, type Ui } from '../../design/atlas-ui';
+import { COUNT_ORDER, type UiState } from '../../design/atlas-ui';
+import { textWidth } from '../../design/theme';
 import type { ClientElements } from 'claude-code';
 import { bandTree, hudPhases, type BandModel } from '../band/band';
 import type { SquadAgent, TodoItem } from '../../contract';

@@ -10,7 +10,7 @@ import { busySnap, NOW } from '../../live_fixture';
 import { coreCells, cellsText } from './core-row';
 import type { CoreModel } from '../../data/core';
 import { planBusy } from '../../data/runstate';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { bandLines, missionLines, runsText, type MissionModel } from './mission-layout';
 import { panelText, type PanelModel } from '../panel/panel-layout';
 

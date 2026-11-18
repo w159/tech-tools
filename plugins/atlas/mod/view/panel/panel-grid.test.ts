@@ -1,7 +1,7 @@
 // Slice S3 of the mods expert-grade spec: the side panel on a fixed grid. Section headers sit in cell 2, rows in cell 4, the value column in cell 12; the same
 // slots are reserved at idle, working and done so a heading never moves; the phase is one stepper row; the gates are one collapsed row; the close chip sits on the pill row.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv } from '../../atlas-ui';
+import { uiFromEnv } from '../../design/atlas-ui';
 import { bodyLines, headerRows, lineText, ribbonRow, tabRows, type PanelLine, type PanelModel } from './panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';

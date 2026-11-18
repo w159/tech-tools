@@ -1,7 +1,7 @@
 // Wave 36: the SUBAGENTS table's CALLS column and the finish card's `· N calls` read the same figure (the live worker's call list), so a finished worker never shows two counts.
 import { describe, expect, test } from 'claude-code/testing';
 import { resetWorkerFacts } from '../data/live';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 import { hudPhases } from './band/band';
 import type { SquadAgent } from '../contract';
 import { liveWorkers, queuedMembers } from '../data/live';

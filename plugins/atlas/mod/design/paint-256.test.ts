@@ -4,13 +4,13 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { PALETTES, runHex, sgrColor, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
-import { bandTree } from './view/band/band';
-import { boardBody } from './view/board/board-model';
-import { hudLines, segmentOf } from './view/hud/hud';
-import { rowSpinnerGlyph } from './view/hud/hud-surface';
-import { liveWorkers } from './data/live';
-import { busySnap, NOW } from './live_fixture';
-import { runEl } from './view/panel/pane/sidebar-paint';
+import { bandTree } from '../view/band/band';
+import { boardBody } from '../view/board/board-model';
+import { hudLines, segmentOf } from '../view/hud/hud';
+import { rowSpinnerGlyph } from '../view/hud/hud-surface';
+import { liveWorkers } from '../data/live';
+import { busySnap, NOW } from '../live_fixture';
+import { runEl } from '../view/panel/pane/sidebar-paint';
 
 const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 const UI24: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

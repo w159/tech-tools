@@ -3,9 +3,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { WORLD_NOW, worldItems } from '../../../contracts/board-golden';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { boardTree, todoRows } from './todo-panel';
-import type { Segment } from '../../runs';
+import type { Segment } from '../../design/runs';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');

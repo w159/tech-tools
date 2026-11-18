@@ -325,7 +325,7 @@ export const countRuns = (s: UiState, n: number, ui: Ui, spinFrame = 0): Run[] =
 
 // ---- width and clipping -------------------------------------------------------------------------
 
-/** Terminal cell width the way the host counts it (mod/theme.ts textWidth): East Asian Wide and emoji are two cells, combining and zero-width marks none,
+/** Terminal cell width the way the host counts it (mod/design/theme.ts textWidth): East Asian Wide and emoji are two cells, combining and zero-width marks none,
  * every glyph this module draws one. Rows are budgeted in cells, never in code points, so a title with a CJK or emoji character cannot overflow its slot. */
 export const cells = (s: string): number => textWidth(s);
 export const runsCells = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);

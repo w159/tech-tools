@@ -5,7 +5,7 @@
 import { ALIASES, CREATURES, PROP_LEGEND, PROPS } from './palette';
 import { ART } from './art';
 import type { Creature } from './palette';
-import { rangeWidth, type Span } from '../theme';
+import { rangeWidth, type Span } from '../design/theme';
 
 import type { Mood } from '../orchestra-types';
 export type Run = { text: string; fg?: string; bg?: string; bold?: boolean };

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world, worldModel } from '../../../contracts/band-world';
 import { band_120, band_120_rich, band_40, band_60, band_80 } from '../../../contracts/band-world-golden';
-import { chipCount, contrast, DECOR_TONES, glyphTone, NEED, PALETTES, runKind, runsString, toneHex, type Run, type Ui } from '../../atlas-ui';
+import { chipCount, contrast, DECOR_TONES, glyphTone, NEED, PALETTES, runKind, runsString, toneHex, type Run, type Ui } from '../../design/atlas-ui';
 import { bandLines, runsWidth } from './mission-layout';
 
 const ui = (theme: 'mocha' | 'latte'): Ui => ({ theme, ascii: false, color: 'truecolor' });

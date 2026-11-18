@@ -2,7 +2,7 @@
 // the group's checks sit indented under the title, their mark under the title's first letter, never in the title's mark column.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import { cells, uiFromEnv } from '../../atlas-ui';
+import { cells, uiFromEnv } from '../../design/atlas-ui';
 import { bodyLines, lineText, type PanelGate, type PanelModel } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };

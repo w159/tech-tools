@@ -5,7 +5,7 @@ import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
 import { assistantTree, forgetDrawnHeaders } from './restyle'
 import { displayDelta } from './leadheader'
 import type { AtlasSnapshot } from '../../contract'
-import type { Ui } from '../../atlas-ui'
+import type { Ui } from '../../design/atlas-ui'
 import { describe } from 'claude-code/testing';
 
 const snap = { contract: { headerFirstLinePattern: HEADER_FIRST_LINE_PATTERN } } as unknown as AtlasSnapshot

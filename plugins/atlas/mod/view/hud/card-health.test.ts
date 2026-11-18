@@ -4,13 +4,13 @@ import type { ClientElements } from 'claude-code';
 import type { AtlasSnapshot, SquadAgent } from '../../contract';
 import { bandTree, type BandHandlers, type BandModel } from '../band/band';
 import { busySnap, NOW } from '../../live_fixture';
-import { uiFromEnv, type Run } from '../../atlas-ui';
+import { uiFromEnv, type Run } from '../../design/atlas-ui';
 import { healthCardRows } from './hud-surface';
 import { gateOf, healthRows, type Health } from '../../data/idle-health';
 import { bodyLines, lineText } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
-import { textWidth } from '../../theme';
-import { gateLine, gatesTotal } from '../../vocab';
+import { textWidth } from '../../design/theme';
+import { gateLine, gatesTotal } from '../../design/vocab';
 import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from '../transcript/placed';
 import type { Pulse } from '../../data/pulse';
 

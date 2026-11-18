@@ -1,8 +1,8 @@
 // Atlas mod theme: brand glyphs, colour arithmetic and the bar gauge.
 // Glyphs, width helpers and the bar gauge. Colours live in atlas-ui.ts (PALETTES, the round 3 palette): this module draws none.
 
-import { PHASE_TABLE } from './contract-pattern';
-import type { AgentState } from './contract';
+import { PHASE_TABLE } from '../contract-pattern';
+import type { AgentState } from '../contract';
 
 /** Single-cell glyphs used across the mod surfaces. Every value is ONE code point that
  * renders 1 cell in Ghostty/iTerm/kitty: ASCII, box drawing and geometric shapes.

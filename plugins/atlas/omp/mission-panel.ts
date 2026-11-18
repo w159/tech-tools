@@ -11,13 +11,13 @@ import { coreCells } from "../mod/view/band/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/host/gates";
 import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
-import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
+import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/design/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/view/band/mission-layout";
 import type { GateGroup } from "../mod/view/panel/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { withOwnerStates } from "../mod/data/live";
 import { openRowName, ownPlan } from "../mod/data/todos";
-import { railIds, railOf } from "../mod/rail";
+import { railIds, railOf } from "../mod/design/rail";
 import { RST, bg, PANEL, visibleWidth } from "./panel-paint";
 import { type PanelTodo, todoLines } from "./todo-panel";
 
@@ -51,7 +51,7 @@ export interface PanelModel {
 	width: number;
 	maxLines: number;
 	phase: string;
-	/** Contract phase ids the rail is cut from (mod/rail.ts); absent: the default rail. */
+	/** Contract phase ids the rail is cut from (mod/design/rail.ts); absent: the default rail. */
 	phases?: readonly string[];
 	spin: string; // kept for callers; the layout picks its own spinner frame from `tick`
 	laneSpin: string; // the todo list's in-progress glyph

@@ -4,7 +4,7 @@ import { resetWorkerFacts } from '../../data/live';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../live_fixture';
 import { forgetRefusals } from '../../data/channels';
-import { type Ui } from '../../atlas-ui';
+import { type Ui } from '../../design/atlas-ui';
 import { forgetPhases } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { boardLines, type BoardRow } from '../board/board-model';

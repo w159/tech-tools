@@ -1,7 +1,7 @@
 // round-z.test.ts: round Z (y2-critic defects Z1-Z7): a chart scale that does not shout, honest percentiles, threshold colours that agree between panel and card, tabs that fill to the footer
 // with real data, the active tab always in the strip, one live health figure on the idle band, and the card in the status tab's order.
 import { describe, expect, test } from 'claude-code/testing';
-import { uiFromEnv, type Run, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Run, type Ui } from '../../design/atlas-ui';
 import { bandRuns, type BandModel } from '../band/band';
 import { cardFrame } from './card-frame';
 import { busySnap, NOW } from '../../live_fixture';
@@ -10,7 +10,7 @@ import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type Panel
 import { panelWorld } from '../../../contracts/panel-world';
 import { CHART_AXIS_MIN, chartRows, latencyLevel, P95_MIN_SAMPLES } from './status-frame';
 import { healthStripRows } from './strip-frame';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const PHASES = ['research', 'theory', 'test', 'implement', 'verify', 'review'];

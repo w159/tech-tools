@@ -9,7 +9,7 @@ import { worldModel } from "../../../contracts/band-world";
 import { coreFixture, coreMatrix } from "../../../contracts/core-fixture";
 import { worldGates, worldIdleSnapshot, worldSnapshot } from "../../../contracts/world-live";
 import { bandTree, missionTree } from "./band";
-import type { Ui } from "../../atlas-ui";
+import type { Ui } from "../../design/atlas-ui";
 import { coreModel } from "../../data/core";
 import { liveWorkers } from "../../data/live";
 

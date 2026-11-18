@@ -7,7 +7,7 @@ import { hudAgents, hudLines, type HudInput } from './hud/hud';
 import { hudPhases } from './band/band';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from '../atlas-ui';
+import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from '../design/atlas-ui';
 import { rowSpinnerGlyph } from './hud/hud-surface';
 import { busySnap, NOW } from '../live_fixture';
 import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from '../motion/motion';

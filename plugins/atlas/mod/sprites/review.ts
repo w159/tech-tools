@@ -1,5 +1,5 @@
 // Sprite review image: draws spriteRows() Run[][] as SVG cells so the picture matches what the terminal paints.
-import { spriteTile } from '../atlas-ui';
+import { spriteTile } from '../design/atlas-ui';
 import type { Run } from './api';
 
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

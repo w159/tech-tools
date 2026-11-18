@@ -1,6 +1,6 @@
 // Layout regressions of a5fa582a (live captures): TODO rows folded while the slot had room, the SUBAGENTS header dropped, the band moving between rows, `▲ blocked ... ▲ 1 blocked`, and `● 1 closed`.
 import { describe, expect, test } from 'claude-code/testing';
-import { runsString, type Ui } from '../../atlas-ui';
+import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
 import { hudLines, hudRunRows, hudWantRows, type HudAgent, type HudInput } from '../hud/hud';

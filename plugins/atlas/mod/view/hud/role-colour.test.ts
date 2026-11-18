@@ -7,9 +7,9 @@ import { join } from 'node:path';
 import { pluginRoot } from '../../fixtures/source-tree';
 import { parseFrontmatter, personaColor, PERSONA_COLORS } from '../../data/personas';
 import { agentRows, agentTable, type AgentRow, type SurfaceOpts } from './hud-surface';
-import { ROLE_COLOUR, roleOf } from '../../theme';
-import { ROLE_HEX, roleHex } from '../../atlas-ui';
-import type { Run } from '../../atlas-ui';
+import { ROLE_COLOUR, roleOf } from '../../design/theme';
+import { ROLE_HEX, roleHex } from '../../design/atlas-ui';
+import type { Run } from '../../design/atlas-ui';
 import { agentModel } from './hud';
 
 const AGENTS = join(pluginRoot(), 'agents');

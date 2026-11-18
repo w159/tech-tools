@@ -11,7 +11,7 @@ import { worldItems, worldOwnerStates } from '../../contracts/board-golden';
 import { panelWorld } from '../../contracts/panel-world';
 import { worldGates, worldOmp, worldSidebar, worldSnapshot, worldTodos } from '../../contracts/world-live';
 import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
-import { stateRun, type Ui, type UiState } from '../atlas-ui';
+import { stateRun, type Ui, type UiState } from '../design/atlas-ui';
 import { bandTree, hudPhases } from './band/band';
 import { coreModel } from '../data/core';
 import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from '../data/live';

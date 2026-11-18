@@ -6,7 +6,7 @@
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
-import { colorMode, paintAnsi, type Ui } from '../atlas-ui'; import { uiFrom } from '../look';
+import { colorMode, paintAnsi, type Ui } from '../design/atlas-ui'; import { uiFrom } from '../design/look';
 import type { TodoItem } from '../contract';
 import { hudLines, hudMotionItems, type HudAgent, type HudInput } from '../view/hud/hud';
 import { Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';

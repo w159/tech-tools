@@ -14,7 +14,7 @@ import type { LiveSnapshot } from '../orchestra-types';
 import { panelModelOf } from '../view/panel/pane/sidebar-model';
 import type { GateGroup } from '../view/panel/pane/sidebar-types';
 import { panelMotionItems } from '../view/panel/panel-layout';
-import type { Ui } from '../atlas-ui';
+import type { Ui } from '../design/atlas-ui';
 
 /** The surfaces' observed names (the keys of the result). */
 export type MotionFeed = { 'hud-todo': MotionItem[]; 'hud-agents': MotionItem[]; board: MotionItem[]; panel: MotionItem[]; band: MotionItem[] };

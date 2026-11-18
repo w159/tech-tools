@@ -22,7 +22,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
 import { type GatesCache,type IdleWave, type LaneTool, type PanelModel, type PanelNote, type PanelWorker, createGatesCache, panelMotionOf, renderPanel, spawnText } from "./mission-panel";
 import { Motion, reducedMotion } from "../mod/motion/motion";
-import { SPINNER_MS } from "../mod/atlas-ui";
+import { SPINNER_MS } from "../mod/design/atlas-ui";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
@@ -95,7 +95,7 @@ export function formatNote(n: Note, max = MAX_LINE): string {
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
-// Mirror of SPIN in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin(). One set for every phase: the circle quarters.
+// Mirror of SPIN in mod/design/theme.ts (module-private there); channel-view.test.ts asserts equality via spin(). One set for every phase: the circle quarters.
 const SPIN = ["◐", "◓", "◑", "◒"];
 
 export function spinFrame(n: number, _phase?: string): string {

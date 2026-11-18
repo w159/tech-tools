@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { bandMotionItems, type MissionModel, type MissionWorker } from '../view/band/mission-layout';
 import { countWords } from '../view/panel/panel-layout';
 import { stateCounts } from '../view/hud/hud-surface';
-import type { UiState } from '../atlas-ui';
+import type { UiState } from '../design/atlas-ui';
 import { phaseFigure, tallyParts, tallyStateOf, workerTally } from './tally';
 
 const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;

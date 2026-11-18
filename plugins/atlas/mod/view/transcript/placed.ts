@@ -10,7 +10,7 @@ import type { LiveSnapshot } from '../../orchestra-types'
 import { endedAt, liveWorkers, factsSeq, workerFactsAt, type WorkerFacts } from '../../data/live'
 import { blockedTree, notificationTree, type FinishOpts } from './cards'
 import { forgetFailed, outcomeText } from './outcome'
-import { elapsedClock, type Ui } from '../../atlas-ui'
+import { elapsedClock, type Ui } from '../../design/atlas-ui'
 
 /** One finished worker, as the card needs it. */
 export interface FinishedWorker { name: string; role: string; failed: boolean; durationMs: number; /** Tool calls the worker made (the card's `· 3 calls`). */ calls?: number }

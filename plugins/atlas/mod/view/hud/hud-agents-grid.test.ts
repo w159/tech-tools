@@ -1,7 +1,7 @@
 // Critique 19, slice B (SUBAGENTS grid). Live shapes: stoprun-150-232567af-1/f0093.ans:31-34 (beta LAST `"No matching deferred tools found."`), stoprun-150-232567af-3/f0104.ans:30-34
 // (`toolsearch...`, MODEL 7 wide, `#2` TASK `read beta.py`), live-110-232567af-1/mod-hud_subagents.png (`returned`), live-110-232567af-2/tab-board.png (`alpha.py read`).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, runsString, type Ui } from '../../atlas-ui';
+import { cells, runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { agentModel, hudLines, lastAction, lastOf, type HudAgent } from './hud';
 

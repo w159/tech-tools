@@ -2,12 +2,12 @@
 // empty tabs with a skeleton and last-run figures, 110 parity, the slow pill breathe, and a real per-gate `last` age.
 import { describe, expect, test } from 'claude-code/testing';
 import { bandRuns, type BandModel } from '../band/band';
-import { hostEnv, uiFromEnv, xtermHex, type Run, type Ui } from '../../atlas-ui';
+import { hostEnv, uiFromEnv, xtermHex, type Run, type Ui } from '../../design/atlas-ui';
 import { busySnap } from '../../live_fixture';
 import { bodyLines, lineText, panelLines, type PanelModel } from './panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { gateLastSecs } from '../hud/status-frame';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import { NOW } from '../../live_fixture';
 import type { Health } from '../../data/idle-health';
 import type { Pulse } from '../../data/pulse';

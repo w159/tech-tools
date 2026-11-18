@@ -2,7 +2,7 @@
 // Mocha and Latte render the same text; only colours differ. The ribbon fills its width exactly, so the design files are 118/119 wide
 // once its trailing blanks are trimmed; compare trimmed rows. Asserted on both hosts (mod/view/board/board.test.ts, omp/todo-panel.test.ts).
 
-import type { UiState } from "../mod/atlas-ui";
+import type { UiState } from "../mod/design/atlas-ui";
 import type { BoardRow } from "../mod/view/board/board-model";
 import { world } from "./band-world";
 

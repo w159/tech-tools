@@ -3,7 +3,7 @@
 // live-110-562576ed-2 (beta `no matching...`), stoprun-150-562576ed-1 (alpha `full file is 7 lines, so first 3...`).
 // Critique 19 B1 reversed two of its answers: a tool's failure (`no matching deferred tools`) is no outcome at all, and a count reads `2 functions` at every width.
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, runsString, type Ui } from '../../atlas-ui';
+import { cells, runsString, type Ui } from '../../design/atlas-ui';
 import { agentModel, hudLines, lastOf, outcomeOf, type HudAgent } from './hud';
 import { agentRows, type AgentRow } from './hud-surface';
 import type { TodoItem } from '../../contract';

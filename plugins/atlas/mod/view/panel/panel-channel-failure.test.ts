@@ -5,7 +5,7 @@ import { busySnap, NOW } from '../../live_fixture';
 import type { LiveSnapshot } from '../../orchestra-types';
 import type { ChannelNote, SquadAgent } from '../../contract';
 import { bodyLines, lineText } from './panel-layout';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { STOP_LINE } from '../../data/runstate';
 import { panelModelOf } from './pane/sidebar-model';
 import type { SidebarModel } from './pane/sidebar';

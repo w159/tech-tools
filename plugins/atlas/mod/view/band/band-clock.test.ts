@@ -3,10 +3,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandRowCount, bandTree, type BandHandlers, type BandModel } from './band';
-import { uiFromEnv, type Ui } from '../../atlas-ui';
+import { uiFromEnv, type Ui } from '../../design/atlas-ui';
 import { busySnap } from '../../live_fixture';
 import { hudLines } from '../hud/hud';
-import { textWidth } from '../../theme';
+import { textWidth } from '../../design/theme';
 import type { Pulse } from '../../data/pulse';
 
 type Node = { kind: string; props: Record<string, any> };

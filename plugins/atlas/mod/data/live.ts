@@ -1,5 +1,5 @@
 // One worker list for every surface: squad + per-agent activity, lead excluded, urgent first.
-import type { UiState } from '../atlas-ui';
+import type { UiState } from '../design/atlas-ui';
 import { ownerOutcome } from '../view/board/board-model';
 import type { LiveSnapshot } from '../orchestra-types';
 

@@ -2,7 +2,7 @@
 // never leaves a working, fixing or retrying band at any width, and the run clock reads the host's wall time without resetting, reverting or lagging.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { leadSpinnerGlyph, LEAD_FRAMES, SPIN_FRAMES, spinnerGlyph, type Ui } from '../../atlas-ui';
+import { leadSpinnerGlyph, LEAD_FRAMES, SPIN_FRAMES, spinnerGlyph, type Ui } from '../../design/atlas-ui';
 import { bandTree } from './band';
 import { ARM_MS, END_GRACE_MS, FRAME_MS, newRunClock, ranSecsOf, restSecsOf, stepRun, workSecsOf } from './band-motion';
 import { hudAgents, hudCompactRows, hudFloorRows, hudLines, hudListsAgents, type HudAgent, type HudInput } from '../hud/hud';
@@ -10,7 +10,7 @@ import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { atlasSlot, fitHudToBand, hudGapRows, hudSlotCap, withStopVerdict } from '../../register';
-import { rowOf, type Segment } from '../../runs';
+import { rowOf, type Segment } from '../../design/runs';
 import { bodyLines } from '../panel/panel-layout';
 import { panelModelOf } from '../panel/pane/sidebar-model';
 import { busySnap } from '../../live_fixture';

@@ -2,7 +2,7 @@
 // every other one is accent text on its own raised tile, one cell apart; no rule under the lit one, no key letter is drawn or bound and no key hint line is printed.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import { cells, uiFromEnv } from '../../atlas-ui';
+import { cells, uiFromEnv } from '../../design/atlas-ui';
 import { fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };

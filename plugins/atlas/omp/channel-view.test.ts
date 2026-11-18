@@ -6,7 +6,7 @@ import { createGatesCache, renderPanel, visibleWidth, type PanelModel } from "./
 import { isTerminalYield, registerStopBridge } from "./stop-bridge";
 import { registerWorkerReport } from "./worker-report";
 import { readFileSync } from "node:fs";
-import { spin } from "../mod/theme";
+import { spin } from "../mod/design/theme";
 import { planCounts, planPhase } from "../mod/data/todos";
 import { expect, test } from "bun:test";
 
@@ -265,7 +265,7 @@ test("todo summary counts only this session's todos (not the historic board) and
 	expect(todoSummary(root, "s1")).toEqual({ done: 1, total: 2, phase: "verify" });
 });
 
-test("spinner differs between consecutive polls and matches mod/theme.ts frames", () => {
+test("spinner differs between consecutive polls and matches mod/design/theme.ts frames", () => {
 	for (const ph of ["research", "theory", "test", "implement", "verify", "done"]) for (let i = 0; i < 12; i++) expect(spinFrame(i, ph)).toBe(spin(i, ph));
 });
 

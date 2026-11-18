@@ -3,7 +3,7 @@
 // live-150-a4fad2f9-1 (tab-core.png, tab-gates.png).
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from '../contract';
-import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from '../atlas-ui';
+import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from '../design/atlas-ui';
 import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './board/board-model';
 import { openRowName, ownPlan, todoState } from '../data/todos';
 import { plannedText } from '../data/core';

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { bandTree } from './band';
 import { cellsText, coreCells } from './core-row';
-import type { Ui } from '../../atlas-ui';
+import type { Ui } from '../../design/atlas-ui';
 import { busySnap, NOW } from '../../live_fixture';
 import { gateTally, leadBusy, withCoreTally } from '../../data/runstate';
 

@@ -1,7 +1,7 @@
 // sidebar-paint.tsx: PanelLines (mod/view/panel/panel-layout.ts) as Claude Code elements. A row with a press is a plain Button; every
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { fillHex, surfaceHex, type Run, type Ui, runHex } from '../../../atlas-ui'; import { lookUi } from '../../../look';
+import { fillHex, surfaceHex, type Run, type Ui, runHex } from '../../../design/atlas-ui'; import { lookUi } from '../../../design/look';
 import { hoverStyle } from '../../../input/clickable';
 import { bodyLines, fillRows, frameTabOf, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';

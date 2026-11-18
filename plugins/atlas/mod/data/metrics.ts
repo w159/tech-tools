@@ -4,7 +4,7 @@
 //   ctx        the context percent (the host's measure, else the pulse's, else the last session's) and whether it is an earlier session's
 //   hook       the handler latency median and p95 over every sample the hook log holds
 // The result is memoised per Health object, so one snapshot cannot render two different figures; a Health built twice from the same inputs computes the same figures (pure functions of them).
-import { elapsedClock } from '../atlas-ui';
+import { elapsedClock } from '../design/atlas-ui';
 import type { Health } from './idle-health';
 import { RATE_BUCKETS } from './pulse';
 
