@@ -27,19 +27,24 @@ Default URL (port from `ATLAS_DASHBOARD_PORT`, default `7421`):
 http://127.0.0.1:7421/
 ```
 
+The bare URL answers `401 launch_required`: loopback is not a trust boundary on a shared host, so `GET /` is served only to a caller that already holds the per-daemon secret. Open the **launch URL** instead (`http://127.0.0.1:7421/?launch=<token>`): the daemon trades it for an `HttpOnly; SameSite=Strict` cookie and redirects to `/`, so the secret does not stay in the address bar. `atlas_dashboard.py launch` and `url` print it, and `ensure` returns it as `url`.
+
 - Open it **once**. Every terminal that activates atlas shares the same page.
-- `session_boot.py` (SessionStart) runs `atlas_dashboard.py ensure` and injects the URL into boot context. It does **not** open a browser.
+- `session_boot.py` (SessionStart) runs `atlas_dashboard.py ensure` and injects the bare URL plus the `atlas_dashboard.py launch` command into boot context (the token never enters the model context). It does **not** open a browser.
 - Disable auto-start with `export ATLAS_DASHBOARD=off`.
 
 ```bash
-python3 plugins/atlas/scripts/atlas_dashboard.py ensure   # start if needed, print result JSON
+python3 plugins/atlas/scripts/atlas_dashboard.py ensure   # start if needed, print result JSON (`url` is the launch URL)
 python3 plugins/atlas/scripts/atlas_dashboard.py status   # snapshot JSON to stdout
-python3 plugins/atlas/scripts/atlas_dashboard.py url      # print URL if the port is open
+python3 plugins/atlas/scripts/atlas_dashboard.py url      # print the launch URL if the port is open (exit 1 without a token file)
+python3 plugins/atlas/scripts/atlas_dashboard.py launch   # print the launch URL for --port N
 python3 plugins/atlas/scripts/atlas_dashboard.py stop
 python3 plugins/atlas/scripts/atlas_dashboard.py serve [--port N] [--host H] [--foreground] [--allow-remote]
 ```
 
-`serve` refuses a non-loopback `--host` unless `--allow-remote` is passed. PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`.
+`ensure`, `url` and `launch` print the owner token (it is the `?launch=` value of the launch URL), so run them in the owner's terminal and do not paste their output into a chat or a log.
+
+`serve` refuses a non-loopback `--host` unless `--allow-remote` is passed. PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`. Token file: `~/.atlas/dashboard-<port>.token`, mode 0600 (under `ATLAS_HOME` when set), removed when the daemon exits. If `serve` cannot write it, it exits 1 before listening (fail closed: no daemon serves a token nobody can read).
 
 ## Request guard
 
@@ -52,10 +57,12 @@ Every route and every method passes `Handler._guard` first. Order and failure co
 | 3 | If an `Origin` header is present it must be `http://127.0.0.1:<port>` or `http://localhost:<port>` | all | `403 bad_origin` |
 | 4 | `X-Atlas-Token` must equal the per-daemon secret (constant-time compare) | every mutation (`POST`/`PUT`), `/api/v2/stream`, and the sensitive GETs below | `401 bad_token` |
 
+`GET /` (and `/index.html`, `/dashboard`) has its own gate, after the checks above: it needs the secret as the `?launch=` value, the `atlas_dash` cookie, or the `X-Atlas-Token` header, else `401 launch_required`.
+
 - `/api/health` and `/health` are **Host-checked only** (no token) so hooks and `ensure` probes keep working.
 - **Sensitive GETs** that require the token (regex `_SENSITIVE_GET`): `/api/v2/stream`, `/api/v2/irc`, `/api/v2/<segment>/transcript`, and `/api/sessions/<id>/transcript`. The herd GETs (`/api/v2/herd*`) carry no token: they expose no agent session paths and no pane output.
-- **Token source:** `DASH_TOKEN = secrets.token_urlsafe(32)`, regenerated every daemon start. The server substitutes it into `index.html` (placeholder `__ATLAS_TOKEN__` in `<meta name="atlas-token" content="...">`; if the placeholder is missing it injects the tag after `<head>`). The client sends it as the `X-Atlas-Token` header on every request. `EventSource` cannot set headers, so the browser calls `POST /api/v2/stream/ticket` (with the header) and opens `/api/v2/stream?ticket=<ticket>`. A ticket is single-use and expires after 30 seconds. Non-browser callers send the `X-Atlas-Token` header. `?token=` is rejected on the stream and on the terminal websocket, which takes only a ticket from `POST /api/v2/term/ticket`. The access log redacts `token` and `ticket` query values.
-- A `401 bad_token` means the page predates the daemon: reload the dashboard to get a fresh token.
+- **Token source:** `DASH_TOKEN = secrets.token_urlsafe(32)`, regenerated every daemon start. The server substitutes it into `index.html` (placeholder `__ATLAS_TOKEN__` in `<meta name="atlas-token" content="...">`; if the placeholder is missing it injects the tag after `<head>`) only for a caller that already holds it, so an anonymous `GET /` no longer yields the token. The browser client sends it as the `X-Atlas-Token` header on every request. `EventSource` cannot set headers, so the browser calls `POST /api/v2/stream/ticket` (with the header) and opens `/api/v2/stream?ticket=<ticket>`. A ticket is single-use and expires after 30 seconds. Non-browser callers do not scrape `GET /`: they read the owner-only token file (`cat ~/.atlas/dashboard-7421.token`) and send it as the `X-Atlas-Token` header, which also opens `GET /`. Example: `T=$(cat ~/.atlas/dashboard-7421.token); curl -s -H "X-Atlas-Token: $T" -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:7421/api/v2/stream/ticket`. `?token=` is rejected on the stream and on the terminal websocket, which takes only a ticket from `POST /api/v2/term/ticket`. The access log redacts `token` and `ticket` query values.
+- A `401 bad_token` means the page predates the daemon: reopen the launch URL (`atlas_dashboard.py launch`) to get a fresh cookie and token; a script re-reads the token file.
 - `OPTIONS` returns `204` with `Allow: GET, HEAD, POST, PUT` and **no** CORS headers, so cross-origin pages are blocked by the browser.
 - Mutating bodies must be a JSON object, at most 4 MiB (`413 body_too_large`), else `400 invalid_json` / `400 bad_length`.
 - Error envelope for guard and v2 failures: `{"ok": false, "error": "<code>", "why": "<reason>", "do": "<next step>"}`. v2 success bodies from mutations carry `ok: true` plus `state` (refreshed counts or board) and `next` (human hint).
@@ -66,7 +73,7 @@ Every route and every method passes `Handler._guard` first. Order and failure co
 
 | Method | Path | Behavior |
 |---|---|---|
-| GET, HEAD | `/`, `/index.html`, `/dashboard`, `/dashboard/` | `dashboard_ui/index.html` with the token injected. `404 ui_missing` if the bundle is absent. |
+| GET, HEAD | `/`, `/index.html`, `/dashboard`, `/dashboard/` | `dashboard_ui/index.html` with the token injected, for an owner only (`?launch=`, cookie or header; else `401 launch_required`). `404 ui_missing` if the bundle is absent. |
 | GET, HEAD | `/ui/<path>` | Static file under `dashboard_ui/`. Rejects `..`, dotfiles, backslashes, NUL, and symlink escape. MIME from a fixed table (`.html .css .js .mjs .json .svg .png .jpg .jpeg .ico .woff2 .txt .map`). |
 | GET | `/assets/mark.svg`, `/assets/logo.svg` | Inline brand mark SVG. |
 | GET | `/assets/hero.jpg`, `/assets/hero.png` | Marketplace `img/` hero if present (under 3.5 MB), else generated SVG placeholder. |
@@ -162,7 +169,7 @@ The colony transport is tmux by default (session `atlas-<run>`, one window per w
 The Atlas dashboard is the shell and herdr-web-ui is framed by two of its surfaces. The dashboard itself stays on loopback; the vendored herdr-web-ui Bun server (the only listener `atlas_remote.py` maps through `tailscale serve`) is the front door and, after its own access decision, does two things (`colony/herdr-web-ui/server/atlas-landing.ts`, `server/atlas-gateway.ts`):
 
 - `GET`/`HEAD /` for a plain browser navigation (`Accept: text/html`, `Sec-Fetch-Dest` absent or `document`, no `embed`, `pane`, `machine` or `chrome` query, full access) answers `302 /atlas/#/herd` (the Command Center maps `#/herd` to the Colony page, `#/colony`). A request with a `chrome`, `embed`, `pane` or `machine` query, and non-browser requests, get the herdr-web-ui SPA; `ATLAS_LANDING=off` disables the redirect.
-- `/atlas/**` is proxied same-origin to the dashboard (`ATLAS_DASHBOARD_URL`, loopback only, default `http://127.0.0.1:7421`): `Host` and `Origin` are rewritten, the per-daemon `X-Atlas-Token` is attached and the browser's herdr-web-ui credentials are never forwarded. The gateway injects `<meta name="atlas-base" content="/atlas">`, which `js/api.js` honours so the UI's `/api/v2/*` calls and the SSE stream go through the prefix. A dashboard that is down answers `502 {"ok":false,"error":"atlas_dashboard_unreachable"}` (an HTML page for a navigation).
+- `/atlas/**` is proxied same-origin to the dashboard (`ATLAS_DASHBOARD_URL`, loopback only, default `http://127.0.0.1:7421`): `Host` and `Origin` are rewritten, the per-daemon `X-Atlas-Token` (read from the owner-only `dashboard-<port>.token` file under `ATLAS_HOME`, so the gateway must run as the dashboard owner) is attached and the browser's herdr-web-ui credentials are never forwarded. The gateway injects `<meta name="atlas-base" content="/atlas">`, which `js/api.js` honours so the UI's `/api/v2/*` calls and the SSE stream go through the prefix. A dashboard that is down answers `502 {"ok":false,"error":"atlas_dashboard_unreachable"}` (an HTML page for a navigation).
 
 There are no herd or irc page modules. The **Colony** page (`js/pages/herdr.js`, `#/colony[?pane=<id>]`) reads the shared agents store (`herd/agents` `web_ui.url`, `herd/colony`, `herd/agents`, `todos`, `irc`; `js/agents-store.js`) and frames `<web_ui.url>/?chrome=full&theme=<t>` edge to edge (`consoleUrl` in `js/fleet.js`; `&pane=<id>&machine=local` when a pane is given). The page is only that iframe: no header, lens bar or second view. A recovery card replaces the frame when herdr or its web UI is down: "herdr isn't running" with **Recheck**, or "The terminal service isn't running. The agent list is live; terminals need it." with **Start terminal service** (`herd/ensure`) and **Recheck**. `GET /api/v2/herd/console` returns the same frame URLs for other clients; no dashboard page calls it. The Fleet inspector's Terminal tab frames `/?pane=<id>&machine=local&chrome=pane&theme=<t>` (`paneUrl`), and its "Open in Colony" button goes to `#/colony?pane=<id>`. Under `/atlas/` (`<meta name="atlas-base">`) both frames use the page origin; direct mode uses the colony URL. The herdr host rewrites the legacy `?embed=1` to `chrome=pane` (with `pane=`) or `chrome=full`. The frame is not built when the dashboard is itself framed (the page then says "Colony cannot open inside itself").
 
@@ -201,7 +208,7 @@ There are no herd or irc page modules. The **Colony** page (`js/pages/herdr.js`,
 
 ## Live stream (SSE)
 
-`GET /api/v2/stream[?project=<root|id>][&token=<token>]` keeps one connection per browser and replaces the old fixed-interval polling as the primary update path.
+`GET /api/v2/stream[?project=<root|id>][&ticket=<ticket>]` keeps one connection per browser and replaces the old fixed-interval polling as the primary update path.
 
 - Headers: `Content-Type: text/event-stream; charset=utf-8`, `Cache-Control: no-store`, `Connection: close`, `X-Accel-Buffering: no`.
 - First frame: `retry: 3000` (the browser reconnects after 3 s).

@@ -25,6 +25,22 @@ COLONY_OFF_HINT = (
 )
 
 
+def _bare_url(url: str) -> str:
+    """scheme://host/path of `url`: no query, no fragment, no credential."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc.rpartition("@")[2], parts.path, "", ""))
+
+
+def _dashboard_launch_hint() -> str:
+    """Names the command that prints the launch URL; the URL itself carries the owner token."""
+    script = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "atlas_dashboard.py")
+    )
+    return f' - launch URL (carries the owner token, never paste it anywhere): python3 "{script}" launch'
+
+
 def ensure_dashboard():
     """Start the shared multi-session dashboard daemon if needed.
 
@@ -96,7 +112,9 @@ def ensure_dashboard():
         if not url:
             return None
         state = "ready" if data.get("already_running") else "started"
-        return f"dashboard: {url} ({state})"
+        # `ensure` returns the launch URL (?launch=<owner token>). This line goes into the model
+        # context and the transcript, so show only scheme://host/path.
+        return f"dashboard: {_bare_url(str(url))} ({state})"
     except subprocess.TimeoutExpired:
         with contextlib.suppress(Exception):
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -350,18 +368,25 @@ _CONTRACT_FILE = os.path.join(
 )
 # Fail-open fallbacks, used only when contracts/operating-contract.json is unreadable.
 _FALLBACK_TEMPLATE = "ATLAS | <glyph> <phase> | <state>"
-_FALLBACK_GLYPHS = (
-    "research 🔍 | theory 💡 | test 🧪 | validate 📋 | "
-    "implement 🔧 | verify ✅ | done 🏁 | blocked ⛔"
-)
+
+
+_CONTRACT_FAULT = ""  # why the last read failed; "" when it succeeded
 
 
 def _contract():
+    global _CONTRACT_FAULT
     try:
         with open(_CONTRACT_FILE, encoding="utf-8") as fh:
             doc = json.load(fh)
-        return doc if isinstance(doc, dict) else {}
-    except Exception:
+        if not isinstance(doc, dict):
+            raise ValueError("operating-contract.json is not a JSON object")
+        _CONTRACT_FAULT = ""
+        return doc
+    except Exception as exc:
+        fault = f"{type(exc).__name__}: {exc}"
+        if fault != _CONTRACT_FAULT:  # one log row per distinct fault, not one per call
+            _boot_log("operating-contract", fault)
+        _CONTRACT_FAULT = fault
         return {}
 
 
@@ -372,15 +397,49 @@ def header_template():
 
 
 def _status_glyphs():
+    """`<glyph> <phase>` pairs, the order headerTemplate prints them; read per call so a
+    contract edit is never shadowed by an import-time copy."""
     phases = [
         p
         for p in (_contract().get("phases") or [])
         if isinstance(p, dict) and p.get("id") and p.get("glyph")
     ]
-    return " | ".join(f"{p['id']} {p['glyph']}" for p in phases) or _FALLBACK_GLYPHS
+    return " | ".join(f"{p['glyph']} {p.get('label') or p['id']}" for p in phases)
 
 
-_STATUS_GLYPHS = _status_glyphs()
+def _header_rule():
+    """Template with the bold brand the output style asks for (markdown is the only
+    brand surface outside the TUI mod), plus the glyph table when the contract has one."""
+    tpl = header_template()
+    if tpl.startswith("ATLAS"):
+        tpl = "**ATLAS**" + tpl[len("ATLAS"):]
+    glyphs = _status_glyphs()
+    if _CONTRACT_FAULT:  # no glyph table to give: say so instead of dropping it silently
+        return (
+            f"`{tpl}` (phase glyph table unavailable: contracts/operating-contract.json "
+            "unreadable, see colony-boot.log; use the phase names research, theory, test, "
+            "validate, implement, verify, done, blocked)"
+        )
+    return f"`{tpl}` ({glyphs})" if glyphs else f"`{tpl}`"
+
+
+def mod_surface_status(env=None):
+    """(confirmed, reason) for the atlas TUI mod on this surface. Only the env the host
+    exports is observable: whether the host fires ui.render, or skips atlas handlers
+    entirely (audit S3), cannot be seen from here, so True means "assumed", not proven."""
+    env = os.environ if env is None else env
+    if env.get("ATLAS_HARNESS") == "omp":
+        return True, "omp renders its own style"
+    if str(env.get("CLAUDE_CODE_REMOTE", "")).lower() in ("1", "true"):
+        return False, "cloud session (CLAUDE_CODE_REMOTE=true), no interactive TUI"
+    ep = str(env.get("CLAUDE_CODE_ENTRYPOINT", "")).strip()
+    if not ep:
+        return False, "surface unknown (CLAUDE_CODE_ENTRYPOINT unset)"
+    if ep.startswith("sdk"):
+        return False, f"headless/SDK session (CLAUDE_CODE_ENTRYPOINT={ep})"
+    if ep != "cli":
+        return False, f"non-terminal surface (CLAUDE_CODE_ENTRYPOINT={ep})"
+    return True, "interactive CLI; whether the host fires ui.render is not observable here"
 
 
 def read_output_style(settings_path=None):
@@ -407,11 +466,11 @@ def status_contract_lines(active_style=""):
     style = (active_style or "").strip()
     if not style or style == ATLAS_OUTPUT_STYLE:
         return [
-            f"Every user-visible reply opens `{header_template()}` ({_STATUS_GLYPHS})."
+            f"Every user-visible reply opens {_header_rule()}."
         ]
     return [
         f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
-        f"Every user-visible reply opens `{header_template()}` ({_STATUS_GLYPHS}); "
+        f"Every user-visible reply opens {_header_rule()}; "
         "before done re-read the request and show evidence; build only what was named; "
         "without TodoWrite add `LEDGER | n/m | now: ... | left: ...`."
     ]
@@ -526,8 +585,11 @@ def dirty_map(root):
 
 
 def snapshot_path(root, session_id):
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+    from atlas_hook_guard import _safe_session_id
+
     return os.path.join(
-        str(root), ".atlas", ".run", f"dirty-snapshot-{session_id}.json"
+        str(root), ".atlas", ".run", f"dirty-snapshot-{_safe_session_id(str(session_id))}.json"
     )
 
 
@@ -1211,6 +1273,15 @@ def main():
             _conn.close()
 
     resume = resume_block(payload.get("cwd") or os.getcwd())
+    if resume:
+        try:
+            sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
+            from recalled_memory import wrap_recalled_memory
+
+            resume = wrap_recalled_memory(resume) or None
+        except Exception as exc:  # unwrapped recalled text must never reach the lead
+            _boot_log("resume-fence", repr(exc))
+            resume = None
     # Todo board: hand unfinished items from previous sessions to this one
     # (origin=carried) and archive what completed. The boot line gives the
     # session its starting ledger; the dashboard Work tab renders the board.
@@ -1478,6 +1549,13 @@ def main():
         os.environ.get("ATLAS_HARNESS") != "omp"
     ):  # omp/style.ts injects the header rule itself
         lines.extend(status_contract_lines(active_style))
+        if payload.get("source") not in ("resume", "compact", "clear"):
+            _mod_ok, _mod_why = mod_surface_status()
+            if not _mod_ok:
+                lines.append(
+                    f"atlas mod: not confirmed active ({_mod_why}); the header stays plain "
+                    "text, only the output style's **ATLAS** brand and phase label apply."
+                )
     lines.append(team_flow_line())
     # git hygiene, security and the analytics first-run notice: early, so the 3500-byte cap never drops them
     boot_notice = _optional_boot_text("atlas_analytics", "boot_notice")
@@ -1611,7 +1689,7 @@ def main():
     with contextlib.suppress(Exception):  # dashboard is best-effort; never block boot
         dash = ensure_dashboard()
         if dash:
-            lines.append(dash + DASHBOARD_OFF_HINT)
+            lines.append(dash + _dashboard_launch_hint() + DASHBOARD_OFF_HINT)
     with contextlib.suppress(Exception):  # colony is best-effort; never block boot
         colony = ensure_colony()
         if colony:

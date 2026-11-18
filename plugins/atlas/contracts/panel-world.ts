@@ -1,10 +1,10 @@
 // The side panel, worker card and toast of the fixture world (contracts/band-world.ts): every number derives from `world`.
-// Goldens: contracts/panel-golden.ts. Both hosts feed these models to the shared layout (mod/panel-layout.ts).
-import type { Ui } from "../mod/atlas-ui";
-import type { CardModel, PanelModel, PanelTab } from "../mod/panel-layout";
+// Goldens: contracts/panel-golden.ts. Both hosts feed these models to the shared layout (mod/view/panel/panel-layout.ts).
+import type { Ui } from "../mod/design/atlas-ui";
+import type { CardModel, PanelModel, PanelTab } from "../mod/view/panel/panel-layout";
 import { world } from "./band-world";
 
-/** People on the channel: everyone who spoke and every worker not finished (the rule of mod/pane/sidebar-model.ts). */
+/** People on the channel: everyone who spoke and every worker not finished (the rule of mod/view/panel/pane/sidebar-model.ts). */
 const worldPeople = (): number => new Set([...world.notes.map((n) => n.from), ...world.workers.filter((w) => w.state !== "done").map((w) => w.name)]).size;
 /** Notes after the lead last spoke (every note when it never did). */
 const worldUnread = (): number => world.notes.length - 1 - world.notes.map((n) => "lead" in n && n.lead === true).lastIndexOf(true);

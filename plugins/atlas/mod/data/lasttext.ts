@@ -1,7 +1,7 @@
 // lasttext.ts: the text of a LAST column or a team tab `last` line, made fit to read. Pure.
 //   lastText  - strip list markers (`1.`), backticks and absolute paths (the file name stays), and a doubled leading verb (`read Read a.py`)
 //   clipWords - fit a width on a whole word, never mid-word, and never inside an open bracket or quote
-import { cells } from '../atlas-ui';
+import { cells } from '../design/atlas-ui';
 
 const MARKER = new RegExp(`^\\s*(?:[-*${String.fromCharCode(0x2022)}]|\\d{1,3}[.)])\\s+`); // a dash, star, bullet or `1.` / `2)` that heads the text
 const ABS_PATH = /(^|[\s(=:])\/(?:[^\s/]+\/)+([^\s/]+)/g;

@@ -1,6 +1,6 @@
 // omp painters are paintAnsi: in 256-colour mode the foreground is the stable palette colour runHex names and the fill is 48;5;234 on Mocha.
 import { expect, test } from "bun:test";
-import { paintAnsi, stable256Indices, type Run, type Tone, type Ui } from "../mod/atlas-ui";
+import { paintAnsi, stable256Indices, type Run, type Tone, type Ui } from "../mod/design/atlas-ui";
 import { paintRun as hudRun } from "./hud-paint";
 import { renderPanel, type PanelModel } from "./mission-panel";
 import { paintRun as panelRun } from "./panel-view";

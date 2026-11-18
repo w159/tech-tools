@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.28.1 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.29.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -153,8 +153,10 @@ separate install: `claude plugin install armada@tech-tools`
        -> blocks with the failing condition letters, or stays silent on pass
 ```
 
-Phases and glyphs come from `contracts/operating-contract.json`. The header
-format is `ATLAS | <glyph> <phase> | <state>`, defined in
+Phases and glyphs come from `contracts/operating-contract.json` (one phase
+table: id, glyph, label, tone and single-cell glyph). The header format is
+`**ATLAS** | <glyph> <phase> | <state>` (a plain `ATLAS |` still passes the gate),
+defined in
 `output-styles/atlas-orchestrator.md`, which sets `force-for-plugin: true` so it
 applies whenever Atlas is enabled.
 
@@ -185,9 +187,9 @@ blocks, it names the letters:
 | ------ | ------------------------------------------------ | ------ | ------------------------------------------ |
 | a      | no `.atlas/evidence` artifact                    | j      | worktrees left open                        |
 | b      | no verified finding backed by a hook record      | k      | no plan (todo list) was made               |
-| c      | CHANGELOG missing                                | l      | dated docs not named `<YYYY-MM-DD>_<slug>` |
-| d      | ROADMAP missing                                  | m      | code shipped with zero subagent dispatches |
-| e      | README missing                                   | n      | status header missing                      |
+| c      | CHANGELOG present but empty (absent: advisory)   | l      | dated docs not named `<YYYY-MM-DD>_<slug>` |
+| d      | ROADMAP present but empty (absent: advisory)     | m      | code shipped with zero subagent dispatches |
+| e      | README present but empty (absent: advisory)      | n      | status header missing                      |
 | f      | docs drift (no CHANGELOG entry for shipped code) | o      | required phases missing                    |
 | g      | implementer work not independently verified      | p      | colony channel unused                      |
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
@@ -883,7 +885,11 @@ It shows the colony roster, the todo board, per-branch channels, live terminal
 seats, doctor findings and settings, updated over Server-Sent Events. It binds
 loopback only unless `--allow-remote` is passed; every request checks the
 `Host` and `Origin`, and mutations and the live stream need a per-daemon
-`X-Atlas-Token`. API reference:
+`X-Atlas-Token`. The bare URL answers `401`: open the launch URL that
+`atlas_dashboard.py launch` (or `url`, or the `url` field of `ensure`) prints.
+The token lives in an owner-only file, `dashboard-<port>.token` (mode 0600)
+under `~/.atlas` (`$ATLAS_HOME` when set); scripts read it from there and the
+daemon refuses to start if it cannot write it. API reference:
 `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 Statusline. Project, model, effort, context meter, rate-limit meters and session
@@ -898,7 +904,7 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 
 ### In-terminal mod
 
-`mod/register.ts`, wired by the `modules` entry in `hooks/hooks.json`, draws four
+`mod/register.ts` (the entry; it calls `register` in `mod/host/hooks.ts`), wired by the `modules` entry in `hooks/hooks.json`, draws four
 things in Claude Code: a band above the prompt, the TODO and SUBAGENTS HUD under
 it, a side panel with a tab strip, and cards in the transcript. `/atlas-cc` opens
 and focuses the panel. `ATLAS_MOD=off` disables the whole mod. Gate readings come
@@ -911,12 +917,12 @@ each segment, row and rule also carries a fill or a colour that plain text canno
 show.
 
 **One clock and one glyph key.** A single 100 ms frame loop (`FRAME_MS` in
-`mod/band-motion.ts`, armed in `mod/register.ts`) advances one spinner index: at
+`mod/view/band/band-motion.ts`, armed by `armFrameLoop` in `mod/host/frame.ts`) advances one spinner index: at
 most 10 redraws a second, the host's cap. The band, the HUD and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
 screen shows the same frame. One glyph set turns on it: the band, the TODO and
 SUBAGENTS rows and titles, the side panel, the board and the dispatch cards all
-draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/atlas-ui.ts`); ASCII
+draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/design/atlas-ui.ts`); ASCII
 mode draws `|/-\`. The capture scorer reads a row's state from these marks.
 `ATLAS_REDUCED_MOTION` and `NO_COLOR` stop the row transitions; the spinner still
 steps.
@@ -929,7 +935,7 @@ steps.
 | `○` | idle | `△` | a gate warning |
 | `▰▱` | a meter, filled and empty cells | | |
 
-The row marks are `STATE_GLYPHS` in `mod/atlas-ui.ts`. No row is struck through:
+The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`. No row is struck through:
 a done row is dim and keeps its green `●`.
 
 **The band.** The band is one row above the prompt, drawn as three filled
@@ -940,7 +946,7 @@ STATE (glyph, word, clock)  |  PLAN (todo n/m)  |  WORKERS (counts)
 ```
 
 The STATE segment reads one of four words (`runStateOf` in
-`mod/mission-layout.ts`) and is filled to match: `working` with a turning spinner
+`mod/view/band/mission-layout.ts`) and is filled to match: `working` with a turning spinner
 (fill 141), `done` (114, bold dark ink), `blocked` (203), or `idle` (240, with 252
 text). The pill is a fixed 97. The PLAN segment is `todo n/m` with a `▰▱` meter
 when the row is 120 columns or wider, and a `■1` beside it when a worker failed.
@@ -954,11 +960,11 @@ Rules the band follows:
 - **Working** is shown whenever the host reports its turn is on, a worker runs or a
   plan row is running, until the host reports the turn over. The run clock starts at your prompt, never steps
   back, and ends when the host reports the turn idle (`stepRun`,
-  `mod/band-motion.ts`). A closed run has one total, set when it closed and
+  `mod/view/band/band-motion.ts`). A closed run has one total, set when it closed and
   never raised after (`closedTotal`): the band, the run card, the side panel's
   phase row, the board footer and axis all print that same figure. A host turn with no live run, such as a slash command
   typed after a run finished, reads `◐ working` with no clock and opens no run
-  (`hostOnly` in `mod/band.tsx`).
+  (`hostOnly` in `mod/view/band/band.tsx`).
 - **Done** shows the run total, frozen (`● done 1:08` stays 1:08 and does not count on), for 30 seconds
   (`IDLE_AFTER_SECS`), then the segment turns idle (`○ idle · 1:08`).
 - **Blocked** reads `▲ blocked · stop refused 0:37` when the Stop hook refused (or
@@ -966,14 +972,14 @@ Rules the band follows:
   0:37` when workers failed. Those are the only two reasons. A run that ends with a
   failed worker (its dispatch row not closed) or a refused stop reads blocked from
   the end of the run until a new run starts, never `idle` (`failedOpen` in
-  `runStateOf`, `mod/mission-layout.ts`). The band and the side
+  `runStateOf`, `mod/view/band/mission-layout.ts`). The band and the side
   panel read the Stop verdict on the same beat, so both switch on the same update.
 - **Width.** Below the full form the meter goes first, then `todo`, then the
   counts shrink to bare figures, then the state word goes and the clock stays.
   The host draws its own `[-]` handle at the right end of the row; the band does
   not draw one.
 
-At 150 columns (`mod/mission-layout.ts` `standardForms`, via `bandLines`):
+At 150 columns (`mod/view/band/mission-layout.ts` `standardForms`, via `bandLines`):
 
 ```
 ◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo ▰▰▰▰▱▱▱▱▱▱ 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
@@ -1015,8 +1021,15 @@ text, from `contracts/band-golden.ts`:
  checks  ● lint  ● test  △ doctor  2/3 green
 ```
 
+**Missing figures.** A figure that is not a plain value is drawn one of three ways, defined once in
+`mod/data/datastate.ts`: `no data yet` when nothing has been read or recorded, `read failed` when the read
+itself failed (in a table cell, a dash and `err`), and an age such as `stale 3m` (cell `~3m`) when data is older
+than its refresh interval. It replaces the old `unknown` in the facts line, the routing rows and note toasts.
+Worker counts come from one tally (`mod/data/tally.ts`), so the band, the HUD and the panel agree, and a
+`thinking` worker counts as running on all three.
+
 **Idle health.** An idle session shows what is healthy, with history, instead of an
-empty band (`mod/idle-health.ts`, figures from `mod/metrics.ts`). The band is built
+empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The band is built
 from fixed-width slots, so the separators do not move between idle, working and done:
 
 ```
@@ -1032,11 +1045,11 @@ response's input tokens over the model window (the host's `session.measure`), no
 a session total. With the pane closed, a `▸ health` chip opens the HEALTH card above
 the prompt; the card's title (`▾ HEALTH`) and the band's `▾ health` chip close it.
 Below 144 columns the host does not dock the side pane at rest, so a two-row idle
-strip above the band (`mod/strip-frame.ts`) shows the last run, run count and
+strip above the band (`mod/view/hud/strip-frame.ts`) shows the last run, run count and
 median, gates, hook p95, context and a spark; a click anywhere on it opens the card.
 
 The status tab, the card and the other tabs draw the same sections from
-`mod/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
+`mod/view/hud/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
 with a y axis, baseline and time axis; the rule names the bucket, `peak 3 / 5s`),
 CONTEXT, RUNS (bars, `N runs · med 0:41 · 1 failed`), GATES (a table with `pass`,
 `deny` and `last` columns) and HOOKS (`n`, `p50` and `last` per hook; the rule says
@@ -1074,10 +1087,10 @@ the message input is labelled `✎ to lead`. No surface prints key hints; the
 `Enter sends` placeholder were removed because the keys do not work in Claude
 Code. Click a chip to switch tabs and a `▸` row to expand it.
 
-**TODO and SUBAGENTS.** `mod/hud.ts` and `mod/hud-surface.ts` draw the HUD under
+**TODO and SUBAGENTS.** `mod/view/hud/hud.ts` and `mod/view/hud/hud-surface.ts` draw the HUD under
 the band as closed rounded boxes with one blank row between them. The slot above
 the prompt is exactly the rows drawn: the band row, then the HUD rows, with no
-spacer rows above or below (`composeFixed` in `mod/slot.ts`). The HUD takes every
+spacer rows above or below (`composeFixed` in `mod/view/band/slot.ts`). The HUD takes every
 row of the slot's budget the band leaves and folds when the plan is longer, so a
 host clip eats HUD rows and never the band. 17.15.0 padded the slot to the whole
 budget with blank rows under the HUD; that left an empty gap between the mod and
@@ -1185,7 +1198,7 @@ TODO tree from the board until the first native todo result.
 
 **The side panel.** The panel is a ribbon (`◖ ◆ ATLAS ◗ ▸ SIDEPANEL`), a tab strip
 of clickable chips with the lit tab filled, and one view under it. The strip names
-six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/panel-layout.ts`): status, team,
+six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/view/panel/panel-layout.ts`): status, team,
 channel, gates, core and board. Click a chip to open that view; no key hint is
 printed; each tab is its own chip with one cell between chips, and no rule is
 drawn under the lit one. All six chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
@@ -1222,7 +1235,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
 - **status** (key `r`, the tab id is still `route`): the phase row wears the band's
   own glyph, word and clock (`phase  ● done 0:29`, `phase  ▲ blocked 0:29`), built
   from the band's own inputs and the same glyph function (`phaseRow` with
-  `phaseGlyph`, `mod/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
+  `phaseGlyph`, `mod/view/panel/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
   rail, a row per agent with a 12-cell braille activity line and its time, the
   gates, an events list of workers starting and finishing (`+0:13  alpha-explorer
   done`), and the todo rows.
@@ -1236,7 +1249,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
   (`verifiedFigure`), or `no verdicts, workers or gates yet`.
 - **board** (key `o`): see below.
 
-**The board.** The board tab (`mod/board-model.ts`, drawn by `mod/pane/sidebar.tsx`)
+**The board.** The board tab (`mod/view/board/board-model.ts`, drawn by `mod/view/panel/pane/sidebar.tsx`)
 lists one row per plan item with state and owner, under a title row that counts
 the items and carries the same `▰▱` meter, then a Gantt timeline: one lane per
 agent, the lead's lane first, a bar (`▇`, ended exactly to the clock) in the
@@ -1288,7 +1301,7 @@ A failed worker reads `■ failed` on every tab. A dispatch row that a plan row 
 folds into that plan row; the rest list under a `dispatches` group.
 
 **Transcript cards.** Cards are one row each, `min(56, cols - 4)` cells wide and
-never wrapped (`finishRow` in `mod/transcript/cards.tsx`). Each starts with a bar
+never wrapped (`finishRow` in `mod/view/transcript/cards.tsx`). Each starts with a bar
 `▌` that is 141 for its first moments and 245 afterwards, then the dim brand mark.
 A worker's finish card shows the state glyph and word, the worker name and, flush
 right, the run time and call count from the worker's SUBAGENTS row (`-` where the
@@ -1303,14 +1316,26 @@ placed once per blocked spell, with a 203 bar, in the band's own words:
 ▌ ◆ ATLAS  ▲ blocked · stop refused                 0:36
 ```
 
-A placed card is never removed, replaced or rewritten. The lead's `ATLAS | ...`
+A placed card is never removed, replaced or rewritten. The mod, the Stop gate and
+the missing-header toast read the header the same way: the first line, after
+splitting on newline only, that is non-empty once ASCII whitespace is stripped
+(`firstHeaderLine` in `mod/contract-pattern.ts`, `parse_status_header` in
+`hooks/completion_gate_core.py`). Each of the eight phases has its own colour
+(`PHASE_TABLE` in `mod/contract-pattern.ts`, from `phases[]` in the contract). The lead's `ATLAS | ...`
 header line is rewritten for the screen by the classic `MessageDisplay` hook to
 `phase n/m · state` in lower case (`displayLine` in
-`mod/transcript/leadheader.ts`); the stored message and the Stop gate keep the
-contract form. A turn footer is frozen at its first draw and prints the band's
-run clock (`run 4:12`, `durationTree` in `mod/restyle.tsx`). Worker
+`mod/view/transcript/leadheader.ts`); the stored message and the Stop gate keep the
+contract form. Session start says `atlas mod: not confirmed active (<reason>)` when
+the surface cannot show the mod (cloud session, SDK or headless entry point, unknown
+entry point), and `atlas_doctor.py` prints the same reason as a warn-only `mod-surface`
+line; whether the host actually fires the mod's handlers cannot be observed from a hook,
+so a confirmed surface means assumed, not proven (`mod_surface_status` in
+`hooks/session_boot_core.py`). When `contracts/operating-contract.json` cannot be read,
+session start gives the header template and says the phase glyph table is unavailable
+(use the phase names) instead of dropping it silently. A turn footer is frozen at its first draw and prints the band's
+run clock (`run 4:12`, `durationTree` in `mod/view/transcript/restyle.tsx`). Worker
 cards are drawn only on omp, where a running worker is a 44-cell box
-(`cardLines` and `CARD_W` in `mod/panel-layout.ts`, painted by `omp/panel-view.ts`):
+(`cardLines` and `CARD_W` in `mod/view/panel/panel-layout.ts`, painted by `omp/panel-view.ts`):
 
 ```
 ┌─ ◆ running implementer-band ────── opus ─┐
@@ -1329,8 +1354,8 @@ On a 256-colour terminal the host maps each hex to the nearest xterm index, and
 every surface is limited to `PALETTE_INDICES` in `mod/surface_indices.ts`.
 
 **Motion.** A row that turns done holds its first state for one 200 ms beat
-(`DONE_HOLD_MS`, `mod/motion.ts`), then eases over up to four more
-200 ms beats (`MOTION_STEP_MS`, `MAX_BEATS` in `mod/motion.ts`). The motion timer runs at 100 ms
+(`DONE_HOLD_MS`, `mod/motion/motion.ts`), then eases over up to four more
+200 ms beats (`MOTION_STEP_MS`, `MAX_BEATS` in `mod/motion/motion.ts`). The motion timer runs at 100 ms
 (`MOTION_FRAME_MS`), at most 10 redraws a second.
 
 **Host load rules.** The mod loads in the host only if its files keep the host's
@@ -1342,21 +1367,21 @@ the same invariant in the contract suite.
 
 ### Terminal variables
 
-These are read by the mod (`mod/atlas-ui.ts`, `mod/motion.ts`, `mod/look.ts`,
-`mod/register.ts`) and by the omp extension (`omp/`). Unset means the default.
+These are read by the mod (`mod/design/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/design/look.ts`,
+`mod/host/hooks.ts`, `mod/host/poll.ts`) and by the omp extension (`omp/`). Unset means the default.
 
 | Variable | Default | Effect |
 | -------- | ------- | ------ |
-| `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/register.ts`) |
-| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/register.ts`) |
-| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/band.tsx`, `mod/look.ts`) |
-| `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/atlas-ui.ts`) |
-| `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/atlas-ui.ts`) |
-| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts`; `reducedMotion`, `mod/motion.ts`) |
-| `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/atlas-ui.ts`) |
-| `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion.ts`) |
+| `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/host/hooks.ts`, `mod/view/transcript/restyle.tsx`) |
+| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/host/hooks.ts`) |
+| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/design/look.ts`) |
+| `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/design/atlas-ui.ts`) |
+| `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/design/atlas-ui.ts`) |
+| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/design/atlas-ui.ts`; `reducedMotion`, `mod/motion/motion.ts`) |
+| `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/design/atlas-ui.ts`) |
+| `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion/motion.ts`) |
 | `ATLAS_PROJECT_ROOT` | unset | A project root that contains `.atlas`; it wins over the search. Unset, the mod walks up from the working directory to the nearest `.git` or `.atlas` (`mod/data/root.ts`) |
-| `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/register.ts`) |
+| `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/host/poll.ts`) |
 | `ATLAS_STATUSLINE` | on | omp only: `off` skips the usage statusline (`omp/index.ts`) |
 | `ATLAS_ADVISOR_GATE` | on | omp only: `off` disables the advisor gate (`omp/advisor.ts`) |
 
@@ -1565,7 +1590,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.28.1
+|-- .claude-plugin/plugin.json   manifest, version 17.29.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
@@ -1576,7 +1601,8 @@ atlas/
 |                                MCP server name lists
 |-- references/                  operating-contract.md and shared references
 |-- output-styles/               atlas-orchestrator.md (force-for-plugin)
-|-- mod/                         Claude Code in-terminal mod
+|-- mod/                         Claude Code in-terminal mod (register.ts entry; host/, data/,
+|                                design/, view/{band,hud,panel,board,transcript}/, motion/, input/)
 |-- omp/                         omp extension package
 |-- colony/                      herdr transport and its web UI
 `-- package.json                 omp extension entry for marketplace installs

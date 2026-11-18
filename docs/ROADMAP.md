@@ -187,6 +187,16 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.29.0 follow-ups (added 2026-11-18)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.29.0); audit and per-finding status: `docs/audits/2026-11-18_atlas-contract-header-mod-audit.md`, section 7.
+
+- [planned] S3: whether the host skips atlas's `classic.Stop` handlers cannot be seen from repo code; only the session-start "not confirmed active" notice (H5) is possible. Needs a host-side signal.
+- [planned] Command Center iframe token prompt: the frame loads a bare herdr URL, so a browser with no herdr cookie shows the token prompt once. Check it in a live browser, then pick one: the dashboard mints the herdr cookie, or document the one-time prompt. Putting the token in the URL would leak it.
+- [planned] Live-host checks of the mod (need a live session): mod load, clicks, omp parity, `claude --bg` provider env, the render after `/clear`, the 256-colour mapping in a real 256-colour terminal, and the phase emoji width at 80 columns.
+- [planned] Pins for published benchmark numbers: crew benchmarks, hook latency and verifier catch rates have no pinning test (the router score is pinned in `hooks/test_prompt_optimizer.py`).
+- [planned] Full CI typecheck of the mod: `.github/workflows/tests.yml` gates only unresolved relative imports because the host types are not in a checkout (890 `error TS` lines locally, 369 from the missing host types).
+
 ### Atlas 17.24.0 follow-ups (added 2026-11-15)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.24.0); audits: `docs/audits/2026-11-15_atlas-round4-expert-gaps.md`, `docs/audits/2026-11-15_atlas-round4-post-review.md`.
@@ -241,7 +251,7 @@ The shipped change is in `plugins/atlas/CHANGELOG.md` (17.15.0).
 - [planned] SUBAGENTS `LAST` content quality: some rows still show a shell command stub (`run a`) instead of a useful verb and target.
 - [planned] SUBAGENTS `FN` detection is text-based (it reads the worker's report); a worker that states no function count shows `-`.
 - [planned] Host-drawn items the plugin cannot change: the `[-]` handle, the tip-row jump under the band, the side-panel reflow when the panel opens, and the 153-column divider.
-- [planned] `contracts/hud-golden.ts` holds the older `agentRows` form (`AGENT STATE TASK LAST RESULT`); the table `hudLines` draws (`agentTable`: `AGENT STATE TIME CALLS FN LAST`) has no golden file. Add one generated from `mod/hud-surface.ts`.
+- [planned] `contracts/hud-golden.ts` holds the older `agentRows` form (`AGENT STATE TASK LAST RESULT`); the table `hudLines` draws (`agentTable`: `AGENT STATE TIME CALLS FN LAST`) has no golden file. Add one generated from `mod/view/hud/hud-surface.ts`.
 
 ### Atlas 17.4.3 follow-ups (added 2026-11-10)
 
@@ -262,9 +272,9 @@ The shipped fixes are in `plugins/atlas/CHANGELOG.md` (17.4.1 and 17.4.2).
 - [planned] Completion gate (r) returns before the other conditions are evaluated, so a blocked `done` reply hides other failing letters. An (r) block also restarts the (n) loop count.
 - [planned] Dashboard page helpers that `fallow dupes` reports as duplicated (802 lines) were left in place by the 17.4.2 dead-code pass.
 - [planned] Doctor layout: a stray whose archive destination would sit inside the stray itself is reported but never archived by `--fix`. Decide its archive base.
-- [planned] Worker card head row overflows: `plugins/atlas/mod/transcript/cards.tsx` `headRow` (about lines 125-127) fits the meta text against a fixed pad of 24 and does not fit the name chip. Proof: name `implementer-root-cause-2` in a 40-column card gives row widths 45/40/40. Below about 15 columns the label rows are left unfitted as well.
-- [planned] Wide-character table: `plugins/atlas/mod/theme.ts` (about line 172) counts U+2705 and U+26A0 U+FE0F as one cell each, so a row that contains either is one cell too wide.
-- [planned] A running worker can read as ended: `plugins/atlas/mod/transcript/outcome.ts` (about lines 22 and 78) shows `finished` when `agent.list()` throws, when the worker's row is absent, or when its status is `idle`.
+- [planned] Worker card head row overflows: `plugins/atlas/mod/view/transcript/cards.tsx` `headRow` (about lines 125-127) fits the meta text against a fixed pad of 24 and does not fit the name chip. Proof: name `implementer-root-cause-2` in a 40-column card gives row widths 45/40/40. Below about 15 columns the label rows are left unfitted as well.
+- [planned] Wide-character table: `plugins/atlas/mod/design/theme.ts` (about line 172) counts U+2705 and U+26A0 U+FE0F as one cell each, so a row that contains either is one cell too wide.
+- [planned] A running worker can read as ended: `plugins/atlas/mod/view/transcript/outcome.ts` (about lines 22 and 78) shows `finished` when `agent.list()` throws, when the worker's row is absent, or when its status is `idle`.
 
 ### Atlas 17.0.0 follow-ups (added 2026-11-05)
 

@@ -133,7 +133,7 @@ atlas_env.apply_store_env()
 import atlas_hook_guard  # noqa: E402
 
 # Worst case in-hook time: npx probe + version probe + audit must stay under the
-# hooks.json timeout for this hook (300s), or the harness kills us before the
+# hooks.json timeout for this hook (90s = 3 + 15 + 60 worst case plus margin), or the harness kills us before the
 # fail-open path returns. F13: the audit is capped at 60s - a hung `fallow audit`
 # used to burn 240s on EVERY commit/push before the fail-open notice.
 _NPX_PROBE_TIMEOUT = 3

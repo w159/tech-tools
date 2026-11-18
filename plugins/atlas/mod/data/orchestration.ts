@@ -5,7 +5,7 @@
 // and git output into the AtlasSnapshot fields. No `$` here.
 import type { ChannelMember, ChannelNote, SquadAgent } from '../contract';
 import type { ActivityEntry, CommsEntry, Mood, TeamTool } from '../orchestra-types';
-import { isRawId } from '../theme';
+import { isRawId } from '../design/theme';
 
 const RAW_ID = /^a?[0-9a-f]{16}$/;
 /** Human label for an id: mapped name, else a label unchanged, else a raw id truncated to 6 chars. */

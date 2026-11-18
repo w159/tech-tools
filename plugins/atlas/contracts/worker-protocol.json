@@ -10,6 +10,7 @@
     "textFields": ["STATUS", "STEPS", "FILES_CHANGED", "EVIDENCE", "DELIVERABLE", "NEXT"],
     "statusValues": ["DONE", "FAILED", "BLOCKED"],
     "firstLinePattern": "^STATUS: (DONE|FAILED|BLOCKED)\\s*$",
+    "handback": "A read-only worker (Read, Grep, Glob only) has no Write tool and no heredoc-to-file, so it hands back a long deliverable with `atlas_todo.py report --root <root> --channel <ch> --owner <you> --to <lead> --file -` and the report body on stdin. The body must hold a `STATUS: DONE|FAILED|BLOCKED` line or the command rejects it with the line to add; the closing `exit <n>` line is appended when missing. A board note over the byte cap keeps its start and names the saved full report in the truncation marker.",
     "nativeWake": "Optional, env-gated: when the lead exports ATLAS_LEAD_AGENT (its lead session name), after posting the board note also send the same report text via SendMessage (to: that name) as a best-effort native wake. The board note stays the transport of record; do not retry sends; skip entirely when the var is unset or the session is not listed.",
     "taskMirror": "Optional, env-gated: when the lead exports ATLAS_TASKS_MIRROR (truthy: 1/true/on), and a TaskCreate tool is available, mirror the board item you claim — TaskCreate with subject \"[<phase>] <content>\" at claim time, marked completed when you post your completion. The atlas board remains the source of truth; do not duplicate status updates beyond the one completion; skip entirely when the var is unset or off.",
     "jsonSchema": {

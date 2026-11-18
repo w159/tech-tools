@@ -953,6 +953,8 @@ CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routing_corpu
 # routing_corpus.jsonl: 45 of 86. Measured by loading `git show d8a7adce:plugins/atlas/hooks/prompt_optimizer_core.py`.
 HEAD_ROUTER_ACCURACY = 45 / 86
 MIN_ACCURACY = 0.85
+MEASURED_CORRECT = 84  # eval_routing on 86 rows, 2026-11-18
+MEASURED_ROWS = 86
 
 
 class RoutingCorpusTest(unittest.TestCase):
@@ -981,6 +983,12 @@ class RoutingCorpusTest(unittest.TestCase):
             print("  MISS want=%s got=%s | %s" % (want, got, prompt))
         self.assertGreaterEqual(acc, HEAD_ROUTER_ACCURACY)
         self.assertGreaterEqual(acc, MIN_ACCURACY)
+        # Ratchet: pin the measured score so a regression below it fails. To update when the
+        # corpus grows: run `python3 hooks/prompt_optimizer_core.py --eval-routing`, take the
+        # new "heuristic: N/M" and set MEASURED_CORRECT to N (and the row count to M); raise it
+        # only after a router improvement, never lower it to get green.
+        self.assertEqual(len(rows), MEASURED_ROWS, "corpus size changed: re-measure and update the pin")
+        self.assertGreaterEqual(len(rows) - len(misses), MEASURED_CORRECT)
 
     def test_eval_routing_cli_reports_model_unavailable_without_inventing_numbers(self):
         env = dict(os.environ, ATLAS_DECISION_URL="http://127.0.0.1:%d" % free_port(), ATLAS_DECISION="on")
@@ -1487,6 +1495,83 @@ class EndToEndSubprocessTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0)
         self.assertNotIn("fail-open", r.stderr)
         self.assertEqual(r.stdout, "")
+
+
+class RemoteOllamaRefusedTest(unittest.TestCase):
+    """X5: the user prompt must never be posted to a non-loopback ollama unless the same opt-in as
+    prompt_decision (ATLAS_DECISION_ALLOW_REMOTE=1) is set."""
+
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+        for k in ("ATLAS_OLLAMA_URL", "OLLAMA_HOST", "ATLAS_DECISION_ALLOW_REMOTE", "ATLAS_OPTIMIZE_CMD"):
+            os.environ.pop(k, None)
+
+    def tearDown(self):
+        self.env.stop()
+
+    def _urlopen_ok(self):
+        cm = mock.MagicMock()
+        cm.__enter__.return_value.read.return_value = json.dumps({"response": "out"}).encode()
+        cm.__exit__.return_value = False
+        return cm
+
+    def test_remote_atlas_ollama_url_is_not_posted_to(self):
+        os.environ["ATLAS_OLLAMA_URL"] = "http://203.0.113.9:11434"
+        with mock.patch("prompt_optimizer.urllib.request.urlopen") as urlopen:
+            self.assertIsNone(po.run_via_api("secret prompt", "m", 10.0))
+        urlopen.assert_not_called()
+
+    def test_remote_ollama_host_is_not_posted_to(self):
+        os.environ["OLLAMA_HOST"] = "ollama.example.com:11434"
+        with mock.patch("prompt_optimizer.urllib.request.urlopen") as urlopen:
+            self.assertIsNone(po.run_via_api("secret prompt", "m", 10.0))
+        urlopen.assert_not_called()
+
+    def test_loopback_forms_still_post(self):
+        for url in ("http://127.0.0.1:1", "localhost:11434", "http://[::1]:11434"):
+            os.environ["ATLAS_OLLAMA_URL"] = url
+            with self.subTest(url=url), mock.patch(
+                "prompt_optimizer.urllib.request.urlopen", return_value=self._urlopen_ok()
+            ) as urlopen:
+                self.assertEqual(po.run_via_api("p", "m", 10.0), "out")
+                urlopen.assert_called_once()
+
+    def test_opt_in_override_allows_remote(self):
+        os.environ["ATLAS_OLLAMA_URL"] = "http://203.0.113.9:11434"
+        os.environ["ATLAS_DECISION_ALLOW_REMOTE"] = "1"
+        with mock.patch(
+            "prompt_optimizer.urllib.request.urlopen", return_value=self._urlopen_ok()
+        ) as urlopen:
+            self.assertEqual(po.run_via_api("p", "m", 10.0), "out")
+            urlopen.assert_called_once()
+
+    def test_refusal_is_reported_on_stderr(self):
+        os.environ["ATLAS_OLLAMA_URL"] = "http://203.0.113.9:11434"
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), mock.patch("prompt_optimizer.urllib.request.urlopen"):
+            po.run_via_api("p", "m", 10.0)
+        self.assertIn("non-loopback", err.getvalue())
+
+    def test_is_loopback_is_the_prompt_decision_function(self):
+        self.assertIs(po._is_loopback, prompt_decision._is_loopback)
+
+    def test_cli_fallback_refused_when_ollama_host_is_remote(self):
+        # `ollama run` reads OLLAMA_HOST itself, so the CLI would carry the prompt off the machine too.
+        os.environ["OLLAMA_HOST"] = "203.0.113.9:11434"
+        with mock.patch("prompt_optimizer.run_via_api", return_value=None), mock.patch(
+            "prompt_optimizer.shutil.which", return_value="/usr/bin/ollama"
+        ), mock.patch("prompt_optimizer._run_argv", return_value="cli") as ra:
+            self.assertIsNone(po.run_optimizer("p"))
+        ra.assert_not_called()
+
+    def test_cli_fallback_runs_when_ollama_host_is_loopback(self):
+        os.environ["OLLAMA_HOST"] = "127.0.0.1:11434"
+        with mock.patch("prompt_optimizer.run_via_api", return_value=None), mock.patch(
+            "prompt_optimizer.shutil.which", return_value="/usr/bin/ollama"
+        ), mock.patch("prompt_optimizer._run_argv", return_value="cli") as ra:
+            self.assertEqual(po.run_optimizer("p"), "cli")
+        ra.assert_called_once()
 
 
 if __name__ == "__main__":

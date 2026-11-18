@@ -1,6 +1,6 @@
 // mission-panel behavior beyond the golden fixtures: the band facts, role and name columns, worker states and sort
 // order, overflow, the message row, the idle panel, row budgeting against the board, the one-row narrow form, ANSI
-// tones and the throttled gates cache. Layout rules live in mod/mission-layout.ts; the goldens pin the shared text.
+// tones and the throttled gates cache. Layout rules live in mod/view/band/mission-layout.ts; the goldens pin the shared text.
 import { expect, test } from "bun:test";
 import { age, createGatesCache, type PanelModel, type PanelWorker, renderPanel, roleOf } from "./mission-panel";
 

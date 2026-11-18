@@ -890,14 +890,27 @@ class RealServeTests(unittest.TestCase):
         }
         p, port = self._start(home, env)
         try:
+            # The index no longer hands the token to an anonymous caller (X2): the owner reads the
+            # 0600 token file, then the index is served to a caller that already holds it.
+            token = (Path(home) / f"dashboard-{port}.token").read_text().strip()
+            anon = urllib.request.Request(f"http://127.0.0.1:{port}/")
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                urllib.request.urlopen(anon, timeout=5)
+            self.assertEqual(ctx.exception.code, 401)
+            self.assertNotIn(token.encode(), ctx.exception.read())
             html = (
-                urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5)
+                urllib.request.urlopen(
+                    urllib.request.Request(
+                        f"http://127.0.0.1:{port}/", headers={"X-Atlas-Token": token}
+                    ),
+                    timeout=5,
+                )
                 .read()
                 .decode()
             )
             m = re.search(r'name="atlas-token" content="([^"]+)"', html)
             assert m is not None
-            token = m.group(1)
+            self.assertEqual(m.group(1), token)
             legacy = WsClient(port, f"/api/v2/term/ws?kind=tui&token={token}")
             self.assertEqual(legacy.status, 403, "query token must be rejected")
             legacy.close()
@@ -927,6 +940,50 @@ class RealServeTests(unittest.TestCase):
             p.terminate()
             p.wait(timeout=10)
             shutil.rmtree(home, ignore_errors=True)
+
+
+class AnonymousPtyAccessTests(unittest.TestCase):
+    """X2: nothing without the owner's credential reaches the pty shell, upgrade included."""
+
+    def setUp(self):
+        import http.server
+
+        import atlas_dashboard as D
+
+        self.D = D
+        self.httpd = http.server.ThreadingHTTPServer((D.LOOPBACK, 0), D.Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.port = self.httpd.server_address[1]
+
+    def test_ws_upgrade_without_a_ticket_never_gets_101(self):
+        tok = self.D.DASH_TOKEN
+        for headers, path in (
+            ({}, "/api/v2/term/ws?kind=shell"),
+            ({"Cookie": f"atlas_dash={tok}"}, "/api/v2/term/ws?kind=shell"),
+            ({"X-Atlas-Token": tok}, "/api/v2/term/ws?kind=shell"),
+            ({}, f"/api/v2/term/ws?kind=shell&token={tok}"),
+            ({}, "/api/v2/term/ws?ticket=forged"),
+        ):
+            c = WsClient(self.port, path, headers)
+            try:
+                self.assertEqual(c.status, 403, (headers, path, c.head))
+                self.assertNotIn(b"101", c.head.split(b"\r\n")[0])
+            finally:
+                c.close()
+
+    def test_ticket_mint_needs_the_owner_token(self):
+        for headers in ({}, {"X-Atlas-Token": "nope"}, {"Cookie": f"atlas_dash={self.D.DASH_TOKEN}"}):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{self.port}/api/v2/term/ticket",
+                data=json.dumps({"kind": "shell"}).encode(),
+                headers={"Content-Type": "application/json", **headers},
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req, timeout=5)
+            self.assertEqual(cm.exception.code, 401, headers)
 
 
 if __name__ == "__main__":

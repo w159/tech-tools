@@ -10,7 +10,7 @@
 //     read is one $.state.get, update reads, applies the change and writes with ifVersion, retrying on a miss.
 //   - A test whose body takes arguments (`test(name, async ($, on) => ...)`) is handed the host engine and the hook
 //     chain by the real kit; nothing here can fake that faithfully, so such tests are registered as skipped under
-//     bun and run only under `claude plugin test`. At the time of writing that is mod/register-sidebar.test.ts.
+//     bun and run only under `claude plugin test`. At the time of writing that is mod/host/register-sidebar.test.ts.
 //   - `mock` (clock/env/session of the host engine) is not shimmed: it throws if a skipped-by-design test reached it.
 import * as bunTest from "bun:test";
 import { plugin } from "bun";

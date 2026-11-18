@@ -4,9 +4,9 @@
 // poll key is stat mtimeMs (plan §2, docs/plans/2026-10-09_atlas-mod.md).
 import type { AtlasSnapshot, Contract, FsLike, PhaseCount, PhaseId, TodoItem } from '../contract';
 import type { TodoGroup } from '../orchestra-types';
-import { contractGlyph } from '../theme';
-import { DONE_DOUBT, type UiState } from '../atlas-ui';
-import { DONE_RETRIED, itemState, titleOwner, WORKER_DOWN } from '../board-model';
+import { contractGlyph } from '../design/theme';
+import { DONE_DOUBT, type UiState } from '../design/atlas-ui';
+import { DONE_RETRIED, itemState, titleOwner, WORKER_DOWN } from '../view/board/board-model';
 
 /** The one derived state of a plan row, shared by the HUD TODO block and the side panel's route tab: the board's rule (board-model itemState),
  * plus `returned` (attention tone, so state `blocked`): the owner agent has ended but the store row is not completed, which never reads `queued`.

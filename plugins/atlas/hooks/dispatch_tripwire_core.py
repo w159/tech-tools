@@ -46,6 +46,12 @@ def __getattr__(name):
         mod = importlib.import_module(name)
         globals()[name] = mod
         return mod
+    if name == "READ_ONLY_ROLES":
+        # completion_gate_core costs 7-14 ms of import on every tool call; only the role checks need it.
+        from completion_gate_core import READ_ONLY_ROLES
+
+        globals()[name] = READ_ONLY_ROLES
+        return READ_ONLY_ROLES
     raise AttributeError(name)
 
 
@@ -143,7 +149,7 @@ def _stash_findings_count(root, session, slot):
     stashes; a different session's state is discarded."""
     if root is None:
         return
-    with contextlib.suppress(Exception):
+    try:
         path = _watch_path(root)
         path.parent.mkdir(parents=True, exist_ok=True)
         state = {}
@@ -161,6 +167,8 @@ def _stash_findings_count(root, session, slot):
             json.dumps({"session_id": session, "counts": counts}),
             encoding="utf-8",
         )
+    except Exception as exc:  # fail open (no baseline: verdict check stays silent) but leave a trace
+        _record_fault(exc, hook="dispatch_tripwire.verifier_baseline")
 
 
 def _verdict_missing(root, session, slot):
@@ -197,6 +205,17 @@ def _in_subagent(payload):
     return "/subagents/" in str(payload.get("transcript_path") or "").replace("\\", "/")
 
 
+def _record_analytics(key: str) -> None:
+    """Anonymous counter (validated by atlas_analytics): counts only, never prompt text, paths or names.
+    Same pattern as the completion gate's gate.<letter>.block; a broken client never changes a verdict."""
+    try:
+        import atlas_analytics
+
+        atlas_analytics.record(key)
+    except Exception as exc:
+        _record_fault(exc, hook="dispatch_tripwire.analytics")
+
+
 def _deny_nested_dispatch(tool):
     """A subagent that dispatches its own subagent forks the work out of the
     orchestrator's view: the nested agent's dispatch is never counted, its
@@ -204,6 +223,7 @@ def _deny_nested_dispatch(tool):
     session that owns the task. Subagents execute; only the orchestrator
     delegates. Unconditional -- not gated on the run being flagged
     orchestrating, because a subagent session never is."""
+    _record_analytics("dispatch.deny." + "nested")
     _deny(
         "DENY - a subagent must never dispatch another subagent. You are running "
         "inside a dispatched agent; nesting hides the work from the orchestrator "
@@ -483,16 +503,20 @@ def _scope_problem(tinput):
     return f"DENY - {detail}. {fix}:\n  {RESOLVE_CMD}{_scope_suggestion(agent)}"
 
 
-# A read-only role dispatched with an explicit haiku/sonnet-class `model` is cheap exploration: it may run in
-# parallel (never edits, so it cannot collide with a teammate). No `model` falls back to normal handling.
+# A read-only role whose own pinned model (`model:` in agents/<role>.md) is haiku/sonnet-class is cheap
+# exploration: it may run in parallel (never edits, so it cannot collide with a teammate). The dispatch's
+# `model` param is not read (the docs say never to pass one); an opus or unpinned role is handled normally.
 _CHEAP_MODEL = lre(r"(?i)(?<![a-z])(?:haiku|sonnet)(?![a-z])")
 
 
 def _cheap_exploration(tinput):
-    """True for a READ_ONLY_ROLES dispatch whose `model` string names haiku or sonnet (also `claude-sonnet-5`)."""
-    return _is_read_only_role(tinput.get("subagent_type")) and bool(
-        _CHEAP_MODEL.search(str(tinput.get("model") or ""))
-    )
+    """True for a READ_ONLY_ROLES dispatch whose role pins a haiku or sonnet model (`model:` in agents/<role>.md).
+    The pin decides, not the dispatch's `model` param: the docs tell the lead never to pass one."""
+    agent = _norm_agent(tinput.get("subagent_type"))
+    if not _is_read_only_role(agent):
+        return False
+    role = agent.split(":", 1)[-1] if agent.startswith("atlas:") else agent[len("atlas-") :]
+    return bool(_CHEAP_MODEL.search(_frontmatter_model(role) or ""))
 
 
 def _burst_note(root, session, exempt=False, tool_use_id=None):
@@ -564,10 +588,12 @@ CLOSING_ROLES = frozenset(
 # the team deny: the deny exists so editing subagents run as a tmux team with isolated files, and a
 # read-only role cannot edit, cannot conflict with a teammate, and is the cheapest lookup there is. Denying
 # a lone `SCOPE: audit/*` explorer forced a tmux team for a grep. verifier is already in CLOSING_ROLES.
-from completion_gate_core import READ_ONLY_ROLES  # noqa: E402  (one definition, shared with the Stop gate)
+# READ_ONLY_ROLES (one definition, shared with the Stop gate) is imported lazily: see __getattr__.
 
 
 def _is_read_only_role(subagent_type):
+    from completion_gate_core import READ_ONLY_ROLES
+
     agent = _norm_agent(subagent_type)
     for prefix in ("atlas:", "atlas-"):
         if agent.startswith(prefix):
@@ -847,8 +873,9 @@ def _close_dispatch(payload):
                 if slot in st.get("open", []):
                     st["open"].remove(slot)  # its own slot; already expired by the window: nothing to free
                 st["owners"] = owners
-            elif st.get("open"):
-                st["open"].pop(0)
+            elif not tuid and st.get("open"):
+                st["open"].pop(0)  # no id at all (non-Claude harness): oldest slot
+            # an id nobody recorded belongs to a denied dispatch: it must not free a running worker's slot
     except Exception as exc:
         _record_fault(exc)
 
@@ -890,15 +917,56 @@ def _lean_ctx_reachable(root=None):
         return True
     import shutil
 
-    with contextlib.suppress(Exception):
+    try:
         if not shutil.which("lean-ctx"):
             return False
         base = Path(root) if root else None
         if base is None:
             cwd = Path(_PAYLOAD_CWD[0] or os.getcwd())
             base = find_root(cwd) or cwd
-        return bool(_lean_ctx_server_key(base))
+        return _lean_ctx_loadable(base)
+    except Exception as exc:  # fail open (nothing demanded) but leave a trace
+        _record_fault(exc, hook="dispatch_tripwire.lean_ctx_probe")
     return False
+
+
+def _lean_ctx_loadable_keys(base) -> list:
+    """Server keys that look like lean-ctx, DEFINED (an mcpServers entry) and not disabled for this project,
+    in the documented precedence: <project>/.mcp.json; <project>/.claude/settings*.json; ~/.claude.json
+    (top-level, then projects[<root>]); ~/.claude/settings.json. An enabledMcpjsonServers name only approves
+    a server some .mcp.json defines; a name with no definition, or one in a disabled list, can never load,
+    so it is not a key. The hook sees only these files: a server a plugin provides or an --mcp-config file
+    adds is invisible here (so it counts as not loadable, which fails toward allowing native tools).
+    Raises on unreadable config: the callers decide how to fail."""
+    home = Path.home()
+    defined: list = []
+    disabled: set = set()
+    mcp = _read_json(base / ".mcp.json") or {}
+    defined += _lean_hits(mcp.get("mcpServers"))
+    project_settings = sorted((base / ".claude").glob("settings*.json"))
+    for path in project_settings + [home / ".claude" / "settings.json"]:
+        data = _read_json(path) or {}
+        if isinstance(data.get("disabledMcpjsonServers"), list):
+            disabled.update(str(n) for n in data["disabledMcpjsonServers"])
+    for path in project_settings:
+        defined += _lean_hits((_read_json(path) or {}).get("mcpServers"))
+    claude_json = _read_json(home / ".claude.json") or {}
+    defined += _lean_hits(claude_json.get("mcpServers"))
+    projects = claude_json.get("projects")
+    project = projects.get(str(base)) if isinstance(projects, dict) else None
+    if isinstance(project, dict):
+        defined += _lean_hits(project.get("mcpServers"))
+        if isinstance(project.get("disabledMcpServers"), list):
+            disabled.update(str(n) for n in project["disabledMcpServers"])
+    defined += _lean_hits((_read_json(home / ".claude" / "settings.json") or {}).get("mcpServers"))
+    return [key for key in defined if key not in disabled]
+
+
+def _lean_ctx_loadable(base) -> bool:
+    """True when a lean-ctx server is defined and not disabled for this project. The one decision both the
+    native Grep/Glob/Bash deny policy (_lean_ctx_server_key) and the toolkit gate use, so a session is never
+    denied native search while lean-ctx cannot load. Raises on unreadable config."""
+    return bool(_lean_ctx_loadable_keys(base))
 
 
 def _plugin_enabled(fragment):
@@ -969,7 +1037,9 @@ def _toolkit_gap_reason(tool, gap):
         "Paste subagent-kit.md / tool-routing.md: one batched ToolSearch that "
         "includes lean-ctx (ctx_compose/ctx_search/ctx_read), plus "
         "context-mode for noisy output. The subagent must run that before "
-        "Read/Grep/Bash, never Bash grep. "
+        "Read/Grep/Bash, never Bash grep. Write exactly this line in the task: "
+        "`TOOLS: ToolSearch lean-ctx (ctx_compose, ctx_search, ctx_read); context-mode for noisy output.` "
+        "(Where lean-ctx is not loadable the gate does not ask for it; a `TOOLS: Grep, Glob, Read` line is enough.) "
         f"Without it {gap} greps the tree."
     )
 
@@ -1658,6 +1728,32 @@ def _is_read_only_bash(command):
     return True
 
 
+_RUN_OUTPUT_DIRS = (".atlas/.run/board", ".atlas/.run/briefs")
+_RUN_OUTPUT_READERS = frozenset({"cat", "ls", "head", "tail", "jq", "grep", "wc", "stat", "cut"})
+
+
+def _reads_run_output(command):
+    """True when a shell command only reads worker output under .atlas/.run/board/ or briefs/ (collecting a
+    team's results is not investigation drift): readers only, no redirect, no substitution, no other binary."""
+    if not isinstance(command, str):
+        return False
+    command = _unwrap_lean_ctx(command)
+    if not any(d in command.replace("\\", "/") for d in _RUN_OUTPUT_DIRS):
+        return False
+    if _SHELL_SUBSTITUTION.search(command):
+        return False
+    stripped = _HARMLESS_REDIRECT.sub(" ", command)
+    if ">" in stripped or "<" in stripped:
+        return False
+    segments = [s.split() for s in _SEGMENT_SPLIT.split(stripped)]
+    segments = [s for s in segments if s]
+    while segments and segments[0][0] == "cd":
+        segments.pop(0)
+    if not segments:
+        return False
+    return all(s[0].rsplit("/", 1)[-1] in _RUN_OUTPUT_READERS for s in segments)
+
+
 def _is_read_only_call(tool, tinput):
     """True for read-only investigation: Read/Grep/Glob, or a read-only Bash
     command. Such calls are not inline ops for the threshold; edits, writes and
@@ -1667,7 +1763,7 @@ def _is_read_only_call(tool, tinput):
     if tool != "Bash":
         return False
     command = (tinput or {}).get("command")
-    if _is_read_only_bash(command):
+    if _is_read_only_bash(command) or _reads_run_output(command):
         return True
     # Test runners, linters and type checks: the completion gate demands them, so they
     # are never inline drift (atlas_scope.is_verification_command).
@@ -1786,7 +1882,10 @@ def _record_dispatch_deny(
     conn, atlas_db, session, tool, tinput, code, session_model=""
 ):
     """One friction row per dispatch deny (`dispatch_denied:<code>`) carrying the agent, sibling name
-    and model, so a deny rate can be broken down per worker and per tier. Fail-open with a fault row."""
+    and model, so a deny rate can be broken down per worker and per tier. Fail-open with a fault row.
+    The same deny is also one anonymous counter per code (dispatch.deny.<code>), so denial frequency is
+    measurable across installs."""
+    _record_analytics("dispatch.deny." + code)
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(
@@ -1871,9 +1970,11 @@ def _pre_tool_use(
                     f"DENY - this {tool} dispatch to {unnamed} carries no `name`. Named dispatches "
                     "are the colony: only a named sibling appears on the sibling roster "
                     "and can SendMessage the others, its report stays attributable, and "
-                    "board notes can be addressed to it. Re-issue the same call with the "
-                    "Agent tool's `name` argument set (a tool argument, not prompt text): "
-                    f"name: <role>-<slice> (e.g. auth-explorer). Ready-to-paste call:\n{_role_block(unnamed, root)}",
+                    "board notes can be addressed to it. ATLAS_AUTONAME=off is set, so this hook will "
+                    "not name it for you. Either re-issue the same call with the `name` field of "
+                    "the Agent tool input set (tool_input.name, which this hook reads; not prompt text): "
+                    "name: <role>-<slice> (e.g. auth-explorer), or unset ATLAS_AUTONAME (default on) "
+                    f"and the hook names an unnamed dispatch itself. Ready-to-paste call:\n{_role_block(unnamed, root)}",
                 )
                 return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.
@@ -1976,6 +2077,11 @@ def _pre_tool_use(
                 )
             )
         if problems:
+            # One friction row (the first code) but every distinct code is counted once, or the
+            # counter under-reports the toolkit/scope problems that rode along with a spec deny.
+            for extra_code in dict.fromkeys(c for c, _ in problems[1:]):
+                if extra_code != problems[0][0]:
+                    _record_analytics("dispatch.deny." + extra_code)
             text = problems[0][1] + "".join(
                 "\nALSO - " + t.removeprefix("DENY - ") for _, t in problems[1:]
             )
@@ -2185,58 +2291,15 @@ def _lean_hits(servers):
 
 
 def _lean_ctx_server_key(root):
-    """First MCP server key that looks like lean-ctx, checked in the documented
-    precedence: <project>/.mcp.json; <project>/.claude/settings*.json
-    (mcpServers, then enabledMcpjsonServers); ~/.claude.json (top-level
-    mcpServers, then projects[<root>].mcpServers); ~/.claude/settings.json.
-    The key is what the deny text turns into the ToolSearch selector.
-    None means lean-ctx MCP is not plausibly configured for this project, so
-    the Grep/Glob deny must downgrade to the one-time nudge. Unreadable config
-    fails open: None, never an exception."""
-    home = Path.home()
+    """First lean-ctx MCP server key that can actually load (see _lean_ctx_loadable_keys: defined, not
+    disabled; an enabled-list name alone does not count). The key is what the deny text turns into the
+    ToolSearch selector. None means lean-ctx MCP is not plausibly loadable for this project, so the
+    Grep/Glob deny must downgrade to the one-time nudge. Unreadable config fails open: None, never an
+    exception."""
     with contextlib.suppress(Exception):
-        # (1) <project>/.mcp.json
-        mcp = _read_json(root / ".mcp.json")
-        hits = _lean_hits((mcp or {}).get("mcpServers"))
-        if hits:
-            return hits[0]
-        # (2) <project>/.claude/settings*.json
-        try:
-            settings = sorted((root / ".claude").glob("settings*.json"))
-        except Exception:
-            settings = []
-        for settings_path in settings:
-            data = _read_json(settings_path)
-            if not data:
-                continue
-            hits = _lean_hits(data.get("mcpServers"))
-            if hits:
-                return hits[0]
-            hits = _lean_hits(data.get("enabledMcpjsonServers"))
-            if hits:
-                return hits[0]
-        # (3) ~/.claude.json: top-level mcpServers, then projects[<root>]
-        claude_json = _read_json(home / ".claude.json")
-        if claude_json:
-            hits = _lean_hits(claude_json.get("mcpServers"))
-            if hits:
-                return hits[0]
-            projects = claude_json.get("projects")
-            if isinstance(projects, dict):
-                project = projects.get(str(root))
-                if isinstance(project, dict):
-                    hits = _lean_hits(project.get("mcpServers"))
-                    if hits:
-                        return hits[0]
-        # (4) ~/.claude/settings.json
-        home_settings = _read_json(home / ".claude" / "settings.json")
-        if home_settings:
-            hits = _lean_hits(home_settings.get("mcpServers"))
-            if hits:
-                return hits[0]
-            hits = _lean_hits(home_settings.get("enabledMcpjsonServers"))
-            if hits:
-                return hits[0]
+        keys = _lean_ctx_loadable_keys(root)
+        if keys:
+            return keys[0]
     return None
 
 
@@ -3043,7 +3106,8 @@ def _run(payload):
             return
         if tool not in INLINE_TOOLS:
             return  # MultiEdit/NotebookEdit are logged for the footprint only
-        count = atlas_db.inline_ops_since_last_dispatch(conn, run_id)
+        # The same count the PreToolUse deny reads (docs/ and .atlas/ edits excluded): one rule, one number.
+        count = atlas_db.unsanctioned_inline_ops_since_last_dispatch(conn, run_id)
 
         edit_to_target = tool in EDIT_TOOLS and not _is_orchestration_path(
             path, payload.get("cwd")

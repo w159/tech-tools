@@ -2,7 +2,7 @@
 // panel in code points (colour vs NO_COLOR), the real gates spawner, and bandText.
 import { expect, test } from "bun:test";
 import { worldModel } from "../contracts/band-world";
-import { PALETTES, sgrColor, type Ui } from "../mod/atlas-ui";
+import { PALETTES, sgrColor, type Ui } from "../mod/design/atlas-ui";
 import { bandText, paintMission, spawnText, type PanelModel } from "./mission-panel";
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };

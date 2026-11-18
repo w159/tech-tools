@@ -1,5 +1,5 @@
 // Parity: the omp mission panel renders the same text rows as the Claude band for the shared world.
-// Twin: mod/band-golden.test.ts. Both compare against contracts/band-golden.ts, blank spacer rows included.
+// Twin: mod/view/band/band-golden.test.ts. Both compare against contracts/band-golden.ts, blank spacer rows included.
 import { expect, test } from "bun:test";
 import { trimRows } from "../contracts/band-fixture";
 import { golden, idleGolden, tierGolden } from "../contracts/band-golden";
@@ -27,7 +27,7 @@ test("idle renders the shared idle golden, core row included, a failed worker st
 	expect(rows.some((r) => r.startsWith(coreGolden[120]))).toBe(true);
 });
 
-// The band at each tier on the shared world (twin: mod/band-golden.test.ts).
+// The band at each tier on the shared world (twin: mod/view/band/band-golden.test.ts).
 const ui = { theme: "mocha", ascii: false, color: "truecolor" } as const;
 for (const [name, columns, rich] of [["120", 120, false], ["120-rich", 120, true], ["80", 80, false], ["60", 60, false], ["40", 40, false]] as const) {
 	test(`band tier ${name} equals the golden`, () => {

@@ -1,9 +1,9 @@
-// The one phase rail (mod/rail.ts): the default rail equals the operating contract's phases minus the three that are not steps, and the omp
+// The one phase rail (mod/design/rail.ts): the default rail equals the operating contract's phases minus the three that are not steps, and the omp
 // mission panel lights the same step the band does for the same phase list. No `done` step of its own.
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { contractRail, RAIL_DEFAULT, RAIL_SKIP, railIds, railNo, railOf } from "../mod/rail";
+import { contractRail, RAIL_DEFAULT, RAIL_SKIP, railIds, railNo, railOf } from "../mod/design/rail";
 import { renderPanel } from "./mission-panel";
 
 const contract = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8")) as { phases: Array<string | { id: string }> };

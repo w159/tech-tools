@@ -71,7 +71,7 @@ class ModGateTests(unittest.TestCase):
 
     def test_top_level_throw_fails(self):
         dst = self._copy()
-        with open(os.path.join(dst, "mod", "usage.ts"), "a", encoding="utf-8") as f:
+        with open(os.path.join(dst, "mod", "host", "usage.ts"), "a", encoding="utf-8") as f:
             f.write("\nthrow new Error('injected top-level throw');\n")
         rc, out = _gate(dst)
         self.assertEqual(rc, 1, out)
@@ -80,7 +80,7 @@ class ModGateTests(unittest.TestCase):
 
     def test_broken_import_fails(self):
         dst = self._copy()
-        path = os.path.join(dst, "mod", "usage.ts")
+        path = os.path.join(dst, "mod", "host", "usage.ts")
         with open(path, encoding="utf-8") as f:
             src = f.read()
         with open(path, "w", encoding="utf-8") as f:
@@ -101,7 +101,7 @@ class ModGateTests(unittest.TestCase):
     def test_live_host_check_fails_on_host_rejected_module(self):
         # The host refuses `$.env.get(<variable>)`; the offline load accepts it. --live must catch it.
         dst = self._copy()
-        usage = os.path.join(dst, "mod", "usage.ts")
+        usage = os.path.join(dst, "mod", "host", "usage.ts")
         with open(usage, encoding="utf-8") as f:
             src = f.read()
         needle = "$.env.get('ATLAS_HOME')"
@@ -250,9 +250,11 @@ class ModGateLiveWiringTests(unittest.TestCase):
         os.makedirs(os.path.join(dst, "mod2"), exist_ok=True)
         with open(os.path.join(dst, "mod2", "register.ts"), "w", encoding="utf-8") as f:
             f.write("export * from '../mod/register';\n")
-        for name in ("band.tsx", "live_fixture.ts"):
-            with open(os.path.join(dst, "mod2", name), "w", encoding="utf-8") as f:
-                f.write(f"export * from '../mod/{name.rsplit('.', 1)[0]}';\n")
+        os.makedirs(os.path.join(dst, "mod2", "view", "band"), exist_ok=True)
+        with open(os.path.join(dst, "mod2", "view", "band", "band.tsx"), "w", encoding="utf-8") as f:
+            f.write("export * from '../../../mod/view/band/band';\n")
+        with open(os.path.join(dst, "mod2", "live_fixture.ts"), "w", encoding="utf-8") as f:
+            f.write("export * from '../mod/live_fixture';\n")
         os.makedirs(os.path.join(dst, "mod2", "data"), exist_ok=True)
         with open(os.path.join(dst, "mod2", "data", "live.ts"), "w", encoding="utf-8") as f:
             f.write("export * from '../../mod/data/live';\n")

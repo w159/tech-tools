@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, it } from "bun:test";
 
 import type { Access } from "./access.ts";
-import { ATLAS_PREFIX, MAX_BODY_BYTES, createAtlasGateway, resolveAtlasUpstream } from "./atlas-gateway.ts";
+import { ATLAS_PREFIX, MAX_BODY_BYTES, createAtlasGateway, dashboardTokenPath, resolveAtlasUpstream } from "./atlas-gateway.ts";
 
 // A fake Atlas dashboard: Host/Origin/token guarded like atlas_dashboard.py _guard, with a rotating token.
 let token = "tok-1";
@@ -23,6 +23,8 @@ const dashboard: Bun.Server<undefined> = Bun.serve({
     if (origin !== null && origin !== `http://${allowed}`) return Response.json({ ok: false, error: "bad_origin" }, { status: 403 });
     if (url.pathname === "/api/health") return Response.json({ ok: true, service: "atlas-dashboard" });
     if (url.pathname === "/") {
+      // like atlas_dashboard.py _index_authorized: an anonymous GET / is 401, so the token cannot be scraped from it
+      if (request.headers.get("x-atlas-token") !== token) return Response.json({ ok: false, error: "launch_required" }, { status: 401 });
       return new Response(`<html><head><meta name="atlas-token" content="${token}">${legacyIndex ? "" : `<meta name="atlas-base" content="">`}</head></html>`, { headers: { "content-type": "text/html; charset=utf-8" } });
     }
     const supplied = request.headers.get("x-atlas-token"); // header only: the dashboard rejects ?token= on the stream
@@ -45,7 +47,8 @@ const dashboard: Bun.Server<undefined> = Bun.serve({
 upstreamPort = dashboard.port ?? 0;
 afterAll(() => dashboard.stop(true));
 
-const gateway = createAtlasGateway({ upstream: resolveAtlasUpstream(`http://127.0.0.1:${upstreamPort}`) });
+// the token comes from the daemon's 0600 file (modelled by the `token` variable), never from GET /
+const gateway = createAtlasGateway({ upstream: resolveAtlasUpstream(`http://127.0.0.1:${upstreamPort}`), readToken: async () => `${token}\n` });
 const drive: Access = { level: "full", via: "token", role: "drive" };
 const watch: Access = { level: "full", via: "device", role: "watch" };
 const denied: Access = { level: "none", reason: "pairing_required" };
@@ -57,6 +60,11 @@ const post = (path: string, body = "{}", headers: Record<string, string> = {}) =
 beforeEach(() => { seen.length = 0; });
 
 describe("atlas gateway", () => {
+  it("reads the token from the daemon's per-port 0600 file under ATLAS_HOME, not from the index", () => {
+    const upstream = resolveAtlasUpstream("http://127.0.0.1:7421");
+    expect(dashboardTokenPath(upstream, { ATLAS_HOME: "/h/.atlas" })).toBe("/h/.atlas/dashboard-7421.token");
+  });
+
   it("owns /atlas and /atlas/** only", () => {
     expect(gateway.owns(ATLAS_PREFIX)).toBe(true);
     expect(gateway.owns("/atlas/ui/js/app.js")).toBe(true);
@@ -123,8 +131,8 @@ describe("atlas gateway", () => {
     const response = await call("/atlas/api/v2/prefs", { method: "PUT", body: "{\"x\":1}", headers: { "content-type": "application/json" } });
     expect(response.status).toBe(200);
     expect((await response.json() as { echo: string }).echo).toBe("{\"x\":1}");
-    expect(seen.map((entry) => `${entry.method} ${entry.path}`)).toEqual(["PUT /api/v2/prefs", "GET /", "PUT /api/v2/prefs"]);
-    expect(seen[2]!.headers.get("x-atlas-token")).toBe("tok-2");
+    expect(seen.map((entry) => `${entry.method} ${entry.path}`)).toEqual(["PUT /api/v2/prefs", "PUT /api/v2/prefs"]); // the refresh re-reads the token file; it never scrapes GET /
+    expect(seen[1]!.headers.get("x-atlas-token")).toBe("tok-2");
     token = "tok-1";
     await call("/atlas/api/v2/prefs", { method: "PUT", body: "{}", headers: { "content-type": "application/json" } }); // gateway re-caches tok-1
   });

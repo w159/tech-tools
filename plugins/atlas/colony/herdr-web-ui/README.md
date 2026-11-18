@@ -188,3 +188,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) to send a change, [development](docs/deve
 ## license
 
 [MIT](LICENSE). Copyright © 2026 devswha.
+
+## Local access token
+
+A request from this PC's loopback address needs a token like any other client: another user of the same host can open a loopback port. With no `HERDR_WEB_TOKEN` set, the server creates a per-install token in `<state dir>/local-token` (mode 0600, readable only by the owner; `scripts/plugin.ts pair` and `phone-setup` read it). Trusted single-user hosts can opt out with `HERDR_WEB_TRUST_LOCAL=1`; it is off by default.

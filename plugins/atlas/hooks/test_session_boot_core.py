@@ -184,13 +184,17 @@ class StatusContractLinesTest(unittest.TestCase):
             lines = session_boot.status_contract_lines(style)
             self.assertEqual(len(lines), 1, style)
             self.assertNotIn("STYLE OVERRIDE", lines[0])
-            self.assertIn(session_boot.header_template(), lines[0])
+            tpl = session_boot.header_template()
+            expected = tpl if tpl.startswith("**ATLAS**") else tpl.replace("ATLAS", "**ATLAS**", 1)
+            self.assertIn(expected, lines[0])
 
     def test_other_style_adds_the_override_hedge(self):
         lines = session_boot.status_contract_lines("concise")
         self.assertIn("STYLE OVERRIDE: outputStyle is 'concise'", "\n".join(lines))
         self.assertIn("LEDGER", "\n".join(lines))
-        self.assertIn(session_boot.header_template(), "\n".join(lines))
+        tpl = session_boot.header_template()
+        expected = tpl if tpl.startswith("**ATLAS**") else tpl.replace("ATLAS", "**ATLAS**", 1)
+        self.assertIn(expected, "\n".join(lines))
 
 
 def _git(root, *args):
@@ -377,6 +381,137 @@ class AnalyticsSessionStartTest(unittest.TestCase):
 
         with mock.patch.object(atlas_analytics, "on_session_start", side_effect=RuntimeError):
             session_boot._analytics_session_start({"source": "startup"})
+
+
+class HeaderFromContractTest(unittest.TestCase):
+    """H1: the injected header text is generated from contracts/operating-contract.json."""
+
+    def test_glyph_table_follows_the_contract_in_template_order(self):
+        doc = {"phases": [{"id": "alpha", "glyph": "A!"}, {"id": "beta", "glyph": "B!"}]}
+        with mock.patch.object(session_boot, "_contract", return_value=doc):
+            text = session_boot.status_contract_lines("")[0]
+        self.assertIn("A! alpha | B! beta", text)
+        self.assertNotIn("alpha A!", text)
+
+    def test_real_contract_prints_glyph_before_phase_and_asks_for_bold_brand(self):
+        text = session_boot.status_contract_lines("")[0]
+        self.assertIn("\U0001f50d research", text)
+        self.assertNotIn("research \U0001f50d", text)
+        self.assertIn("`**ATLAS** | <glyph> <phase> | <state>`", text)
+
+    def test_override_hedge_uses_the_same_table(self):
+        doc = {"phases": [{"id": "alpha", "glyph": "A!"}]}
+        with mock.patch.object(session_boot, "_contract", return_value=doc):
+            text = "\n".join(session_boot.status_contract_lines("concise"))
+        self.assertIn("A! alpha", text)
+        self.assertIn("**ATLAS**", text)
+
+
+class SnapshotPathSessionIdTest(unittest.TestCase):
+    """X7: a session id never escapes .atlas/.run."""
+
+    def test_traversal_id_stays_inside_run_dir(self):
+        root = os.path.join(os.sep, "proj")
+        p = session_boot.snapshot_path(root, "../../etc/x")
+        self.assertEqual(os.path.dirname(p), os.path.join(root, ".atlas", ".run"))
+        self.assertNotIn("..", os.path.basename(p))
+
+    def test_plain_id_is_unchanged(self):
+        p = session_boot.snapshot_path("/proj", "abc-123_x")
+        self.assertEqual(os.path.basename(p), "dirty-snapshot-abc-123_x.json")
+
+
+class ModSurfaceStatusTest(unittest.TestCase):
+    """H5: what repo code can observe about the mod surface (never the host's ui.render)."""
+
+    def test_cloud_session_is_not_confirmed(self):
+        ok, why = session_boot.mod_surface_status(
+            {"CLAUDE_CODE_REMOTE": "true", "CLAUDE_CODE_ENTRYPOINT": "cli"}
+        )
+        self.assertFalse(ok)
+        self.assertIn("cloud", why)
+
+    def test_sdk_and_unknown_entrypoints_are_not_confirmed(self):
+        for ep in ("sdk-cli", "sdk-ts", "claude-vscode", ""):
+            ok, why = session_boot.mod_surface_status({"CLAUDE_CODE_ENTRYPOINT": ep})
+            self.assertFalse(ok, ep)
+            self.assertTrue(why, ep)
+
+    def test_interactive_cli_is_assumed_active(self):
+        ok, _why = session_boot.mod_surface_status({"CLAUDE_CODE_ENTRYPOINT": "cli"})
+        self.assertTrue(ok)
+
+    def test_omp_is_out_of_scope(self):
+        ok, _why = session_boot.mod_surface_status(
+            {"ATLAS_HARNESS": "omp", "CLAUDE_CODE_REMOTE": "true"}
+        )
+        self.assertTrue(ok)
+
+
+class ContractUnreadableTest(unittest.TestCase):
+    def test_unreadable_contract_logs_fault_and_still_names_the_template(self):
+        import session_boot_core as core
+
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.dict(os.environ, {"ATLAS_HOME": home}), mock.patch.object(
+                core, "_CONTRACT_FILE", os.path.join(home, "missing.json")
+            ), mock.patch.object(core, "_CONTRACT_FAULT", ""):
+                text = " ".join(core.status_contract_lines(""))
+            with open(os.path.join(home, "colony-boot.log"), encoding="utf-8") as fh:
+                log = fh.read()
+        self.assertIn("| <glyph> <phase> | <state>", text)
+        self.assertIn("unreadable", text)
+        self.assertIn("operating-contract", log)
+
+class DashboardLaunchTokenTest(unittest.TestCase):
+    """`ensure` returns a launch URL carrying the owner token: it must never reach the model context."""
+
+    SECRET = "SECRET-LAUNCH-TOKEN-0123"
+
+    def _ensure(self) -> subprocess.CompletedProcess:
+        url = f"http://127.0.0.1:7500/?launch={self.SECRET}#frag-{self.SECRET}"
+        return subprocess.CompletedProcess([], 0, json.dumps({"url": url, "already_running": True}), "")
+
+    def test_ensure_dashboard_line_has_no_query_or_token(self) -> None:
+        env = {"ATLAS_DASHBOARD": "on", "ATLAS_DASHBOARD_PORT": "7500"}
+        with mock.patch.dict(os.environ, env), mock.patch("subprocess.run", return_value=self._ensure()):
+            line = session_boot.ensure_dashboard()
+        self.assertEqual(line, "dashboard: http://127.0.0.1:7500/ (ready)")
+        self.assertNotIn(self.SECRET, line)
+
+    def test_session_start_output_never_carries_the_token(self) -> None:
+        import io
+
+        real_run = subprocess.run
+        ensure = self._ensure()
+
+        def fake_run(argv, *a, **kw):
+            if isinstance(argv, (list, tuple)) and any(str(x).endswith("atlas_dashboard.py") for x in argv):
+                return ensure
+            return real_run(argv, *a, **kw)
+
+        tmp = tempfile.mkdtemp()
+        env = {
+            "ATLAS_DASHBOARD": "on",
+            "ATLAS_DASHBOARD_PORT": "7500",
+            "ATLAS_DB": os.path.join(tmp, "atlas.db"),
+            "ATLAS_COLONY": "off",
+        }
+        stdout = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch("subprocess.run", side_effect=fake_run),
+            mock.patch("sys.stdin", new=io.StringIO(json.dumps({"session_id": "tok1", "cwd": tmp}))),
+            mock.patch("sys.stdout", new=stdout),
+        ):
+            with self.assertRaises(SystemExit):
+                session_boot.main()
+        out = stdout.getvalue()
+        self.assertNotIn(self.SECRET, out)
+        self.assertNotIn("launch=", out)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("dashboard: http://127.0.0.1:7500/ (ready)", ctx)
+        self.assertRegex(ctx, r"atlas_dashboard\.py\" launch")
 
 
 if __name__ == "__main__":

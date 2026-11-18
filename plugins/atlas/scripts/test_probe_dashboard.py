@@ -145,7 +145,7 @@ def test_get_without_token_set_sends_no_token_header(ctx, stub):
     assert "X-Atlas-Token" not in stub.seen[-1][2]
 
 
-def start_with(ctx, monkeypatch, stub, proc):
+def start_with(ctx, monkeypatch, stub, proc, write_token=True):
     monkeypatch.setattr(core, "seed_db", lambda c, db, root: {"kind": "synthetic", "messages": 5})
     popen_args = {}
 
@@ -157,6 +157,8 @@ def start_with(ctx, monkeypatch, stub, proc):
     monkeypatch.setattr(pd.time, "sleep", lambda s: None)
     d = pd.Dash(ctx)
     d.port = stub.port
+    if write_token:  # the daemon writes this 0600 file before it answers /api/health
+        (d.atlas / f"dashboard-{d.port}.token").write_text(stub.token)
     return d, popen_args
 
 
@@ -208,11 +210,11 @@ def test_start_survives_connection_errors_while_waiting(ctx, monkeypatch):
     assert len(sleeps) == 100 and set(sleeps) == {0.15}
 
 
-def test_start_without_token_in_index_fails(ctx, monkeypatch):
-    s = Stub(index=b"<html>no token</html>")
+def test_start_without_token_file_fails(ctx, monkeypatch):
+    s = Stub()
     try:
-        d, _ = start_with(ctx, monkeypatch, s, FakeProc())
-        with pytest.raises(RuntimeError, match=r"no token in index \(status 200\)"):
+        d, _ = start_with(ctx, monkeypatch, s, FakeProc(), write_token=False)
+        with pytest.raises(RuntimeError, match=r"no token file"):
             d.start()
     finally:
         s.close()

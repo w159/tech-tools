@@ -154,6 +154,22 @@
         "z"
       ]
     },
+    "denycode": {
+      "values": [
+        "builtin_agent",
+        "name",
+        "model_override",
+        "effort_override",
+        "toolkit",
+        "scope",
+        "spec",
+        "multi_goal",
+        "steps",
+        "team",
+        "mux",
+        "nested"
+      ]
+    },
     "cleaned": {
       "values": [
         "worktrees",
@@ -293,9 +309,10 @@
     },
     "dispatch": {
       "patterns": [
-        "dispatch.{event}.ms.{ms}"
+        "dispatch.{event}.ms.{ms}",
+        "dispatch.deny.{denycode}"
       ],
-      "purpose": "Hook latency: how long the whole Atlas hook pass takes per event, bucketed, so the per-tool-call overhead Atlas adds stays small on real machines and regressions show up."
+      "purpose": "Hook latency: how long the whole Atlas hook pass takes per event, bucketed, so the per-tool-call overhead Atlas adds stays small on real machines and regressions show up. Dispatch denials: how often each dispatch rule (toolkit, scope, spec, team and the rest) denies a subagent dispatch, a count per rule only, so a rule that denies too often or demands something sessions cannot supply is found and fixed."
     },
     "skill": {
       "patterns": [

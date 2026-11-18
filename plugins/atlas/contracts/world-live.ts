@@ -1,10 +1,10 @@
 // The fixture world (contracts/band-world.ts) as the inputs the real adapters take, so one frame can be rendered through the Claude Code
-// paths (mod/band.tsx missionModel, mod/hud.ts, mod/todo-panel.tsx, mod/pane/sidebar-model.ts panelModelOf) and the omp painters
+// paths (mod/view/band/band.tsx missionModel, mod/view/hud/hud.ts, mod/view/board/todo-panel.tsx, mod/view/panel/pane/sidebar-model.ts panelModelOf) and the omp painters
 // (omp/mission-panel.ts, omp/hud-paint.ts, omp/todo-panel.ts, omp/panel-view.ts) from ONE world. Nothing here restates a number: counts,
-// phases, gates, worker and todo states and ages all come from `world`. The cross-surface test is mod/consistency.test.ts.
+// phases, gates, worker and todo states and ages all come from `world`. The cross-surface test is mod/view/consistency.test.ts.
 import type { ChannelNote, SquadAgent, TodoItem } from "../mod/contract";
 import type { LiveSnapshot } from "../mod/orchestra-types";
-import type { GateGroup, SidebarModel, SidebarView } from "../mod/pane/sidebar-types";
+import type { GateGroup, SidebarModel, SidebarView } from "../mod/view/panel/pane/sidebar-types";
 import { FIXTURE_CONTRACT } from "../mod/test_helpers";
 import { world } from "./band-world";
 import { WORLD_NOW } from "./board-golden";
@@ -17,7 +17,7 @@ export const SESSION = "world";
 export const CHANNEL = "atlas-board-mod";
 
 /** The contract phase list as a host reads it: the world's steps with the three ids that are not steps (`validate`, `done`, `blocked`),
- * so a surface that counts them in its rail disagrees with the world (mod/rail.ts is the one rail). */
+ * so a surface that counts them in its rail disagrees with the world (mod/design/rail.ts is the one rail). */
 export const worldContractPhases = (): string[] => [world.phases[0]!.id, "validate", ...world.phases.slice(1).map((p) => p.id), "done", "blocked"];
 /** The world's contract: its rail is `world.phases`; the extra ids are the contract's non-steps. */
 export const worldContract = () => ({ ...FIXTURE_CONTRACT, phases: worldContractPhases().map((id) => ({ id: id as never, glyph: "·" })), todoPhases: worldContractPhases().filter((id) => id !== "blocked") as never[] });

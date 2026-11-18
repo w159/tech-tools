@@ -209,8 +209,14 @@ class AtlasGatesTest(unittest.TestCase):
         self.assertIsInstance(doc["generatedAt"], int)
         comp = doc["groups"][0]
         by_id = {ln["id"]: ln for ln in comp["lines"]}
-        self.assertFalse(by_id["c"]["ok"])  # no CHANGELOG in temp repo
-        self.assertIn("CHANGELOG", by_id["c"]["fix"])
+        # G4: a repo that never had a CHANGELOG gets an advisory (ok), not a block
+        self.assertTrue(by_id["c"]["ok"])
+        # a CHANGELOG that exists but is empty still blocks
+        (self.root / "docs" / "CHANGELOG.md").write_text("")
+        _, doc_present = _run(self.db, self.root)
+        present = {ln["id"]: ln for ln in doc_present["groups"][0]["lines"]}
+        self.assertFalse(present["c"]["ok"])
+        self.assertIn("CHANGELOG", present["c"]["fix"])
         trip = {ln["id"]: ln for ln in doc["groups"][1]["lines"]}
         self.assertTrue(trip["armed"]["ok"])
         self.assertEqual(trip["inline"]["detail"], "1 direct calls since the last dispatch, limit 4")  # the logged code write

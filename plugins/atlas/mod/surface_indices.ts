@@ -5,23 +5,23 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent, TodoItem } from './contract';
 import type { LiveSnapshot } from './orchestra-types';
-import { hostTo256, spinClock, withSpinFrame, type Ui } from './atlas-ui';
-import { bandTree } from './band';
-import { hudAgents, hudRows } from './hud';
+import { hostTo256, spinClock, withSpinFrame, type Ui } from './design/atlas-ui';
+import { bandTree } from './view/band/band';
+import { hudAgents, hudRows } from './view/hud/hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_MS } from './motion';
-import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
-import { leadOf, leadRow } from './transcript/leadheader';
-import { bubbleTree, notificationTree, workerCard, type CallLike } from './transcript/cards';
-import { noteToastRuns, toastRuns } from './panel-layout';
-import { paintAnsi } from './atlas-ui';
+import { Motion, MOTION_MS } from './motion/motion';
+import { sidebarTree, type SidebarHandlers, type SidebarModel } from './view/panel/pane/sidebar';
+import { leadOf, leadRow } from './view/transcript/leadheader';
+import { bubbleTree, notificationTree, workerCard, type CallLike } from './view/transcript/cards';
+import { noteToastRuns, toastRuns } from './view/panel/panel-layout';
+import { paintAnsi } from './design/atlas-ui';
 
 export const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 
 /** The indices Atlas's palette may put on screen: accent 141, ok 114, warn 179, error 203, neutrals 236 / 240 / 245 / 252, the panel fills 234 / 235, the chip tile 237 and 239 (Y2c: 239 on the 234 panel is five steps up), 231 (white, a fade's first step), 151 (the done fade's held step) and 97 (the wordmark pill, pinned to its pre-image in band.tsx). */
-export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 237, 239, 240, 245, 252, 234, 235, 231, 151, 97]);
+export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 237, 239, 240, 245, 252, 234, 235, 231, 151, 97, 74, 68]); // 74 and 68: the cyan and blue phase tokens (the lead header tells eight phases apart)
 
 type Node = { kind?: string; type?: string; props?: Record<string, unknown>; children?: unknown };
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });

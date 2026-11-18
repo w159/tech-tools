@@ -212,14 +212,14 @@ def gate(root: Path, live: bool, require_live: bool = False) -> int:
             if rc != 0:
                 continue
             moddir = entry.parent
-            need = [moddir / "band.tsx", moddir / "live_fixture.ts", moddir / "data" / "live.ts"]
+            need = [moddir / "view" / "band" / "band.tsx", moddir / "live_fixture.ts", moddir / "data" / "live.ts"]
             gone = [str(p) for p in need if not p.is_file()]
             if gone:
                 report(results, f"smoke load+render {entry.name}", FAIL, f"band fixtures missing: {', '.join(gone)}")
                 continue
             probe_src = tmp / f"probe.{i}.ts"
             q = lambda p: json.dumps(str(p))  # noqa: E731
-            probe_src.write_text(PROBE.format(entry=q(entry), band=q(moddir / "band"),
+            probe_src.write_text(PROBE.format(entry=q(entry), band=q(moddir / "view" / "band" / "band"),
                                               fixture=q(moddir / "live_fixture"), live=q(moddir / "data" / "live")))
             probe_js = tmp / f"probe.{i}.js"
             rc, txt = run([bun, "build", str(probe_src), "--target=node", *ext, "--outfile", str(probe_js)], cwd=root)

@@ -3,8 +3,8 @@
 // denied chip never counts a pending line.
 import { describe, expect, test } from 'claude-code/testing';
 import { gateTally, withPending, STOP_LINE } from './runstate';
-import { deniedCalls } from '../vocab';
-import type { GateGroup } from '../pane/sidebar-types';
+import { deniedCalls } from '../design/vocab';
+import type { GateGroup } from '../view/panel/pane/sidebar-types';
 
 type L = { id: string; label: string; ok: boolean; detail?: string; pending?: boolean };
 const completion = (extra: L[] = []): GateGroup =>

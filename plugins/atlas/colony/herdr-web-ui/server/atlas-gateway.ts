@@ -6,9 +6,13 @@
  * only refuses what the verdict does not allow (no access, or a `watch` device mutating),
  * then speaks to the dashboard as the loopback client its guard (atlas_dashboard.py _guard)
  * expects: Host and Origin rewritten to the dashboard's own, the per-daemon X-Atlas-Token
- * scraped from GET / and attached. Nothing the browser sent for herdr-web-ui (cookies,
+ * read from the daemon's owner-only 0600 token file and attached (GET / answers 401 to a caller
+ * without the credential, so the index is no longer a place to scrape it). Nothing the browser sent for herdr-web-ui (cookies,
  * bearer, Tailscale identity, forwarding headers) is forwarded to the dashboard.
  */
+import { readFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { jsonResponse } from "./http.ts";
 import { sameOrigin } from "./machine-security.ts";
 import { unauthorizedJson } from "./auth.ts";
@@ -55,6 +59,13 @@ export interface AtlasGateway {
 export interface AtlasGatewayOptions {
   upstream: AtlasUpstream;
   fetchImpl?: typeof fetch;
+  /** where the dashboard token comes from; defaults to the daemon's 0600 file under ATLAS_HOME (or ~/.atlas) */
+  readToken?: () => Promise<string>;
+}
+
+/** The file atlas_dashboard.py writes for the port it serves (dashboard-<port>.token). Only the owner can read it. */
+export function dashboardTokenPath(upstream: AtlasUpstream, env: Record<string, string | undefined> = process.env): string {
+  return join(env["ATLAS_HOME"] || join(homedir(), ".atlas"), `dashboard-${upstream.url.port}.token`);
 }
 
 const escapeHtml = (text: string): string => text.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -86,21 +97,19 @@ function badGateway(upstream: AtlasUpstream, error: unknown, request: Request): 
   }, 502, { "cache-control": "no-store" });
 }
 
-const TOKEN_META = /<meta\s+name="atlas-token"\s+content="([^"]*)"/i;
 const BASE_META = /<meta\s+name="atlas-base"\s+content="[^"]*"\s*>/i;
 
 export function createAtlasGateway(options: AtlasGatewayOptions): AtlasGateway {
   const { upstream } = options;
   const doFetch = options.fetchImpl ?? fetch;
+  const readToken = options.readToken ?? (() => readFile(dashboardTokenPath(upstream), "utf8"));
   let cachedToken: string | null = null;
   let tokenInflight: Promise<string> | null = null;
 
   async function fetchToken(): Promise<string> {
-    const response = await doFetch(new URL("/", upstream.url), { headers: { host: upstream.host }, redirect: "manual" });
-    const html = await response.text();
-    const token = TOKEN_META.exec(html)?.[1];
-    if (!response.ok || !token || token === "__ATLAS_TOKEN__") throw new Error(`no atlas-token in dashboard index (HTTP ${response.status})`);
-    return token;
+    const value = (await readToken()).trim();
+    if (!value) throw new Error("the dashboard token file is empty");
+    return value;
   }
 
   function token(refresh: boolean): Promise<string> {

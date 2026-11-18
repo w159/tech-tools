@@ -5,19 +5,19 @@
 import { expect, test } from "bun:test";
 import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from "../contracts/hud-golden";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
-import type { Ui } from "../mod/atlas-ui";
-import { hudRows } from "../mod/hud";
+import type { Ui } from "../mod/design/atlas-ui";
+import { hudRows } from "../mod/view/hud/hud";
 import { hudText as rawHudText, paintHud } from "./hud-paint";
 
 const ui: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
-const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0, merge: false }); // the design goldens are the two-box shape at rest; the merged block (wave 31) is asserted in mod/wave31-hud.test.ts
+const opts = (cols: number, rich = false, maxRows = 60) => ({ cols, maxRows, ui, rich, now: 0, merge: false }); // the design goldens are the two-box shape at rest; the merged block (wave 31) is asserted in mod/view/band/slot-fixed-block.test.ts
 // The design goldens draw the first spinner frame; a row's frame is spinFrameOf(now, name), so the goldens compare with the frame normalised.
 const hudText = (...a: Parameters<typeof rawHudText>) => rawHudText(...a).map(l => l.replace(/(SUBAGENTS )[◐◓◑◒]/, "$1@SPIN@").replace(/[◐◓◑◒]/g, "◐")); // the title's spinner glyph is `@SPIN@` in the golden
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const phases = worldPhases();
 const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUBAGENTS")));
 
-// Round 3 (critique 21): every title rule already runs to the last cell (mod/hud-surface.ts titleRow) and a `╰───╯` rule closes each block, so the goldens are the rows as drawn.
+// Round 3 (critique 21): every title rule already runs to the last cell (mod/view/hud/hud-surface.ts titleRow) and a `╰───╯` rule closes each block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
 test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60 uses the 40 form", () => {
 	const input = { todos: worldPlan(), agents: [], phases };
