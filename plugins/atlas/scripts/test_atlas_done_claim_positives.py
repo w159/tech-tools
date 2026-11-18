@@ -11,6 +11,7 @@ import unittest
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
+import _test_isolation  # noqa: F401,E402  (redirects ~/.atlas to a tempdir)
 import atlas_done_claim_positives as P  # noqa: E402
 
 
@@ -285,7 +286,8 @@ class CarryTest(unittest.TestCase):
         for split in ("train", "heldout"):
             hdr, rows = rec[split]
             self.assertIn("excluded_by_reason", hdr)
-            self.assertTrue(all(r["id"].startswith("dcp-") for r in rows))
+            # the committed files carry the m1 rows (dcp-) plus the amendment-2a rows (dcm2-)
+            self.assertTrue(all(r["id"].startswith(("dcp-", "dcm2-")) for r in rows))
             self.assertTrue(all(r["split"] == split for r in rows))
 
 
