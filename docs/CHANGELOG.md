@@ -1,5 +1,11 @@
 # Changelog
 
+## atlas 17.30.1 - 2026-11-18
+
+- Fixed, crew: `scripts/atlas_crew.py` `resolve_context` and `_weight` treat an over-long single-line `context` entry as literal text instead of raising `OSError: File name too long`; `_guard_codes` runs identical worker checks once and caps concurrent shell commands at `GUARD_MAX_SINGLES`.
+- Fixed, router: `hooks/prompt_optimizer_core.py` `crew_command` prints a crew command only when the spec has a section heading for at least 2 of the planned files and at least half of them.
+- Version 17.30.0 to 17.30.1. Details: `plugins/atlas/CHANGELOG.md`.
+
 ## atlas 17.30.0 - 2026-11-18
 
 Atlas prompt text follows Anthropic's guide "Prompting Claude Fable 5.2". Wording changed; gate behavior and thresholds did not.
