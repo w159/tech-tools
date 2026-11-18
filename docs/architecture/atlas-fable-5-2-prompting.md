@@ -1,6 +1,6 @@
 # Atlas and the Fable 5.2 prompting guide
 
-Anthropic publishes a guide called "Prompting Claude Fable 5.2" (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2). It explains how to write prompts for that model: set effort deliberately, say when a task is finished, name who owns the code, keep the user informed, explain what a subagent costs, and give the reason behind every rule. Atlas is mostly prompt text (agents, skills, hook messages, output style), so as of atlas 17.29.0 that text follows the guide. This page records how, so a reader who has not seen the work can keep it that way.
+Anthropic publishes a guide called "Prompting Claude Fable 5.2" (https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/prompting-claude-fable-5-2). It explains how to write prompts for that model: set effort deliberately, say when a task is finished, name who owns the code, keep the user informed, explain what a subagent costs, and give the reason behind every rule. Atlas is mostly prompt text (agents, skills, hook messages, output style), so as of atlas 17.30.0 that text follows the guide. This page records how, so a reader who has not seen the work can keep it that way.
 
 ## Guide sections and what atlas does
 
