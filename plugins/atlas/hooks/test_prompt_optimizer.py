@@ -852,6 +852,44 @@ class RouteScopeTest(unittest.TestCase):
         self.assertNotIn("atlas_crew.py\" run", nudge)
         self.assertIn("working seats", nudge)
 
+    def test_crew_command_none_for_non_spec_doc_and_many_files(self):
+        # the observed misfire: a one-file bug report naming a reference doc, a busy dir and a pytest command
+        root = Path(self.tmp)
+        (root / "scripts").mkdir()
+        (root / "refs").mkdir()
+        for stem in ("alpha", "beta", "gamma", "delta"):
+            (root / "scripts" / f"{stem}.py").write_text("x = 1\n")
+        (root / "scripts" / "test_alpha.py").write_text("def test_x():\n    pass\n")
+        (root / "refs" / "crew.md").write_text("# Crew\n## Overview\nhow crews run\n## Exit codes\n")
+        prompt = (
+            "Fix the bug in scripts/alpha.py, see refs/crew.md, then run "
+            "`python3 -m pytest -q scripts/test_alpha.py scripts/test_beta.py`."
+        )
+        self.assertIsNone(po.crew_command(self.tmp, prompt, ""))
+
+    def test_crew_command_keeps_spec_with_heading_per_file(self):
+        root = Path(self.tmp)
+        (root / "scripts").mkdir()
+        (root / "refs").mkdir()
+        for stem in ("alpha", "beta", "gamma"):
+            (root / "scripts" / f"{stem}.py").write_text("x = 1\n")
+        (root / "refs" / "other.md").write_text("# Other\n## nothing here\n")
+        (root / "refs" / "plan.md").write_text("# Plan\n## scripts/alpha.py\nA\n## beta.py\nB\n## gamma\nC\n")
+        prompt = "Build scripts/ per refs/other.md and refs/plan.md; run `python3 -m pytest -q scripts`."
+        cmd = po.crew_command(self.tmp, prompt, "")
+        self.assertIn("--spec refs/plan.md --files 'scripts/*.py'", cmd)  # first spec that passes wins
+
+    def test_crew_command_none_when_spec_covers_under_half(self):
+        root = Path(self.tmp)
+        (root / "scripts").mkdir()
+        for stem in ("alpha", "beta", "gamma", "delta", "eps"):
+            (root / "scripts" / f"{stem}.py").write_text("x = 1\n")
+        (root / "plan.md").write_text("# Plan\n## scripts/alpha.py\nA\n## beta.py\nB\n")
+        prompt = "Build scripts/ per plan.md; run `python3 -m pytest -q scripts`."
+        self.assertIsNone(po.crew_command(self.tmp, prompt, ""))
+        (root / "plan.md").write_text("# Plan\n## alpha.py\nA\n")  # one heading: under the 2-file floor
+        self.assertIsNone(po.crew_command(self.tmp, prompt, ""))
+
     def test_every_module_is_high_effort(self):
         self.assertEqual(po.classify_scope("implement every module in kit/")[1], "high")
         self.assertEqual(po.classify_scope("fix all the file headers")[1], "high")

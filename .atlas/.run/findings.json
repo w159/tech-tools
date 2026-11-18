@@ -13711,5 +13711,42 @@
     "verified_at": "2026-11-18T10:52:32+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "crew-command-spec-guard",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "crew_command per-file spec guard: no implementation present to verify",
+    "evidence": [
+      "git status --porcelain: 0 changed files at HEAD 03a650a; no heading/section check in crew_command; no new CHANGELOG line"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --porcelain | wc -l; grep -n 'def crew_command' -A55 plugins/atlas/hooks/prompt_optimizer_core.py | grep -i 'heading\\|section'",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T11:56:03+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-031c"
+  },
+  {
+    "id": "crew-command-spec-guard",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "crew_command emits a crew command only when the spec has section headings for the planned files",
+    "evidence": [
+      "plugins/atlas/hooks/prompt_optimizer_core.py:865",
+      "plugins/atlas/hooks/test_prompt_optimizer.py::test_crew_command_none_for_non_spec_doc_and_many_files"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/hooks (3431 passed)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T12:02:48+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

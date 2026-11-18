@@ -23,6 +23,7 @@ Fixes for the 2026-11-18 audit of the operating-contract gates, the status heade
 - Crew context. `scripts/atlas_crew.py` `resolve_context`: a long single-line `context` entry is handed over as literal text instead of raising `OSError: File name too long`.
 - Crew weight. `scripts/atlas_crew.py` `_weight`: a long single-line `context` entry is read as literal text instead of raising `OSError: File name too long` while the launch order is computed.
 - Crew green-check guard. `scripts/atlas_crew.py` `_guard_codes`: workers with the same check text share one run (88 identical pytest runs at once gave load average 239), and at most `GUARD_MAX_SINGLES` (max(4, cpus)) shell commands run at the same time, the shared-interpreter fallback included.
+- Crew command spec guard. `hooks/prompt_optimizer_core.py` `crew_command`: the nudge names a spec only when it has a section heading for at least 2 of the planned files and at least half of them (a reference doc plus a busy directory had produced an 88-worker command); no spec that fits -> no command.
 - Added counters: `dispatch.deny.<builtin_agent|name|model_override|effort_override|toolkit|scope|spec|multi_goal|steps|team|mux|nested>` (`contracts/analytics-schema.json`, `telemetry/allowed-keys.json`; counts only).
 
 ### Changed

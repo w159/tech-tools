@@ -843,12 +843,51 @@ def _scripts_dir() -> str:
     return os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts"))
 
 
+def _spec_heads(text: str) -> list:
+    """Markdown heading texts outside fenced code blocks (atlas_crew._headings, kept local to the hook)."""
+    out, fence = [], None
+    for line in text.splitlines():
+        st = line.strip()
+        if fence:
+            if re.fullmatch(re.escape(fence[0]) + "{%d,}" % len(fence), st):
+                fence = None
+            continue
+        m = re.match(r"(`{3,}|~{3,})(.*)$", st)
+        if m and not (m.group(1)[0] == "`" and "`" in m.group(2)):
+            fence = m.group(1)
+            continue
+        h = re.match(r"^#{1,6}\s+(.*?)\s*#*\s*$", line)
+        if h:
+            out.append(h.group(1).strip())
+    return out
+
+
+def _spec_covers(spec_path: Path, rels: list) -> bool:
+    """True when the spec has a section heading naming at least 2 of `rels`, and at least half of them.
+    A heading names a file the way atlas_crew._heading_for finds it: it holds the path, else the file
+    name, else the stem as a whole word. An unreadable spec covers nothing."""
+    try:
+        heads = _spec_heads(spec_path.read_text(encoding="utf-8", errors="replace"))
+    except Exception:
+        return False
+    hit = 0
+    for rel in rels:
+        name, stem = Path(rel).name, Path(rel).stem
+        if any(rel in h or name in h or re.search(rf"\b{re.escape(stem)}\b", h, re.I) for h in heads):
+            hit += 1
+    return hit >= 2 and hit * 2 >= len(rels)
+
+
 def crew_command(cwd, prompt: str, session: str = "") -> str | None:
     """The exact `atlas_crew.py run` command for a spec-driven multi-file job in this repo, else None.
 
     Repo-aware: the spec is a .md the prompt names (or SPEC.md / spec.md / docs/SPEC.md); the files are
     the dominant source extension of a directory the prompt names, two or more files; the check is a
     backticked test command from the prompt, else `python3 -m pytest -q` when tests/ holds test_*.py.
+    The spec must be a per-file spec for those files: it needs a section heading naming at least 2 of the
+    planned files (the glob minus __init__.py, conftest.py, test_*) and at least half of them, matched as
+    atlas_crew._heading_for matches (path, else file name, else stem as a word). The first candidate spec
+    that passes is used; none passes -> None; an unreadable spec does not match.
     None when any piece is missing, so a guess never reaches the lead as a runnable command."""
     try:
         root = Path(_scope_root(cwd))
@@ -863,22 +902,27 @@ def crew_command(cwd, prompt: str, session: str = "") -> str | None:
         if not specs:
             return None
         best = None
+        best_rels: list = []
         for d in dict.fromkeys(_DIR_REF_RE.findall(text)):
             if d.split("/")[0] in _NOT_WORK_DIRS or not (root / d).is_dir():
                 continue
             for ext in _CREW_SRC_EXTS:
-                n = sum(
-                    1
-                    for f in (root / d).glob("*." + ext)
+                rels = [
+                    f.relative_to(root).as_posix()
+                    for f in sorted((root / d).glob("*." + ext))
                     if f.is_file()
                     and f.name not in ("__init__.py", "conftest.py")
                     and not f.name.startswith("test_")
-                )
+                ]
+                n = len(rels)
                 if n >= 2 and (best is None or n > best[2]):
-                    best = (d, ext, n)
+                    best, best_rels = (d, ext, n), rels
         if best is None:
             return None
         d, ext, _ = best
+        spec = next((c for c in specs if _spec_covers(root / c, best_rels)), None)
+        if spec is None:
+            return None
         m = _RUNNER_REF_RE.search(text)
         check = m.group(1).strip() if m else None
         tests_dir = root / "tests"
@@ -892,7 +936,7 @@ def crew_command(cwd, prompt: str, session: str = "") -> str | None:
             tests = " --tests 'tests/test_{stem}.py'"
         sess = f" --session {shlex.quote(session)}" if session else ""
         return (
-            f'python3 "{os.path.join(_scripts_dir(), "atlas_crew.py")}" run --spec {shlex.quote(specs[0])} '
+            f'python3 "{os.path.join(_scripts_dir(), "atlas_crew.py")}" run --spec {shlex.quote(spec)} '
             f"--files '{d}/*.{ext}'{tests} --check {shlex.quote(check)}{sess} --wait 110 "
             "--changelog '<one line: what changed>'"
         )

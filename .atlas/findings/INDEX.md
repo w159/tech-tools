@@ -84,6 +84,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | resolve-context-oserror | verified | resolve_context returns an over-long single-line context entry as literal text | [2026-11-18_resolve-context-oserror.md](2026-11-18_resolve-context-oserror.md) |
 | 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | crew-guard-fanout | verified | green-check guard runs identical checks once and caps concurrent shell commands; _weight treats an over-long entry as literal text | [2026-11-18_crew-guard-fanout.md](2026-11-18_crew-guard-fanout.md) |
+| 2026-11-18 | crew-command-spec-guard | verified | crew_command emits a crew command only when the spec has section headings for the planned files | [2026-11-18_crew-command-spec-guard.md](2026-11-18_crew-command-spec-guard.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
 | 2026-11-18 | audit-C7 | rejected | eager import true but 7-14 ms not 40; event_dispatch 38-44 ms | [2026-11-18_audit-c7.md](2026-11-18_audit-c7.md) |
