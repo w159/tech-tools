@@ -12,7 +12,7 @@
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
 import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from '../../atlas-ui';
 import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
-import { KILLED, wordOf } from '../../pane/activity';
+import { KILLED, wordOf } from '../panel/pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */

@@ -1001,7 +1001,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/pane/sidebar-channel.tsx": {
+    "plugins/atlas/mod/view/panel/pane/sidebar-channel.tsx": {
       "crap_high": {
         "count": 1
       },
@@ -1009,12 +1009,12 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/pane/sidebar-gates.tsx": {
+    "plugins/atlas/mod/view/panel/pane/sidebar-gates.tsx": {
       "crap_critical": {
         "count": 1
       }
     },
-    "plugins/atlas/mod/pane/sidebar-route.tsx": {
+    "plugins/atlas/mod/view/panel/pane/sidebar-route.tsx": {
       "crap_critical": {
         "count": 1
       },
@@ -1022,7 +1022,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/pane/sidebar-team.tsx": {
+    "plugins/atlas/mod/view/panel/pane/sidebar-team.tsx": {
       "complexity_critical": {
         "count": 1
       },
@@ -1868,7 +1868,7 @@
     "plugins/atlas/omp/index.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/integrations.js:high impact",
     "mcp_servers/auvik-mcp/scripts/smoke.ts:complexity",
-    "plugins/atlas/mod/pane/sidebar-team.tsx:untested risk",
+    "plugins/atlas/mod/view/panel/pane/sidebar-team.tsx:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/settings-row.js:untested risk",
     "plugins/atlas/mod/view/transcript/restyle.tsx:high impact",
     "plugins/atlas/mod/register.ts:high impact",
@@ -1890,9 +1890,9 @@
     "plugins/atlas/scripts/dashboard_ui/js/pages/settings.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/ui-data.js:high impact",
     "plugins/atlas/omp/todo-panel.ts:high impact",
-    "plugins/atlas/mod/pane/sidebar-route.tsx:untested risk",
+    "plugins/atlas/mod/view/panel/pane/sidebar-route.tsx:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/overview.js:untested risk",
-    "plugins/atlas/mod/pane/sidebar-channel.tsx:high impact",
+    "plugins/atlas/mod/view/panel/pane/sidebar-channel.tsx:high impact",
     "mcp_servers/threatlocker-mcp/src/utils/resolve.ts:high impact",
     "plugins/atlas/mod/data/herdr.ts:complexity",
     "mcp_node/node-blumira/src/http.ts:complexity",

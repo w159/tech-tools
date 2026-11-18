@@ -7,7 +7,7 @@ import { liveWorkers } from './live';
 import { busySnap, NOW } from '../live_fixture';
 import { uiFromEnv } from '../atlas-ui';
 import { healthCardRows, todoRows, agentRows } from '../view/hud/hud-surface';
-import { bodyLines, lineText, type PanelModel } from '../panel-layout';
+import { bodyLines, lineText, type PanelModel } from '../view/panel/panel-layout';
 import { panelWorld } from '../../contracts/panel-world';
 import { textWidth } from '../theme';
 import { composeSlot } from '../view/band/slot';

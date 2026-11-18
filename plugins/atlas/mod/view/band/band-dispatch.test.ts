@@ -11,12 +11,12 @@ import { ownTodos } from '../../data/todos';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { atlasSlot, fitHudToBand, hudGapRows, hudSlotCap, withStopVerdict } from '../../register';
 import { rowOf, type Segment } from '../../runs';
-import { bodyLines } from '../../panel-layout';
-import { panelModelOf } from '../../pane/sidebar-model';
+import { bodyLines } from '../panel/panel-layout';
+import { panelModelOf } from '../panel/pane/sidebar-model';
 import { busySnap } from '../../live_fixture';
 import { hudPhases } from './band';
 import type { TodoItem } from '../../contract';
-import type { GateGroup } from '../../pane/sidebar-types';
+import type { GateGroup } from '../panel/pane/sidebar-types';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

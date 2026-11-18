@@ -10,8 +10,8 @@ import type { ClientElements } from 'claude-code';
 import { worldGates, worldSidebar, worldSnapshot } from '../../contracts/world-live';
 import { bandTree } from '../view/band/band';
 import { liveWorkers } from '../data/live';
-import { panelModelOf } from '../pane/sidebar-model';
-import { bodyLines, lineText } from '../panel-layout';
+import { panelModelOf } from '../view/panel/pane/sidebar-model';
+import { bodyLines, lineText } from '../view/panel/panel-layout';
 import type { Ui } from '../atlas-ui';
 
 type AnyNext = (input: unknown) => Promise<unknown>;

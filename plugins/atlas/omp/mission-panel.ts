@@ -13,7 +13,7 @@ import { gatesError, parseGates } from "../mod/host/gates";
 import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/view/band/mission-layout";
-import type { GateGroup } from "../mod/pane/sidebar";
+import type { GateGroup } from "../mod/view/panel/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { withOwnerStates } from "../mod/data/live";
 import { openRowName, ownPlan } from "../mod/data/todos";

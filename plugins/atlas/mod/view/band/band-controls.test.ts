@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { bandTree, type BandHandlers } from './band';
 import { liveWorkers } from '../../data/live';
 import { busySnap, NOW } from '../../live_fixture';
-import { sidebarTree, type SidebarHandlers } from '../../pane/sidebar';
+import { sidebarTree, type SidebarHandlers } from '../panel/pane/sidebar';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

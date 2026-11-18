@@ -8,7 +8,7 @@ import { eventBuckets, noteHook, resetHookLog } from '../../host/hook-log';
 import { bandLines, runsText, runStateOf, type MissionModel } from '../band/mission-layout';
 import { healthCardRows } from './hud-surface';
 import { fitFields, gateOf, healthDetail, healthRows, type Health } from '../../data/idle-health';
-import { bodyLines, lineText } from '../../panel-layout';
+import { bodyLines, lineText } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { BUCKETS, rateLabel } from '../../data/pulse';
 import { sparkOf } from '../../spark';

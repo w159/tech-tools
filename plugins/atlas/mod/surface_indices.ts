@@ -12,10 +12,10 @@ import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_MS } from './motion/motion';
-import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
+import { sidebarTree, type SidebarHandlers, type SidebarModel } from './view/panel/pane/sidebar';
 import { leadOf, leadRow } from './view/transcript/leadheader';
 import { bubbleTree, notificationTree, workerCard, type CallLike } from './view/transcript/cards';
-import { noteToastRuns, toastRuns } from './panel-layout';
+import { noteToastRuns, toastRuns } from './view/panel/panel-layout';
 import { paintAnsi } from './atlas-ui';
 
 export const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };

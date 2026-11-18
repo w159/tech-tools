@@ -8,9 +8,9 @@ import { hudLines, type HudAgent, type HudInput } from './view/hud/hud';
 import type { SquadAgent, TodoItem } from './contract';
 import { busySnap } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
-import type { PanelModel } from './panel-layout';
-import { panelModelOf } from './pane/sidebar-model';
-import type { SidebarModel } from './pane/sidebar-types';
+import type { PanelModel } from './view/panel/panel-layout';
+import { panelModelOf } from './view/panel/pane/sidebar-model';
+import type { SidebarModel } from './view/panel/pane/sidebar-types';
 
 const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;
 const NOW = 1_000_000;const text = (rows: readonly (readonly { t: string }[])[]): string[] => rows.map((r) => r.map((x) => x.t).join(''));

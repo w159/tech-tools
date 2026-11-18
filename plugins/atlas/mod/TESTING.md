@@ -38,7 +38,7 @@ claude plugin test plugins/atlas
 Expectation is two-tier:
 
 - **Mod lines must be fully green.** The mod test files load and pass,
-  592 pass (includes `mod/pane/sidebar.test.ts`, `mod/host/register-sidebar.test.ts`
+  592 pass (includes `mod/view/panel/pane/sidebar.test.ts`, `mod/host/register-sidebar.test.ts`
   and `mod/sprites/sprites.golden.test.ts`, which injects `memFs` from
   `mod/test_helpers.ts` instead of importing `node:fs`, which the host forbids).
 - **Colony/omp residuals are expected failures of the walk.** 184 load failures, each a `plugins/atlas/colony/**` or `plugins/atlas/omp/**` file
@@ -89,7 +89,7 @@ test('rebuilds when a watched file changes', async $ => {
 ```
 
 For UI tests, call the pure tree builders (`bandTree`, `sidebarTree`) with a recording
-elements object and handler stubs, as `mod/pane/sidebar.test.ts` does; pass
+elements object and handler stubs, as `mod/view/panel/pane/sidebar.test.ts` does; pass
 `mock.clock(on)` when the component schedules work. Live input behavior (mouse clicks
 on chips and `▸` toggles; the mods print no key hints) is checked in a real session, not here.
 

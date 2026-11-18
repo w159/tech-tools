@@ -1,11 +1,11 @@
 // Critique 18, slice C5: at 110 columns the side pane is about 38 cells wide and the six-tab strip wrapped onto two lines on every tab
 // (stoprun-110-562576ed-1/tab-route.png: `r: route  t: team  c: channel` / `g: gates  k: core  o: board`; live-110-562576ed-2/tab-board.png). The strip stays on one line
-// whenever the six whole words fit; the keys stay bound (the zero-width layer of mod/pane/sidebar.tsx) and the band footer names them.
+// whenever the six whole words fit; the keys stay bound (the zero-width layer of mod/view/panel/pane/sidebar.tsx) and the band footer names them.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { uiFromEnv } from './atlas-ui';
 import { cells } from './atlas-ui';
-import { headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
+import { headerRows, lineText, stripLayout, tabRows, type PanelTab } from './view/panel/panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];

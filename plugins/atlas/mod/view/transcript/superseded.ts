@@ -1,6 +1,6 @@
 // superseded.ts: which `⚑ DONE` header chips a Stop refusal overturned (critique 21: the chip printed directly above the refusal that overruled it and nothing marked it).
 // The chips the transcript drew are recorded in order; when the last Stop verdict flips to refused, every done chip drawn so far is superseded, and a done chip drawn after the
-// refusal (the lead's real finish) is not. Plain module state, no host calls: the pane feeds the verdict (mod/pane/sidebar.tsx), the AssistantMessage site reads it (restyle.tsx).
+// refusal (the lead's real finish) is not. Plain module state, no host calls: the pane feeds the verdict (mod/view/panel/pane/sidebar.tsx), the AssistantMessage site reads it (restyle.tsx).
 
 const MAX = 200;
 const drawn: string[] = []; // ids of the done chips drawn, oldest first

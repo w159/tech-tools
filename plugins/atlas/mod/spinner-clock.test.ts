@@ -7,8 +7,8 @@ import { liveWorkers } from './data/live';
 import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from './atlas-ui';
 import { hudAgents, hudLines } from './view/hud/hud';
 import { rowSpinnerGlyph } from './view/hud/hud-surface';
-import { panelModelOf } from './pane/sidebar-model';
-import { bodyLines, lineText } from './panel-layout';
+import { panelModelOf } from './view/panel/pane/sidebar-model';
+import { bodyLines, lineText } from './view/panel/panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const glyphOf = (rows: readonly string[], name: string): string | undefined => rows.find((l) => l.includes(name))?.trimStart().replace(/^▸\s*/, '')[0];

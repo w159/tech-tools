@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { leadSpinnerGlyph, type Ui } from './atlas-ui';
 import { forgetBandFrame, sharedSpinFrame } from './motion/motion';
-import { lineText, panelLines, type PanelModel } from './panel-layout';
+import { lineText, panelLines, type PanelModel } from './view/panel/panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const SPIN_MARK = /[◐◓◑◒]/;

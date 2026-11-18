@@ -10,9 +10,9 @@ import { agentRows, type AgentRow } from './view/hud/hud-surface';
 import { agentName } from './view/hud/hud';
 import { coreReport } from './view/band/core-row';
 import { coreModel } from './data/core';
-import { bodyLines, lineText, panelText, type PanelModel } from './panel-layout';
+import { bodyLines, lineText, panelText, type PanelModel } from './view/panel/panel-layout';
 import { bandLines, missionLines, runsText, type MissionModel } from './view/band/mission-layout';
-import type { GateGroup } from './pane/sidebar-types';
+import type { GateGroup } from './view/panel/pane/sidebar-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['plan', 'research', 'build', 'verify', 'ship'] as const;

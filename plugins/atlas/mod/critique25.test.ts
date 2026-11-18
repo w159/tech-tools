@@ -8,8 +8,8 @@ import { boardRowsOf, boardText, boardLines } from './view/board/board-model';
 import { liveWorkers } from './data/live';
 import { todoState } from './data/todos';
 import { hudAgents, hudLines } from './view/hud/hud';
-import { panelModelOf } from './pane/sidebar-model';
-import { bodyLines, lineText, noteToastText, toastRuns, toastText } from './panel-layout';
+import { panelModelOf } from './view/panel/pane/sidebar-model';
+import { bodyLines, lineText, noteToastText, toastRuns, toastText } from './view/panel/panel-layout';
 import { notificationTree } from './view/transcript/cards';
 import { workerCard } from './view/transcript/cards';
 

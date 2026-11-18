@@ -12,9 +12,9 @@ import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
 import { panelWorld } from '../../contracts/panel-world';
 import { coreModel } from './core';
 import { withHeaderTally } from './runstate';
-import { panelText } from '../panel-layout';
-import type { PanelModel } from '../panel-layout';
-import type { GateGroup } from '../pane/sidebar-types';
+import { panelText } from '../view/panel/panel-layout';
+import type { PanelModel } from '../view/panel/panel-layout';
+import type { GateGroup } from '../view/panel/pane/sidebar-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['plan', 'research', 'build', 'verify', 'ship'] as const;

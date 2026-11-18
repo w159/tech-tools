@@ -168,9 +168,9 @@ describe('faults', () => {
     const logs: unknown[][] = [];
     (engine.ui as unknown as { log: (...a: unknown[]) => void }).log = (...a) => { logs.push(a); };
     await register(on, {});
-    const e = { surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k', module: 'mod/pane/board.tsx', phase: 'load', reason: 'boom' };
+    const e = { surface: 'terminal', component: 'Pane', requestId: 'atlas', element: 'k', module: 'mod/view/panel/pane/board.tsx', phase: 'load', reason: 'boom' };
     expect(await pick('ui.fault')(engine, e, noopNext)).toEqual(e);
-    expect(logs).toEqual([['atlas: Pane mod/pane/board.tsx load: boom', { to: 'debug' }]]);
+    expect(logs).toEqual([['atlas: Pane mod/view/panel/pane/board.tsx load: boom', { to: 'debug' }]]);
   });
 });
 

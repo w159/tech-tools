@@ -11,7 +11,7 @@ import type { LiveSnapshot } from '../orchestra-types';
 import { cells, msClock, type Ui } from '../atlas-ui';
 import { clipE as clip } from '../view/board/board-model';
 import { lookOf } from '../look';
-import { noteToastText, toastText } from '../panel-layout';
+import { noteToastText, toastText } from '../view/panel/panel-layout';
 
 export type NotifyEvent =
 	| { type: 'agent-spawn'; name: string }

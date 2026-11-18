@@ -10,7 +10,7 @@ import { hudLines, segmentOf } from './view/hud/hud';
 import { rowSpinnerGlyph } from './view/hud/hud-surface';
 import { liveWorkers } from './data/live';
 import { busySnap, NOW } from './live_fixture';
-import { runEl } from './pane/sidebar-paint';
+import { runEl } from './view/panel/pane/sidebar-paint';
 
 const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 const UI24: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

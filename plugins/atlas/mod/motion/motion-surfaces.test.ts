@@ -11,7 +11,7 @@ import { boardBody, boardMotionItems, type BoardRow } from '../view/board/board-
 import { hudLines, hudMotionItems, type HudInput } from '../view/hud/hud';
 import { bandLines, bandMotionItems } from '../view/band/mission-layout';
 import { Motion, sinceChange, windowOf, type MotionCtx, type MotionItem } from './motion';
-import { bodyLines, panelMotionItems, type PanelModel } from '../panel-layout';
+import { bodyLines, panelMotionItems, type PanelModel } from '../view/panel/panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const T0 = 1000;

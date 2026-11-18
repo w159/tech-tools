@@ -17,11 +17,11 @@ import { fillHex, LINGER_MS, preImage, spinClock, surfaceHex, xtermHex, type Ui,
 import { noteBandFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
 import type { UiState } from '../../atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
-import type { GateGroup, SidebarView } from '../../pane/sidebar-types';
+import type { GateGroup, SidebarView } from '../panel/pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from '../../runs';
 import { todoRows } from '../board/todo-panel';
 import { contractRail, railOf, type Rail } from '../../rail';
-import { chipText, STRIP_TABS } from '../../panel-layout';
+import { chipText, STRIP_TABS } from '../panel/panel-layout';
 import { fitText, textWidth } from '../../theme';
 import { chipStyle, hoverStyle } from '../../input/clickable';
 import type { Health, HealthIn } from '../../data/idle-health';

@@ -6,9 +6,9 @@ import { closedTotal, newRunClock, readRun, runKey, stepRun, type ClockHold, typ
 import { elapsedClock, phaseGlyph, type Ui } from './atlas-ui';
 import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 import { panelWorld } from '../contracts/panel-world';
-import { lineText, panelLines, bodyLines } from './panel-layout';
-import { forgetPhases, panelModelOf } from './pane/sidebar-model';
-import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
+import { lineText, panelLines, bodyLines } from './view/panel/panel-layout';
+import { forgetPhases, panelModelOf } from './view/panel/pane/sidebar-model';
+import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './view/panel/pane/sidebar';
 import { forgetRefusals } from './data/channels';
 import { agentModel, hudAgents } from './view/hud/hud';
 import { liveWorkers, queuedMembers } from './data/live';

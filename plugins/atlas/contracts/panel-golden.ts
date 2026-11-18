@@ -23,7 +23,7 @@
 // and the ribbon's right-hand text, or for the Team tab's lead row, roster rows and lead summary. Those expectations in `tabGolden`
 // and `teamLiveGolden` are LITERAL TEXT checked against the rev 4 vocabulary (rev4 sections 3 and 5 and the six state words); they are
 // not design evidence. At round 3 (panel polish) `tabGolden` was written out from the layout's own rows once, then read row by row
-// against the grammar of mod/panel-polish.test.ts and the rendered PNGs; the properties that matter (one state column, whole figures,
+// against the grammar of mod/view/panel/panel-polish.test.ts and the rendered PNGs; the properties that matter (one state column, whole figures,
 // the strip on both hosts) are asserted independently there, so a layout regression fails both.
 export const sidepanelDesign: Record<number, string[]> = {
   80: [

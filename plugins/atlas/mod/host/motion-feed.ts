@@ -11,9 +11,9 @@ import { ownTodos } from '../data/todos';
 import type { CoreModel } from '../data/core';
 import type { MotionItem } from '../motion/motion';
 import type { LiveSnapshot } from '../orchestra-types';
-import { panelModelOf } from '../pane/sidebar-model';
-import type { GateGroup } from '../pane/sidebar-types';
-import { panelMotionItems } from '../panel-layout';
+import { panelModelOf } from '../view/panel/pane/sidebar-model';
+import type { GateGroup } from '../view/panel/pane/sidebar-types';
+import { panelMotionItems } from '../view/panel/panel-layout';
 import type { Ui } from '../atlas-ui';
 
 /** The surfaces' observed names (the keys of the result). */

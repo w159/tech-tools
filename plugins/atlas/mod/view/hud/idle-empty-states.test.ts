@@ -6,7 +6,7 @@ import { busySnap, NOW } from '../../live_fixture';
 import { uiFromEnv } from '../../atlas-ui';
 import { healthCardRows } from './hud-surface';
 import { hudLines } from './hud';
-import { bodyLines, headerRows, lineText, ribbonRow, type PanelModel } from '../../panel-layout';
+import { bodyLines, headerRows, lineText, ribbonRow, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { textWidth } from '../../theme';
 import type { Health } from '../../data/idle-health';

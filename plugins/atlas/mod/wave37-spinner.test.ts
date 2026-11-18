@@ -4,7 +4,7 @@ import { panelWorld } from '../contracts/panel-world';
 import { LEAD_FRAMES, leadSpinnerGlyph, SPINNER_MS, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 import { sharedSpinFrame } from './motion/motion';
-import { lineText, bodyLines, type PanelModel } from './panel-layout';
+import { lineText, bodyLines, type PanelModel } from './view/panel/panel-layout';
 import { rowSpinnerGlyph } from './view/hud/hud-surface';
 import { hudLines } from './view/hud/hud';
 import type { TodoItem } from './contract';

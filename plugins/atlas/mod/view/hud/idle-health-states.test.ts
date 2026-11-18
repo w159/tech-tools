@@ -6,14 +6,14 @@ import { bandHealth, bandTree, type BandHandlers, type BandModel } from '../band
 import { busySnap, NOW } from '../../live_fixture';
 import { uiFromEnv } from '../../atlas-ui';
 import { healthCardRows, padRows } from './hud-surface';
-import { bodyLines, lineText, type PanelModel } from '../../panel-layout';
+import { bodyLines, lineText, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { textWidth } from '../../theme';
 import { composeSlot } from '../band/slot';
 import * as ih from '../../data/idle-health';
 import type { Health } from '../../data/idle-health';
 import { hookStats, noteHook, resetHookLog } from '../../host/hook-log';
-import { sidebarTree, type SidebarHandlers } from '../../pane/sidebar';
+import { sidebarTree, type SidebarHandlers } from '../panel/pane/sidebar';
 import { activeChipStyle } from '../../input/clickable';
 
 type Node = { kind: string; props: Record<string, any> };

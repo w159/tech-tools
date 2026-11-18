@@ -13,7 +13,7 @@
     "plugins/armada/mcp/_env/load.mjs",
     "plugins/atlas/mod/register.ts",
     "plugins/atlas/mod/view/band/band.tsx",
-    "plugins/atlas/mod/pane/*.tsx",
+    "plugins/atlas/mod/view/panel/pane/*.tsx",
     "plugins/atlas/mod/**/*.test.ts",
     "plugins/atlas/mod/**/*.test.tsx",
     "plugins/atlas/scripts/sprite_review.ts",

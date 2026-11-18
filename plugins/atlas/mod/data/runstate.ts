@@ -4,7 +4,7 @@
 // So `3/4 green` on the gates tab and `checks ... 3 ok` on the band are the same figure.
 import { groupOpenCount } from '../host/gates';
 import { textWidth } from '../theme';
-import type { GateGroup } from '../pane/sidebar-types';
+import type { GateGroup } from '../view/panel/pane/sidebar-types';
 import { elapsedClock, type UiState } from '../atlas-ui';
 import { todoState } from './todos';
 import { plannedText, type Route } from './core';

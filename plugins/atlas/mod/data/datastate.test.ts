@@ -4,7 +4,7 @@ import { factsLine } from '../host/discipline';
 import { uiFromEnv, type Run } from '../atlas-ui';
 import type { Health, HealthCheck } from './idle-health';
 import { frameKit, statusFrame, statusGatesRows, statusHooksRows, type GateSrc, type StatusIn } from '../view/hud/status-frame';
-import { tabFrame, tabText, type TabIn } from '../tabs-frame';
+import { tabFrame, tabText, type TabIn } from '../view/panel/tabs-frame';
 import { ageShort, dataCell, dataStateOf, dataWord } from './datastate';
 
 describe('empty, error and stale: the three states of a figure', () => {

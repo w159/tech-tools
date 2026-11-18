@@ -14,7 +14,7 @@ import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
 import { Motion } from './motion/motion';
 import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from './atlas-ui';
-import { sidebarTree } from './pane/sidebar';
+import { sidebarTree } from './view/panel/pane/sidebar';
 import { boardTimeline } from './view/board/board-model';
 import { notificationTree } from './view/transcript/cards';
 import { outcomeText } from './view/transcript/outcome';

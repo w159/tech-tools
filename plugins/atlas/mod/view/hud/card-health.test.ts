@@ -7,7 +7,7 @@ import { busySnap, NOW } from '../../live_fixture';
 import { uiFromEnv, type Run } from '../../atlas-ui';
 import { healthCardRows } from './hud-surface';
 import { gateOf, healthRows, type Health } from '../../data/idle-health';
-import { bodyLines, lineText } from '../../panel-layout';
+import { bodyLines, lineText } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { textWidth } from '../../theme';
 import { gateLine, gatesTotal } from '../../vocab';

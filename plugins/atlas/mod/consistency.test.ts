@@ -16,8 +16,8 @@ import { bandTree, hudPhases } from './view/band/band';
 import { coreModel } from './data/core';
 import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from './data/live';
 import { hudAgents, hudLines } from './view/hud/hud';
-import { panelModelOf } from './pane/sidebar-model';
-import { panelText, type PanelTab } from './panel-layout';
+import { panelModelOf } from './view/panel/pane/sidebar-model';
+import { panelText, type PanelTab } from './view/panel/panel-layout';
 import { boardTree } from './view/board/todo-panel';
 import type { LiveSnapshot } from './orchestra-types';
 import { pluginRoot } from './fixtures/source-tree';
@@ -203,7 +203,7 @@ const expected = {
   gatesGreen: `${world.gates.length - failing}/${world.gates.length}`,
   workers: Object.fromEntries(world.workers.map((w) => [w.name, w.state as UiState])),
   items: Object.fromEntries(world.todos.map((t) => [t.label, t.state as UiState])),
-  // The channel header, from the world's notes and workers (the rule of mod/pane/sidebar-model.ts: whoever spoke plus every worker not finished; notes after the lead last spoke).
+  // The channel header, from the world's notes and workers (the rule of mod/view/panel/pane/sidebar-model.ts: whoever spoke plus every worker not finished; notes after the lead last spoke).
   channel: { people: new Set([...world.notes.map((n) => n.from), ...world.workers.filter((w) => w.state !== 'done').map((w) => w.name)]).size, unread: world.notes.length - 1 - world.notes.map((n) => 'lead' in n).lastIndexOf(true) },
   // Every plan row an owner holds, as `T1,T2` (1-based plan positions).
   tasks: Object.fromEntries(world.workers.flatMap((w) => { const ids = world.todos.flatMap((t, i) => (t.owner === w.name ? [`T${i + 1}`] : [])); return ids.length ? [[w.name, ids.join(',')]] : []; })),

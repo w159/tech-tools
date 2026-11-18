@@ -10,7 +10,7 @@ import { coreModel, type CoreModel } from './data/core';
 import { gateTally } from './data/runstate';
 import { busySnap } from './live_fixture';
 import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
-import { bodyLines, lineText, ribbonRow, type PanelModel } from './panel-layout';
+import { bodyLines, lineText, ribbonRow, type PanelModel } from './view/panel/panel-layout';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

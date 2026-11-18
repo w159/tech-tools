@@ -103,13 +103,13 @@ Every statement below is backed by the file named beside it (paths under `plugin
 
 - One phase rail. `mod/rail.ts` (`railIds`, `railOf`, `railNo`) is the only place a rail is cut from the contract phases
   (`RAIL_SKIP` drops `validate`, `blocked`, `done`). The band (`mod/view/band/band.tsx`), the side panel model
-  (`mod/pane/sidebar-model.ts`), the panel layout (`mod/panel-layout.ts`) and the omp mission panel
+  (`mod/view/panel/pane/sidebar-model.ts`), the panel layout (`mod/view/panel/panel-layout.ts`) and the omp mission panel
   (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
 - Gauges need an estimate. The Board and the HUD TODO draw `of mm:ss` and the elapsed gauge only for an item that carries
   `estimate_s` (`mod/view/board/board-model.ts` line 78 and `mod/view/hud/hud.ts` line 73). Any other running item reads
   `elapsed 00:42` with no gauge; there is no default budget.
-- One tab list. `STRIP_TABS` (`mod/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
-  the list the Claude Code side panel strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
+- One tab list. `STRIP_TABS` (`mod/view/panel/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
+  the list the Claude Code side panel strip (`mod/view/panel/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
   footer buttons (`BAND_BUTTONS` in `mod/view/band/band.tsx`) all draw.
 - Board key. `o` runs `openBoard` (`mod/register.ts`). When the Atlas pane is shown, the board is drawn inside that pane
   (view `board`) and a second `o` returns to the route; otherwise it opens the `atlas-board` pane.
@@ -121,7 +121,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
 - Channel tab. The roster falls back to the project's main channel key (`<folder>` or `<folder>@<ref>`) when no candidate
   key matches the lead's session (`mod/data/channels.ts`).
 - Route tab. Running agents that own no plan row are listed under the plan, in the HUD Subagents state words
-  (`mod/panel-layout.ts`, comment at "Agents that work but hold no plan row").
+  (`mod/view/panel/panel-layout.ts`, comment at "Agents that work but hold no plan row").
 - Widths are terminal cells. `cells`, `clip` and `clipMiddle` in `mod/atlas-ui.ts` count wide characters as two cells
   through `textWidth` (`mod/theme.ts`).
 - The `[-]` beside the first HUD row is the host's own collapse mark in the five cells it reserves (`bodyColumns`). The

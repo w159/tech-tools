@@ -5,7 +5,7 @@ import { runElapsed } from '../../data/runstate';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { leadSpinnerGlyph, type Ui } from '../../atlas-ui';
 import { forgetBandFrame, noteBandFrame } from '../../motion/motion';
-import { lineText, panelLines, type PanelModel } from '../../panel-layout';
+import { lineText, panelLines, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { blockedText } from '../../data/runstate';
 import { noteWorkerFacts, resetWorkerFacts } from '../../data/live';

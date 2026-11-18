@@ -6,7 +6,7 @@ import { bandRuns, type BandModel } from '../band/band';
 import { cardFrame } from './card-frame';
 import { busySnap, NOW } from '../../live_fixture';
 import type { Health, HealthCheck } from '../../data/idle-health';
-import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type PanelTab } from '../../panel-layout';
+import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type PanelTab } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { CHART_AXIS_MIN, chartRows, latencyLevel, P95_MIN_SAMPLES } from './status-frame';
 import { healthStripRows } from './strip-frame';

@@ -1,6 +1,6 @@
 // gates.ts — pure shaping of the sidebar's Gates data: the atlas_gates.py JSON, the
 // last-reply header check, and the open-gate count shared by the sidebar and the band.
-import type { GateGroup } from '../pane/sidebar';
+import type { GateGroup } from '../view/panel/pane/sidebar';
 
 /** Result of testing the last answer's first line against the contract header pattern. */
 export type HeaderCheck = { matched: boolean; phase: string | null } | null;

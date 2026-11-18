@@ -2,7 +2,7 @@
 // glyph (spinner phase, pop frame, state mark) and the colour of the glyph and of the state word match row for row, at every beat of a transition, in
 // Unicode, ASCII, truecolor and 256 colours; `returned` has its own mark; and no step of the deterministic ramp repeats the one before it.
 import { describe, expect, test } from 'claude-code/testing';
-import { bodyLines, type PanelModel } from './panel-layout';
+import { bodyLines, type PanelModel } from './view/panel/panel-layout';
 import { hudAgents, hudLines, type HudInput } from './view/hud/hud';
 import { hudPhases } from './view/band/band';
 import { liveWorkers, queuedMembers } from './data/live';
@@ -12,7 +12,7 @@ import { rowSpinnerGlyph } from './view/hud/hud-surface';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion/motion';
 import { motionFeed } from './host/motion-feed';
-import { panelModelOf } from './pane/sidebar-model';
+import { panelModelOf } from './view/panel/pane/sidebar-model';
 import type { TodoItem } from './contract';
 import type { LiveSnapshot } from './orchestra-types';
 

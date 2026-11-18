@@ -4,7 +4,7 @@ import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, DONE_DOUBT, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, lineText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, lineText, type PanelModel, type PanelTab } from './view/panel/panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });

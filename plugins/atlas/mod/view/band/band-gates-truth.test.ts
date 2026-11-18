@@ -12,7 +12,7 @@ import type { CoreModel } from '../../data/core';
 import { planBusy } from '../../data/runstate';
 import type { Ui } from '../../atlas-ui';
 import { bandLines, missionLines, runsText, type MissionModel } from './mission-layout';
-import { panelText, type PanelModel } from '../../panel-layout';
+import { panelText, type PanelModel } from '../panel/panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['plan', 'build', 'verify'] as const;

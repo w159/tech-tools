@@ -7,11 +7,11 @@ import { DONE_DOUBT, type Ui } from '../../atlas-ui';
 import { agentModel, hudAgents, resetAgentSeq } from '../hud/hud';
 import { meterRuns } from '../hud/hud-surface';
 import { liveWorkers, queuedMembers } from '../../data/live';
-import { forgetPhases } from '../../pane/sidebar-model';
-import { leadBarState, sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from '../../pane/sidebar';
+import { forgetPhases } from '../panel/pane/sidebar-model';
+import { leadBarState, sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from '../panel/pane/sidebar';
 import { boardLines, boardText, boardTimeline, type BoardRow } from './board-model';
-import { workersByTask } from '../../panel-layout';
-import { panelModelOf } from '../../pane/sidebar-model';
+import { workersByTask } from '../panel/panel-layout';
+import { panelModelOf } from '../panel/pane/sidebar-model';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

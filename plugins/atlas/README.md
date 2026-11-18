@@ -1198,7 +1198,7 @@ TODO tree from the board until the first native todo result.
 
 **The side panel.** The panel is a ribbon (`◖ ◆ ATLAS ◗ ▸ SIDEPANEL`), a tab strip
 of clickable chips with the lit tab filled, and one view under it. The strip names
-six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/panel-layout.ts`): status, team,
+six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/view/panel/panel-layout.ts`): status, team,
 channel, gates, core and board. Click a chip to open that view; no key hint is
 printed; each tab is its own chip with one cell between chips, and no rule is
 drawn under the lit one. All six chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
@@ -1235,7 +1235,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
 - **status** (key `r`, the tab id is still `route`): the phase row wears the band's
   own glyph, word and clock (`phase  ● done 0:29`, `phase  ▲ blocked 0:29`), built
   from the band's own inputs and the same glyph function (`phaseRow` with
-  `phaseGlyph`, `mod/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
+  `phaseGlyph`, `mod/view/panel/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
   rail, a row per agent with a 12-cell braille activity line and its time, the
   gates, an events list of workers starting and finishing (`+0:13  alpha-explorer
   done`), and the todo rows.
@@ -1249,7 +1249,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
   (`verifiedFigure`), or `no verdicts, workers or gates yet`.
 - **board** (key `o`): see below.
 
-**The board.** The board tab (`mod/view/board/board-model.ts`, drawn by `mod/pane/sidebar.tsx`)
+**The board.** The board tab (`mod/view/board/board-model.ts`, drawn by `mod/view/panel/pane/sidebar.tsx`)
 lists one row per plan item with state and owner, under a title row that counts
 the items and carries the same `▰▱` meter, then a Gantt timeline: one lane per
 agent, the lead's lane first, a bar (`▇`, ended exactly to the clock) in the
@@ -1335,7 +1335,7 @@ session start gives the header template and says the phase glyph table is unavai
 (use the phase names) instead of dropping it silently. A turn footer is frozen at its first draw and prints the band's
 run clock (`run 4:12`, `durationTree` in `mod/view/transcript/restyle.tsx`). Worker
 cards are drawn only on omp, where a running worker is a 44-cell box
-(`cardLines` and `CARD_W` in `mod/panel-layout.ts`, painted by `omp/panel-view.ts`):
+(`cardLines` and `CARD_W` in `mod/view/panel/panel-layout.ts`, painted by `omp/panel-view.ts`):
 
 ```
 ┌─ ◆ running implementer-band ────── opus ─┐

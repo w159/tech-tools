@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, uiFromEnv } from './atlas-ui';
-import { bodyLines, lineText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, lineText, type PanelModel, type PanelTab } from './view/panel/panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}) => bodyLines(panelWorld(t, cols, ui, { rows: 24, ...over }));

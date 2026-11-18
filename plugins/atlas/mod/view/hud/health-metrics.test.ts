@@ -7,11 +7,11 @@ import { cardFrame } from './card-frame';
 import type { Health, HealthCheck } from '../../data/idle-health';
 import { busySnap, NOW } from '../../live_fixture';
 import { metricsOf, PANEL_CHART_COLS } from '../../data/metrics';
-import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type PanelTab } from '../../panel-layout';
+import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type PanelTab } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { frameKit, statusActivityRows, statusGatesRows, statusHooksRows, statusRunsRows } from './status-frame';
 import { healthStripRows } from './strip-frame';
-import { tabFrame, tabText, type TabId, type TabIn } from '../../tabs-frame';
+import { tabFrame, tabText, type TabId, type TabIn } from '../panel/tabs-frame';
 import { textWidth } from '../../theme';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };

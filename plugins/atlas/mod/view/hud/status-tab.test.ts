@@ -3,7 +3,7 @@
 // them: `panelLines` from the NOW ribbon down to the pinned footer, the host border removed. The tab strip and the ribbon above NOW are shared chrome and not part of this slice.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Ui } from '../../atlas-ui';
-import { lineText, panelLines, type PanelModel } from '../../panel-layout';
+import { lineText, panelLines, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';
 import { textWidth } from '../../theme';

@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv } from '../../atlas-ui';
 import { healthCardRows } from './hud-surface';
-import { bodyLines, headerRows, lineText, tabRows, type PanelModel } from '../../panel-layout';
+import { bodyLines, headerRows, lineText, tabRows, type PanelModel } from '../panel/panel-layout';
 import { panelWorld } from '../../../contracts/panel-world';
 import { NOW } from '../../live_fixture';
 import { agoText, humanEvent, recentEvents, type Health } from '../../data/idle-health';
