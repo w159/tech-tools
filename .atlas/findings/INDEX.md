@@ -64,6 +64,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-18 | t8865d576-p5 | rejected | claim 5 false: git diff HEAD is empty, no uncommitted docs/CHANGELOG.md edit | [2026-11-18_t8865d576-p5.md](2026-11-18_t8865d576-p5.md) |
+| 2026-11-18 | t8865d576-p1-4 | verified | fable52 contract tests, version check, attribution, changelog entries pass | [2026-11-18_t8865d576-p1-4.md](2026-11-18_t8865d576-p1-4.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-17 | root-sanitize-2026-11-17 | verified | worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root | [2026-11-17_root-sanitize-2026-11-17.md](2026-11-17_root-sanitize-2026-11-17.md) |
 | 2026-11-17 | pushed-head-guarantees-2026-11-17 | verified | Four behavioural guarantees reproduced directly against the pushed HEAD archive | [2026-11-17_pushed-head-guarantees-2026-11-17.md](2026-11-17_pushed-head-guarantees-2026-11-17.md) |
