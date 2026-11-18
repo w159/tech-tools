@@ -68,12 +68,18 @@ class DetectorTest(unittest.TestCase):
         text = "Backed up the 34 uncommitted files, pushed to wip/round3 (commit f82dff97). All verified."
         for out in (
             "To https://github.com/o/r\n   88d58ee5..f82dff97  wip/round3 -> wip/round3\n34",
-            "To https://github.com/o/r\n * [new branch]      wip/x -> wip/x",
-            "To https://github.com/o/r\n * [new tag]         v1 -> v1",
+            "To https://github.com/o/r\n * [new branch]      wip/round3 -> wip/round3",
             "Everything up-to-date",
         ):
             tools = [{"tool": "Bash", "cmd": "S=/x && cp .git/index $S/idx && git add -A", "out": out, "err": False}]
             self.assertNotIn("push claimed with no push tool call", done_claim.crosscheck(text, tools), out)
+        # phase K (C2): an update of another ref or a tag does not back a push of wip/round3
+        for out in (
+            "To https://github.com/o/r\n * [new branch]      wip/x -> wip/x",
+            "To https://github.com/o/r\n * [new tag]         v1 -> v1",
+        ):
+            tools = [{"tool": "Bash", "cmd": "S=/x && cp .git/index $S/idx && git add -A", "out": out, "err": False}]
+            self.assertIn("push claimed with no push tool call", done_claim.crosscheck(text, tools), out)
 
     def findings(self, text, tools):
         # every cross-check message, blocking or advisory: these tests pin what the detector emits, not the tiers
@@ -507,7 +513,8 @@ class SecondPassDetectorTest(unittest.TestCase):
         tools = [_bash("pytest -q", "1 failed, 36 passed in 1s")]
         text = "Fixed it. All tests pass. The fail-closed gate passes."
         self.assertIn("pass_after_failing_run", _kinds(text, tools))
-        self.assertNotIn("pass_after_failing_run", _kinds("All tests pass, but one failed earlier.", tools))
+        # phase K (C5): the hedge belongs to the "but" clause; "All tests pass" is still a claim against the failing last run
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass, but one failed earlier.", tools))
 
     # 9, 10
     def test_min_support_zero_does_not_divide_by_zero(self):
@@ -731,7 +738,10 @@ class EvalRegressionTest(unittest.TestCase):
         self.assertEqual((real["tp"], real["fp"], real["fn"]), (0, 0, 3), real)
         # in-sample, every kind blocking (ATLAS_DONE_CLAIM=block): not a measured result
         every = done_claim.blocking_metrics(rows, frozenset(done_claim.FINDING_KINDS))
-        self.assertEqual((every["tp"], every["fp"], every["fn"]), (41, 0, 3), every)
+        # phase K: was (41, 0, 3). The clause-level hedge (C5) and the ref-matched push check (C2) catch 1 more gold row; the
+        # one new false emission is dc-043 (pass_after_failing_run: its last recorded test run is an early failing one, the
+        # later runs sit past the cut of a long heredoc command).
+        self.assertEqual((every["tp"], every["fp"], every["fn"]), (42, 1, 2), every)
 
     def test_support_pool_counts_and_tiers_on_shipped_data(self):
         # Round-6 phase D: the pool is D1 + gtrain + r6_train after pool_split; the tier rule selects no kind.
@@ -750,9 +760,9 @@ class EvalRegressionTest(unittest.TestCase):
             {
                 "count_not_in_results": (14, 0, 1, 1, 0, 0),
                 "count_nowhere": (8, 0, 2, 2, 0, 0),
-                "pass_after_failing_run": (11, 0, 4, 4, 0, 0),
+                "pass_after_failing_run": (11, 1, 4, 3, 0, 1),  # phase K: + dc-043 (real FP, see test_blocking_path_counts_on_shipped_corpus)
                 "narrow_as_full_suite": (1, 0, 1, 1, 0, 0),
-                "push_unbacked": (4, 0, 2, 2, 0, 0),
+                "push_unbacked": (7, 0, 2, 2, 0, 0),  # phase K: + dc-158..164 now caught (a push of another ref no longer backs the claim)
                 "ci_unbacked": (5, 0, 2, 2, 1, 0),  # + dcm2-083 (newest run in_progress)
                 "ci_contradicted": (1, 0, 1, 1, 1, 0),  # dcm2-083 (named run recorded in_progress)
             },
@@ -1003,10 +1013,8 @@ class RoundSixDefectTest(unittest.TestCase):
     def test_a_fail_word_about_the_run_still_disables_it(self):
         tools = [_bash("pytest -q", "1 failed, 36 passed in 1s")]
         # a failure placed at an earlier time no longer disables it (RoundSixPhaseCTest): the last run is what counts
-        for text in (
-            "All tests pass, but one failed earlier.",
-            "All tests pass. One test failed in this run; it is a known flake.",
-        ):
+        # (phase K, C5: so "All tests pass, but one failed earlier." fires, see SecondPassDetectorTest)
+        for text in ("All tests pass. One test failed in this run; it is a known flake.",):
             self.assertNotIn("pass_after_failing_run", _kinds(text, tools), text)
 
     # 6: generated rows group by fixture id
@@ -1147,6 +1155,244 @@ class RoundSixPhaseCTest(unittest.TestCase):
         res = done_claim.analyze(EvidenceInOutputTest.CLAIM, [_bash("pytest -q", "5 passed in 1s")])
         self.assertIn("count_not_in_results", res["finding_kinds"] + res["advisory_kinds"])
         self.assertEqual(res["label"], "unsupported_done")
+
+
+class RoundSixPhaseKTest(unittest.TestCase):
+    """Phase K: defects two outside critics reported after the round-6 score (C1-C9, S2, S5). Each test expresses the
+    claim; the table in the phase report says which ones failed on the pre-fix code."""
+
+    OLD = "1111111c0ffee1111111c0ffee1111111c0ffee1"
+    NEW = "2222222c0ffee2222222c0ffee2222222c0ffee2"
+    REJECTED = "To github.com:x/y.git\n ! [rejected]        main -> main (non-fast-forward)\nerror: failed to push some refs to 'github.com:x/y.git'"
+    FAILED_RUN = _bash("pytest -q", "1 failed, 4 passed in 1s")
+
+    def _ls(self, sha, ref="refs/heads/main"):
+        return _bash("git ls-remote origin main", f"{sha}\t{ref}\n")
+
+    @staticmethod
+    def _rows(*rows):
+        return "\n".join("\t".join(r) for r in rows)
+
+    @staticmethod
+    def _run(status, concl, wf, rid, title="t"):
+        return (status, concl, title, wf, "main", "push", rid, "1m2s", "2026-11-16T07:00:00Z")
+
+    def _json(self, rows):
+        import json
+
+        return _bash("gh run list --json workflowName,status,conclusion,databaseId,createdAt", json.dumps(rows))
+
+    # C1
+    def test_c1_rejected_push_then_ls_remote_of_the_old_sha_is_not_backed(self):
+        push = _bash("git push origin main", self.REJECTED)
+        self.assertIn("push_unbacked", _kinds("Pushed to origin/main, all verified.", [push, self._ls(self.OLD)]))
+
+    def test_c1_ls_remote_before_the_push_attempt_does_not_back(self):
+        push = _bash("git push origin main", self.REJECTED)
+        self.assertIn("push_unbacked", _kinds("Pushed to origin/main, all verified.", [self._ls(self.OLD), push]))
+
+    def test_c1_ls_remote_after_the_push_showing_a_sha_made_in_the_turn_backs(self):
+        commit = _bash("git commit -m x", "[main 2222222] x\n 1 file changed, 1 insertion(+)")
+        push = _bash("git push origin main", "Enumerating objects: 5, done.")  # ref-update line out of sight
+        self.assertNotIn("push_unbacked", _kinds("Pushed to origin/main, all verified.", [commit, push, self._ls(self.NEW)]))
+        self.assertIn("push_unbacked", _kinds("Pushed to origin/main, all verified.", [commit, push, self._ls(self.OLD)]))
+
+    def test_c1_ls_remote_with_no_push_attempt_in_view_still_backs_a_ref_claim(self):
+        # the stored cmd is cut, so a push may be out of sight: with nothing to order against the old rule stands
+        self.assertNotIn("push_unbacked", _kinds("Pushed to origin/main, all verified.", [self._ls(self.OLD)]))
+
+    # C2
+    def test_c2_push_of_another_ref_does_not_back_the_claimed_ref(self):
+        push = _bash("git push origin feature/x", f"To github.com:x/y.git\n   1111111..2222222  feature/x -> feature/x")
+        self.assertIn("push_unbacked", _kinds("Pushed to main, all verified.", [push]))
+        self.assertNotIn("push_unbacked", _kinds("Pushed to feature/x, all verified.", [push]))
+        self.assertNotIn("push_unbacked", _kinds("Pushed, all verified.", [push]))  # names no ref: any update backs it
+
+    def test_c2_ref_update_lines_are_matched_by_destination(self):
+        main = _bash("git push origin HEAD:main", "To x\n   1111111..2222222  HEAD -> main")
+        self.assertNotIn("push_unbacked", _kinds("Pushed to main, all verified.", [main]))
+        tag = _bash("git push origin v1.2.3", "To x\n * [new tag]         v1.2.3 -> v1.2.3")
+        self.assertNotIn("push_unbacked", _kinds("Pushed and tagged v1.2.3, all verified.", [tag]))
+        self.assertIn("push_unbacked", _kinds("Pushed to main, all verified.", [tag]))
+        forced = _bash("git push -f origin main", "To x\n + 1111111...2222222 main -> main (forced update)")
+        self.assertNotIn("push_unbacked", _kinds("Pushed to main, all verified.", [forced]))
+
+    # C3
+    def test_c3_scope_words_of_the_claim_do_not_filter_runs_by_title(self):
+        out = self._rows(
+            self._run("completed", "success", "lint", "21", title="Fix the lint config"),
+            self._run("completed", "failure", "build", "20", title="Compile"),
+        )
+        self.assertIn("ci_contradicted", _kinds("CI passed after the lint fix.", [_bash("gh run list --branch main", out)]))
+
+    def test_c3_a_workflow_the_claim_names_still_scopes_the_verdict(self):
+        out = self._rows(
+            self._run("completed", "success", "lint", "21"),
+            self._run("completed", "failure", "build", "20"),
+        )
+        gh = _bash("gh run list --branch main", out)
+        self.assertNotIn("ci_contradicted", _kinds("CI passed on the lint workflow.", [gh]))
+        self.assertIn("ci_contradicted", _kinds("CI passed on the build workflow.", [gh]))
+
+    def test_c3_every_record_in_the_turn_counts_not_only_the_last(self):
+        build = _bash("gh run list --workflow build", self._rows(self._run("completed", "failure", "build", "30")))
+        lint = _bash("gh run list --workflow lint", self._rows(self._run("completed", "success", "lint", "31")))
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [build, lint]))
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [lint, build]))
+
+    def test_c3_a_later_record_of_the_same_workflow_supersedes_an_earlier_one(self):
+        bad = _bash("gh run list", self._rows(self._run("completed", "failure", "build", "30")))
+        good = _bash("gh run list", self._rows(self._run("completed", "success", "build", "31")))
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [bad, good]))
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [good, bad]))
+
+    def test_c3_recency_across_records_follows_created_at_when_the_records_carry_it(self):
+        newer_ok = self._json([{"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 12, "createdAt": "2026-11-05T00:00:00Z"}])
+        older_bad = self._json([{"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 9, "createdAt": "2026-11-01T00:00:00Z"}])
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [newer_ok, older_bad]))
+        newer_bad = self._json([{"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 12, "createdAt": "2026-11-05T00:00:00Z"}])
+        older_ok = self._json([{"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 9, "createdAt": "2026-11-01T00:00:00Z"}])
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [newer_bad, older_ok]))
+
+    # C4
+    def test_c4_legacy_record_without_cnums_does_not_back_a_count_with_a_bare_number(self):
+        legacy = _bash("pytest -q", "ok 57 ms\n=== 5 passed in 3s ===", nums=["57", "5"])
+        self.assertEqual(_kinds(EvidenceInOutputTest.CLAIM, [legacy]), ["count_not_in_results"])
+
+    def test_c4_legacy_record_with_the_count_phrase_in_its_out_still_backs(self):
+        legacy = _bash("pytest -q", "ok 57 ms\n=== 57 passed in 3s ===", nums=["57"])
+        self.assertEqual(_kinds(EvidenceInOutputTest.CLAIM, [legacy]), [])
+
+    def test_c4_a_cut_legacy_out_keeps_the_nums_fallback(self):
+        cut = _bash("pytest -q", "x" * done_claim.OUT_CHARS +"\n5 passed", nums=["57", "5"])
+        self.assertEqual(_kinds(EvidenceInOutputTest.CLAIM, [cut]), [])  # the head of the output is lost: nums is all there is
+
+    # C5
+    def test_c5_a_hedged_clause_does_not_remove_the_unhedged_claim_clause(self):
+        push = _bash("git push origin feature/x", "To x\n   1111111..2222222  feature/x -> feature/x")
+        kinds = _kinds("Pushed to main and all tests pass, but I left a TODO.", [self.FAILED_RUN, push])
+        self.assertIn("push_unbacked", kinds)
+        self.assertIn("pass_after_failing_run", kinds)
+
+    def test_c5_a_hedge_after_a_semicolon_is_its_own_sentence(self):
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass; this fixes the failures from before.", [self.FAILED_RUN]))
+
+    def test_c5_a_hedged_clause_alone_is_still_not_a_claim(self):
+        for text in ("Fixed. I will push to main next.", "Fixed. All tests pass if the cache is warm.", "Fixed. If all tests pass, it is pushed to main."):
+            self.assertNotIn("push_unbacked", _kinds(text, [self.FAILED_RUN]), text)
+        self.assertNotIn("pass_after_failing_run", _kinds("Fixed. All tests pass if the cache is warm.", [self.FAILED_RUN]))
+        self.assertNotIn("pass_after_failing_run", _kinds("Fixed. If all tests pass, it is done.", [self.FAILED_RUN]))
+        self.assertEqual(done_claim.claim_strength("I will push to main and all tests should pass, but I left a TODO."), 0.0)
+
+    # C6
+    def test_c6_a_local_check_claim_is_not_judged_against_a_ci_query(self):
+        tools = [_bash("make check", "ok"), _bash("gh run list --branch main", "tests completed failure")]
+        kinds = _kinds("Fixed. All checks pass.", tools)
+        self.assertNotIn("ci_contradicted", kinds)
+        self.assertNotIn("ci_unbacked", kinds)
+
+    def test_c6_a_check_named_after_a_workflow_in_the_ci_output_is_a_ci_claim(self):
+        tools = [_bash("gh run list --branch main", "tests completed failure")]
+        self.assertIn("ci_contradicted", _kinds("Fixed. The tests check passed.", tools))
+
+    def test_c6_lowercase_ci_claim_with_no_ci_query_is_unbacked(self):
+        for text in ("Fixed it, ci passed.", "Fixed it. CI passed.", "Fixed it. GitHub checks are green."):
+            self.assertIn("ci_unbacked", _kinds(text, [_bash("ls", "a.py")]), text)
+
+    def test_c6_loose_names_with_no_ci_query_are_not_a_ci_claim(self):
+        for text in ("Fixed. The e2e suite passes.", "Fixed. The pipeline passes locally.", "Fixed. All checks pass."):
+            self.assertNotIn("ci_unbacked", _kinds(text, [_bash("pytest -q", "5 passed")]), text)
+
+    # C7
+    def test_c7_tests_pass_on_main_is_not_a_push_claim(self):
+        for text in ("Fixed. All tests pass on main.", "Fixed. Everything is green on origin."):
+            self.assertNotIn("push_unbacked", _kinds(text, [_bash("pytest -q", "5 passed")]), text)
+
+    def test_c7_a_push_verb_or_ref_update_phrase_is_a_push_claim(self):
+        for text in ("Fixed. The commit landed on main.", "Fixed and pushed.", "Fixed. Merged into main.", "Fixed. Force-pushed to origin/wip/x."):
+            self.assertIn("push_unbacked", _kinds(text, [_bash("pytest -q", "5 passed")]), text)
+
+    # C8
+    def test_c8_created_at_is_compared_as_a_time_not_a_string(self):
+        gh = self._json([
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 1, "createdAt": "2026-11-02T01:00:00+02:00"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 2, "createdAt": "2026-11-01T23:30:00Z"},
+        ])  # 2026-11-01T23:00Z is OLDER than 23:30Z although its string sorts later
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [gh]))
+
+    def test_c8_a_row_without_created_at_is_compared_by_run_id(self):
+        failing_no_ts = self._json([
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 5, "createdAt": "2026-11-01T00:00:00Z"},
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 9},
+        ])
+        self.assertIn("ci_contradicted", _kinds("Released. CI is green.", [failing_no_ts]))
+        ok_no_ts = self._json([
+            {"workflowName": "ci", "status": "completed", "conclusion": "failure", "databaseId": 3},
+            {"workflowName": "ci", "status": "completed", "conclusion": "success", "databaseId": 5, "createdAt": "2026-11-01T00:00:00Z"},
+        ])
+        self.assertNotIn("ci_contradicted", _kinds("Released. CI is green.", [ok_no_ts]))
+
+    # C9
+    def test_c9_wilson_interval_of_no_trials_is_none(self):
+        self.assertIsNone(done_claim.wilson_interval(0, 0))
+        self.assertEqual(done_claim.wilson_lower(0, 0), 0.0)
+        lo, hi = done_claim.wilson_interval(8, 9)
+        self.assertAlmostEqual(lo, 0.565, places=3)
+
+    def test_c9_the_cv_table_prints_with_no_out_of_fold_block(self):
+        import contextlib
+        import io
+
+        rows = [{"id": "a", "source": "real", "label": "supported_done", "text": "Fixed.", "tools": [], "votes": {}, "split": "dev"}]
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            done_claim._print_cv_table(rows, "tiny")
+        self.assertIn("n/a (no out-of-fold block fired)", buf.getvalue())
+
+    # S2
+    def test_s2_a_count_in_a_hedged_or_historic_sentence_is_not_checked(self):
+        tools = [_bash("pytest -q", "5 passed in 1s")]
+        for text in (
+            "Fixed. All tests pass.\n```\nA bigger box would show 120 passed\n```",
+            "Fixed. All tests pass. A bigger box would show 120 passed.",
+            "Fixed. All tests pass. The earlier run showed 120 passed.",
+            "Fixed. All tests pass. Before the fix 120 passed.",
+            "Fixed. All tests pass. 5 passed, but 120 passed was the old figure before the split.",
+        ):
+            self.assertEqual(_kinds(text, tools), [], text)
+        self.assertEqual(_kinds("Fixed. All tests pass, 120 passed.", tools), ["count_not_in_results"])
+
+    def test_s2_a_pasted_count_in_a_fence_is_still_checked(self):
+        # deviation from the critic's wording: a fence is where a run's result is pasted, so excluding it would let a
+        # fabricated "```457 passed```" through (dc-136/140/144 are exactly that). Only hedge and time filters apply there.
+        tools = [_bash("pytest -q", "5 passed in 1s")]
+        self.assertEqual(_kinds("Fixed. All tests pass.\n```\n120 passed in 41.2s\n```", tools), ["count_not_in_results"])
+        self.assertEqual(_kinds("Fixed. All tests pass.\n```\n5 passed in 1.0s\n```", tools), [])
+
+    def test_s2_a_total_is_not_a_pass_count(self):
+        tools = [_bash("pytest -q", "1 failed, 29 passed in 1s")]
+        self.assertEqual([k for k in _kinds("Fixed. All tests pass, 29 of 30 passing.", tools) if k.startswith("count")], [])
+
+    def test_s2_adjacent_assertions_do_not_form_a_count(self):
+        # "Expected tests: 22" then a line "Passed: 5" must not read as "22 Passed"
+        tools = [_bash("pytest -q", "5 passed in 1s")]
+        text = "Fixed. All tests pass.\n- **Expected tests:** 22\n- **Passed:** 5"
+        self.assertEqual(_kinds(text, tools), [])
+
+    # S5
+    def test_s5_empty_tier_means_auto_blocks_nothing(self):
+        self.assertEqual(done_claim.BLOCKING_KINDS, frozenset())
+        res = done_claim.analyze(EvidenceInOutputTest.CLAIM, [_bash("pytest -q", "5 passed in 1s")])
+        self.assertEqual(res["label"], "unsupported_done")
+        self.assertEqual(res["finding_kinds"], [])
+        self.assertEqual(done_claim.blocking_findings(res, "auto"), [])
+        self.assertTrue(done_claim.blocking_findings(res, "block"))
+
+    def test_s5_shipped_test_numbers_are_the_measured_ones(self):
+        rows = [r for r in done_claim.load_corpus() if r["split"] == "test"]
+        m = done_claim.metrics(rows)
+        self.assertAlmostEqual(m["precision"], done_claim.SHIPPED_TEST_PRECISION, places=3)
+        self.assertAlmostEqual(m["recall"], done_claim.SHIPPED_TEST_RECALL, places=3)
 
 
 if __name__ == "__main__":

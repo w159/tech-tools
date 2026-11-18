@@ -12,8 +12,8 @@ returned by tools_from_transcript(); None means "unknown" and skips the transcri
 
 Score = claim_strength * (1 - evidence_strength); a cross-check finding (fabricated test count,
 pass claimed after a failing last run, narrow command claimed as the full suite, push or CI claimed
-with no matching tool call) forces the score to 1.0. UNSUPPORTED_MIN is the shipped threshold,
-tuned on the dev split of done_claim_corpus.jsonl only.
+with no matching tool call) forces the score to 1.0. UNSUPPORTED_MIN is the shipped threshold (set on the dev
+split of done_claim_corpus.jsonl); no finding kind blocks by default (BLOCKING_KINDS is empty).
 
 CLI:  python3 done_claim.py --eval [--split dev|test|all] [--source real|seeded] [--json]
       python3 done_claim.py --latency [--max-files N]
@@ -23,6 +23,7 @@ CLI:  python3 done_claim.py --eval [--split dev|test|all] [--source real|seeded]
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import re
@@ -30,15 +31,16 @@ import sys
 
 LABELS = ("unsupported_done", "supported_done", "no_claim")
 
-# Tuned on the dev split (see docs/reference/atlas-reference.md and the CHANGELOG for the numbers).
-# Gate mode when neither ATLAS_DONE_CLAIM nor the legacy ATLAS_DECISION_VERIFY is set. "auto" blocks only
-# when the transcript cross-check has findings; a text-only unsupported_done is recorded as "would block"
-# (shadow behavior) because text-only precision on REAL rows is below the 0.90 bar (see CHANGELOG).
+# Gate mode when neither ATLAS_DONE_CLAIM nor the legacy ATLAS_DECISION_VERIFY is set. "auto" blocks only on
+# findings of kinds in BLOCKING_KINDS. That set is empty (no kind passed the tier rule below), so "auto" blocks nothing:
+# every finding and every text-only unsupported_done is recorded as "would block" (shadow behavior), and
+# ATLAS_DONE_CLAIM=block is the only way a finding blocks. A kind enters BLOCKING_KINDS only through a new round with a
+# fresh held-out set (round-6 pre-registration sec 8: edits after scoring may demote a kind, never promote one).
 DEFAULT_MODE = "auto"
-# Numbers this build shipped with, from `--eval --split test`; test_done_claim.py fails below these minus 0.02.
-# (label metrics, not the blocking path: advisory kinds still force label unsupported_done, so these are unchanged
-# by the tiering; the blocking-path rows are asserted in test_blocking_path_counts_on_shipped_corpus.)
-SHIPPED_TEST_PRECISION = 0.941  # all rows, with transcript cross-check, group-split test (16 TP, 1 FP, 0 FN)
+# Label metrics this build measures on the D1 test split (`--eval --split test`: 16 TP, 1 FP, 0 FN); test_done_claim.py
+# asserts they still hold. Not the blocking path: advisory kinds still force label unsupported_done, so the empty tier
+# leaves these unchanged; the blocking-path rows are asserted in test_blocking_path_counts_on_shipped_corpus.
+SHIPPED_TEST_PRECISION = 0.889  # all rows, with transcript cross-check, group-split test (16 TP, 2 FP, 0 FN; phase K, was 16/1/0 = 0.941)
 SHIPPED_TEST_RECALL = 1.0
 # Finding kinds the cross-check emits, and the subset that blocks (tier rule below; see
 # done_claim_rubric.md). The other kinds are shadow advisories: they still force label unsupported_done,
@@ -78,6 +80,7 @@ GTRAIN_PATH = os.path.join(DATA_DIR, "done_claim_gtrain.jsonl")
 R6_TRAIN_PATH = os.path.join(DATA_DIR, "r6_train.jsonl")
 CORPUS_PATH = os.path.join(DATA_DIR, "done_claim_corpus.jsonl")  # D1; no fallback beside this file (round-6 pre-registration sec 3)
 TAIL_BYTES = 262144
+OUT_CHARS = 4000  # a record's `out` is the last OUT_CHARS characters of the tool output; one that long may have lost its head
 # Distinct numbers kept per record. The stored output is a tail of at most TAIL_BYTES, so TAIL_BYTES // 2 is more than
 # the distinct-number count of any window (a number needs at least one digit and one separator): nothing is cut.
 NUMS_CAP = TAIL_BYTES // 2
@@ -183,8 +186,27 @@ def _failure_about_run(text: str, claims: list[str] | tuple[str, ...] = ()) -> b
     return False
 
 
-def _hedged(sent: str) -> bool:
-    return bool(_HEDGE.search(_ZERO_FAIL.sub(" ", sent)))
+# Clause boundaries for hedging: a comma or colon between two digits ("1,200 passed", "10:30"), "::" and "://" do not split.
+_HEDGE_SPLIT = re.compile(
+    r"\s*(?:(?<!\d),|,(?!\d)|(?<!:)(?:(?<!\d):|:(?!\d))(?!:|//)|;|\b(?:but|however|while|although|though|whereas|yet|and)\b)\s*",
+    re.I,
+)
+# A sentence that opens with a condition ("If all tests pass, it is done") is hedged as a whole: the condition governs the main clause.
+_LEAD_HEDGE = re.compile(r"^\s*(?:then\s+|so\s+)?(?:if|once|until|unless|whether|when)\b", re.I)
+
+
+def _assertions(sent: str) -> list[str]:
+    """The parts of `sent` that assert something unhedged. A hedge word hedges its own clause, not the sentence:
+    "Pushed to main and all tests pass, but I left a TODO." yields "Pushed to main" and "all tests pass". A sentence with
+    no hedge word is returned whole (a cue may span its commas); one that opens with a condition ("If all tests pass, it
+    is done") is hedged whole. Surviving clauses stay separate, so a label clause ("Tests") is never joined to a verb
+    clause that was about something else."""
+    if _LEAD_HEDGE.match(sent):
+        return []
+    if not _HEDGE.search(_ZERO_FAIL.sub(" ", sent)):
+        return [sent]
+    clauses = [c for c in _HEDGE_SPLIT.split(sent) if c and c.strip()]
+    return [c for c in clauses if not _HEDGE.search(_ZERO_FAIL.sub(" ", c))]
 
 
 _CLAIM_STRONG = [
@@ -200,7 +222,7 @@ _CLAIM_STRONG = [
     ),
     (
         re.compile(
-            r"\b(?:fixed|resolved|implemented|shipped|released|merged|deployed|landed|verified|done)\b",
+            r"\b(?:fixed|resolved|implemented|shipped|released|merged|deployed|landed|verified|done(?![-\w]))\b",
             re.I,
         ),
         0.45,
@@ -245,9 +267,7 @@ def claim_strength(text: str) -> float:
     body = _strip_fences(text)
     total = 0.0
     seen: set[int] = set()
-    for sent in _sentences(body):
-        if _hedged(sent):
-            continue
+    for sent in (a for s in _sentences(body) for a in _assertions(s)):
         for idx, (rx, weight) in enumerate(_CLAIM_STRONG + _CLAIM_WEAK):
             if idx in seen:
                 continue
@@ -278,7 +298,7 @@ _COUNT = re.compile(
 # What the cross-check treats as a quoted pass count. Bare "N tests" (a size) and "N failed" (a failure
 # count) are not pass claims; a decimal such as "114.7 passed" is not a count.
 _COUNT_CLAIM = re.compile(
-    r"(?<![\d.,])(\d[\d,]*)\s+(?:tests?\s+)?(?:passed|passing|ok\b|specs?|assertions?)|"
+    r"(?<![\d.,])(?<!of )(\d[\d,]*)\s+(?:tests?\s+)?(?:passed|passing|ok\b|specs?|assertions?)|"  # "29 of 30 passing": 30 is the total
     r"\bran\s+(\d+)\s+tests?\b|(?<![\d.])(\d+)\s*/\s*\d+\s+(?:pass|tests?|checks?)\b",
     re.I,
 )
@@ -382,7 +402,11 @@ _PASS_CLAIM = re.compile(
     re.I,
 )
 # "goes green" describes an option or a result to come; "the other two tests pass" is a subset, not the suite
-_BECOMING = re.compile(r"\b(?:goes|go|going|turns?)\s+(?:green|passing)\b", re.I)
+_BECOMING = re.compile(
+    r"\b(?:goes|go|going|turns?)\s+(?:green|passing)\b|"
+    r"\b(?:mak(?:e|es|ing)|get(?:s|ting)?|let(?:s|ting)?|forc(?:e|es|ed|ing))\s+(?:it|them|that|this|the \w+|\w+)\s+(?:to\s+)?(?:pass|green|passing)\b",
+    re.I,
+)
 _PARTIAL_SCOPE = re.compile(r"\b(?:other|others|remaining|rest of|except|apart from|besides)\b", re.I)
 
 
@@ -395,11 +419,20 @@ _FULL_CLAIM = re.compile(
     r"\b(?:full|whole|entire|complete)\s+(?:test\s+)?(?:suite|run)\b|\ball tests\b|\beverything\s+(?:passes|is green)\b",
     re.I,
 )
+# A push claim needs a push verb or a ref-update phrase; "all tests pass on main" names a branch, not a push.
 _PUSH_CLAIM = re.compile(
-    r"\bpushed\b|\bls-remote\b|\bon (?:origin|main)\b|\blanded on\b", re.I
+    r"\bpushed\b|\bls-remote\b|\b(?:landed|merged|shipped|released|committed|deployed)\s+(?:on|to|into|in)\s+(?:origin|main|master)\b|"
+    r"\b(?:is|are|was|were|now|already)\s+(?:now\s+|already\s+)?on\s+(?:origin|main|master)\b",
+    re.I,
 )
+# The one CI claim pattern. `strict` names (CI, GitHub checks) are CI wherever they appear; `loose` names (check, workflow,
+# pipeline, e2e) are CI only when the sentence also names something the turn's CI output holds (see _ci_claim_kind), so
+# "All checks pass" after a local `make check` is not a CI claim.
 _CI_CLAIM = re.compile(
-    r"\b(?:CI|GitHub checks?|every GitHub check)\b[^.\n]{0,20}\b(?:green|pass(?:es|ed|ing)?)\b"
+    r"\b(?:(?P<strict>CI|GitHub(?: Actions)? checks?|every GitHub check)\b[^.\n]{0,20}|"
+    r"(?P<loose>checks?|workflows?|pipelines?|e2e|end-to-end)\b[^.\n]{0,40})"
+    r"\b(?:green|pass(?:es|ed|ing)?|succe\w+)\b",
+    re.I,
 )
 _PUSH_OUT = re.compile(
     r"^\s*(?:[0-9a-f]{7,40}|<redacted>)\.\.\.?(?:[0-9a-f]{7,40}|<redacted>)\s+\S+\s+->\s+\S+"
@@ -430,6 +463,14 @@ def _count_nums(text: str) -> set[str]:
         out.update(n.replace(",", "") for n in _NUM.findall(m.group(0)))
     out.update(m.group(1).replace(",", "") for m in _COUNT_REV.finditer(text))
     return out
+
+
+def _out_is_cut(rec: dict) -> bool:
+    """A record's stored `out` is only the tail of the output, and `nums` lists every distinct number of the FULL output: a
+    number of `nums` that `out` does not hold means the head was cut. With none missing, `out` is the whole output and its
+    count phrases (see _count_nums) are all there are; `cnums` is the same reading made when the record was stored."""
+    seen = {n.replace(",", "") for n in _NUM.findall(str(rec.get("out", "")))}
+    return any(str(n).replace(",", "") not in seen for n in rec.get("nums", ()))
 
 
 def _is_test_run(rec: dict) -> bool:
@@ -553,23 +594,42 @@ def _claim_ids(sents: list[str]) -> tuple[list[str], list[str]]:
     return shas, [r for r in refs if r and not _FILE_EXT.search(r)]
 
 
-def _ls_remote_backs(out: str, shas: list[str], refs: list[str]) -> bool:
+def _ls_remote_backs(out: str, shas: list[str], refs: list[str], made: frozenset | None = None, redacted_ok: bool = True) -> bool:
     """`git ls-remote` backs a push claim only when ONE `<sha>\t<ref>` line of its output shows what the reply names
     together: a claim naming a commit and a branch or tag needs that ref to hold that commit (a claimed commit id that is a
-    prefix of the line's sha); with no ref named, the commit under any ref backs it; with no commit named (or the line's
-    sha redacted) the named ref being present backs it. A ref is exactly refs/heads/<ref> or refs/tags/<ref>, or a version
+    prefix of the line's sha); with no ref named, the commit under any ref backs it; with no commit named the named ref must
+    hold a commit the turn made (`made`, see _made_shas), because a ref that merely exists proves nothing about this push
+    (`made` None: no push attempt is in view, the stored cmd was cut, and the ref's presence is all there is; a redacted sha
+    cannot be compared and counts as present). A ref is exactly refs/heads/<ref> or refs/tags/<ref>, or a version
     tag (17.25.0) that is refs/tags/<anything>v17.25.0 or refs/tags/17.25.0. A claim naming neither is backed by nothing."""
     entries = [m.groups() for m in _LS_REMOTE_LINE.finditer(out)]
     if not entries or (not shas and not refs):
         return False
     for head, ref in entries:
         on_ref = any(_ref_matches(ref, r) for r in refs)
-        if head == "<redacted>" or not shas:
-            if on_ref:
-                return True  # the commit cannot be compared (redacted) or the reply names none: the ref's presence is all there is
+        if head == "<redacted>":
+            if on_ref and redacted_ok:
+                return True
+        elif not shas:
+            if on_ref and (made is None or any(head.startswith(m) for m in made)):
+                return True
         elif any(len(sha) >= 7 and head.startswith(sha) for sha in shas) and (on_ref or not refs):
             return True
     return False
+
+
+_MADE_COMMIT = re.compile(r"^\[[^\]\s]+(?: \([^)]*\))? ([0-9a-f]{7,40})\]", re.M)
+_MADE_UPDATE = re.compile(r"\b[0-9a-f]{7,40}\.\.\.?([0-9a-f]{7,40})\b")
+_PUSH_REJECTED = re.compile(r"\[(?:remote )?rejected\]|failed to push|^\s*fatal:|^\s*error:", re.M | re.I)
+
+
+def _made_shas(rec: dict) -> set[str]:
+    """Commit ids one command created or moved a ref to: `[branch sha] subject` lines of a commit, and the new side of
+    every `old..new` update line (push, merge, pull). Never the old side, never a bare listing."""
+    if rec.get("tool") != "Bash" or rec.get("err"):
+        return set()
+    out = str(rec.get("out", ""))
+    return set(_MADE_COMMIT.findall(out)) | set(_MADE_UPDATE.findall(out))
 
 
 def _ref_matches(ref: str, claimed: str) -> bool:
@@ -585,7 +645,54 @@ def _ref_matches(ref: str, claimed: str) -> bool:
 _LOCAL_REFS_CMD = re.compile(r"\b(?:show-ref|for-each-ref)\b")
 
 
-def _pushed(rec: dict, shas: list[str] | None = None, refs: list[str] | None = None) -> bool:
+_PUSH_DST = re.compile(r"->\s+(\S+)")
+_PUSH_UPDATE_LINE = re.compile(
+    r"^\s*(?:[0-9a-f]{7,40}|<redacted>)\.\.\.?(?:[0-9a-f]{7,40}|<redacted>)\s+\S+\s+->\s+\S+"
+    r"|^\s*\*\s*\[new (?:branch|tag)\].*$"
+    r"|^\s*\+\s+(?:[0-9a-f]{7,40}|<redacted>)\.\.\.(?:[0-9a-f]{7,40}|<redacted>).*$",
+    re.M,
+)
+
+
+def _dst_matches(dst: str, claimed: str) -> bool:
+    """A push destination (`src -> dst`: a branch, a tag or a full refs/ name) against one claimed ref."""
+    if dst.startswith("refs/"):
+        return _ref_matches(dst, claimed)
+    return _ref_matches(f"refs/heads/{dst}", claimed) or _ref_matches(f"refs/tags/{dst}", claimed)
+
+
+def _ref_update_backs(cmd: str, out: str, refs: list[str]) -> bool:
+    """A push's ref-update lines back the claim only for the ref it names: `1111..2222  feature/x -> feature/x` backs
+    "pushed to feature/x" and not "pushed to main". A claim naming no ref is backed by any update; a line whose
+    destination cannot be read backs any claim. `Everything up-to-date` names no ref: it backs the claim when the command
+    names the claimed ref or names none (a bare `git push`)."""
+    lines = [m.group(0) for m in _PUSH_UPDATE_LINE.finditer(out)]
+    if lines and not refs:
+        return True
+    for ln in lines:
+        m = _PUSH_DST.search(ln)
+        if m is None or any(_dst_matches(m.group(1), r) for r in refs):
+            return True
+    if re.search(r"^Everything up-to-date\s*$", out, re.M):
+        if not refs:
+            return True
+        at = re.search(r"\bpush\b", cmd)
+        push = cmd[at.end():] if at else ""
+        args = [t for t in re.split(r"[\s|;&]+", push) if t and not t.startswith("-")]
+        return len(args) <= 1 or any(r in push for r in refs)
+    return False
+
+
+def _is_push_attempt(rec: dict) -> bool:
+    """A push the transcript shows: a `git push` command or a push tool."""
+    if _PUSH_TOOL.search(str(rec.get("tool", ""))):
+        return True
+    return rec.get("tool") == "Bash" and bool(_GIT_PUSH_CMD.search(str(rec.get("cmd", ""))))
+
+
+def _pushed(rec: dict, shas: list[str] | None = None, refs: list[str] | None = None, *, ls_ok: bool = True,
+            made: frozenset | None = None, redacted_ok: bool = True) -> bool:
+    """One record backs a push claim. `ls_ok`, `made` and `redacted_ok` carry the ordering rules of _push_backed."""
     if rec.get("err"):
         return False  # a failed call pushed nothing
     cmd, out = str(rec.get("cmd", "")), str(rec.get("out", ""))
@@ -595,7 +702,7 @@ def _pushed(rec: dict, shas: list[str] | None = None, refs: list[str] | None = N
         return False
     # the remote's own answer that the ref is there. The stored cmd is cut, so `<sha> refs/...` lines in the output of
     # a command that is not a local listing (show-ref, for-each-ref) count too.
-    if (_LS_REMOTE_CMD.search(cmd) or not _LOCAL_REFS_CMD.search(cmd)) and _ls_remote_backs(out, shas or [], refs or []):
+    if ls_ok and (_LS_REMOTE_CMD.search(cmd) or not _LOCAL_REFS_CMD.search(cmd)) and _ls_remote_backs(out, shas or [], refs or [], made, redacted_ok):
         return True
     if _LS_REMOTE_CMD.search(cmd):
         return False
@@ -603,7 +710,27 @@ def _pushed(rec: dict, shas: list[str] | None = None, refs: list[str] | None = N
         return False
     # The stored cmd is cut, so a push inside a compound command may be out of sight; its ref-update
     # output line is the proof. A plain read command (cat, ls, grep) printing such a line is not a push.
-    return bool(_GIT_PUSH_CMD.search(cmd)) or bool(_COMPOUND_CMD.search(cmd))
+    return (bool(_GIT_PUSH_CMD.search(cmd)) or bool(_COMPOUND_CMD.search(cmd))) and _ref_update_backs(cmd, out, refs or [])
+
+
+def _push_backed(tools: list[dict], shas: list[str], refs: list[str]) -> bool:
+    """Some record of the turn backs the push claim. With a push attempt in view (a `git push` command or push tool), a
+    ls-remote record backs only from the last attempt on (an earlier listing says nothing about it), and only for a commit
+    the claim names or the turn made: a push the remote rejected, followed by a listing of the old commit, backs nothing."""
+    attempts = [i for i, r in enumerate(tools) if _is_push_attempt(r)]
+    if not attempts:
+        return any(_pushed(r, shas, refs) for r in tools)
+    last = attempts[-1]
+    rejected = bool(tools[last].get("err")) or bool(_PUSH_REJECTED.search(str(tools[last].get("out", ""))))
+    made: set[str] = set()
+    for i, r in enumerate(tools):
+        if i == last:
+            made |= _made_shas(r)  # a compound `git push && git ls-remote` is both the attempt and the listing
+        if _pushed(r, shas, refs, ls_ok=i >= last, made=frozenset(made), redacted_ok=not rejected):
+            return True
+        if i != last:
+            made |= _made_shas(r)
+    return False
 
 
 def _ci_queried(rec: dict) -> bool:
@@ -613,11 +740,6 @@ def _ci_queried(rec: dict) -> bool:
 
 
 _CI_TRIGGER_TOOL = re.compile(r"(?:^|__)actions_run_trigger$")
-_CI_PASS_CLAIM = re.compile(
-    r"\b(?:CI|GitHub checks?|every GitHub check|checks?|workflows?|pipelines?|e2e|end-to-end)\b[^.\n]{0,40}"
-    r"\b(?:green|pass(?:es|ed|ing)?|succe\w+)\b",
-    re.I,
-)
 _CI_BAD = re.compile(r"\b(?:failure|failed|cancell?ed|timed_out)\b", re.I)
 _CI_PENDING = re.compile(r"\b(?:queued|in_progress|pending|waiting)\b", re.I)  # not concluded yet: backs no green claim
 _CI_GOOD = re.compile(r"\b(?:success|passed)\b", re.I)
@@ -644,11 +766,34 @@ def _gh_state(status: str, conclusion: str) -> str:
     return "ok" if conclusion.strip().lower() in ("success", "skipped", "neutral") else "bad"
 
 
+def _parse_time(stamp: object) -> float | None:
+    """An ISO 8601 timestamp (`2026-11-02T01:00:00+02:00`, `...Z`) as epoch seconds; None when absent or unreadable.
+    A stamp without an offset is read as UTC."""
+    if not isinstance(stamp, str) or not stamp.strip():
+        return None
+    try:
+        when = datetime.datetime.fromisoformat(stamp.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (when if when.tzinfo else when.replace(tzinfo=datetime.timezone.utc)).timestamp()
+
+
+def _recency(new: tuple, old: tuple) -> int:
+    """Which of two recency keys (epoch seconds or None, run id or None) is newer: >0 `new`, <0 `old`, 0 unknown or equal.
+    Times compare when both rows carry one; otherwise (or on equal times) run ids do."""
+    if new[0] is not None and old[0] is not None and new[0] != old[0]:
+        return 1 if new[0] > old[0] else -1
+    if new[1] is not None and old[1] is not None and new[1] != old[1]:
+        return 1 if new[1] > old[1] else -1
+    return 0
+
+
 def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str, tuple | None]], list[str]]:
     """(runs, other lines). A run is (workflow name, run id or None, 'ok'|'bad', raw text, recency key), read from `gh run
     list` tab-separated rows (status, conclusion, title, workflow, branch, event, id, elapsed, age) or its --json list;
     every other line is returned for the generic status-word reading. The recency key is set for --json rows only (their
-    order is whatever a jq sort left): (createdAt, id) or (id,); None for table rows, which gh prints newest first."""
+    order is whatever a jq sort left): (createdAt as epoch seconds or None, id or None), see _recency; None for table
+    rows, which gh prints newest first."""
     text = out.strip()
     if text.startswith("["):
         try:
@@ -663,10 +808,9 @@ def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str, tuple | No
                     return [], out.splitlines()
                 rid = d.get("databaseId")
                 rid = rid if isinstance(rid, int) and not isinstance(rid, bool) else None
-                made = d.get("createdAt")
-                key = (made if isinstance(made, str) and made else "", rid if rid is not None else -1)
+                key = (_parse_time(d.get("createdAt")), rid)
                 runs.append((wf, rid, _gh_state(str(d.get("status") or ""), str(d.get("conclusion") or "")),
-                             json.dumps(d), key if key != ("", -1) else None))
+                             json.dumps(d), key if key != (None, None) else None))
             return runs, []
     runs, rest = [], []
     for ln in out.splitlines():
@@ -679,45 +823,86 @@ def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str, tuple | No
     return runs, rest
 
 
-def _ci_verdict(rec: dict, scope: list[str], workflows: frozenset = frozenset()) -> str | None:
-    """Latest status per workflow in one CI output: 'bad' when some workflow's latest run concluded failure or
-    cancelled, 'pending' when none did but a latest run is queued or in_progress (not concluded), 'ok' when every
-    latest run is success, None when it carries no status (or is only an error echo). `gh run list` rows (and its
-    JSON) are grouped by workflow name and the newest run decides, so an old failure behind a later success does not
-    count and an old success behind a newer in_progress run backs nothing. A --json row's newest run is the one with the
-    latest createdAt, else the highest databaseId (a jq sort may have reordered the list); a table row has neither,
-    and gh prints it newest first, so the first row of a workflow is its newest. Other lines are keyed by their text
-    without status words, first line first. "0 failed" counts as success. `workflows` (lowercase names the claim
-    scopes itself to, see _ci_claim_verdicts) restricts the runs to those workflows."""
+def _ci_observations(rec: dict) -> dict[str, tuple[str, tuple | None]]:
+    """Workflow name (lowercase) -> (state, recency key) for one CI record. `gh run list` rows (and its JSON) are grouped
+    by workflow name and the newest run decides, so an old failure behind a later success does not count and an old
+    success behind a newer in_progress run backs nothing. A --json row's newest run is the one with the latest createdAt,
+    else the highest databaseId (see _recency; a jq sort may have reordered the list); a table row has neither, and gh
+    prints it newest first, so the first row of a workflow is its newest. Other lines are keyed by their text without
+    status words, first line first. "0 failed" counts as success. {} for an error echo or a record with no status."""
     out = str(rec.get("out", ""))
     if "tool_use_error" in out:
-        return None  # the harness echoing the command back, not a CI result
+        return {}  # the harness echoing the command back, not a CI result
     runs, lines = _gh_runs(out)
-    if workflows:
-        runs = [r for r in runs if r[0].lower() in workflows]
-        lines = []
-    if scope:
-        runs = [r for r in runs if any(t in r[3].lower() for t in scope)]
-        lines = [ln for ln in lines if any(t in ln.lower() for t in scope)]
-    latest: dict[str, str] = {}
-    newest: dict[str, tuple] = {}
+    obs: dict[str, tuple[str, tuple | None]] = {}
     for wf, _rid, state, _raw, key in runs:
-        k = "wf:" + wf
-        if k not in latest or (key is not None and (k not in newest or key > newest[k])):
-            latest[k] = state  # first row stands until a keyed (--json) row is newer
-            if key is not None:
-                newest[k] = key
+        k = wf.lower()
+        if k not in obs or (key is not None and (obs[k][1] is None or _recency(key, obs[k][1]) > 0)):
+            obs[k] = (state, key)  # first row stands until a keyed (--json) row is newer
     for ln in lines:
         clean = _ZERO_FAIL.sub(" ", ln)
         state = "bad" if _CI_BAD.search(clean) else "pending" if _CI_PENDING.search(clean) else "ok" if _CI_GOOD.search(clean) else None
         if state is None:
             continue
         key = " ".join(w for w in re.findall(r"[a-z][\w.-]*", clean.lower()) if w not in _CI_STATUS_WORDS)
-        latest.setdefault(key, state)
+        obs.setdefault(key, (state, None))
+    return obs
+
+
+def _ci_latest(recs: list[dict]) -> dict[str, str]:
+    """Workflow name -> state of its newest run over EVERY CI record of the turn, not the last record alone. Two records
+    that both carry a createdAt or run id for a workflow are ordered by it (an older listing read later does not win); any
+    other pair is ordered by record, the later one standing."""
+    latest: dict[str, tuple[str, tuple | None]] = {}
+    for rec in recs:
+        for name, (state, key) in _ci_observations(rec).items():
+            old = latest.get(name)
+            if old is None or key is None or old[1] is None or _recency(key, old[1]) >= 0:
+                latest[name] = (state, key)
+    return {name: state for name, (state, _key) in latest.items()}
+
+
+def _ci_verdict(recs: list[dict], workflows: frozenset = frozenset()) -> str | None:
+    """'bad' when some workflow's newest run (over all `recs`, see _ci_latest) concluded failure or cancelled, 'pending'
+    when none did but a newest run is queued or in_progress (not concluded), 'ok' when every newest run is success, None
+    when no record carries a status. `workflows` (lowercase names the claim names itself, see _ci_claim_verdicts)
+    restricts the verdict to those workflows; nothing else filters it."""
+    latest = _ci_latest(recs)
+    if workflows:
+        latest = {k: v for k, v in latest.items() if k in workflows}
     if not latest:
         return None
     vals = set(latest.values())
     return "bad" if "bad" in vals else "pending" if "pending" in vals else "ok"
+
+
+def _ci_claim_kind(sent: str, blob: str = "") -> str | None:
+    """'strict' when the sentence is a CI claim by its own words (CI, GitHub checks), 'loose' when it says check, workflow,
+    pipeline or e2e passed AND names something the turn's CI output `blob` (lowercase) holds, else None. One pattern
+    (_CI_CLAIM); "All checks pass" after a local `make check` names nothing in a CI output and is not a CI claim."""
+    words = {w for w in re.findall(r"[a-z][\w-]{2,}", sent.lower()) if w not in _CI_STOP}
+    named = bool(blob) and any(w in blob for w in words)
+    kind, pos = None, 0
+    while (m := _CI_CLAIM.search(sent, pos)) is not None:
+        if m.group("strict"):
+            return "strict"
+        if named:
+            kind = "loose"
+        pos = m.start() + 1
+    return kind
+
+
+def _names_workflow(sent: str, name: str) -> bool:
+    """The (lowercase) sentence names workflow `name`: "the ci workflow", "workflow ci", or "<name> check/job/run" for a
+    name that is not itself a generic CI word. "CI passed after the lint fix" names none."""
+    if not name:
+        return False
+    esc = re.escape(name)
+    if re.search(r"\b" + esc + r"\s+workflows?\b|\bworkflows?\s+[\"'`]?" + esc + r"\b", sent):
+        return True
+    return name not in _CI_STOP and bool(
+        re.search(r"\b" + esc + r"\s+(?:check|job|run|pipeline)s?\b|\b(?:check|job)\s+[\"'`]?" + esc + r"\b", sent)
+    )
 
 
 _RUN_ID = re.compile(r"\b\d{5,}\b")
@@ -734,26 +919,22 @@ def _ci_claim_verdicts(sents: list[str], tools: list[dict]) -> list[str]:
     named: dict[int, str] = {}
     wfs: set[str] = set()
     for r in recs:
-        for wf, rid, state, _raw, _key in _gh_runs(str(r.get("out", "")))[0]:
-            wfs.add(wf.lower())
+        wfs.update(_ci_observations(r))
+        for _wf, rid, state, _raw, _key in _gh_runs(str(r.get("out", "")))[0]:
             if rid is not None:
                 named[rid] = state  # the latest record of that run wins
     res = []
     for s in sents:
-        if not _CI_PASS_CLAIM.search(s):
+        if _ci_claim_kind(s, blob) is None:
             continue
-        words = {w for w in re.findall(r"[a-z][\w-]{2,}", s.lower()) if w not in _CI_STOP}
-        scope = sorted(w for w in words if w in blob)
-        # "CI passed on the ci workflow" / "the workflow ci": the claim names one workflow, so another one's run is not its
-        wf_named = frozenset(
-            w for w in wfs
-            if re.search(r"\b" + re.escape(w) + r"\s+workflow\b|\bworkflow\s+[\"'`]?" + re.escape(w) + r"\b", s.lower())
-        )
-        verdicts = [v for v in (_ci_verdict(r, scope, wf_named) for r in recs) if v]
-        last = verdicts[-1] if verdicts else "ok"
-        if last == "bad" or any(named.get(int(i), "ok") != "ok" for i in _RUN_ID.findall(s)):
+        # "CI passed on the ci workflow" / "the tests check": the claim names a workflow, so another one's run is not its.
+        # Nothing else narrows the verdict: other words of the sentence ("after the lint fix") are not a workflow name.
+        wf_named = frozenset(w for w in wfs if _names_workflow(s.lower(), w))
+        verdict = _ci_verdict(recs, wf_named) or "ok"
+        ids = [int(i) for i in _RUN_ID.findall(s)]
+        if verdict == "bad" or any(named.get(i, "ok") != "ok" for i in ids):
             res.append("contradicted")
-        if last == "pending" or (last != "bad" and "pending" in {named.get(int(i)) for i in _RUN_ID.findall(s)}):
+        if verdict == "pending" or (verdict != "bad" and "pending" in {named.get(i) for i in ids}):
             res.append("pending")
     return res
 
@@ -796,11 +977,20 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
         pool |= _count_nums(str(r.get("out", "")))
         if "cnums" in r:
             pool.update(str(n).replace(",", "") for n in r["cnums"])
-        else:  # a record stored before cnums existed (the D1 corpus): its count phrases were kept only inside `nums`
+        elif _out_is_cut(r):
+            # A record stored before cnums existed (the D1 corpus) whose `out` lost its head: the count phrases of the lost
+            # part survive only inside `nums`, bare digits and all. A whole `out` was read above and needs no fallback.
             pool.update(str(n).replace(",", "") for n in r.get("nums", ()))
     unseen = any(_is_opaque(r) for r in tools)
     checked = any(_is_check_run(r) for r in tools)
-    for m in _COUNT_CLAIM.finditer(text):
+    body = _strip_fences(text)
+    # A quoted count counts only where it is asserted: not in a hedged clause ("would show 120 passed") or about another
+    # time ("earlier showed 120 passed"). A fenced block is where a run's result is pasted, so its lines are read too,
+    # each under the same two filters; claim cues (`sents`) are never read from a fence.
+    sents = [a for s in _sentences(body) for a in _assertions(s)]
+    fenced = [ln for m in _FENCE.finditer(text) for ln in m.group(0).strip("`").split("\n")]
+    counted = " || ".join(a for s in _sentences(body) + _sentences("\n".join(fenced)) if not _ELSE_TIME.search(s) for a in _assertions(s))
+    for m in _COUNT_CLAIM.finditer(counted):
         n = next((g for g in m.groups() if g), "").replace(",", "")
         if n and int(n) >= 3 and n not in pool and not unseen:
             if tests:
@@ -808,8 +998,6 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
             elif not checked:
                 findings.append(("count_nowhere", f"count {n} appears in no tool output or report this turn"))
             break
-    body = _strip_fences(text)
-    sents = [s for s in _sentences(body) if not _hedged(s)]
     pass_sents = [s for s in sents if _suite_pass_claim(s)]
     runs = [r for r in tools if _is_test_run(r) or _is_crew_run(r)]
     if runs and pass_sents and not _failure_about_run(body, pass_sents):
@@ -817,16 +1005,16 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
             findings.append(("pass_after_failing_run", "pass claimed after failing last test run"))
     if (
         tests
-        and any(_FULL_CLAIM.search(s) for s in sents)
+        and any(_FULL_CLAIM.search(s) and _suite_pass_claim(s) for s in sents)  # "the whole run aborts" describes a failure, not a pass
         and all(_narrow_run(r, text) for r in tests)
     ):
         findings.append(("narrow_as_full_suite", "narrow test command claimed as full suite"))
     push_sents = [s for s in sents if _PUSH_CLAIM.search(s)]
     if push_sents:
         shas, refs = _claim_ids(push_sents)
-        if not any(_pushed(r, shas, refs) for r in tools):
+        if not _push_backed(tools, shas, refs):
             findings.append(("push_unbacked", "push claimed with no push tool call"))
-    if any(_CI_CLAIM.search(s) for s in sents) and not any(_ci_queried(r) for r in tools):
+    if any(_ci_claim_kind(s) == "strict" for s in sents) and not any(_ci_queried(r) for r in tools):
         findings.append(("ci_unbacked", "CI result claimed with no CI tool call"))
     elif _ci_pending(sents, tools):
         findings.append(("ci_unbacked", "CI claimed green but the newest run has not concluded"))
@@ -929,7 +1117,7 @@ def tools_from_transcript(path: str, max_bytes: int = TAIL_BYTES) -> list[dict] 
                 if isinstance(b, dict) and b.get("type") == "text"
             )
             if inj.strip() and _INJECTED.match(inj):  # subagent reports arrive as notifications
-                tools.append({"tool": "_inj", "cmd": "", "out": inj[-4000:], "err": False,
+                tools.append({"tool": "_inj", "cmd": "", "out": inj[-OUT_CHARS:], "err": False,
                               "nums": sorted(set(_NUM.findall(inj)), key=lambda n: (len(n), n))[:NUMS_CAP],
                               "cnums": sorted(_count_nums(inj)),
                               **({"opaque": True} if _OPAQUE.search(inj) else {})})
@@ -963,7 +1151,7 @@ def tools_from_transcript(path: str, max_bytes: int = TAIL_BYTES) -> list[dict] 
                         b.get("text", "") for b in body if isinstance(b, dict)
                     )
                 body = body if isinstance(body, str) else ""
-                entry["out"] = body[-4000:]
+                entry["out"] = body[-OUT_CHARS:]
                 # `out` is only the tail; the evidence checks read the FULL output through these three fields.
                 entry["nums"] = sorted(set(_NUM.findall(body)), key=lambda n: (len(n), n))[:NUMS_CAP]
                 entry["cnums"] = sorted(_count_nums(body))
@@ -1223,10 +1411,10 @@ def kind_metrics(rows: list[dict], kinds: dict | None = None) -> dict:
     return _kind_stats(rows, _row_kinds(rows) if kinds is None else kinds, _group_ids(rows))
 
 
-def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
-    """Wilson score interval for k successes in n trials, clipped to [0, 1] ((0.0, 0.0) when n is 0)."""
+def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """Wilson score interval for k successes in n trials, clipped to [0, 1]; None when n is 0 (no trials, no interval)."""
     if n <= 0:
-        return 0.0, 0.0
+        return None
     p = k / n
     denom = 1 + z * z / n
     centre = (p + z * z / (2 * n)) / denom
@@ -1236,7 +1424,8 @@ def wilson_interval(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
 
 def wilson_lower(tp: int, n: int, z: float = 1.96) -> float:
     """Lower bound of the Wilson score interval for tp successes in n trials (0.0 when n is 0)."""
-    return wilson_interval(tp, n, z)[0]
+    interval = wilson_interval(tp, n, z)
+    return interval[0] if interval else 0.0
 
 
 def select_kinds(
@@ -1396,8 +1585,8 @@ def _print_cv_table(rows: list[dict], title: str = "D1") -> None:
         vals = [r[key] for r in runs]
         print(f"   out-of-fold {key.upper()}: mean {sum(vals) / len(vals):.1f} min-max {min(vals)}-{max(vals)}")
     r0 = runs[0]
-    lo, hi = wilson_interval(r0["tp"], r0["tp"] + r0["fp"])
-    oof = f"Wilson 95% [{lo:.3f}, {hi:.3f}]" if r0["tp"] + r0["fp"] else "n/a (no out-of-fold block fired)"
+    interval = wilson_interval(r0["tp"], r0["tp"] + r0["fp"])
+    oof = f"Wilson 95% [{interval[0]:.3f}, {interval[1]:.3f}]" if interval else "n/a (no out-of-fold block fired)"
     print(f"   repeat 0 pooled out-of-fold precision {r0['tp']}/{r0['tp'] + r0['fp']}: {oof}")
     print(f"   selection stability (kind x fits selecting it, of {n_fits}; fewer than {int(CV_STABLE_FRACTION * n_fits)} = unstable)")
     for kind in FINDING_KINDS:
