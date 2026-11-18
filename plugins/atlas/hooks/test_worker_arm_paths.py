@@ -1,5 +1,5 @@
 """Worker exemption, arm paths with a lead control: prompt arming, omp_runstate arm,
-and the STOP + inbox single-document merge (which a worker no longer triggers)."""
+and the routing-note + inbox single-document merge (which a worker no longer triggers)."""
 
 import json
 import os
@@ -95,8 +95,8 @@ class RunstateArmTest(_DbCase):
 
 
 class StopAndInboxMergeTest(twi.RealCollisionTest):
-    """The tripwire's own STOP and an inbox delivery share ONE document. A worker no
-    longer gets a STOP, so the collision is forced by treating the call as a lead's."""
+    """The tripwire's own routing note and an inbox delivery share ONE document. A worker no
+    longer gets the note, so the collision is forced by treating the call as a lead's."""
 
     @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_stop_message_and_inbox_share_one_document(self):
@@ -107,7 +107,7 @@ class StopAndInboxMergeTest(twi.RealCollisionTest):
             )  # raises if two documents were printed
         ctx = both["hookSpecificOutput"]["additionalContext"]
         self.assertIn("ping during an edit", ctx)
-        self.assertIn("STOP", ctx)
+        self.assertIn("Routing note", ctx)
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@
 - [Resumability](#resumability)
 - [Right-size the wave before you dispatch](#right-size-the-wave-before-you-dispatch)
 
-The principle: **plan before you touch anything, and make every stage prove itself.** Assumption-driven work is banned. You move forward only on checked output, and you move backward the moment a later fix invalidates an earlier check.
+The principle: **plan before you touch anything, and make every stage prove itself.** Do not build on an unchecked assumption, because a wrong guess that stays unchecked carries into every later stage. You move forward only on checked output, and you move backward the moment a later fix invalidates an earlier check.
 
 ## The stage map
 
@@ -88,7 +88,7 @@ This is the Verify step (`SKILL.md` step 3) applied per stage, not only at end-o
 **Rules:**
 - Every stage that shipped code (implementer dispatch) MUST have a paired `verifier` dispatch and a `status` of `verified` or `rejected` before its dependents start.
 - A stage with `"verifier": null` and `"status": "pending"` blocks its dependents, with no exceptions.
-- The completion gate's condition (g) reads `unpaired_implementer_dispatches` from the DB; `findings.json` is the human-readable mirror that lets you track coverage during the run, not just at the end.
+- The completion gate's condition (g) (verifier coverage) reads `unpaired_implementer_dispatches` from the DB; `findings.json` is the human-readable mirror that lets you track coverage during the run, not just at the end.
 - Update `findings.json` after every verify step, not at the end of the session.
 
 ## Delegation decision
@@ -115,7 +115,7 @@ When you do delegate, every subagent gets a 4-part brief:
 
 ## Standing-consent orchestration mode
 
-While the atlas-orchestrate skill is active, the orchestrator has STANDING CONSENT to fan out to subagents for every substantive task without re-asking. Optimize for the most exhaustive correct answer, not the fastest one. Work solo only on trivial or purely conversational turns where a subagent would add nothing.
+While the atlas-orchestrate skill is active, fan out when the work has independent parts or needs an independent check. A simple task (one working seat or effort `low`) is done inline. A subagent costs a fresh context and its tokens, and it knows only what the brief says. Delegate when the work is separable, would fill this context, or needs an independent check. Do a single lookup or a one-line answer yourself.
 
 - The user can say **"mode off"** to revert to per-task confirmation (ask before each fan-out).
 - Saying **"mode on"** - or re-invoking the skill - restores standing consent.
@@ -128,7 +128,7 @@ Scale fan-out to the task. Do not manufacture subtasks to look busy, and do not 
 
 - A focused change to a module of a few hundred lines rarely needs more than ~10 subtasks.
 - A broad audit of a large codebase justifies more - split by surface, layer, or component.
-- Scope each subtask to a **distinct concern, component, or question.** Never per-line, never per-file-for-its-own-sake.
+- Scope each subtask to a **distinct concern, component, or question.** Do not split per line or per file for its own sake, because the pieces then lose the context that makes them make sense.
 
 If two "subtasks" would always succeed or fail together, they are one subtask.
 
@@ -144,7 +144,7 @@ Re-read it before any continuation - after a pause, a handoff, or a context comp
 
 ## Right-size the wave before you dispatch
 
-Every task is delegated - the orchestrator never does the work itself. That is not the
+In a run with two or more working seats, the work is delegated and the orchestrator does not do it itself. That is not the
 same as every task getting a squad. Match the shape of the work:
 
 | Shape of the work | Dispatch |
@@ -160,7 +160,5 @@ a `verified` entry written into `.atlas/.run/findings.json` DURING this run pair
 implementer exactly like an `atlas:verifier` dispatch does. Reach for the verifier when
 no test can express the check, and say in one line why.
 
-What this does NOT license: doing the work yourself because it is "small." A one-line
-change is still an `atlas:implementer` dispatch. The point of delegation is keeping the
-orchestrator's context clean, and that argument is strongest, not weakest, on small
-changes where the reading-and-editing noise dwarfs the diff.
+Work inline when one lookup answers the question and no edit is needed, or when the simple-task rule applies (one working seat or effort `low`, no team launched; `_simple_task` in the hooks; `ATLAS_MODE=solo` is the explicit opt-in). Outside those cases a one-line change is still an `atlas:implementer` dispatch. The point of delegation is keeping the
+orchestrator's context clean, and that argument is strongest on changes where the reading-and-editing noise dwarfs the diff.

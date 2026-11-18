@@ -321,7 +321,7 @@ _SPEC_HINTS = {
     "DELIVERABLE:": "<the exact artifact>",
     "SUCCESS CRITERIA:": "<independently checkable, each with its evidence>",
     "OUT OF SCOPE:": "<what not to touch>",
-    "STOP CONDITIONS:": "<when to halt and report instead of pushing through>",
+    "STOP CONDITIONS:": "<deliberate blockers only: a file marked off-limits, withheld access, a safety guardrail, a decision the lead must make. Diagnose and retry ordinary errors.>",
     "REPORT:": "STATUS, STEPS, FILES_CHANGED, EVIDENCE, DELIVERABLE, NEXT",
 }
 
@@ -1140,7 +1140,7 @@ AUTONAMES_RELPATH = (".atlas", ".run", "autonames")
 
 
 _PENDING_REPORT = [False]
-DEFAULT_REPORT_LINE = "REPORT: STATUS: DONE|FAILED|BLOCKED as the first line, then file:line findings, then one line per file touched"
+DEFAULT_REPORT_LINE = "REPORT: STATUS: DONE|FAILED|BLOCKED as the first line, then file:line findings, then one line per file touched, then DELIVERABLE in plain full sentences that a reader who saw none of the work can act on"
 _NAME_STOPWORDS = {
     "the",
     "a",
@@ -2002,8 +2002,11 @@ def _pre_tool_use(
         and not _simple_task(conn, root, session, run_id)
     ):
         _deny(
-            "DENY - atlas orchestrators never edit target code inline. "
-            f"Route this {tool} of {path} to atlas:implementer."
+            "DENY - in this run, target code is edited by a dispatched agent, because "
+            "the completion gate checks for a delegated, verified change. "
+            f"Route this {tool} of {path} to atlas:implementer. "
+            "(Simple tasks are exempt; this session is not classed as simple: a team or crew "
+            "was launched, no scope is resolved, or ATLAS_INLINE_SIMPLE is off.)"
         )
         return
     # (a) Too many inline ops with no intervening dispatch. Read-only investigation
@@ -2044,7 +2047,8 @@ def _pre_tool_use(
             "the work happens in subagents so this session's context stays clean. "
             "Dispatch the next step to atlas:explorer (investigation) or "
             "atlas:implementer (edits). Right-size it - one bounded change is ONE "
-            "implementer dispatch, not a squad. (Your own docs/ and .atlas/ writes "
+            "implementer dispatch, not a squad. A subagent adds cost, so delegate edits "
+            "and separable investigation; a read-only check does not count here. (Your own docs/ and .atlas/ writes "
             "are not counted here; only unsanctioned inline work is.)"
         )
 
@@ -3056,10 +3060,10 @@ def _run(payload):
             ):
                 return  # a simple task is the lead's own inline work: no STOP nudge
             if edit_to_target:
-                msg = f"STOP - route this {tool} of {path} to atlas:implementer."
+                msg = f"[atlas] Routing note: route this {tool} of {path} to atlas:implementer."
             else:
                 msg = (
-                    f"STOP - {count} inline ops, no dispatch. Route the next step to "
+                    f"[atlas] Routing note: {count} inline ops, no dispatch. Route the next step to "
                     "atlas:explorer / atlas:implementer."
                 )
             out = {

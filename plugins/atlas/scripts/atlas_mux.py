@@ -1279,7 +1279,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
         wake = (
             "If the env var ATLAS_LEAD_AGENT is set to your lead's session name and ListAgents "
             "shows it, send the same report text via SendMessage (to: that name) immediately "
-            "after posting the note. Do not retry sends. Skip entirely when unset or not "
+            "after posting the note. If a send fails, skip it: the board note is the record. Skip entirely when unset or not "
             "listed.\n\n"
         )
     mirror = ""
@@ -1292,7 +1292,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
             "If a TaskCreate tool is available to you, mirror the board item you claim: "
             'TaskCreate with subject "[<phase>] <content>" at claim time and mark it '
             "completed when you post your completion. The atlas board remains the source "
-            "of truth; do not duplicate status updates beyond the one completion.\n\n"
+            "of truth.\n\n"
         )
     return (
         f"{prompt}\n\n# Atlas worker report contract\n"
@@ -1302,7 +1302,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
         f"    {note_cmd}\n\n"
         f"{wake}"
         f"{mirror}"
-        "Post no other notes to the board."
+        "Post that one report note when you finish; a short progress note at a milestone is welcome."
     )
 
 
@@ -2251,15 +2251,15 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     cmd = f"python3 {todo}"
     flags = f"--root {qr} --channel {qc}"
     return (
-        f"You are {me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
-        f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
-        f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
-        f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
+        f"You are {me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), 1/{len(rec['members'])} workers, team {rec['team_id']} "
+        f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n"
+        f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n# Scope\n{scope}\n"
+        f"# Protocol\nPost: {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read: {cmd} notes --to {me} {flags}\n"
         f"1. After a first finding, note {lead}.\n"
-        "2. Before finishing, note each peer once (found, changed, avoid).\n"
-        "3. Reply once to any peer note.\n"
-        "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT.\n"
+        "2. Before finishing, note each peer once (found/changed/avoid).\n"
+        "3. Reply once to a peer note.\n"
+        "4. End with STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE/NEXT; DELIVERABLE in sentences.\n"
     )
 
 

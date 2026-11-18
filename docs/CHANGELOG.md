@@ -1,5 +1,14 @@
 # Changelog
 
+## atlas 17.29.0 - 2026-11-18
+
+Atlas prompt text follows Anthropic's guide "Prompting Claude Fable 5.2". Wording changed; gate behavior and thresholds did not.
+
+- Operating contract, agent-common, all agents, the lead output style, `AGENTS.md`, `CLAUDE.md`, skills, hook messages and crew, team and todo prompts: finish the whole task, work through ordinary obstacles, give the reason with each absolute rule, open with a line, update, recap, and name what a subagent costs.
+- Memory capture adds a ` [noted YYYY-MM-DD]` date to corrections and assumptions; the recall dedupe key ignores it.
+- New page `docs/architecture/atlas-fable-5-2-prompting.md` maps each guide section to what atlas does and lists open follow-ups; contract test `plugins/atlas/hooks/test_fable52_guide.py`.
+- Version 17.28.1 to 17.29.0. Details: `plugins/atlas/CHANGELOG.md`.
+
 ## atlas 17.28.1 - 2026-11-17
 
 Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries below ship in this version. Second fix wave (crew `crew-205854560b`), regression tests in `hooks/test_audit2_*.py` and `scripts/test_audit2_*.py`:

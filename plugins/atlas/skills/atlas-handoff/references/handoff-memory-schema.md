@@ -2,7 +2,9 @@
 
 The structured shape of a handoff record, for storage in the project's
 memory store or an on-disk file. The schema is the contract a fresh session
-relies on to resume without re-discovery.
+relies on to resume without re-discovery. The reader is a fresh session with
+no context: write for a low-context reader, put the state and the next
+action first, use full sentences, and give the reason for each open decision.
 
 ## Fields
 
@@ -44,7 +46,7 @@ then proceed.
 
 ## Anti-patterns
 
-- Narrative prose ("we discussed", "the plan is to"): cut it.
-- Intent without action ("we want to improve"): cut it.
+- Filler prose ("we discussed", "the plan is to"): cut the filler, and keep the sentence that gives the reason.
+- Intent without action ("we want to improve"): remove it.
 - A claim of "done" with no evidence: move it to `remaining`.
 - A re-run command with no expected output: incomplete; fill it in.

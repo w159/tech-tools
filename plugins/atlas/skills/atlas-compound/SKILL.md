@@ -44,7 +44,7 @@ The skill documents a **solved and verified** problem, nothing else. Apply every
 - **Verified:** the fix was proven - test run, command output, verifier verdict in `.atlas/.run/findings.json`, or evidence under `.atlas/evidence/`. An unverified fix is never captured; offer to verify first.
 - **Non-obvious and durably useful - the counterfactual test:** if this learning disappeared, would a future engineer reading the final code, tests, types, comments, and docs likely re-make the mistake or redo substantial investigation? The code must NOT already explain itself. If it would, skip.
 - **Completion phrases identify the checkpoint, not a waiver.** "that worked", "it's fixed", "working now", "problem solved" trigger evaluation of this skill; they never lower the bar. Explicit invocation (`atlas-compound <context>`) applies the identical gate.
-- **One learning per invocation.** Several distinct lessons require sequential invocations. Batching breaks grounding and overlap assumptions; pick the single most valuable lesson or tell the user to invoke again for the next one.
+- **One learning per invocation.** Batching breaks grounding and overlap assumptions; capture the most valuable lesson and list the other candidates in the report as not captured.
 
 Failing the gate is a normal, expected outcome: emit the terminal signal `Learning skipped` (see Phase 6) with the failed clause. Do not stretch a lesson to pass.
 

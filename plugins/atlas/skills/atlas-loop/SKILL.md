@@ -50,8 +50,8 @@ If this skill is invoked with **no task** (bare invocation, or "what loops do yo
 
 - **Inputs are explicit.** Each loop file declares an `inputs` list in its frontmatter. Resolve every input before running. Prefer discovery (read the repo, the manifest, the failing command) over asking; ask only for genuinely unknowable values (a target URL, an interval preference, a budget).
 - **Interval choice is deliberate.** Pick the cadence interval from the task tempo, not a default. A deploy poll is minutes; a backlog sweep that hammers an API needs a longer gap or rate awareness. State the interval and why.
-- **Fan-out stays bounded.** Cap concurrent subagents (~4-6 in flight) and always close a wave with an independent verifier before spawning dependents. Reuse the atlas squad (`atlas:explorer`, `atlas:implementer`, `atlas:verifier`, etc.) rather than generic agents when the work is code.
-- **Destructive loops gate.** If the chosen loop writes, migrates, pushes, or is visible to others, surface the blast radius and stop for approval before the first mutating iteration. Read-only loops (status polls, discovery sweeps) may run freely.
+- **Fan-out stays bounded.** Cap concurrent subagents (~4-6 in flight) and close a wave with a test run where a test can express the check, and with an independent verifier where none can, before spawning dependents. Reuse the atlas squad (`atlas:explorer`, `atlas:implementer`, `atlas:verifier`, etc.) rather than generic agents when the work is code.
+- **Destructive loops gate.** If the chosen loop writes files, runs a migration, pushes, opens a PR, sends a message, or writes to a shared system, surface the blast radius and stop for approval before the first mutating iteration. Read-only loops (status polls, discovery sweeps) may run freely.
 - **Hand off cleanly to `/loop`.** For interval and self-paced loops your deliverable is the exact `/loop ...` line the user (or the session) runs. Do not simulate the timer yourself; `/loop` owns the cadence.
 
 ## Composing and extending

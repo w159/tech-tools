@@ -22,6 +22,7 @@ captured to memory across sessions) and is kept independent of it.
 Fail-open: any error exits 0 silently. Disable with ATLAS_MEMORY_CAPTURE=off.
 """
 
+import datetime
 import hashlib
 import os
 import re
@@ -253,7 +254,9 @@ def _extract_facts(conn, session_id, cwd):
                 # permission-shaped one is flagged so it reads as unreviewed.
                 flag = "[review] " if _REVIEW_RE.search(clean) else ""
                 fact = _Fact(
-                    f"{flag}User correction ({project_name}): {_clip(clean)}", clean
+                    f"{flag}User correction ({project_name}): {_clip(clean)}"
+                    f"{_noted_suffix()}",
+                    clean,
                 )
                 project_facts.append(fact)
     except sqlite3.Error as exc:
@@ -271,7 +274,9 @@ def _extract_facts(conn, session_id, cwd):
             if snippet and snippet.strip():
                 clean = atlas_memory.redact_secrets(snippet.strip())
                 fact = _Fact(
-                    f"Assumption to avoid ({project_name}): {_clip(clean)}", clean
+                    f"Assumption to avoid ({project_name}): {_clip(clean)}"
+                    f"{_noted_suffix()}",
+                    clean,
                 )
                 project_facts.append(fact)
     except sqlite3.Error as exc:
@@ -309,6 +314,13 @@ def _extract_facts(conn, session_id, cwd):
 
 # A subagent's cwd basename is not a project name.
 _JUNK_SCOPE = re.compile(r"^(agent-[0-9a-f]{6,}|\.run|\.atlas|)$")
+
+
+def _noted_suffix():
+    """Capture date (UTC) as ` [noted YYYY-MM-DD]`, so a later reader can tell
+    how old a caution is. The dedupe key never includes it."""
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    return f" [noted {today}]"
 
 
 def _clip(text, limit=200):

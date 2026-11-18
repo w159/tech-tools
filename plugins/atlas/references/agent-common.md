@@ -4,9 +4,25 @@ Shared by every `agents/*.md` worker. Read it only when you need one of the item
 
 Inline rule used when this file was split out: a line stays in the agent if the agent needs it before it can read a file, or if skipping it is unsafe or fails a hook gate. A line moves here if it is a procedure used only on a trigger, a template used only at the end, or a tool-routing hint repeated in three or more agents.
 
+## Finishing work
+
+Do not stop while you still owe work that was asked for. Ordinary obstacles are errors,
+timeouts, locked files, empty results and failing tools. Diagnose them first. When they are
+not real blockers, work through them with the access you have: wait and retry, fix the
+request, or use another tool or source. Do not end a turn by listing what is left, by
+offering to continue, or by asking permission to go on. Carry on with every part that does
+not depend on an open answer.
+
+A deliberate blocker is different: a file marked not to be touched, access that was
+withheld on purpose, a safety guardrail, or a decision only the lead or the user can make.
+Leave it alone, and look for another safe way to finish the rest. This does not remove the
+confirmation step for risky or destructive actions. If the blocker stops the work, end the
+dispatch with `STATUS: BLOCKED`, put the blocker and what you tried in DELIVERABLE, and put
+the question in NEXT.
+
 ## Siblings and board notes
 
-You are one worker in a team; the lead dispatches work and declares it done. If your work may touch what another sibling owns, or you are blocked on theirs, message that sibling by name (SendMessage on Claude Code, `write agent://<name>` on omp; one exchange, never wait twice). Post durable notes with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`; report to the lead, never the user. If CLAUDE_PLUGIN_ROOT is empty, use the absolute script path from your dispatch.
+You are one worker in a team; the lead dispatches work and declares it done. If your work may touch what another sibling owns, or you are blocked on theirs, message that sibling by name (SendMessage on Claude Code, `write agent://<name>` on omp; one exchange, never wait twice). Post durable notes with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" note --owner <name>`; report to the lead, never the user. If CLAUDE_PLUGIN_ROOT is empty, use the absolute script path from your dispatch. On a long task, post a board note at each milestone, not only at the end.
 
 If the prompt carries `BOARD ITEM: <id>`, at start run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" status --id <id> --status in_progress`.
 
@@ -23,6 +39,8 @@ EVIDENCE:
 DELIVERABLE: <findings or artifact the dispatch asked for; none if only files changed>
 NEXT: <exact question for the lead if BLOCKED or FAILED; else none>
 ```
+
+Write DELIVERABLE and NEXT in plain full sentences that a reader who has seen none of your tool calls can act on. Name each file and symbol in full; do not use an abbreviation you made up during the work.
 
 ## Tool routing
 

@@ -9,9 +9,11 @@ Model/effort tiers and squad
 **Opus is the orchestrator's tier.** A subagent works from a spec you already wrote, so it runs on
 the cheapest tier that can do the job. The tier table is `agents/<role>.md` frontmatter
 (`model`, `effort`, `tier_allow`, `effort_allow`), mirrored per seat in `contracts/scope-matrix.json`.
-**Never pass `model` in the Agent call; agents pin their own model.** The resolver
+**Do not pass `model` in the Agent call, because agents pin their own model and the tripwire denies the override.** The resolver
 (`atlas_resolve.py <class> <effort>`, one `model` per seat) tells you the team and tier: do not copy the model the resolver emits into the Agent call; the dispatch carries only `SCOPE:`. Opus is allowed only for roles whose `tier_allow` lists it and
 only where the matrix cell says so; the lead stays opus.
+
+These tables are defaults measured on earlier models. On a new model, re-measure them with an effort sweep before you trust them.
 
 | Tier | Use for | Roles (default model) |
 |---|---|---|
@@ -29,7 +31,7 @@ medium/high to `low`).
 | **medium** | writing code or rendering an independent verdict against evidence you did not hand them | `implementer`, `test-engineer`, `verifier`, `completeness-critic`, `db-prober` (catalog, privilege, naming audits) |
 | **high** | whole-codebase or cross-harness design | `planner` |
 
-Raising a subagent's effort is a last resort after the prompt has been tightened and still fails.
+Choose effort by measurement. Low suits well-specified work. A role that stops early or misses findings at low is a reason to test it one level up.
 
 **Every agent carries a `color:`** so a dispatch is identifiable at a glance in the
 terminal, grouped by role family: cyan = read-only discovery (`explorer`), blue = planning (`planner`), green = writes code
@@ -57,13 +59,13 @@ off-palette value.
 
 ## Your squad
 
-Dispatch constantly. Three complementary sets:
+Dispatch when a role's work is needed. Three complementary sets:
 
 - **Orchestrator companions** (carry this skill's discipline): `atlas:explorer` (read-only mapping), `atlas:implementer` (one bounded change), `atlas:verifier` (adversarial confirmation), `atlas:db-prober` (read-only DB), `atlas:ui-runtime-tester` (live frontend behavior), `atlas:planner` (multi-stage decomposition + stage maps), `atlas:docs-curator` (maintains docs/ SSOT; writes only under `docs/`), `atlas:docs-auditor` (audits docs/ for drift against code), `atlas:completeness-critic` ("what did we miss" gap pass before done).
 - **Atlas meta-skills** (broader-scope orchestration companions): `atlas-loop` (loop-library matcher; recurring/iterative work), `atlas-setup` (onboarding, install, connectors, repair), `atlas-audit` (code/security audit swarm; architecture map; atlas self-telemetry from the observability DB), `atlas-ux-test` (UX runtime swarm; app-discovering).
 - **Domain specialists already installed** (route here for depth): `backend-architect`, `frontend-developer`, `security-engineer`, `debugger`, `devops-automator`, `code-reviewer`, `test-engineer`, `test-executor`, `secondary-expert-validator`, `codebase-explorer`. Plus built-ins `Explore`/`Plan`/`general-purpose`.
 
-**Fork history-heavy dispatches instead of re-explaining.** `planner`, `completeness-critic`, `docs-curator`, and synthesis dispatches SHOULD use `subagent_type: "fork"` (cheap, inherits this session's history) - `atlas:verifier` and `atlas:explorer` must NEVER fork (they need fresh, uncontaminated context). See `references/subagent-kit.md`.
+**Fork a dispatch when the subagent needs this session's history.** `planner`, `completeness-critic`, `docs-curator`, and synthesis dispatches SHOULD use `subagent_type: "fork"` (it inherits this session's history) - `atlas:verifier` and `atlas:explorer` must NEVER fork (they need fresh, uncontaminated context). See `references/subagent-kit.md`.
 
 `references/capability-routing.md` maps task signals -> the right agent + skill + MCP + model.
 

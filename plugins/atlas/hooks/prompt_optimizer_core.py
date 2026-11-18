@@ -185,9 +185,9 @@ def should_optimize(prompt: str) -> tuple[bool, str]:
 # Directive the optimizer must carry into its spec. It is an instruction FOR the executing
 # agent; the optimizer itself does not write in STE.
 STE_DIRECTIVE = (
-    "Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, "
-    "applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), "
-    "one instruction per sentence, active voice, approved common words, consistent terms. "
+    "Write your replies, docs and reports in ASD-STE100 Simplified Technical English, "
+    "applied about 80%: short sentences, "
+    "one idea per sentence, active voice, approved common words, consistent terms. "
     "Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity."
 )
 
@@ -328,6 +328,10 @@ _CLOSING_ROLES = frozenset(
 _READ_ONLY_CLASSES = frozenset({"audit", "verify", "db", "db-audit", "ui-test"})
 _MATRIX_PATH = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "contracts", "scope-matrix.json"
+)
+_FINISH_LINE = (
+    "Finish the whole task: work through ordinary errors and timeouts, and stop only for a "
+    "deliberate blocker or a decision that is the user's."
 )
 _NUDGE_MAX_BYTES = 700
 # A crew nudge carries the whole runnable command (an absolute plugin path, the session id, the CHANGELOG
@@ -876,8 +880,8 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
         nxt = (
             "Don't write those files or read them. ONE Bash call now: `%s` (a crew in THIS tree: "
             "worker per file, leases, live IRC; it adds your CHANGELOG line when green). Exit 0: its "
-            "gate re-ran the check; don't re-run tests. Reply in at most 3 lines: the pass count and the "
-            "files changed, no recap of the summary, then stop. Exit 3: run the `wait` it prints. "
+            "gate re-ran the check; don't re-run tests. Reply in two or three short sentences: pass count, "
+            "files changed, what is next, so a reader who saw none of the work can follow. Exit 3: run the `wait` it prints. "
             "Exit 1: fix from check_tail." % crew_cmd
         )
     elif n >= 2:
@@ -893,6 +897,8 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
             "Next: one in-process atlas:%s call with SCOPE: %s is the right size."
             % (role, scope)
         )
+        if effort in ("low", "medium"):
+            nxt += " " + _FINISH_LINE
     head = (
         "[atlas-orchestrate] Session armed: use the atlas:atlas-orchestrate skill "
         "and dispatch, not inline work."

@@ -1,6 +1,6 @@
 ---
 name: atlas-ship
-description: "Ships finished work: a fresh-context verifier checks a clean tree, then a local commit; stops before any push or PR. Commit-only mode commits a file list. Use when work is ready to commit or open a PR."
+description: "Ships finished work: the project gates (or a fresh-context verifier where no gate can express the check) check a clean tree, then a local commit; stops before any push or PR. Commit-only mode commits a file list. Use when work is ready to commit or open a PR."
 when_to_use: "ship it, commit my work, commit my changes, ready to commit, conventional commit, stage and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '[commit-only] [files...] [exclude:<paths>] [description-only] [babysit:off|checkpoint]'
@@ -34,15 +34,15 @@ Read `references/repo-state.md` and run its probe sequence first - one argv-form
 - **Detached HEAD, or on ANY protected branch with work** (`atlas_git.py protected` - default branch, `main`/`master`/`production`/`release/*`, GitHub-protected) - run `atlas_git.py branch <slug>` (slug from the change content). It REUSES the existing branch for the same work or creates one `atlas/<slug>` within the branch cap; never create a new branch per ship. Re-read `git branch --show-current` and continue. Do not ask whether to branch. On a protected branch with no work - report and stop. Committing on a protected branch needs the user's explicit ask plus `atlas_git.py allow`; see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`.
 - **Feature branch already checked out** - use it as is; do not create another.
 
-## Step 2 - Verify a clean, gate-passing tree (compose atlas:verifier)
+## Step 2 - Verify a clean, gate-passing tree
 
-Before anything is committed, an independent context confirms the tree is shippable. Dispatch `atlas:verifier` in a fresh context (never fork - it must carry none of this session's assumptions) using the enforced dispatch shape from `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md` (single `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, batched `ToolSearch` line). Its scope:
+Before anything is committed, confirm the tree is shippable. Run the project gates directly. Dispatch a fresh-context `atlas:verifier` only where no gate can express the check, and say why in one line. When you do dispatch it, use a fresh context (never fork - it must carry none of this session's assumptions, so it cannot inherit a mistaken belief from this session) and the enforced dispatch shape from `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/subagent-kit.md` (single `GOAL:`, `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, batched `ToolSearch` line). The check covers:
 
 1. **Project gates** - run the project's active gates exactly as its `AGENTS.md`/`CLAUDE.md` defines them (tests, lint, typecheck). Evidence is command output, not "should pass".
 2. **Diff inventory** - `git status` plus the full diff of what would be committed: the material this Step 3's message and Step 5's PR body are grounded in.
 3. **Docs-current status** - when `docs/` exists: `docs/CHANGELOG.md` entry present for the change, `docs/ROADMAP.md` reconciled. Missing docs-current is reported as a residual for the user to waive or fix - never silently shipped, never auto-expanded into a docs task mid-ship.
 
-End the dispatch with the verifier contract line: "Write your verdict (PASS/FAIL plus evidence paths) to `.atlas/.run/findings.json` before returning. A response without a findings.json write is invalid." After the return, re-read `.atlas/.run/findings.json`; an absent or truncated verdict means re-dispatch, not proceed.
+When a verifier is dispatched, end the dispatch with the verifier contract line: "Write your verdict (PASS/FAIL plus evidence paths) to `.atlas/.run/findings.json` before returning. A response without a findings.json write is invalid." After the return, re-read `.atlas/.run/findings.json`; an absent or truncated verdict means re-dispatch, not proceed. When the gates ran directly, record their command output as the evidence.
 
 - **FAIL on a gate** - do not commit or ship a red tree. Route the failure through `atlas-debug` (or an `atlas:implementer` fix round) and re-verify. Stop and report if the fix is out of this ship's scope.
 - **PASS with residuals** - continue; the residuals ride into the Step 4 confirmation ask.
@@ -75,7 +75,7 @@ Then wait. Full consent mechanics - what counts as an explicit yes, what never c
 
 Re-verify at the point of risk (snapshot rule): branch is still the intended one, remote still present, PR presence re-checked immediately before create - a "no PR" from Step 1 is a stale snapshot, and a PR that appeared since (or was missed by an unknown-state probe) means take the existing-PR path, never open a duplicate.
 
-1. **Push** - `git push -u origin HEAD`, pushing the live HEAD, never a remembered branch name. Never `--force`/`--force-with-lease`. If the remote rejects as non-fast-forward, stop and report - resolving remote-history divergence (fetch/rebase/push-again) is a fresh user decision, not this skill's.
+1. **Push** - `git push -u origin HEAD`, pushing the live HEAD, never a remembered branch name. Never `--force`/`--force-with-lease`, because a forced push can overwrite remote history that other people have built on. If the remote rejects as non-fast-forward, stop and report - resolving remote-history divergence (fetch/rebase/push-again) is a fresh user decision, not this skill's.
 2. **PR only if the user asked for one (or said yes to the PR question) and `prs` policy allows it; otherwise skip to step 4.** Open PR already exists for this branch: the push landed on it, never a second PR. Compose the PR title and body** per `references/pr-body.md`, grounded in the actual three-dot diff (`base...HEAD`) and any linked artifacts already in hand: `docs/plans/<slug>.md`, `.atlas/findings/<YYYY-MM-DD>_<slug>.md`, verified entries from `.atlas/.run/findings.json`, the plan unit IDs on the commits. Never a generic summary; never invented `Fixes`.
 3. **Create via the github device** (only when step 2 says so). Write JSON to `xd://github` with `op: "pr_create"`, `title`, `body`, `head: <current branch>`, `base: <default branch>` (pass `repo` when the checkout's default remote is not the target; `draft: true` only if the user asked for a draft in the confirmation). Bash `gh pr create` is the fallback only when the device is unavailable - and then the body goes via `--body-file <path>`, never stdin or `--body "$(...)"` (`gh` exits 0 with an empty body). On the device path, pass the body text directly; do not round-trip through a shell heredoc.
 4. **Report** the push result, the PR URL if one exists or was opened, the shipped commit range, and the residuals the user waived.
@@ -88,7 +88,7 @@ Once the branch's work is later merged, branch cleanup is `atlas_git.py clean --
 
 ## Step 7 - REPORT
 
-- Verifier verdict and its findings.json evidence path; residuals waived by the user.
+- Verifier verdict and its findings.json evidence path (or the gate commands and their output when the gates ran directly); residuals waived by the user.
 - Commit hash(es) and subject(s) (or "nothing to commit").
 - The confirmation exchange: what was asked, what was answered (or that it was never reached - no remote).
 - Push result, and PR result with the URL only if a PR was asked for, or the exact local-only end state with the user-runnable commands.

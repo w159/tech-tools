@@ -8,6 +8,7 @@ System design, component maps, and Architecture Decision Records (ADRs).
 - `adr/` - Architecture Decision Records, one file per decision
 - `maps/` - architecture diagrams produced by graphify from this folder
 - `components.md` - component inventory and dependency edges
+- `atlas-fable-5-2-prompting.md` - how atlas prompt text follows the "Prompting Claude Fable 5.2" guide, what is left open, and the rules for future edits
 
 ## ADR template
 

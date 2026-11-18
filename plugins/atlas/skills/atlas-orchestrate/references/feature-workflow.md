@@ -39,14 +39,16 @@ either a broken feature or an unverified one.
 
 - Dispatch all independent jobs in ONE message (multiple Agent calls
   in a single message) so they run concurrently; keep roughly 4-6 in
-  flight. ALWAYS close the wave with an independent atlas:verifier in a
-  fresh context before integrating results.
+  flight. Close the wave with a test run where a test can express the
+  check, and with an independent atlas:verifier in a fresh context
+  where none can, before integrating results.
   - atlas:explorer: map where the new endpoints, models, and UI belong.
   - backend-architect or atlas:implementer: add the API surface,
     services, and data access.
   - frontend-developer: build the UI against the new endpoints.
-- Backend rules: validate all inputs; handle the error path; never
-  hardcode secrets (read from env, add keys to .env.example); verify DB
+- Backend rules: validate all inputs; handle the error path; do not
+  hardcode secrets, because they leak through the repo (read from env,
+  add keys to .env.example); verify DB
   writes by reading them back; test the auth path, not just the happy
   path.
 - Frontend rules: handle loading, empty, error, and success states;

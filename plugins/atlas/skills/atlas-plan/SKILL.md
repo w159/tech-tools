@@ -20,13 +20,13 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 ## Why this skill exists
 
-Atlas executes well (`atlas-orchestrate`) and elicits requirements well (`atlas-brainstorm`), but the step between them - turning a settled WHAT into a contract an implementer can execute without guessing - was ad hoc: every run re-derived unit decomposition, verification strategy, and done-ness from scratch. This skill is the HOW stage: it consumes the requirements-only brainstorm artifact and produces the implementation-ready plan that `atlas-orchestrate` consumes next. Its control plane: grep-first learnings research over `docs/lessons/` and `.atlas/findings/`, Compound Packs via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`, `atlas:completeness-critic` as the mandatory pre-write review, and date-first docs naming per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`.
+Atlas executes well (`atlas-orchestrate`) and elicits requirements well (`atlas-brainstorm`), but the step between them - turning a settled WHAT into a contract an implementer can execute without guessing - was ad hoc: every run re-derived unit decomposition, verification strategy, and done-ness from scratch. This skill is the HOW stage: it consumes the requirements-only brainstorm artifact and produces the implementation-ready plan that `atlas-orchestrate` consumes next. Its control plane: grep-first learnings research over `docs/lessons/` and `.atlas/findings/`, Compound Packs via `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_packs.py`, `atlas:completeness-critic` as the mandatory review of the written plan before the plan is presented, and date-first docs naming per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/docs-ssot.md`.
 
 **What this skill is NOT - read this before planning anything:**
 
 - **Not atlas-orchestrate's internal Plan phase.** Orchestrate's Plan step and the `atlas:planner` agent produce an *in-memory stage map for one run* - a sequencing decision that lives in `.atlas/.run/` and dies with the session. atlas-plan produces the *durable, reusable contract*: an artifact that survives the session, is resumable by ID, and can be re-executed or audited months later. Orchestrate's stage map may sequence this plan's units; it never replaces this artifact.
 - **Not an execution skill.** There is no separate work skill and none will be created - that concept was folded into `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/implementation-units.md`. When the plan is done, hand off to **`atlas-orchestrate`** for execution. Planning never writes product code, never runs tests or builds as proof, never commits.
-- **Not requirements elicitation.** If the WHAT is genuinely unsettled, send the request back to `atlas-brainstorm` first; planning over a guessed problem produces a confident plan for the wrong thing.
+- **Not requirements elicitation.** When one or two questions are open, record each as an open question with a default and proceed. Send the request back to `atlas-brainstorm` only when the product shape itself is undecided; planning over a guessed problem produces a confident plan for the wrong thing.
 
 Reference map (read each when its phase says so):
 
@@ -37,7 +37,7 @@ Reference map (read each when its phase says so):
 | `references/units.md` | Phase 2 - resolved-vs-deferred inventory, challenge pass, U<N> unit contract |
 | `references/tracer-slices.md` | Phase 2 - vertical slices, one failing check per unit, blocking edges, one fresh worker per unit |
 | `references/plan-sections.md` | Phase 3 - artifact section contract, path/naming, Verification Contract, DoD, docs-curator write |
-| `references/handoff.md` | Phase 4 - mandatory completeness-critic review, verification, handoff to atlas-orchestrate |
+| `references/handoff.md` | Phase 4 - mandatory completeness-critic review of the written plan, verification, handoff to atlas-orchestrate |
 
 ## Phase 0 - Intake and classify
 
@@ -74,7 +74,7 @@ Read `references/plan-sections.md` in full. Compose the implementation-ready art
 
 Read `references/handoff.md` in full.
 
-- **Mandatory review gate:** dispatch `atlas:completeness-critic` (subagent-kit shape) against the written plan - mandatory and not skippable. Blocking gaps route back into the plan; re-check only the changed sections.
+- **Mandatory review gate:** dispatch `atlas:completeness-critic` (subagent-kit shape) against the written plan before the plan is presented - mandatory and not skippable. Blocking gaps route back into the plan; re-check only the changed sections.
 - **Verification:** dispatch `atlas:verifier` (read-only) to adversarially check the artifact against repo facts: grounded claims trace to real files, unit file lists exist, verification commands are plausible for this repo. It stamps its verdict into `.atlas/.run/findings.json`. Lightweight tiers with zero external claims may run the Ready checks as verification instead, stating so.
 - **Handoff (interactive):** exactly one recommendation: **`atlas-orchestrate`** consumes this plan and executes it through the implementer/verifier squad. There is no execution step inside atlas-plan and no separate work skill - never offer one. Offer `atlas-prototype` when a visual/interaction fork was deferred, `atlas-bakeoff` when an open technical fork was deferred.
 - **Handoff (noninteractive / return-to-caller):** return the contract in `references/handoff.md` verbatim: `status`, `artifact_path`, `unit_count`, `requirements_covered`, `question_counts`, `deferred_questions`, `review_verdict`, `recommended_next`.

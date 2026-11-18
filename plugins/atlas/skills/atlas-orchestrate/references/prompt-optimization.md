@@ -53,7 +53,8 @@ contract, not a paragraph of hope. The mechanics live in `references/subagent-ki
   `ToolSearch` for their schemas first, because deferred MCP tools are not in its tool list until
   it does. "Use the right tools" and "use lean-ctx" both produce an agent that quietly falls back to
   `Read`/`Grep`; that is the failure this line exists to prevent.
-- **State the model and effort deliberately** (per the tier tables in `SKILL.md`). Sonnet is the
+- **State the model and effort deliberately** (per the tier tables in `SKILL.md`); the tables are
+  defaults, and a sweep on the current model decides. Sonnet is the
   ceiling for `atlas:*` companions and effort is `low` for spec-executing roles - which is only
   affordable because the prompt carries the decomposition. A subagent that seems to need a bigger
   model is telling you the prompt is underspecified. Fix the prompt.

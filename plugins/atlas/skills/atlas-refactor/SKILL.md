@@ -34,13 +34,13 @@ Read the arguments as: the project, a short description of it, and the pain poin
 Rules:
 - Behavior is frozen. Before refactoring any unit, capture its current behavior (a test, a sample run, or recorded input/output). After refactoring, prove the behavior is unchanged.
 - Incremental progress. Work in small independently verifiable steps. Run tests after every single step. Do not batch changes.
-- Clean execution. Fix in place. Delete dead code entirely; do not comment it out. No parallel version files (no file_v2).
+- Clean execution. Fix in place. Delete dead code entirely; do not comment it out. No parallel version files (no file_v2). Within the named scope, you own this code's structure and its design is up to you: consolidate duplicated code into one shared function. Do not change behavior, and do not add tests or docs that were not asked for. The final report lists every change, including small ones, so the reviewer can check the diff against it.
 - Precision edits. Use symbol-level navigation and targeted edits rather than full-file rewrites (lean-ctx `ctx_read`/`ctx_search` or native LSP where available).
 
 Sequence:
 1. Analysis. Map the current structure and list specific problems with evidence (file and line numbers).
 2. Planning. Propose the target structure and ordered steps. Pause for approval only if a step changes a public API contract or touches files outside the named project.
-3. Execution. Step by step, verifying behavior after each change. If this is a recurring or iterative refactor (a sweep across many files, a migration, or an until-dry cleanup pass), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer for structure discovery, debugger if a step breaks behavior, atlas:implementer for the edits. ALWAYS close the wave with an independent atlas:verifier in a fresh context that behavior held before integrating results.
+3. Execution. Step by step, verifying behavior after each change. If this is a recurring or iterative refactor (a sweep across many files, a migration, or an until-dry cleanup pass), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer for structure discovery, debugger if a step breaks behavior, atlas:implementer for the edits. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, so that behavior is shown to hold before integrating results.
 
 VERIFY:
 - Run the test suite or the captured sample runs after each step. Show the exact command and the actual output.

@@ -26,8 +26,8 @@ One skill covers both "how does X work" and "wtf does this do" questions: both a
 
 ## Non-negotiables
 
-- **Never answer from memory or assumption.** "I know this codebase" is not evidence. If the code path has not been traced in this run, trace it before claiming it.
-- **Read-only.** No file writes, no artifacts, no findings.json stamping (this skill never claims "done/fixed", so the verifier pipeline does not apply). Git commands are observation only - no push, no PR, no commit, ever.
+- **Do not answer from memory or assumption, because the code may have changed and an untraced claim can be wrong.** "I know this codebase" is not evidence. If the code path has not been traced in this run, trace it before claiming it.
+- **Read-only.** No file writes, no artifacts, no findings.json stamping (this skill never claims "done/fixed", so the verifier pipeline does not apply). Git commands are observation only. Do not push, open a PR or commit from this skill, because it is read-only by contract and an explanation must not change the repository or send anything off the machine.
 - **What vs why are different claims.** Code shows behavior, not intent. Label each rationale claim: *Documented* (a comment, commit message, doc, or linked issue states it), *Inference* (you derived it - say so, and give the supporting evidence), or *Unknown* (the record is silent - say so; a missing search result does not prove there was no reason).
 - **Consumer first.** A person needs a working answer; a calling workflow needs text it can incorporate. Answer the asked subject only - do not explain an adjacent thing when the asked thing is unresolvable; report that instead.
 
@@ -43,12 +43,12 @@ Trace the actual code path, the diff, or the commit window - per `references/int
 
 - **Concept:** follow the trigger through its state changes, ownership boundaries, and effects in current source and relevant tests. A filename or conversation claim does not establish behavior.
 - **Diff/window:** resolve the change or range; gather evidence with `git show`, `git log`, and the touched files plus any motivating doc under `docs/`. Empty range or empty window: report the absence - do not silently explain something else.
-- **Dispatch:** anything beyond a trivial single-symbol lookup goes to `atlas:explorer` as a read-only Task dispatch using the exact spec in `references/trace-dispatch.md`. When one pass cannot name the boundaries without hand-waving, split the question into one slice per ownership boundary (two minimum, four maximum - more means the question is still unscoped: narrow it and trace again) and dispatch the slices together in one message. If Task dispatch is unavailable or fails on a reason that survives correcting the invocation, run the trace inline with the same evidence budget and disclose that in one line.
+- **Dispatch:** anything beyond a trivial single-symbol lookup goes to `atlas:explorer` as a read-only Task dispatch using the exact spec in `references/trace-dispatch.md`. When one pass cannot name the boundaries without hand-waving, split the question into one slice per ownership boundary (usually two to four slices; more means the question is still unscoped: narrow it and trace again) and dispatch the slices together in one message. If Task dispatch is unavailable or fails on a reason that survives correcting the invocation, run the trace inline with the same evidence budget and disclose that in one line.
 - **External concepts** (no footprint in this repo): skip repo grounding entirely. If no web/research tool is reachable, you may explain from model knowledge, but label it **Unverified - from model knowledge, not checked against current sources**.
 
 ### Phase 3 - Compose the answer in chat
 
-- Open with the direct answer in one or two sentences. No preamble, no restatement of the question.
+- Open with the direct answer in one or two sentences, answer first. Do not add a preamble or restate the question. When the trace runs many tool calls, you may add one line before the answer that names what is being traced.
 - Then the trace: the mechanism with `file:line` for every claim, prose or a small diagram/table when it improves understanding. A function call does not establish guarantees about its uninspected implementation - check or hedge.
 - Then the why, with the three labels above, each tied to its evidence (`src/x.py:42` comment, commit `abc1234`, `docs/decisions/...`). Preserve the conditions and failure paths that matter.
 - Plain-language mode (`wtf`): the reader can say what the source means and what, if anything, they must decide or do, without going back to the source. Open with the point; keep exact names, commands, and values the user will need; keep failures, caveats, and open questions - the explanation must not sound more certain than the source; add no claims the source does not make. Shorter than the source; never walk it section by section. No analogies, no cheerleading.

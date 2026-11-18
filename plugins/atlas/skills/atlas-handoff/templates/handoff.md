@@ -44,9 +44,11 @@ session needs to act.
 
 ## Rules
 
-- Precise, not narrative. Record only what a new session needs to act.
-- No summary of intent. If a sentence does not help the next session do
-  work, cut it.
+- Write for a low-context reader: the next session saw none of this one.
+  Put the state and the next action first. Use full sentences and no
+  abbreviation made up in this session. Record what the next session needs
+  to act, with the reason for each open decision.
+- If a sentence does not help the next session do work, cut it.
 - Every "verified" claim names the command run and the output observed,
   not an assumption.
 - Every re-run command is real and complete enough to reproduce current

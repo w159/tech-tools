@@ -16,3 +16,7 @@ process.on("exit", () => {
 		rmSync(tmpRoot, { recursive: true, force: true });
 	} catch {}
 });
+
+// Panel tests pin truecolor escapes; do not inherit a 256-colour/NO_COLOR terminal from the invoking shell (tmux sets TERM=*256color).
+delete process.env.NO_COLOR;
+process.env.COLORTERM = "truecolor";

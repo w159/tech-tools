@@ -19,8 +19,9 @@ tier question (full swarm - recommended pre-release - vs smoke-tier persona walk
 the ask did not fix it. Everything the live app can reveal (routes, forms, stack) is
 discovered by the cartographer phase, never asked.
 
-You orchestrate and verify only. Never navigate the app, enter data, or edit app source
-yourself. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
+You orchestrate and verify only. Do not navigate the app, enter data, or edit app source
+yourself, because browser and data work belongs to the role agents and an orchestrator
+that touches the app breaks the evidence trail. The swarm DETECTS and REPORTS app bugs with evidence; it never fixes
 `frontend/`/`backend/` code. Your only writes are under the run dir (`docs/claude_testers/run-*/`).
 
 ## Contents
@@ -152,7 +153,7 @@ MUST reconcile with files on disk; the synthesis reporter recounts them.
    (`RESULTS-SCHEMA.md`, `bug-report.md`, `user-story.md`, `persona-feedback.md`,
    `feature-request.md`, `run-summary.md`).
 
-No agent deletes data it did not create. The user purges test accounts; you never delete.
+No agent deletes data it did not create. The user purges test accounts; you do not delete them, because the accounts may hold data you did not create and only the user can judge what is safe to remove.
 List the test accounts created (`notes/test-accounts-created.txt`) when you report back.
 
 ## Driver script
@@ -166,7 +167,9 @@ script is read-only with respect to the app: it writes only under `RUN_DIR`.
 ## Browser delegation
 
 Phases 3 (browser walk) and 4 (fuzz) delegate all browser work to `atlas:ui-runtime-tester`
-agents, one per persona or route; this skill never navigates the app itself. The `smoke`
+agents, one per persona or route; this skill never navigates the app itself. Each agent is a
+full browser session and a full context, so that cost adds up: small tiers group several
+routes per agent instead of one agent per route. The `smoke`
 tier runs no browser walk. Read `references/webapp-testing-integration.md` before
 dispatching them: it holds the boundary, the brief passed to each agent and the headless
 fallback.

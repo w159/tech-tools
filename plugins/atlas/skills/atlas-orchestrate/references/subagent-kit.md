@@ -2,6 +2,7 @@
 
 ## Contents
 
+- [When delegation is worth it](#when-delegation-is-worth-it)
 - [The dispatch spec (use this shape, nothing extra)](#the-dispatch-spec-use-this-shape-nothing-extra)
 - [Choosing the agent + model + effort](#choosing-the-agent--model--effort)
 - [Companion agents (this skill's core squad)](#companion-agents-this-skills-core-squad)
@@ -15,6 +16,15 @@
 - [Anti-patterns](#anti-patterns)
 
 How to dispatch a subagent so it stays small, focused, and returns only what you need.
+
+## When delegation is worth it
+
+A subagent costs a fresh context and its tokens, and it knows only what the brief says. Delegate when the work is separable, would fill this context, or needs an independent check. Do a single lookup or a one-line answer yourself.
+
+- Worth it: parallel independent slices, work that would fill the lead's context, and a fresh-context check.
+- Not worth it: one lookup, a one-line fix under the simple-task rule (one working seat or effort `low`, no team launched), or a question an open file answers.
+
+**How to brief:** the brief is the only context the subagent has, so give the goal, the target paths, what is already ruled out and the exact deliverable.
 
 ## The dispatch spec (use this shape, nothing extra)
 
@@ -31,7 +41,7 @@ This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` d
 - `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`/`DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
 - A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.` (`:1342`).
 - `atlas:runner` only: numbered `STEPS:` (`:644`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
-- Never pass `model` (or `effort`); agents pin their own model in frontmatter. Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).
+- Do not pass `model` (or `effort`); agents pin their own model in frontmatter. Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).
 - No built-in agent types (code `builtin_agent`): `DENY - this <tool> dispatch uses the built-in agent '<type>'` (`:1281`); `ATLAS_BUILTIN_AGENT_NUDGE=off` disables.
 - A subagent never dispatches: `DENY - a subagent must never dispatch another subagent.` (`:197`).
 
@@ -66,7 +76,7 @@ DISCOVER FIRST: confirm the best-fit capability for this exact job,
 DELIVERABLE: <exact artifact: a report, a diff, a findings entry path>
 SUCCESS CRITERIA: <bullets, each independently checkable, each with required evidence>
 OUT OF SCOPE: <bullets, what NOT to touch>
-STOP CONDITIONS: <when to halt and report back rather than push through>. You do not dispatch subagents; if the work needs splitting, report it in NEXT.
+STOP CONDITIONS: <name deliberate blockers only: a file marked not to be touched, access withheld on purpose, a safety guardrail, or a decision the lead must make>. Ordinary errors, timeouts, locked files and empty results are not stop conditions: diagnose them and retry first. You do not dispatch subagents; if the work needs splitting, report it in NEXT.
 REPORT: (required, every atlas dispatch) the final message is the fixed container below and nothing else.
   STATUS: DONE | FAILED | BLOCKED   (first non-empty line; pattern ^STATUS: (DONE|FAILED|BLOCKED)\s*$)
   STEPS: <done>/<total>
@@ -93,13 +103,14 @@ For how to slice work into stages and when to fan out at all, see `multi-stage-p
 
 - Pick the agent type from `capability-routing.md`. Model and effort already live in each agent's
   frontmatter per the tier tables in `SKILL.md` - **sonnet is the ceiling for every `atlas:*`
-  companion**, and effort is `low` except for the three that render an independent verdict. Only
+  companion**, and effort is `low` except for the three that render an independent verdict. The tables
+  are defaults measured on earlier models; on a new model, re-measure them with an effort sweep. Only
   override at dispatch time with a stated reason; "this feels hard" is not one. An underspecified
   prompt is the usual cause, and the fix is the prompt.
 - Read-only roles (explore, verify, db-probe, ui-test) -> `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]`.
-- Parallel editors of the same tree -> `atlas_wt.py add <name>` per writer (worktree `.atlas/wt/<name>`, branch `worker/<name>`); the brief names that path as the ONLY place the worker edits and demands branch + head sha in the report. Verifier per branch, then `atlas_wt.py merge <name>` one at a time (see `implementation-units.md`). Only when two writers truly collide on the same files (otherwise crew leases on disjoint files). Harness `isolation: "worktree"` remains acceptable where the lead cannot pre-create worktrees. Subagents never create branches, worktrees or PRs and never push; they commit only when the brief says so, on the branch the brief names (see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`).
+- Parallel editors of the same tree -> `atlas_wt.py add <name>` per writer (worktree `.atlas/wt/<name>`, branch `worker/<name>`); the brief names that path as the ONLY place the worker edits and demands branch + head sha in the report. Verifier per branch, then `atlas_wt.py merge <name>` one at a time (see `implementation-units.md`). Only when two writers truly collide on the same files (otherwise crew leases on disjoint files). Harness `isolation: "worktree"` remains acceptable where the lead cannot pre-create worktrees. Subagents do not create branches, worktrees or PRs and do not push, because the lead owns the git policy; they commit only when the brief says so, on the branch the brief names (see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`).
 - Cap long/background jobs with a turn budget. 2+ independent jobs run as one `spawn-team` (see Parallelism & integration).
-- **Subagents never talk to the user.** They cannot use AskUserQuestion; a subagent that
+- **Subagents do not talk to the user.** They cannot use AskUserQuestion; a subagent that
   hits a genuinely user-owned decision (destructive action, scope fork, missing
   credential) STOPS and returns a `DECISION NEEDED: <question + options>` line in its
   report instead of guessing. The orchestrator collects these and asks the user itself
@@ -127,7 +138,7 @@ For domain depth, route instead to the installed specialists (`backend-architect
 
 ## Fork subagents (`subagent_type: "fork"`) - when to inherit history instead of starting fresh
 
-A fork inherits the full conversation history, the parent's system prompt, tools, and model - and its first request reuses the parent's prompt cache, so a forked dispatch is cheap. It requires `CLAUDE_CODE_FORK_SUBAGENT=1` (set globally on this machine). Fork is not a frontmatter field on an agent `.md` file - there is no such agent definition; `fork` is chosen at dispatch time, per call, by passing it as the `subagent_type`. A fork cannot spawn further forks.
+A fork inherits the full conversation history, the parent's system prompt, tools, and model. Its first request reuses the parent's prompt cache. It requires `CLAUDE_CODE_FORK_SUBAGENT=1` (set globally on this machine). Fork is not a frontmatter field on an agent `.md` file - there is no such agent definition; `fork` is chosen at dispatch time, per call, by passing it as the `subagent_type`. A fork cannot spawn further forks.
 
 Route by whether the dispatch's value comes from everything already said this session:
 
@@ -187,7 +198,7 @@ before starting, so two agents never build the same thing:
   claim time and mark it completed when you post your completion. The atlas board
   stays the source of truth - don't duplicate status updates beyond the one
   completion; skip entirely when the var is unset or off.
-- `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
+- `--force` steals a stale claim (30 min idle). Do not force-steal a live agent's item, because its owner would lose work in progress.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
 - Add an item from the CLI: `atlas_todo.py add [--unique] --session <session_id> "<text>"`.
   `--unique` makes the add idempotent per (session, exact content) across every
@@ -223,8 +234,8 @@ effort/model tier and guardrails.
 - The sibling roster is a snapshot taken when you start [harness fact, unverified here]: a sibling spawned after
   you is not on it. Missing an expected sibling -> read `atlas_todo.py notes`
   and address it with `note --to <name>` instead.
-- Touch the board only through `atlas_todo.py`. Never edit `todos.json` or
-  `board/*.jsonl` directly: direct writes skip the lock and can erase a sibling's claim.
+- Touch the board only through `atlas_todo.py`. Do not edit `todos.json` or
+  `board/*.jsonl` directly, because direct writes skip the lock and can erase a sibling's claim.
 - The lead alone dispatches and declares done. Siblings report to the lead,
   never to the user, and never dispatch other subagents.
 
