@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.31.0 - 2026-11-18
+
+- Fixed, done-claim detector (`hooks/done_claim.py`): the 10 round 5 defects (CI run grouping and newest-run verdict, push ref and sha backing, count backing, per-clause hedges), plus code findings from two outside critics, each with regression tests. Eval data moved to `evals/done_claim/`.
+- Advisory only: `BLOCKING_KINDS` stays empty, so no done-claim kind blocks, in `block` mode too.
+- Measured, held-out score (once, after the freeze; `docs/audits/2026-11-18_atlas-round6-fresh-score.json`): 0 false would-blocks on 80 gold negatives, Wilson95 [0, 0.04582]; recall 0 of 1, so no usable recall interval. Rows are generated and labels are model labels.
+- Marketplace 5.37.0 to 5.38.0 (`.claude-plugin/marketplace.json`). armada and programmer are unchanged.
+- Version 17.30.2 to 17.31.0. Details: `plugins/atlas/CHANGELOG.md`.
+
 ## atlas 17.30.2 - 2026-11-18
 
 - Removed: Blumira connector; CodeQL triage hardening in tests, hooks and scripts.

@@ -1,4 +1,36 @@
 # Changelog
+## 17.31.0 - 2026-11-18
+
+Round 6 of the done-claim detector (`hooks/done_claim.py`): the 10 defects from round 5 are fixed with regression tests, the detector was scored once on a held-out set, and no done-claim kind blocks. `BLOCKING_KINDS` stays empty, so the verify gate's `block` mode still blocks nothing on a done-claim finding by default; every kind is advisory. Audit: `docs/audits/2026-11-18_atlas-round6.md`. Protocol: `docs/audits/2026-11-18_atlas-round6-preregistration.md` (section 15 holds the amendments).
+
+### Changed
+
+- Done-claim detector. `_ci_verdict` groups `gh run list` output by workflow and lets the newest run decide (by `createdAt` then run id for `--json`, print order for tables); a push claim needs the named ref to hold the named sha; a failure word must be about the claimed run before it suppresses `pass_after_failing_run`; an opaque phrase disables the count kinds only when an injected record is present; bare numbers no longer back a claimed count; generated rows are grouped by fixture.
+- Hedges apply per clause: a hedge lead or trailing word hedges only its own clause, a but/however clause hedges its lead only when it limits verification, caps CI prose ("CI PASSED.") counts as a claim, and more trailing hedge words are recognized.
+- Eval data moved out of the plugin to `evals/done_claim/`; the detector loads it only from there and returns no rows when the directory is absent. The scorer freezes the hash of every scored file and refuses to run on a mismatch or when its output exists. The decision eval prints Holm-adjusted McNemar p values.
+- Version 17.30.2 to 17.31.0 in both plugin manifests, `.claude-plugin/marketplace.json` (marketplace 5.37.0 to 5.38.0), `README.md` and `plugins/atlas/README.md`.
+
+### Fixed (outside-critic code findings, after the held-out score)
+
+Two outside critics (sonnet and opus) each scored the scored state 3 of 10 (round 5 critics gave 4 of 10). Their code findings were confirmed by tests and fixed, demote-only, without a second score:
+
+- `_ls_remote_backs` backed a claim that named a ref but no sha when the ref merely existed; `_pushed` let any ref-update line back any push claim; `_PUSH_CLAIM` read "All tests pass on main" as a push claim.
+- `_ci_verdict` and `_ci_claim_verdicts` scoped runs by free-text title and used only the last record; the two CI claim patterns disagreed on case and on local `check` claims; `_gh_runs` compared `createdAt` as strings.
+- Legacy rows fell back to bare `nums` for count backing; the count check ignored hedge and fence filtering; `wilson_interval(0, 0)` returned `(0.0, 0.0)`.
+- Hedging removed whole sentences from every check; it now works per clause.
+
+### Measured
+
+- Held-out score (once, after the freeze; `docs/audits/2026-11-18_atlas-round6-fresh-score.json`): 0 false would-blocks on 80 gold negatives, Wilson95 [0, 0.04582] (0 of 50 groups, [0, 0.07135]); recall 0 of 1; the real-transcript pool is empty. Rows are generated, labels are model labels, not human ground truth.
+- Advisory false alarms on the 156 legacy negatives (in-sample): 20 on `0da40153`, 23 at the freeze, 31 after the first post-score fixes, 23 on the final module `9829883e`. `done_claim.py --eval` on the final module: TP 44, FP 2, FN 0 (precision 0.957) for all rows.
+- Tests at `9829883e`: hooks 3547 passed 4 skipped; scripts 6517 passed 1 skipped; contract 124 passed 3 skipped.
+
+### Known limits
+
+- Limiter words (only, local, manual) in a "but" clause can hide an unrelated unbacked claim ("Pushed to main, but only after rebasing.").
+- A bare "CI PASSED" with no period reads as a status label; "All checks passed in ci." is missed; "On CI it showed 120 passed, locally 10 passed." is a false positive.
+- The post-score fixes were not re-scored on held-out data. One gold positive exists, so recall has no usable interval (upper bound 0.793457).
+
 ## 17.30.2 - 2026-11-18
 
 Blumira connector removed and CodeQL triage hardening in tests, hooks and scripts.

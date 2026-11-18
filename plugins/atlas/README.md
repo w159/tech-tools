@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.30.2 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.31.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -578,7 +578,7 @@ judgment:
    an observed result, it never adds a block, and it never clears a block that
    rests on a transcript finding. `ATLAS_DECISION_VERIFY` still works as an
    alias. Counters `decision.verify.{block,block-would,cleared,pass,skip}`.
-   Measured on `hooks/done_claim_corpus.jsonl` (182 rows: 131 real final replies
+   Measured on `evals/done_claim/done_claim_corpus.jsonl` (182 rows: 131 real final replies
    from this machine's tech-tools and bench transcripts, 51 seeded; labels by
    two models plus one adjudication pass, not human ground truth, kappa 0.767).
    Blocking path on that corpus: 32 TP, 0 FP, 12 FN before the round-5 tier rule
@@ -592,6 +592,12 @@ judgment:
    not measurable. `python3 hooks/done_claim.py --eval [--split test]` reprints the
    corpus numbers; `hooks/done_claim_rubric.md` is the label rubric. Audit:
    [2026-11-16_atlas-round5.md](../../docs/audits/2026-11-16_atlas-round5.md).
+   Round 6 (17.31.0) kept every kind advisory: no kind blocks, because none
+   reached the 9 all-true-positive groups the tier rule needs. On the single
+   held-out score (generated rows only) 0 of 80 gold negatives would have
+   blocked (Wilson95 [0, 0.04582]) and the one gold positive was missed (recall
+   0 of 1). Audit:
+   [2026-11-18_atlas-round6.md](../../docs/audits/2026-11-18_atlas-round6.md).
 2. Which team, at what cost. `scripts/atlas_resolve.py <class> <effort>` reads
    `contracts/scope-matrix.json` and returns the roles, counts, model tier,
    effort and isolation for the task. It is deterministic: the same input gives
@@ -1590,7 +1596,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.30.2
+|-- .claude-plugin/plugin.json   manifest, version 17.31.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
