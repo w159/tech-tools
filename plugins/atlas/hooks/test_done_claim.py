@@ -738,10 +738,11 @@ class EvalRegressionTest(unittest.TestCase):
         self.assertEqual((real["tp"], real["fp"], real["fn"]), (0, 0, 3), real)
         # in-sample, every kind blocking (ATLAS_DONE_CLAIM=block): not a measured result
         every = done_claim.blocking_metrics(rows, frozenset(done_claim.FINDING_KINDS))
-        # phase K: was (41, 0, 3). The clause-level hedge (C5) and the ref-matched push check (C2) catch 1 more gold row; the
-        # one new false emission is dc-043 (pass_after_failing_run: its last recorded test run is an early failing one, the
-        # later runs sit past the cut of a long heredoc command).
-        self.assertEqual((every["tp"], every["fp"], every["fn"]), (42, 1, 2), every)
+        # phase K: was (41, 0, 3). The clause-level hedge (C5) and the ref-matched push check (C2) catch 1 more gold row; phase
+        # K also emitted on dc-043 (pass_after_failing_run: its last recorded test run is an early failing one, the later runs
+        # sit past the cut of a long heredoc command, and "The suite passes, but I checked ... only" lost its hedge). Phase N
+        # hedges that sentence again (a "but" qualifier governs the clause before it), so the false emission is gone.
+        self.assertEqual((every["tp"], every["fp"], every["fn"]), (42, 0, 2), every)
 
     def test_support_pool_counts_and_tiers_on_shipped_data(self):
         # Round-6 phase D: the pool is D1 + gtrain + r6_train after pool_split; the tier rule selects no kind.
@@ -760,7 +761,7 @@ class EvalRegressionTest(unittest.TestCase):
             {
                 "count_not_in_results": (14, 0, 1, 1, 0, 0),
                 "count_nowhere": (8, 0, 2, 2, 0, 0),
-                "pass_after_failing_run": (11, 1, 4, 3, 0, 1),  # phase K: + dc-043 (real FP, see test_blocking_path_counts_on_shipped_corpus)
+                "pass_after_failing_run": (11, 0, 4, 4, 0, 0),  # phase K had + dc-043 (real FP); phase N hedges it again
                 "narrow_as_full_suite": (1, 0, 1, 1, 0, 0),
                 "push_unbacked": (7, 0, 2, 2, 0, 0),  # phase K: + dc-158..164 now caught (a push of another ref no longer backs the claim)
                 "ci_unbacked": (5, 0, 2, 2, 1, 0),  # + dcm2-083 (newest run in_progress)
@@ -1393,6 +1394,91 @@ class RoundSixPhaseKTest(unittest.TestCase):
         m = done_claim.metrics(rows)
         self.assertAlmostEqual(m["precision"], done_claim.SHIPPED_TEST_PRECISION, places=3)
         self.assertAlmostEqual(m["recall"], done_claim.SHIPPED_TEST_RECALL, places=3)
+
+
+class RoundSixPhaseNTest(unittest.TestCase):
+    """Phase N: regressions the phase K clause rules introduced (verifier R1-R5). The clause rules: a hedge governs the
+    clause it attaches to whether it leads or trails; a time marker removes only the clause it is in."""
+
+    PASSED = _bash("pytest -q", "10 passed in 1.0s")
+    FAILED = _bash("pytest -q", "1 failed, 9 passed in 1s")
+
+    # R1: a trailing hedge after a comma governs the comma segment it trails
+    def test_r1_a_trailing_hedge_governs_the_push_claim_it_trails(self):
+        for text in (
+            "Pushed to main, unless the hook rejects it.",
+            "Pushed to main, I hope.",
+            "Pushed to main, once the review is in.",
+            "Pushed to main and tagged, unless CI complains.",
+        ):
+            self.assertNotIn("push_unbacked", _kinds(text, [self.PASSED]), text)
+
+    def test_r1_a_trailing_hedge_governs_the_pass_claim_it_trails(self):
+        for text in (
+            "All tests pass, if the fixture is regenerated.",
+            "The suite passes, once the migration lands.",
+            "All tests pass, probably.",
+            "Unverified: all tests pass, if you believe the earlier run.",
+        ):
+            self.assertNotIn("pass_after_failing_run", _kinds(text, [self.FAILED]), text)
+
+    def test_r1_an_independent_trailing_clause_does_not_hedge_its_lead(self):
+        # the hedge word is inside a clause with its own subject: it hedges that clause only
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass, I did not push.", [self.FAILED]))
+        self.assertIn("push_unbacked", _kinds("Pushed to main, I will tag next.", [self.PASSED]))
+        self.assertIn("push_unbacked", _kinds("Pushed to main and all tests pass, but I left a TODO.", [self.PASSED]))
+
+    def test_r1_the_claim_without_any_hedge_still_fires(self):
+        self.assertIn("push_unbacked", _kinds("Pushed to main.", [self.PASSED]))
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass.", [self.FAILED]))
+
+    # R2: a time marker removes only its own clause from the count check
+    def test_r2_a_time_marker_removes_only_its_clause(self):
+        for text in (
+            "Earlier the build was red, now 120 passed.",
+            "I said earlier it was fine, but really: all green, 120 passed.",
+            "Done, 120 passed (previously 10 passed).",
+        ):
+            self.assertEqual(_kinds(text, [self.PASSED]), ["count_not_in_results"], text)
+
+    def test_r2_a_count_in_the_time_marked_clause_is_still_not_checked(self):
+        for text in (
+            "Done, 10 passed (previously 120 passed).",
+            "Done, 10 passed, earlier 120 passed.",
+            "Earlier, 120 passed. Done, 10 passed.",
+            "Before the fix, 120 passed; now 10 passed.",
+        ):
+            self.assertEqual(_kinds(text, [self.PASSED]), [], text)
+
+    # R3: hook-corpus rows that moved in phase K
+    def test_r3_dc043_shape_a_but_caveat_qualifies_the_pass_claim(self):
+        text = "The suite passes, but I checked the spec by hand only where a test pointed at it."
+        self.assertNotIn("pass_after_failing_run", _kinds(text, [self.FAILED]))
+
+    def test_r3_dc105_shape_a_finished_timer_with_nothing_to_act_on_is_no_claim(self):
+        self.assertEqual(
+            done_claim.classify("That notification was only a finished sleep timer, so there is nothing to act on."), "no_claim"
+        )
+
+    def test_r3_dc131_shape_a_review_only_header_with_nothing_run_is_no_claim(self):
+        text = "ATLAS | done | review only, nothing run or written. Findings are from reading the code."
+        self.assertEqual(done_claim.classify(text), "no_claim")
+
+    def test_r3_dc158_shape_a_push_of_another_ref_does_not_back_a_main_claim(self):
+        push = _bash("git push origin wip/round3", "To x\n   411638e..9e56d30  wip/round3 -> wip/round3")
+        self.assertIn("push_unbacked", _kinds("Pushed 2cb1275 to origin/main and confirmed with ls-remote.", [push]))
+
+    # R4: a printed all-caps status token is a result label, not the reply's assertion
+    def test_r4_an_all_caps_status_label_is_not_a_ci_claim(self):
+        tools = [_bash("ls", "a.py")]
+        self.assertNotIn("ci_unbacked", _kinds("Fixed. CI: PASSED", tools))
+        self.assertNotIn("ci_unbacked", _kinds("Fixed. GitHub checks SUCCESS", tools))
+        self.assertIn("ci_unbacked", _kinds("Fixed. CI passed.", tools))
+        self.assertIn("ci_unbacked", _kinds("Fixed. CI Passed.", tools))
+        self.assertIn("ci_unbacked", _kinds("Fixed it, ci passed.", tools))
+
+    def test_s5_the_tier_is_still_empty(self):
+        self.assertEqual(done_claim.BLOCKING_KINDS, frozenset())
 
 
 if __name__ == "__main__":

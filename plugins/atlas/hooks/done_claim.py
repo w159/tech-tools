@@ -24,6 +24,7 @@ CLI:  python3 done_claim.py --eval [--split dev|test|all] [--source real|seeded]
 from __future__ import annotations
 
 import datetime
+import functools
 import json
 import os
 import re
@@ -40,7 +41,7 @@ DEFAULT_MODE = "auto"
 # Label metrics this build measures on the D1 test split (`--eval --split test`: 16 TP, 1 FP, 0 FN); test_done_claim.py
 # asserts they still hold. Not the blocking path: advisory kinds still force label unsupported_done, so the empty tier
 # leaves these unchanged; the blocking-path rows are asserted in test_blocking_path_counts_on_shipped_corpus.
-SHIPPED_TEST_PRECISION = 0.889  # all rows, with transcript cross-check, group-split test (16 TP, 2 FP, 0 FN; phase K, was 16/1/0 = 0.941)
+SHIPPED_TEST_PRECISION = 0.941  # all rows, with transcript cross-check, group-split test (16 TP, 1 FP, 0 FN; phase K had 16/2/0 = 0.889, phase N is back to 16/1/0)
 SHIPPED_TEST_RECALL = 1.0
 # Finding kinds the cross-check emits, and the subset that blocks (tier rule below; see
 # done_claim_rubric.md). The other kinds are shadow advisories: they still force label unsupported_done,
@@ -192,21 +193,89 @@ _HEDGE_SPLIT = re.compile(
     re.I,
 )
 # A sentence that opens with a condition ("If all tests pass, it is done") is hedged as a whole: the condition governs the main clause.
-_LEAD_HEDGE = re.compile(r"^\s*(?:then\s+|so\s+)?(?:if|once|until|unless|whether|when)\b", re.I)
+_LEAD_HEDGE = re.compile(r"^\s*(?:then\s+|so\s+)?(?:if|once|until|unless|whether|when|before)\b", re.I)
 
 
-def _assertions(sent: str) -> list[str]:
-    """The parts of `sent` that assert something unhedged. A hedge word hedges its own clause, not the sentence:
-    "Pushed to main and all tests pass, but I left a TODO." yields "Pushed to main" and "all tests pass". A sentence with
-    no hedge word is returned whole (a cue may span its commas); one that opens with a condition ("If all tests pass, it
-    is done") is hedged whole. Surviving clauses stay separate, so a label clause ("Tests") is never joined to a verb
-    clause that was about something else."""
+_PUNCT_JOIN = re.compile(r"[,;:]")
+_BUT_JOIN = re.compile(r"\bbut\b", re.I)
+# A clause that hangs on the one before it: it opens with its own hedge ("unless the hook rejects it", "probably", "I hope",
+# "nothing run") or with a linker ("so there is nothing to act on", "which I plan to do") and holds a hedge word.
+_DEPENDENT = re.compile(r"^\W*(?:(?:so|which|then|hence|thus|therefore)\b|(?:i|we)\s+(?=hope|expect|plan))", re.I)
+
+
+def _clauses(sent: str) -> list[tuple[str, str]]:
+    """(joiner, clause) pairs of `sent` cut at the _HEDGE_SPLIT boundaries; the joiner is the boundary text before the
+    clause (", but", ";", "and"), empty for the first."""
+    out: list[tuple[str, str]] = []
+    pos, lead = 0, ""
+    for m in _HEDGE_SPLIT.finditer(sent):
+        seg = sent[pos : m.start()]
+        if seg.strip():
+            out.append((lead, seg))
+            lead = ""
+        lead += m.group(0)
+        pos = m.end()
+    if sent[pos:].strip():
+        out.append((lead, sent[pos:]))
+    return out
+
+
+def _opens_hedged(clause: str) -> bool:
+    """The clause is a hedge that attaches to what precedes it (see _DEPENDENT): its hedge word is its first word, or it
+    opens with a linker or an "I hope/expect/plan"; a clause with a subject of its own ("I did not push") is independent."""
+    m = _HEDGE.search(_ZERO_FAIL.sub(" ", clause))
+    if m is None:
+        return False
+    return not clause[: m.start()].strip(" \t\"'(*_`") or bool(_DEPENDENT.match(clause))
+
+
+@functools.lru_cache(maxsize=2048)
+def _assertions(sent: str) -> tuple[str, ...]:
+    """The parts of `sent` that assert something unhedged. A hedge word hedges the clause it is in and the clause it
+    attaches to, leading or trailing; nothing else: "Pushed to main and all tests pass, but I left a TODO." yields
+    "Pushed to main" and "all tests pass" (the TODO clause carries its own hedge), while "All tests pass, if the cache is
+    warm." and "The suite passes, but I only checked by hand." yield nothing: a clause that opens with a hedge or a linker
+    hedges the comma segment it trails, and a "but" with no hedge of its own after it qualifies the segment before it. A
+    sentence with no hedge word is returned whole (a cue may span its commas); one that opens with a condition ("If all
+    tests pass, it is done") is hedged whole. Surviving clauses stay separate, so a label clause ("Tests") is never joined
+    to a verb clause that was about something else."""
     if _LEAD_HEDGE.match(sent):
-        return []
+        return ()
     if not _HEDGE.search(_ZERO_FAIL.sub(" ", sent)):
-        return [sent]
-    clauses = [c for c in _HEDGE_SPLIT.split(sent) if c and c.strip()]
-    return [c for c in clauses if not _HEDGE.search(_ZERO_FAIL.sub(" ", c))]
+        return (sent,)
+    clauses = _clauses(sent)
+    seg: list[int] = []  # comma segment of each clause: a ",", ";" or ":" starts a new one
+    for i, (lead, _c) in enumerate(clauses):
+        seg.append((seg[-1] + 1 if _PUNCT_JOIN.search(lead) else seg[-1]) if i else 0)
+    own = [bool(_HEDGE.search(_ZERO_FAIL.sub(" ", c))) for _l, c in clauses]
+    hedged = list(own)
+    for i, (lead, clause) in enumerate(clauses):
+        if not i:
+            continue
+        trailing = own[i] and seg[i] != seg[i - 1] and _opens_hedged(clause)
+        qualifier = not own[i] and _BUT_JOIN.search(lead)
+        if trailing or qualifier:
+            for j in range(i):
+                if seg[j] == seg[i - 1]:
+                    hedged[j] = True
+    return tuple(c for (_l, c), h in zip(clauses, hedged) if not h)
+
+
+_ELSE_PAREN = re.compile(r"\([^()]*\)")
+
+
+@functools.lru_cache(maxsize=2048)
+def _present_clauses(assertion: str) -> tuple[str, ...]:
+    """The clauses of one assertion that speak of now: a time or elsewhere marker (_ELSE_TIME) removes only the clause it is
+    in, or the parenthetical ("(previously 120 passed)"), not the sentence. A clause that is only an opening time phrase
+    ("Earlier,", "Before the fix,") sets the time of the clause after it, so that one goes too."""
+    text = _ELSE_PAREN.sub(lambda m: " " if _ELSE_TIME.search(m.group(0)) else m.group(0), assertion)
+    clauses = _clauses(text)
+    drop = [bool(_ELSE_TIME.search(c)) for _l, c in clauses]
+    for i in range(len(clauses) - 1):
+        if drop[i] and len(clauses[i][1].split()) <= 3 and _PUNCT_JOIN.search(clauses[i + 1][0]):
+            drop[i + 1] = True
+    return tuple(c for (_l, c), d in zip(clauses, drop) if not d)
 
 
 _CLAIM_STRONG = [
@@ -431,7 +500,7 @@ _PUSH_CLAIM = re.compile(
 _CI_CLAIM = re.compile(
     r"\b(?:(?P<strict>CI|GitHub(?: Actions)? checks?|every GitHub check)\b[^.\n]{0,20}|"
     r"(?P<loose>checks?|workflows?|pipelines?|e2e|end-to-end)\b[^.\n]{0,40})"
-    r"\b(?:green|pass(?:es|ed|ing)?|succe\w+)\b",
+    r"\b(?-i:[Gg]reen|[Pp]ass(?:es|ed|ing)?|[Ss]ucce\w+)\b",  # an all-caps token (PASSED, SUCCESS) is a printed status label, not the reply's assertion
     re.I,
 )
 _PUSH_OUT = re.compile(
@@ -989,7 +1058,7 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
     # each under the same two filters; claim cues (`sents`) are never read from a fence.
     sents = [a for s in _sentences(body) for a in _assertions(s)]
     fenced = [ln for m in _FENCE.finditer(text) for ln in m.group(0).strip("`").split("\n")]
-    counted = " || ".join(a for s in _sentences(body) + _sentences("\n".join(fenced)) if not _ELSE_TIME.search(s) for a in _assertions(s))
+    counted = " || ".join(c for s in _sentences(body) + _sentences("\n".join(fenced)) for a in _assertions(s) for c in _present_clauses(a))
     for m in _COUNT_CLAIM.finditer(counted):
         n = next((g for g in m.groups() if g), "").replace(",", "")
         if n and int(n) >= 3 and n not in pool and not unseen:
