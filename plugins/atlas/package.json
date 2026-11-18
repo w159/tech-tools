@@ -1,6 +1,10 @@
 {
   "name": "atlas",
   "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "bun test omp mod"
+  },
   "omp": {
     "extensions": ["./omp/index.ts"]
   }

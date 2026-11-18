@@ -829,7 +829,7 @@ export async function runCommand(argv: string[]): Promise<string | null> {
   }
 }
 
-export function systemUsageContext(): UsageContext {
+function systemUsageContext(): UsageContext {
   return {
     home: homedir(),
     env: process.env,

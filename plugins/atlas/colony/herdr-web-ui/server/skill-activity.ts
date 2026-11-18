@@ -5,7 +5,7 @@ const record = (value: unknown): Record<string, unknown> => value !== null && ty
 const label = (value: unknown): string | null => typeof value === "string" && value.length > 0 && value.length <= 200 && !/[\r\n<>]/.test(value) ? value : null;
 
 /** No filesystem lookup: evidence belongs to the bound transcript, including remote PCs. */
-export function skillDocument(path: unknown): SkillActivity | null {
+function skillDocument(path: unknown): SkillActivity | null {
   if (typeof path !== "string" || path.length > 4096 || /[\r\n]/.test(path)) return null;
   const normalized = path.replaceAll("\\", "/");
   if (!normalized.endsWith("/SKILL.md")) return null;

@@ -112,7 +112,7 @@ function candidate(path: string, roots: readonly string[], cwd: string): OmoCand
  * writes no session under ~/.omo, so the chat found none there and showed nothing.
  */
 const AGENT_DIR_ENV = ["OMO_CODING_AGENT_DIR", "SENPI_CODING_AGENT_DIR", "PI_CODING_AGENT_DIR"];
-export const defaultOmoAgentDir = (home: string) => join(home, ".omo", "agent");
+const defaultOmoAgentDir = (home: string) => join(home, ".omo", "agent");
 
 /** The agent directory of one omo process, from its environment (null when unreadable: the default). */
 export function omoAgentDir(environ: readonly string[] | null, home: string, cwd: string): string {
@@ -129,7 +129,7 @@ export function omoAgentDir(environ: readonly string[] | null, home: string, cwd
 }
 
 /** A process's environment as it started, where the system tells it (Linux). */
-export function processEnviron(pid: number): string[] | null {
+function processEnviron(pid: number): string[] | null {
   try { return readFileSync(`/proc/${pid}/environ`, "utf8").split("\0"); } catch { return null; }
 }
 

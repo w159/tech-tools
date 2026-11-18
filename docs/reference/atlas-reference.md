@@ -359,6 +359,12 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_NOTE_MAX_BYTES` | largest board note body accepted (default 8192 bytes); longer notes are refused with `body_too_large` |
 | `ATLAS_NOTE_ARCHIVE_BYTES` | size an owner's note file may reach before notes older than 14 days move to `board/archive` (default 2097152 bytes) |
 | `ATLAS_CHECK_INSTALL_PARITY=1` | opt in to the two contract tests that compare the repo with the installed plugin cache (default off, so a suite run never depends on the install) |
+| `ATLAS_CREW_MAX_BLOCKS` | times a crew worker's Stop is refused (unread messages, failing `irc check`) before it is let go with the failure recorded (default 3; `atlas_crew.py` sets it from the plan's `max_blocks`; read by `hooks/crew_worker.py`) |
+| `ATLAS_PROMPT_JUDGE_TIMEOUT` | seconds the prompt-judge subprocess (`atlas_prompt_judge.py`) may run (default 120; a non-integer value falls back to 120) |
+| `ATLAS_SECURITY_REFRESH_HOURS` | hours before the cached security alerts are stale and a detached background refresh runs (default 12; needs `gh` on PATH; a non-number falls back to 12; `atlas_security.py`) |
+| `ATLAS_SCRATCH_ROOTS` | test-only: `os.pathsep`-separated absolute paths that replace the default scratch roots of `atlas_scope.py`, so a suite run from a checkout under `/tmp` is not itself treated as scratch; set but empty means none (default unset: built-in roots plus `TMPDIR`, `TEMP`, `TMP`) |
+| `ATLAS_IRC_CHANNEL` | channel the `atlas_irc.py` CLI posts to when no `--to` and no bus channel is set (default `#team`; the CLI also reads `ATLAS_IRC_DIR` and `ATLAS_IRC_NICK`) |
+| `ATLAS_TEST_PYTHON` | interpreter `atlas_test.py` runs pytest with (default: the first of `<repo>/.venv/bin/python`, `sys.executable`, then `python3*` on PATH that has pytest; exit 2 when none) |
 | omp only: `ATLAS_HOOK_BRIDGE`, `ATLAS_STOP_BRIDGE`, `ATLAS_LEAN_SHELL`, `ATLAS_ADVISOR_GATE`, `ATLAS_STYLE`, `ATLAS_NATIVE_POLICY` | see [omp parity](#omp-parity) |
 
 **Related flags and miners.**

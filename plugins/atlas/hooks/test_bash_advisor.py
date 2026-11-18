@@ -523,16 +523,15 @@ class CommitReviewNudgeTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(out, "")
 
-    def test_kill_switch_is_exactly_off(self):
-        """Equivalence contract: both harnesses check the literal string "off";
-        "Off" must not kill, or the two runtimes diverge."""
+    def test_kill_switch_is_case_insensitive(self):
+        """Any case of off disables the nudge."""
         with (
             mock.patch.object(bash_advisor, "_ponytail_installed", return_value=True),
             mock.patch.dict(os.environ, {"ATLAS_MANDATES": "Off"}),
         ):
             code, out = _run_main(self._payload("git commit -m 'wip'"))
         self.assertEqual(code, 0)
-        self.assertIn("ponytail-review", out)
+        self.assertNotIn("ponytail-review", out)
 
     def test_missing_session_id_stays_silent(self):
         """One-time needs a session key; absent id means no nudge (same

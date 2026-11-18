@@ -82,8 +82,8 @@ def parse_state(path: Path) -> dict:
         return {"schema_version": SCHEMA_VERSION, "sources": {}, "items": {}}
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError):
-        raise Corrupt(f"state file does not parse as JSON: {path}")
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise Corrupt(f"state file does not parse as JSON: {path}") from exc
     if not isinstance(data, dict) or "schema_version" not in data:
         raise Corrupt(f"state file has no schema_version: {path}")
     return data
@@ -203,7 +203,7 @@ def cmd_upsert_item(args) -> None:
     try:
         incoming = json.loads(args.json)
     except json.JSONDecodeError as exc:
-        raise Misuse(f"--json is not valid JSON: {exc}")
+        raise Misuse(f"--json is not valid JSON: {exc}") from exc
     if not isinstance(incoming, dict):
         raise Misuse("--json must be a JSON object")
     path = state_path(args.state)
@@ -278,7 +278,7 @@ def cmd_run_record(args) -> None:
     try:
         counts = json.loads(args.counts)
     except json.JSONDecodeError as exc:
-        raise Misuse(f"--counts is not valid JSON: {exc}")
+        raise Misuse(f"--counts is not valid JSON: {exc}") from exc
     if not isinstance(counts, dict):
         raise Misuse("--counts must be a JSON object")
     timestamp = args.timestamp or now_iso()

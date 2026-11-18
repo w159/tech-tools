@@ -432,6 +432,7 @@ _k("ATLAS_BUILTIN_AGENT_NUDGE", _GR, "Nudge off built-in agents", "Advise using 
 _k("ATLAS_SCOPE_GATE", _GR, "Enforce dispatch SCOPE", "Deny a dispatch whose SCOPE line is missing or wrong. Off downgrades it to advice.", default="on", details="Read at hooks/dispatch_tripwire_core.py:504.")
 _k("ATLAS_BURST_SECS", _GR, "Dispatch burst window (seconds)", "Window in which several dispatches count as one burst for the burst advisory. 0 or less disables the advisory.", "number", "30", details="Read at hooks/dispatch_tripwire_core.py:480; default BURST_SECS = 30.")
 _k("ATLAS_QUIET", _GR, "Quiet Claude Code", "Print only what needs the user: the Stop nudge speaks once and only after non-docs changes, and board acknowledgements and progress pings stay on the board.", default="on", details="Off restores the old chatter. Read at hooks/nudge.py and hooks/worker_inbox.py.")
+_k("ATLAS_GIT_AUTOCLEAN", _GR, "Auto git clean at session start", "Let session start launch a detached local git clean when the last clean is older than the policy auto_clean_hours. It never runs git itself and never cleans remotes.", default="on", details="Off disables only that boot-time clean; ATLAS_GIT_GUARD=off is the separate guard switch. Read at hooks/session_boot_core.py:1041.")
 
 # Colony
 _k("ATLAS_COLONY", _COL, "Start the colony at session start", "Start the herdr colony when a session begins.", default="on", details="Off, 0, false or no skips it. Read at hooks/session_boot_core.py:221.")

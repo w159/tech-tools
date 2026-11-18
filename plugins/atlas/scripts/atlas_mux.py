@@ -2910,7 +2910,10 @@ def cmd_wait(args) -> int:
             "team_id": rec["team_id"],
             "members": members,
             "notes_worker_to_worker": w2w,
-            "elapsed_s": round(time.time() - t0, 1),
+            # the team own wall time (spawn to the last member end), not how long this wait ran
+            "elapsed_s": max((m["duration_s"] for m in members if m["duration_s"] is not None), default=0.0)
+            if finished
+            else round(time.time() - rec["created"], 1),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
             **({"timed_out": True, "timeout_s": args.timeout} if timed_out else {}),
         },

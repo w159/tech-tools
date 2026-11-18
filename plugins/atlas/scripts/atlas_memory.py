@@ -275,9 +275,9 @@ def _file_lock(path: Path, timeout: Optional[float] = None):
                 try:
                     fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
                     break
-                except BlockingIOError:
+                except BlockingIOError as exc:
                     if time.monotonic() >= deadline:
-                        raise LockTimeout(f"lock busy: {lock_path}")
+                        raise LockTimeout(f"lock busy: {lock_path}") from exc
                     time.sleep(0.02)
         elif fcntl:
             fcntl.flock(fd, fcntl.LOCK_EX)

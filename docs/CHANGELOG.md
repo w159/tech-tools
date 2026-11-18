@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.28.1 - 2026-11-17
+
+Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries below ship in this version. Second fix wave (crew `crew-205854560b`), regression tests in `hooks/test_audit2_*.py` and `scripts/test_audit2_*.py`:
+
+- Completion gate: `_git_fallback_paths` in `hooks/completion_gate_core.py` drops files that were already dirty at SessionStart and are unchanged since (dirty snapshot), so a read-only session is no longer told it shipped code.
+- Dispatch tripwire: `READ_ONLY_ROLES` has one definition; the `atlas:` agent prefix is normalized (case, whitespace) before the gates read it; the board title accepts a bold `**GOAL:**`; shell calls that only run `atlas_crew.py wait|status`, `atlas_mux.py wait|reap|status` or `atlas_irc.py` count as bookkeeping, not inline ops.
+- `ATLAS_MANDATES` is read case-insensitively and trimmed in `bash_advisor.py`, `recall_gate.py` and `session_boot_core.py`.
+- Crew: `irc claim` takes the lease of a worker that has exited (`owner_exited` in `scripts/atlas_irc.py`), and the lease deny in `hooks/crew_worker.py` names that command; plan load breaks automatic `needs` cycles and the worker prompt no longer tells a worker with no needs to wait on peers; `atlas_crew.py plan --plan <file>` prints the validated plan.
+- Scripts: the dashboard stop path reports `os.kill` failures; six `raise` sites chain their cause; `atlas_mux.py wait` reports the team's real elapsed time; `atlas_control.py` has a row for `ATLAS_GIT_AUTOCLEAN`.
+- Tests: `bun test omp mod` no longer depends on the caller's `NO_COLOR` or `FORCE_COLOR` (`mod/test-preload.ts`, first in `bunfig.toml` preload); `test_second_drain_reads_only_new_bytes` no longer re-resolves the channel 2000 times.
+- TypeScript: `package.json` has `typecheck` and `test` scripts; `as any` on parsed JSON replaced with guards in `mod/data/core.ts`, `omp/team-tool.ts` and `mod/pane/sidebar.golden-cases.ts`; unused exports dropped in eight herdr server files and `mod/band-frame.ts`.
+- Docs: agent and component counts in `docs/AGENTS.md` match the tree; six undocumented `ATLAS_*` variables added to `docs/reference/atlas-reference.md`; `atlas-wiki` has a graphify-not-installed branch; two stale cites fixed.
+- Verified 2026-11-17: `atlas_test.py run --jobs 8` hooks PASS 80 files, scripts PASS 173 files; `tsc --noEmit` 0 errors; `bun test omp mod` 0 fail with and without `NO_COLOR=1`. The herdr `bun test server` suite fails two tests and stalls at the previous commit too, so it gives no verdict on the export changes beyond `tsc`.
+- Not done: the 456 broad `except Exception` handlers, the remaining unused exports fallow reports, a full `.env.example`, and executable bits on shebang scripts (137 files).
+
 ## atlas 17.28.0 (unreleased additions) - 2026-11-17
 
 - Audit fixes (branch `atlas/audit-fixes-1117`, crew `crew-1649305f31`), each with a regression test in `hooks/test_audit_*.py` or `scripts/test_audit_scripts.py`:
@@ -11,7 +26,7 @@
   - `hooks/completion_gate_core.py` `_nondocs_changed` ignores paths under `.atlas/`. Files that were already dirty at session start are not yet excluded.
   - `scripts/atlas_mux.py` `seat_model` honors the scope-matrix model for every seat on the claude harness; audit/high explorers now run on sonnet as `atlas_resolve.py` reports.
   - `scripts/atlas_crew.py` `_stop_pidfile` returns None when the pid's argv cannot be read.
-  - `tsc --noEmit -p plugins/atlas/tsconfig.json` reports 0 errors (was 82), and `.github/workflows/tests.yml` runs it. The CI step pins `typescript@5` through `bunx` and has not run in CI yet.
+  - `tsc --noEmit -p plugins/atlas/tsconfig.json` reports 0 errors (was 82). It is a local check only: a CI step for it was added and then removed, because `tsconfig.json` extends the host-generated, gitignored `.claude-plugin/types/` and a CI checkout has no host types (the step failed in `atlas-bun` on PR 69).
   - `colony/herdr-web-ui/server/machine-security.ts` `canSendSecret` accepts `x-forwarded-proto: https` only beside other proxy evidence.
   - Root `CLAUDE.md` cites symbols instead of line numbers; `docs/architecture/atlas-harness-parity.md` cites point at the `_core` files; the README says which tools read-only agents lose.
   - Verified 2026-11-17: `atlas_test.py run --jobs 8` hooks PASS 78 files, scripts PASS 170 files; `bun test omp mod` 5017 pass, 0 fail; herdr `bun test server/machine` 58 pass.

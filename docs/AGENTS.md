@@ -76,7 +76,7 @@ Source: `plugins/atlas/agents/docs-curator.md`, `docs-auditor.md`.
 
 ## Database Audit Agents
 
-Four read-only agents for structured database audits. Strictly no writes, no migrations, no DDL.
+One read-only agent for structured database audits. Strictly no writes, no migrations, no DDL.
 (The former `atlas:api-usage-map` code-usage scanner was removed on 2026-07-07; its responsibility
 folds into the domain plugins' own MCP-backed audits. There is no remaining code-usage-map agent.)
 
@@ -125,7 +125,7 @@ Source: `plugins/atlas/agents/test-engineer.md`.
 
 ## Stack
 
-Verified 2026-07-13 against the shipped tree.
+Verified 2026-11-17 against the shipped tree.
 
 - Language(s): Python 3 (`plugins/atlas/hooks`, `plugins/atlas/scripts`)
 - Framework(s): none; code is standard library only, runtime is the Claude Code plugin and
@@ -135,13 +135,15 @@ Verified 2026-07-13 against the shipped tree.
 
 ## Architecture
 
+Verified 2026-11-17 against the shipped tree.
+
 - Entry points: `plugins/atlas/{hooks,scripts,skills,agents}` (hook handlers, CLI scripts,
-  40 skills, 14 agents); the 13 MCP connector bundles ship in `plugins/armada/mcp/`
-- Boundaries: `atlas` plugin (codebase-facing, 14 agents in `plugins/atlas/agents/`) versus
+  40 skills, 11 agents); the 13 MCP connector bundles ship in `plugins/armada/mcp/`
+- Boundaries: `atlas` plugin (codebase-facing, 11 agents in `plugins/atlas/agents/`) versus
   `armada` plugin (11 department agents in `plugins/armada/agents/`); the split landed in v5.0.0
-- Key modules: 40 skills under `plugins/atlas/skills/`, 14 agents under `plugins/atlas/agents/`,
-  hook handlers under `plugins/atlas/hooks/` (19 programs, 24 bindings in `hooks/hooks.json`, including
-  `worker_report_gate.py` on SubagentStop), CLI scripts under `plugins/atlas/scripts/`, 13 MCP
+- Key modules: 40 skills under `plugins/atlas/skills/`, 11 agents under `plugins/atlas/agents/`,
+  hook handlers under `plugins/atlas/hooks/` (11 programs, 15 bindings in `hooks/hooks.json`, including
+  `worker_report_gate.py` on SubagentStop; one program, `atlas_doctor.py`, lives in `plugins/atlas/scripts/`), CLI scripts under `plugins/atlas/scripts/`, 13 MCP
   connector bundles under `plugins/armada/mcp/` (listed in `plugins/armada/.mcp.json`)
 
 ## Conventions
@@ -152,10 +154,11 @@ Verified 2026-07-13 against the shipped tree.
 - Every claim cites file:line.
 - Every completion carries its evidence in the same message.
 - The `.atlas/.run/` directory is ephemeral and gitignored.
+- Every new test module under `plugins/atlas/hooks` or `plugins/atlas/scripts` imports `_test_isolation` after the sys.path setup and must pass when collected alone (the contract test `test_every_test_module_imports_isolation_helper` checks the import).
 
 ## Commands
 
-Verified 2026-07-13. Run from repo root.
+Verified 2026-11-17. Run from repo root.
 
 - Build: none (no compile step; Python is interpreted)
 - Test, one file: `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_<name>.py`. The suites need pytest; `python3 -m unittest` fails on 26 files that import pytest or hold pytest-style tests only (test counts omitted: they drift; re-run to quote them)
@@ -170,7 +173,7 @@ Verified 2026-07-13. Run from repo root.
 
 ## Agent Constraints
 
-All 14 agents share three standing constraints regardless of the task:
+All 11 agents share three standing constraints regardless of the task:
 
 1. **Never fix what you are auditing.** Auditor, verifier, critic, oracle, and prober agents
    return findings only. They do not carry Write, Edit, or MultiEdit permissions.

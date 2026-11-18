@@ -116,7 +116,7 @@ def load_settings(path: Path) -> dict:
     except json.JSONDecodeError as exc:
         raise SystemExit(
             f"ERROR: {path} is not valid JSON ({exc}). Fix it before installing."
-        )
+        ) from exc
 
 
 def runs_script(command: str, script: str) -> bool:

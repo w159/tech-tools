@@ -2704,6 +2704,25 @@ def _session_is_orchestrating(session_id: str) -> bool:
             conn.close()
 
 
+def _git_fallback_paths(root, session_id: str) -> list:
+    # git changed paths minus files already dirty at SessionStart and unchanged since (dirty snapshot).
+    # No or corrupt snapshot: every git path.
+    if root is None:
+        return []
+    paths = _git_changed_paths(root)
+    try:
+        import session_boot
+
+        with open(session_boot.snapshot_path(root, session_id), encoding="utf-8") as fh:
+            before = json.load(fh)["paths"]
+        now = session_boot.dirty_map(root)
+        if not isinstance(before, dict) or now is None:
+            return paths
+    except Exception:
+        return paths
+    return [p for p in paths if p not in before or before[p] != now.get(p)]
+
+
 def _run_written_paths(session_id: str, root: Path | None = None) -> list:
     """(a)/(b)/(f)/(g) shared signal: file paths THIS RUN's own activity wrote,
     via atlas_db.run_changed_paths for the current-or-latest run.
@@ -2729,10 +2748,10 @@ def _run_written_paths(session_id: str, root: Path | None = None) -> list:
             conn, session_id
         )
         if rid is None:
-            return _git_changed_paths(root) if root is not None else []
+            return _git_fallback_paths(root, session_id)
         paths = atlas_db.run_changed_paths(conn, rid)
         if not paths and not _run_has_telemetry(conn, rid, session_id):
-            return _git_changed_paths(root) if root is not None else []
+            return _git_fallback_paths(root, session_id)
         return paths
     except Exception:
         return []

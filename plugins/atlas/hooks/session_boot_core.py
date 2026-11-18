@@ -1496,7 +1496,7 @@ def main():
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
     recall = (
         recall_mandate()
-        if mem_plugin and os.environ.get("ATLAS_MANDATES") != "off"
+        if mem_plugin and os.environ.get("ATLAS_MANDATES", "").strip().lower() != "off"
         else None
     )
     if recall:

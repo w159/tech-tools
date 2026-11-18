@@ -554,7 +554,7 @@ export function forgetHistoryChains(): void {
 }
 
 /** Drops one rollout's remembered chain: its next read resolves it again. */
-export function forgetHistoryChain(path: string): void {
+function forgetHistoryChain(path: string): void {
   historyChains.delete(path);
 }
 

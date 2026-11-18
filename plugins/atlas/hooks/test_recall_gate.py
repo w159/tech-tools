@@ -484,9 +484,9 @@ class RecallGateTest(unittest.TestCase):
         with patch.dict(os.environ, {"ATLAS_MANDATES": "off"}):
             self.assertEqual(_run_main(self._payload(case)), (0, ""))
         with patch.dict(
-            os.environ, {"ATLAS_MANDATES": "Off"}
-        ):  # exact "off", as in omp
-            self.assertTrue(
+            os.environ, {"ATLAS_MANDATES": " Off "}
+        ):  # any case, trimmed
+            self.assertFalse(
                 _denied(_run_main(self._payload(case, session_id="caps"))[1])
             )
         with patch.object(recall_gate, "_claude_mem_enabled", return_value=False):

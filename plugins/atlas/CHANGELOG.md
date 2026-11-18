@@ -1,11 +1,27 @@
 # Changelog
+## 17.28.1 - 2026-11-17
+
+Audit-fix release: behavior changed after 17.28.0 was tagged (commits #67, #68 and branch `atlas/audit-fixes-1117`).
+
+### Changed
+
+- Audit fixes 2026-11-17: git_guard quoted-program prefilter, bash_advisor wrapper scan (full length, command position only), one SCOPE line per dispatch, visible notice when the event budget skips PreToolUse hooks, fail-open import guard on three hook shims, completion gate no longer counts .atlas/ writes as a non-docs change, matrix model honored for unlabelled team seats, crew `_stop_pidfile` never signals an unverified pid, tsc clean locally (no CI typecheck: the host types it needs are generated and gitignored), herdr `canSendSecret` ignores a forged x-forwarded-proto, doc cites by symbol.
+- Audit record, no source change: a read-only audit of `plugins/atlas/` on 2026-11-17 reported 36 issues, 15 medium and 21 low. Baseline: hooks suite 3277 passed, scripts suite 6328 passed, `tsc --noEmit -p plugins/atlas/tsconfig.json` 82 errors, `bun test omp mod` 9 fail under `NO_COLOR=1`.
+- `hooks/dispatch_tripwire_core.py` `_close_dispatch`: frees the slot owned by the returning `tool_use_id` (tracked via `owners`) instead of the oldest open slot, so an out-of-order PostToolUse no longer frees a teammate's slot. Test: `hooks/test_dispatch_tripwire.py` `CloseDispatchSlotTest`.
+- `scripts/atlas_control.py` `ATLAS_BURST_SECS`: the dashboard default now reads 30 like `BURST_SECS`; `docs/architecture/atlas-channels.md` and `command-center-redesign.md` said 10. Test: `scripts/test_atlas_control.py` (`test_burst_secs_default_matches_hook_constant`).
+- Judge endpoint: the local decision model rejects any prompt over 2,048 tokens and the judge state budget is about 5,250, so `ATLAS_TYPESAFE_MODEL` and `ATLAS_TYPESAFE_URL` moved back to the hosted `jev-latest` default. 1,610 `facets` rows were re-judged by it (0 errors); the six non-model columns and `created_at` were unchanged.
+- `docs/reference/atlas-reference.md`: script count corrected from 87 to 88 non-test scripts (the contract test checks it); six environment variables read by code are now documented (`ATLAS_CREW_MAX_BLOCKS`, `ATLAS_PROMPT_JUDGE_TIMEOUT`, `ATLAS_SECURITY_REFRESH_HOURS`, `ATLAS_SCRATCH_ROOTS`, `ATLAS_IRC_CHANNEL`, `ATLAS_TEST_PYTHON`).
+- Root `CLAUDE.md` gains a `## Parallel agents (team rules)` section: cheap-model read-only agents may dispatch in parallel to explore, no agent makes multi-file edits in parallel, and the other dispatch denials stand.
+- Deleted the root `skills/` folder (72 files, 12 skills); no manifest, script or CI job loaded it. `mcp_servers/` and `mcp_node/` are kept: `scripts/rebuild_armada_bundles.mjs` builds the armada bundles from them.
+- New lessons under `docs/lessons/`: `2026-11-17_disabling-plugins-and-mcp-per-project.md`, `2026-11-17_check-for-a-consumer-before-a-delete.md`, `2026-11-17_a-loop-counter-needs-a-progress-signal.md`.
+- `skills/atlas-wiki/SKILL.md` stops with a one-line install hint when neither a `graphify` skill nor a `graphify` binary is available.
+
 ## 17.28.0 - 2026-11-16
 
 The owner reported that the same session behaved differently from one project to the next: a simple edit was denied, the first working dispatch ran in-process while later ones were routed, worker rows had no role colour, the TODO block was empty while the board held the plan, and the gates panel was red mid-run for conditions not reached yet. Five workers fixed one fault each.
 
 ### Changed
 
-- Audit fixes 2026-11-17: git_guard quoted-program prefilter, bash_advisor wrapper scan (full length, command position only), one SCOPE line per dispatch, visible notice when the event budget skips PreToolUse hooks, fail-open import guard on three hook shims, completion gate no longer counts .atlas/ writes as a non-docs change, matrix model honored for unlabelled team seats, crew `_stop_pidfile` never signals an unverified pid, tsc clean plus CI typecheck, herdr `canSendSecret` ignores a forged x-forwarded-proto, doc cites by symbol.
 - `scripts/atlas_crew.py` `worker_model`, `worker_effort`, `role_effort`: a crew worker whose env, worker entry and plan name no model or effort now launches with its role's `model:` and `effort:` from `agents/<role>.md` (implementer `sonnet`/`medium`, explorer `haiku`/`low`); a worker with no role is an implementer, and a role with no agent file or no such key adds no flag. The run-wide `--model` in `cmd_run` takes no role default. `run.json` gains `worker_tiers`, the resolved model and effort per worker. Before this every such worker ran on the session default model. Test: `scripts/test_atlas_crew.py`.
 - `scripts/atlas_test.py` (new, with `scripts/test_atlas_test.py`): `run` starts each test file of the hooks and scripts suites as its own `python -m pytest -q -p no:cacheprovider` process (interpreter: `ATLAS_TEST_PYTHON`, repo `.venv`, `sys.executable`, then `python3*` on PATH, first with pytest; exit 2 when none) from a pool (`--jobs`, `--suite hooks|scripts`, `--changed [BASE]`); `select <path>...` prints the test files a change can affect. A TypeScript file selects no Python suite. Run the selection locally and leave the full run to branch CI.
 - `hooks/completion_gate_core.py` `_canon_segments`: the gate (b) self-stamp check splits a finding's reproduction and each command that ran on `;`, `&&`, `||` outside quotes and credits a self-stamped verified row when one test-runner segment ran passing. Before, a compound reproduction such as `fallow audit ...; cd plugins/atlas && env -u NO_COLOR bun test omp mod` never matched the `bun test omp mod` run and the gate refused the Stop. Known limit: pass status is the whole command's status. Test: `hooks/test_completion_gate.py`.
@@ -1573,7 +1589,7 @@ Command Center v14: the dashboard UI is rebuilt from scratch as a sidebar shell 
 
 - Shell and pages: sidebar plus nine flat pages (Overview, Agents, Board, Channels, Activity, Health, Improve, Projects, Settings); component kit `js/ui.js`, plus `api.js`, `state.js`, `router.js`, `pages/*.js` with `*-model.js` and `node:test` files, and a `drawer/` (terminal, messages, tasks).
 - Terminal inside the Agents drawer: `POST /api/v2/term/ticket` then `ws?ticket=`.
-- Settings backend (`scripts/atlas_control.py`): 20 new `_AD` rows so every documented `ATLAS_*` key has a row, 16 keys became toggles, 3 selects (`ATLAS_GATES`, `ATLAS_MODE`, `ATLAS_SEAT_BACKEND`), 7 bounded numbers, and `ATLAS_TYPESAFE_URL` has kind `url`. Tests: `scripts/test_atlas_control_settings.py`.
+- Settings backend (`scripts/atlas_control.py`): 20 new `_AD` rows so every documented `ATLAS_*` key has a row, 16 keys became toggles, 3 selects (`ATLAS_GATES`, `ATLAS_MODE`, `ATLAS_SEAT_BACKEND`), 7 bounded numbers, and `ATLAS_TYPESAFE_URL` has kind `url`. Tests: `scripts/test_atlas_control.py`.
 
 ### Changed
 

@@ -1511,6 +1511,7 @@ def stop_daemon(port: int | None = None) -> dict:
                 break
             time.sleep(0.1)
     listener_killed = False
+    kill_errors: list[str] = []
     if _port_open(LOOPBACK, port) and _daemon_db_ok(port):
         try:
             # LISTEN only: plain `tcp:<port>` also returns client sockets
@@ -1521,13 +1522,16 @@ def stop_daemon(port: int | None = None) -> dict:
             for p in out.splitlines():
                 try:
                     target = int(p)
-                    if target == me:
-                        continue
+                except ValueError:
+                    continue
+                if target == me:
+                    continue
+                try:
                     os.kill(target, signal.SIGTERM)
                     stopped = True
                     listener_killed = True
-                except Exception:
-                    pass
+                except OSError as e:
+                    kill_errors.append(f"pid {target}: {e}")
         except Exception:
             pass
     if listener_killed:
@@ -1547,7 +1551,13 @@ def stop_daemon(port: int | None = None) -> dict:
             }
     time.sleep(0.15)
     _clear_pidfile(port=port)
-    return {"ok": True, "stopped": stopped, "pid": pid or None, "port": port}
+    return {
+        "ok": True,
+        "stopped": stopped,
+        "pid": pid or None,
+        "port": port,
+        **({"kill_errors": kill_errors} if kill_errors else {}),
+    }
 
 
 def _version_tuple(value) -> tuple[int, ...] | None:

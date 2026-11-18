@@ -699,6 +699,19 @@ def _move_lease(d, path: str, to: str, check) -> str | None:
             fcntl.flock(fh, fcntl.LOCK_UN)
 
 
+def owner_exited(d, owner: str) -> bool:
+    """True when `owner`'s newest worker round has an exit record in the run dir next to the bus (its process
+    is gone, so its lease can be taken with `irc claim`). False for the lead, an unknown nick or a live worker."""
+    run = Path(d).parent
+    rounds = []
+    for sub in ("exit", "wpid", "launched"):
+        for p in (run / sub).glob(f"{owner}.r*"):
+            m = re.match(r"r(\d+)(?:\.json)?$", p.name[len(owner) + 1 :])
+            if m:
+                rounds.append(int(m.group(1)))
+    return bool(rounds) and (run / "exit" / f"{owner}.r{max(rounds)}.json").is_file()
+
+
 def cmd_give(a) -> int:
     """Hand a file you own to a peer: from now on only the peer may edit it, and fixes for it go to the peer."""
     d = _dir(a.dir)
@@ -742,8 +755,11 @@ def cmd_claim(a) -> int:
 
     def check(table):
         owner = table.get(rel, _static_owner(rel))
-        if owner and owner != nick:
-            return f"claim refused: {rel} is leased to {owner}; ask it with `irc say --to {owner} ...` or `irc give`"
+        if owner and owner != nick and not owner_exited(d, owner):
+            return (
+                f"claim refused: {rel} is leased to {owner}, who is still running; ask it with "
+                f"`irc say --to {owner} ...` or have it `irc give` the file (a file whose owner has exited can be claimed)"
+            )
         return None
 
     why = _move_lease(d, rel, nick, check)

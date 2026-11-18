@@ -239,7 +239,55 @@ def load_plan(path) -> dict:
             seen[p] = w["name"]
     for w in workers:
         _wire_check(w)
+    _break_need_cycles(plan)
     return plan
+
+
+def _find_cycle(g: dict):
+    """One cycle of the graph {node: [node]} as a node list, or None. Deterministic (sorted start order)."""
+    state: dict = {}
+
+    def visit(n, path):
+        state[n] = 1
+        path.append(n)
+        for m in g.get(n, ()):
+            if state.get(m) == 1:
+                return path[path.index(m):]
+            if m not in state:
+                found = visit(m, path)
+                if found:
+                    return found
+        state[n] = 2
+        path.pop()
+        return None
+
+    for n in sorted(g):
+        if n not in state:
+            found = visit(n, [])
+            if found:
+                return found
+    return None
+
+
+def _break_need_cycles(plan: dict) -> None:
+    """A worker never waits on a peer that (transitively) waits on it. Each cycle in `needs` loses one automatic
+    edge (those an auto plan lists in `auto_needs`; the same edge on every load); a cycle of explicit edges only
+    is a plan error. The dropped edges go to plan["dropped_needs"] as [worker, peer] pairs."""
+    ws = {w["name"]: w for w in plan["workers"]}
+    dropped = []
+    while True:
+        cyc = _find_cycle({n: [x for x in (w.get("needs") or []) if x in ws] for n, w in ws.items()})
+        if not cyc:
+            break
+        auto = [(a, b) for a, b in zip(cyc, cyc[1:] + cyc[:1]) if b in (ws[a].get("auto_needs") or [])]
+        if not auto:
+            raise ValueError("needs form a cycle: " + " -> ".join([*cyc, cyc[0]]) + " (state the waits one way round)")
+        a, b = max(auto)
+        ws[a]["needs"] = [x for x in ws[a]["needs"] if x != b]
+        ws[a]["auto_needs"] = [x for x in ws[a]["auto_needs"] if x != b]
+        dropped.append([a, b])
+    if dropped:
+        plan["dropped_needs"] = dropped
 
 
 _HEAD = re.compile(r"^(#{1,6})\s+(.*?)\s*#*\s*$")
@@ -336,8 +384,14 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
     ctx = resolve_context((plan.get("context") or []) + (w.get("context") or []), root)
     check = w.get("check") or "(none: you finish when your task is done)"
     unit = w.get("unit_check")
+    needs = [n for n in (w.get("needs") or []) if n != w["name"]]
     done_when = (
-        f"`{check}` passes in {root}: it runs `{unit}` after the peers you import are done."
+        (
+            f"`{check}` passes in {root}: it runs `{unit}` after the peers you import are done."
+            if needs
+            else f"`{check}` passes in {root}: it runs `{unit}` at once and waits for no peer. Never `irc need` or "
+            "wait on a peer yourself: a wait you add can close a cycle and deadlock the crew."
+        )
         if unit and check.strip() == IRC_CHECK
         else f"`{check}` passes in {root}."
     )
@@ -358,7 +412,8 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
         )
         + "\n\n"
         + trim
-        + f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n\n"
+        + f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n"
+        "A file whose owner has exited (`irc leases`) is yours to take: run `irc claim <path>`, then edit it.\n\n"
         f"## Done when\n{done_when}\n\n"
         f"## Context\n{ctx}\n"
     )
@@ -1151,7 +1206,7 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
             "context": scoped.get(top, []) + ([f"{spec}#{head}"] if head else [spec])
             + ([IFACE_HEAD + iface] if iface else []) + [rel],
             "check": IRC_CHECK if final else "",  # DONE is posted by `irc check` itself once final passes
-            **({"unit_check": final, "needs": needs} if final else {}),
+            **({"unit_check": final, "needs": needs, "auto_needs": list(needs)} if final else {}),
         })
     return {"goal": goal or f"Implement {files_glob} per {spec}", "check": check or "", "context": shared, "workers": workers}
 
@@ -1159,9 +1214,14 @@ def auto_plan(root: str, spec: str, files_glob: str, tests_pat: str | None = Non
 def cmd_plan(a) -> int:
     root = os.path.realpath(a.root or os.getcwd())
     try:
-        if not (a.spec and a.files):
-            raise ValueError("plan needs --spec and --files")
-        plan = auto_plan(root, a.spec, a.files, a.tests, a.check, a.goal)
+        if a.plan:
+            plan = load_plan(a.plan)
+            for w in plan["workers"]:
+                w.setdefault("needs", [])
+        else:
+            if not (a.spec and a.files):
+                raise ValueError("plan needs --plan, or --spec and --files")
+            plan = auto_plan(root, a.spec, a.files, a.tests, a.check, a.goal)
     except (OSError, ValueError) as exc:
         print(json.dumps({"ok": False, "error": str(exc)}))
         return 2
@@ -1540,6 +1600,7 @@ def cmd_run(a) -> int:
                 "irc": f"irc gateway: 127.0.0.1:$(cat {rundir / 'irc' / 'port'}) channel #{run_id}",
                 "next": _self_cmd("wait", "--run", run_id, "--root", root),
                 **({"launch_errors": launch_errors} if launch_errors else {}),
+                **({"dropped_needs": plan["dropped_needs"], "note": "automatic needs that closed a wait cycle were dropped"} if plan.get("dropped_needs") else {}),
                 **({} if sealed else {"warning_seal": f"could not write the run's seal under {atlas_crew_seal.record_path(rundir).parent}: the completion gate will not credit this crew"}),
                 **({"warning": "no lead session id: pass --session <id> or the completion gate will not credit this crew"} if not meta["lead_session"] else {}),
             }
@@ -2952,6 +3013,7 @@ def parser():
     pl = sub.choices["plan"]
     pl.add_argument("--root")
     pl.add_argument("--out")
+    pl.add_argument("--plan", help="print this plan JSON as loaded and validated (resolved needs), starting nothing")
     pl.set_defaults(fn=cmd_plan)
     r.add_argument("--root")
     r.add_argument("--model")

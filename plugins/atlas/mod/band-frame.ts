@@ -15,11 +15,11 @@ import { ctxLevel, latencyLevel } from './status-frame';
 import { fitText, textWidth } from './theme';
 
 /** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it (AA2: packed in one 28-cell state slot, `● done 6/6 · ended 18s`). */
-export const HEAD_W = 17;
-export const DETAIL_W = 10;
+const HEAD_W = 17;
+const DETAIL_W = 10;
 /** The head's width below NARROW_BELOW cells of band (the pane open at 110 columns). */
-export const HEAD_NARROW = 11;
-export const NARROW_BELOW = 75;
+const HEAD_NARROW = 11;
+const NARROW_BELOW = 75;
 /** The detail rides the state slot from this band width, while the pane is closed (the pane's NOW row says it otherwise): 121 = the state slot with detail, every figure slot and the health chip. */
 export const DETAIL_FROM = 121;
 /** AA2: the figure slots' widths: the spark (always 8 cells), `peak 3 / 5s`, `hook p50 7ms`, `ctx 6%`. */

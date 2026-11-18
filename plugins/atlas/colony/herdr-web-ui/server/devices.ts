@@ -53,7 +53,7 @@ export function normalizeLabel(value: unknown, fallback: string): string {
   return label || fallback;
 }
 
-export function isDeviceRole(value: unknown): value is DeviceRole {
+function isDeviceRole(value: unknown): value is DeviceRole {
   return value === "drive" || value === "watch";
 }
 

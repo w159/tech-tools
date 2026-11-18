@@ -30,6 +30,7 @@
     "plugins/atlas/omp/test-isolation.ts",
     "plugins/atlas/omp/test-omp-stubs.ts",
     "plugins/atlas/mod/test-shim.ts",
+    "plugins/atlas/mod/test-preload.ts",
     "plugins/atlas/scripts/dashboard_ui/js/test-dom-baseline.js",
     "plugins/atlas/scripts/sprite_review.test.ts",
     "mcp_servers/ninjaone-mcp/src/worker.ts"

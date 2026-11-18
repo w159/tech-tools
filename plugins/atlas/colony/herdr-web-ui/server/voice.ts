@@ -169,7 +169,7 @@ async function readTranscript(body: ReadableStream<Uint8Array> | null, onDelta: 
 }
 
 /** The checked multipart body of POST /api/voice/transcribe. */
-export function parseClip(form: FormData): VoiceClip {
+function parseClip(form: FormData): VoiceClip {
   const audio = form.get(VOICE_FORM.audio);
   if (audio === null || typeof audio === "string") throw new VoiceError("invalid_audio", 400, "Send the recording as the audio part");
   if (audio.size === 0) throw new VoiceError("invalid_audio", 400, "The recording is empty");

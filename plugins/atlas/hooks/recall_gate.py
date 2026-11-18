@@ -18,7 +18,7 @@ Armed only when the claude-mem plugin is enabled (tool_routing.plugin_enabled) A
 claude-mem MCP server is mounted; enabled-but-unmounted allows everything and leaves one
 atlas_faults trace per session (no recall tool exists, so the gate could never be satisfied).
 Hooks cannot see the session's callable tool set, so config is the closest proxy; omp
-checks the real callable set per call instead. ATLAS_MANDATES=off (exact string) disables it.
+checks the real callable set per call instead. ATLAS_MANDATES=off (any case, surrounding spaces ignored) disables it.
 
 Main thread only: a payload with an agent_id, or whose transcript_path lies under
 /subagents/, is skipped (an absent transcript_path is treated as main), so subagents that
@@ -323,7 +323,7 @@ def _decide(data: dict) -> str | None:
             or not session
         ):
             return None
-        if os.environ.get("ATLAS_MANDATES") == "off":
+        if os.environ.get("ATLAS_MANDATES", "").strip().lower() == "off":
             return None
         if data.get("agent_id") or "/subagents/" in str(
             data.get("transcript_path") or ""

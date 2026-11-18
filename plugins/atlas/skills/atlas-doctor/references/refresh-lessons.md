@@ -3,8 +3,8 @@
 Read at Phase 6, after MEASURE.
 
 A lesson in `docs/lessons/` only compounds value while its evidence still
-holds. A lesson citing `plugins/atlas/hooks/completion_gate.py:88-104` was
-true when written; after the next refactor the citation may point at nothing.
+holds. A lesson citing a line range of `plugins/atlas/hooks/completion_gate_core.py`
+(for example the gate-letter list in its module docstring) was true when written; after the next refactor the citation may point at nothing.
 Trusted silently forever, the store starts lying. This pass (folded into this skill, see
 Provenance) audits the store against the current tree.
 

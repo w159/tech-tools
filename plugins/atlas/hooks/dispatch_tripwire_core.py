@@ -97,6 +97,14 @@ FINDINGS_RELPATH = (".atlas", ".run", "findings.json")
 VERIFIER_WATCH_RELPATH = (".atlas", ".run", "verifier_watch.json")
 
 
+def _norm_agent(value):
+    # stripped; `atlas:` prefix and role lower-cased (ATLAS:Implementer -> atlas:implementer)
+    agent = str(value or "").strip()
+    if agent.lower().startswith("atlas:"):
+        return "atlas:" + agent[len("atlas:") :].strip().lower()
+    return agent
+
+
 def _is_verifier(subagent_type):
     return "verifier" in str(subagent_type or "").lower()
 
@@ -123,7 +131,7 @@ def _verifier_slot(tinput):
     (the named-dispatch identity). Parallel verifiers in one session each get
     their own slot instead of sharing a baseline (friction F5)."""
     return "{}|{}".format(
-        str(tinput.get("subagent_type") or ""),
+        _norm_agent(tinput.get("subagent_type")),
         str(tinput.get("name") or tinput.get("description") or ""),
     )
 
@@ -429,7 +437,7 @@ def _scope_problem(tinput):
     """Deny text for an atlas:* dispatch with no SCOPE line, no resolvable one, or none whose team holds
     this role; "" otherwise. Roles the matrix never names (runner, docs-auditor...) only need a line.
     Every SCOPE line counts (a batch context's line plus the task's own); aliases like med/explore normalize."""
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return ""
     try:
@@ -556,11 +564,11 @@ CLOSING_ROLES = frozenset(
 # the team deny: the deny exists so editing subagents run as a tmux team with isolated files, and a
 # read-only role cannot edit, cannot conflict with a teammate, and is the cheapest lookup there is. Denying
 # a lone `SCOPE: audit/*` explorer forced a tmux team for a grep. verifier is already in CLOSING_ROLES.
-READ_ONLY_ROLES = frozenset({"explorer", "db-prober"})
+from completion_gate_core import READ_ONLY_ROLES  # noqa: E402  (one definition, shared with the Stop gate)
 
 
 def _is_read_only_role(subagent_type):
-    agent = str(subagent_type or "")
+    agent = _norm_agent(subagent_type)
     for prefix in ("atlas:", "atlas-"):
         if agent.startswith(prefix):
             return agent[len(prefix) :] in READ_ONLY_ROLES
@@ -580,7 +588,7 @@ def _is_working_role(subagent_type):
 def _working_seats(tinput, root, session):
     """(class, effort, working seats) for this dispatch: the SCOPE line whose team holds the role (else the
     first that resolves), else prompt_optimizer_core.resolved_scope for the session. None when unknown."""
-    role = str(tinput.get("subagent_type") or "").split(":", 1)[-1]
+    role = _norm_agent(tinput.get("subagent_type")).split(":", 1)[-1]
     try:
         resolve, _classes, _known, (class_alias, effort_alias) = _scope_matrix()
         first = None
@@ -651,7 +659,7 @@ def _route_brief(base, tinput):
 
     try:
         prompt = str(tinput.get("prompt") or "")
-        role = str(tinput.get("subagent_type") or "").split(":", 1)[-1]
+        role = _norm_agent(tinput.get("subagent_type")).split(":", 1)[-1]
         stem = re.sub(r"[^A-Za-z0-9._-]+", "-", str(tinput.get("name") or "").strip() or role)
         stem = stem.strip(".-")[:60] or "brief"
         digest = hashlib.sha1(prompt.encode("utf-8", "replace")).hexdigest()[:8]
@@ -670,8 +678,8 @@ def _team_blocks(tinput):
     _pre_tool_use can ask it without counting the dispatch toward the advisory."""
     import shutil
 
-    agent = tinput.get("subagent_type")
-    if not str(agent or "").startswith("atlas:"):
+    agent = _norm_agent(tinput.get("subagent_type"))
+    if not agent.startswith("atlas:"):
         return False
     if not _is_working_role(agent) or _is_read_only_role(agent):
         return False
@@ -738,7 +746,7 @@ def _team_note(root, session, tinput, run_key, cwd=None):
     if blocked:
         import shlex
 
-        role = str(tinput.get("subagent_type") or "")
+        role = _norm_agent(tinput.get("subagent_type"))
         if scope:
             cls, effort = scope[0], scope[1]
         else:  # no SCOPE line and no resolved scope: the matrix class whose team holds this role
@@ -857,7 +865,7 @@ def _scope_gate(deny, tinput, root, session, run_key=None, cwd=None):
         if problem
         else []
     )
-    if str(tinput.get("subagent_type") or "").startswith("atlas:"):
+    if _norm_agent(tinput.get("subagent_type")).startswith("atlas:"):
         blocked, text = _burst_note(root, session, _cheap_exploration(tinput))
         if blocked:
             deny("mux", text)
@@ -912,7 +920,7 @@ def _toolkit_gap(tinput, root=None):
     named code-nav tool (lean-ctx, ctx_search, ctx_read, ctx_compose) so agents cannot
     "ToolSearch" a decoy and still grep.
     """
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's loaded tools; non-atlas agents opt out
     if not _lean_ctx_reachable(root):
@@ -976,7 +984,7 @@ def _unbounded_dispatch(tinput):
 
     Returns (agent, missing_blocks, goal_count) or None when the spec holds.
     """
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return None  # forks inherit the parent's brief; non-atlas agents opt out
     prompt = str(tinput.get("prompt") or "")
@@ -1023,7 +1031,7 @@ _NUMBERED_RE = lre(r"^[ \t]*\d+[.)][ \t]+\S")
 def _runner_steps_problem(tinput):
     """Deny text when a mechanical-tier (runner) dispatch lacks a capped STEPS block."""
     agent, max_steps = _mechanical_tier()
-    if str(tinput.get("subagent_type") or "") != "atlas:" + agent:
+    if _norm_agent(tinput.get("subagent_type")) != "atlas:" + agent:
         return None
     prompt = str(tinput.get("prompt") or "")
     m = re.search(r"(?im)^[ \t]*STEPS[ \t]*:", prompt)
@@ -1109,7 +1117,7 @@ def _name_missing(tinput):
     a scoped subagent (code.claude.com/docs/en/sub-agents, "Subagent
     names"), and an atlas worker must stay a subagent so its definition's
     effort/model tier and tool guardrails apply."""
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return None
     if os.environ.get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS") == "1":
@@ -1311,7 +1319,7 @@ BUILTIN_ROLE = {
 def _builtin_agent(tinput):
     """The built-in subagent_type (lowercased, '' when absent) of a dispatch that
     should have been an atlas:* role, else None."""
-    agent = str(tinput.get("subagent_type") or "").strip().lower()
+    agent = _norm_agent(tinput.get("subagent_type")).strip().lower()
     if os.environ.get("ATLAS_BUILTIN_AGENT_NUDGE", "on").lower() == "off":
         return None
     return agent if agent in BUILTIN_ROLE else None
@@ -1514,7 +1522,7 @@ def _tier_hint(tinput, role):
 def _effort_override(tinput):
     """An atlas:* dispatch whose `effort` is not the definition's and not tier-accepted. Returns
     (agent, declared, given) or None (no effort arg, unreadable definition, or accepted)."""
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return None
     given = str(tinput.get("effort") or "").strip()
@@ -1555,7 +1563,7 @@ def _model_override(tinput, session_model=""):
     the definition accepts any model (frontmatter missing, `inherit`), when the
     dispatch passes no `model`, when it matches a pin or the parent model, or
     when the definition cannot be read (fail open)."""
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return None
     given = str(tinput.get("model") or "").strip()
@@ -1672,14 +1680,14 @@ _MUX_TEAM_VERBS = ("spawn-team", "wait", "reap")
 _SHELL_OPS = {"&&", "||", ";", "|", "&", ";;", "|&"}
 
 
-_BOOKKEEPING_SCRIPTS = ("atlas_todo.py", "atlas_finding.py")
+_BOOKKEEPING_SCRIPTS = ("atlas_todo.py", "atlas_finding.py", "atlas_irc.py")
 
 
 def _is_bookkeeping_call(tool, tinput):
     """True when a shell call only runs atlas bookkeeping scripts (atlas_todo.py,
     atlas_finding.py, atlas_resolve.py), optionally after `cd` and piped into a filter.
     Such a call is neither an inline op nor a dispatch: not logged, not denied, no reset."""
-    return _team_mux_verb(tool, tinput) in ("bookkeeping", "resolve")
+    return _team_mux_verb(tool, tinput) in ("bookkeeping", "resolve", "wait", "reap")
 
 
 def _is_shell_tool(tool):
@@ -1740,6 +1748,12 @@ def _team_mux_verb(tool, tinput):
         elif script == "atlas_crew.py" and len(seg) > 2 and seg[2] == "run":
             verb = "spawn-team"  # a crew launch is a team dispatch
         elif (
+            script in ("atlas_crew.py", "atlas_mux.py")
+            and len(seg) > 2
+            and seg[2] in ("wait", "status")
+        ):
+            verb = verb or "bookkeeping"  # the lead observing its own team
+        elif (
             script == "atlas_resolve.py"
         ):  # the read-only resolver step that precedes spawn-team
             verb = verb or "resolve"
@@ -1756,7 +1770,7 @@ def _team_mux_verb(tool, tinput):
 def _dispatch_attribution(tinput, session_model=""):
     """Who a dispatch is for: agent, sibling name and the model it would run on
     (an explicit per-call `model`, else the definition's pin, else the parent's)."""
-    agent = str(tinput.get("subagent_type") or "")
+    agent = _norm_agent(tinput.get("subagent_type"))
     given = str(tinput.get("model") or "").strip()
     pinned = (
         _frontmatter_model(agent[len("atlas:") :]) if agent.startswith("atlas:") else ""
@@ -2619,9 +2633,9 @@ def _channel_dispatch(payload):
     )
     if payload.get("tool_use_id"):  # the join key for PostToolUse (no name there)
         atlas_todo.set_member_tool_use_id(root, name, payload["tool_use_id"])
-    if str(tinput.get("subagent_type") or "").startswith("atlas:"):
-        goal = re.search(r"^\s*GOAL:\s*(.+)$", prompt, re.M)
-        title = goal.group(1).strip() if goal else " ".join(prompt.split())[:80]
+    if _norm_agent(tinput.get("subagent_type")).startswith("atlas:"):
+        goal = " ".join((_block_body(prompt, ("GOAL:",)) or "").replace("*", " ").split())
+        title = goal or " ".join(prompt.split())[:80]
         board_line = ""
         with contextlib.suppress(
             Exception
@@ -2633,13 +2647,13 @@ def _channel_dispatch(payload):
                 origin="dispatch",
                 owner=name,
                 channel=chan["name"],
-                role=str(tinput["subagent_type"]).split(":")[-1],
+                role=_norm_agent(tinput["subagent_type"]).split(":")[-1],
             )
             if res.get("ok"):
                 board_line = f"\nBOARD ITEM: {res['item']['id']}"
     else:
         board_line = ""
-    role = str(tinput.get("subagent_type") or "").split(":")[-1]
+    role = _norm_agent(tinput.get("subagent_type")).split(":")[-1]
     brief = atlas_todo.channel_brief(root, chan["name"], lead, name, role)
     return {**tinput, "prompt": f"{prompt}\n\n{brief}{board_line}"}
 

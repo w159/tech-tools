@@ -17,16 +17,16 @@
 import { HerdrError } from "./herdr/client.ts";
 
 /** between reads while the screen is changing, and the ceiling it relaxes to while it is not */
-export const MIRROR_ACTIVE_MS = 80;
-export const MIRROR_IDLE_MS = 400;
+const MIRROR_ACTIVE_MS = 80;
+const MIRROR_IDLE_MS = 400;
 /** how soon the screen is read after something was typed: the echo is what the typist waits for */
-export const MIRROR_ECHO_MS = 15;
+const MIRROR_ECHO_MS = 15;
 /** how often the whole screen goes out while it changes: a client's screen that drifted is whole again by then */
-export const MIRROR_WHOLE_MS = 10_000;
+const MIRROR_WHOLE_MS = 10_000;
 /** how long the screen must stay unchanged, after rows were sent, before it goes out whole once more */
-export const MIRROR_QUIET_MS = 1000;
+const MIRROR_QUIET_MS = 1000;
 /** how often the pane's size is asked for: herdr announces no layout change this server listens to */
-export const MIRROR_SIZE_MS = 2000;
+const MIRROR_SIZE_MS = 2000;
 /** reads in a row that herdr did not answer before the mirror ends as a terminal would */
 const MIRROR_FAILURES = 10;
 

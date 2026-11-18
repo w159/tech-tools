@@ -23,7 +23,7 @@ const todoGroups = [
   { phase: 'research', dept: '', glyph: '', items: [it('a', 'completed', 'bob'), it('b', 'pending')] },
   { phase: 'implement', dept: '', glyph: '', items: [it('c', 'in_progress', 'alice-long-owner-name'), it('d', 'pending')] },
   { phase: 'advisor', dept: '', glyph: '', items: [it('n1', 'pending'), it('n2', 'pending'), it('n3', 'pending')] },
-] as any;
+] as unknown as LiveSnapshot['todoGroups']; // partial fixture rows (no done/total/live): the sidebar reads only what is set
 const name = busy.squad[0]!.name;
 // No zone suffix: the channel view prints local hh:mm, so a zoned ts would change the fixture with the machine's TZ.
 const note = (i: number) => ({ ts: '2026-01-01T00:00:00.000', seq: i, owner: i % 3 === 0 ? 'lead' : name, text: `note ${i}`, channel: 'general' });

@@ -82,7 +82,7 @@ export const MAX_TURNS = 100;
  * in the user's seat: the answer before it is final and the work after it is a new turn.
  * Merging across it buried that answer in the work block. The envelope is chrome.
  */
-export function piNotice(value: unknown): Extract<ConversationPart, { kind: "notice" }> | null {
+function piNotice(value: unknown): Extract<ConversationPart, { kind: "notice" }> | null {
   const entry = record(value);
   if (entry.type !== "custom_message" || entry.display === false || typeof entry.content !== "string") return null;
   const text = entry.content.trim().replace(/^<system-notice>\s*/, "").replace(/\s*<\/system-notice>$/, "").trim();
@@ -98,7 +98,7 @@ const amount = (value: unknown): number | null => typeof value === "number" && N
  * The summaries OmO's `task` calls gave their tasks, by task id: the call's result names the
  * task it started (`details.task_id`, or one `details.items` entry per task of a batch).
  */
-export function omoTaskTitles(message: Row, titles: Map<string, string>): void {
+function omoTaskTitles(message: Row, titles: Map<string, string>): void {
   if (message.role !== "toolResult" || message.toolName !== "task") return;
   const details = record(message.details);
   for (const value of Array.isArray(details.items) ? details.items : [details]) {
@@ -115,7 +115,7 @@ export function omoTaskTitles(message: Row, titles: Map<string, string>): void {
  * record that the task ended and what it found, so it is drawn in the user's seat as gjc's
  * notice is; a wake that carries no task result (a monitor's event) stays the runtime's.
  */
-export function omoTaskResults(value: unknown, titles: ReadonlyMap<string, string>): OmoTaskResult[] | null {
+function omoTaskResults(value: unknown, titles: ReadonlyMap<string, string>): OmoTaskResult[] | null {
   const entry = record(value);
   if (entry.type !== "custom_message" || entry.customType !== "omo-senpi:wake" || !Array.isArray(entry.details)) return null;
   // one row per task: a task reported twice in one wake is the later report (the rows are keyed by id)

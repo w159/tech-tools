@@ -203,6 +203,16 @@ def _deny(reason: str) -> None:
     _out({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": reason}})
 
 
+def _lease_hint(who: str, rel: str) -> str:
+    d = os.environ.get("ATLAS_IRC_DIR") or ""
+    if d and who != "the lead" and atlas_irc.owner_exited(d, who):
+        return f"{who} has exited: take the file yourself with `irc claim {rel}`, then edit it."
+    return (
+        f"Ask {who} for the change with `irc say --to {who} \"...\"` instead of editing it "
+        f"(if {who} has exited, take the file with `irc claim {rel}`)."
+    )
+
+
 def pre_tool_use(payload) -> None:
     tool = payload.get("tool_name")
     if tool not in EDIT_TOOLS and tool != "Bash":
@@ -226,8 +236,7 @@ def pre_tool_use(payload) -> None:
         hit = bash_writes_peer_file(ti.get("command") or "", mine, owners)
         if hit:
             _deny(
-                f"{hit[0]} is leased to {hit[1]}; you own {', '.join(mine)}. Ask {hit[1]} for the change "
-                f"with `irc say --to {hit[1]} \"...\"` instead of writing it."
+                f"{hit[0]} is leased to {hit[1]}; you own {', '.join(mine)}. " + _lease_hint(hit[1], hit[0])
             )
         return
     path = ti.get("file_path") or ti.get("notebook_path") or ""
@@ -251,7 +260,7 @@ def pre_tool_use(payload) -> None:
                 "hookEventName": "PreToolUse",
                 "permissionDecision": "deny",
                 "permissionDecisionReason": f"{rel} is leased to {who}; you own {', '.join(mine)}. "
-                f"Ask {who} for the change with `irc say --to {who} \"...\"` instead of editing it.",
+                + _lease_hint(who, rel),
             }
         }
     )

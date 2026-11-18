@@ -405,8 +405,8 @@ class CommitNudgeUnit(unittest.TestCase):
     def test_off_switch_exact(self):
         with mock.patch.dict(os.environ, {"ATLAS_MANDATES": "off"}):
             self.assertIsNone(ba._commit_nudge({"session_id": "s"}, "git commit"))
-        with mock.patch.dict(os.environ, {"ATLAS_MANDATES": "OFF"}):
-            self.assertIsNotNone(ba._commit_nudge({"session_id": "s2"}, "git commit"))
+        with mock.patch.dict(os.environ, {"ATLAS_MANDATES": " OFF "}):
+            self.assertIsNone(ba._commit_nudge({"session_id": "s2"}, "git commit"))
 
     def test_not_armed_leaves_no_marker(self):
         self.inst.return_value = False

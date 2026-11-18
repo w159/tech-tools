@@ -145,6 +145,9 @@ const VERDICTS: readonly VerdictStatus[] = [
 const num = (v: unknown): number =>
   typeof v === "number" && Number.isFinite(v) ? v : 0;
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
+/** A parsed JSON value as a plain object (arrays included, as `typeof` says), else null. */
+const rec = (v: unknown): Record<string, unknown> | null =>
+  v && typeof v === "object" ? (v as Record<string, unknown>) : null;
 const parse = (text: string): unknown => {
   try {
     return JSON.parse(text);
@@ -278,13 +281,13 @@ export function offloadOf(name: string, log: string, report: string, role = role
   let finished = false;
   for (const line of log.split("\n")) {
     if (!line.startsWith("{")) continue;
-    const e = parse(line) as any;
-    if (!e || typeof e !== "object") continue;
-    const msg = e.message && typeof e.message === "object" ? e.message : null;
+    const e = rec(parse(line));
+    if (!e) continue;
+    const msg = rec(e.message);
     if (e.type === "assistant" && msg?.usage)
-      calls.set(String(msg.id ?? calls.size), ctxOf(msg.usage));
+      calls.set(String(msg.id ?? calls.size), ctxOf(rec(msg.usage) ?? {}));
     if (e.type === "message_end" && msg?.role === "assistant" && msg.usage)
-      calls.set(`omp-${calls.size}`, ctxOf(msg.usage));
+      calls.set(`omp-${calls.size}`, ctxOf(rec(msg.usage) ?? {}));
     if (msg && typeof msg.model === "string" && msg.model) model = msg.model;
     if (e.type === "system" && e.subtype === "init")
       billed = typeof e.apiKeySource === "string" && e.apiKeySource.trim() !== "" && e.apiKeySource !== "none";
@@ -372,17 +375,20 @@ export function routesOf(
 ): Route[] {
   const matrix = parse(matrixText);
   const wanted = channels ? new Set(channels.map(lastSegment).filter(Boolean)) : null;
-  const created = (t: { text: string }): number => num((parse(t.text) as any)?.created);
+  const created = (t: { text: string }): number => num(rec(parse(t.text))?.created);
   return [...teams].sort((x, y) => created(x) - created(y)).flatMap((t): Route[] => {
-    const r = parse(t.text) as any;
-    if (!r || typeof r !== "object" || !r.class) return [];
+    const r = rec(parse(t.text));
+    if (!r || !r.class) return [];
     if (wanted && !wanted.has(lastSegment(r.channel))) return [];
     const members: string[] = Array.isArray(r.members)
-      ? r.members.map((m: any) => str(m?.name))
+      ? r.members.map((m: unknown) => str(rec(m)?.name))
       : [];
     // a labelled seat is matched to the members spawned for that label, so two seats of one role keep their own tier
     const seatOf: Record<string, string> = {};
-    for (const m of Array.isArray(r.members) ? r.members : []) if (str(m?.name) && str(m?.seat)) seatOf[m.name] = m.seat;
+    for (const m of Array.isArray(r.members) ? r.members : []) {
+      const row = rec(m);
+      if (row && str(row.name) && str(row.seat)) seatOf[str(row.name)] = str(row.seat);
+    }
     const ranBy = (role: string, seat?: string): string[] =>
       offload
         .filter(
@@ -458,8 +464,11 @@ const lastReport = (reports: readonly ReportNote[], name: string): string =>
 function teamRoles(teams: readonly { text: string }[]): Record<string, string> {
   const out: Record<string, string> = {};
   for (const t of teams) {
-    const r = parse(t.text) as any;
-    for (const m of Array.isArray(r?.members) ? r.members : []) if (str(m?.name) && str(m?.role)) out[m.name] = m.role;
+    const r = rec(parse(t.text));
+    for (const m of Array.isArray(r?.members) ? r.members : []) {
+      const row = rec(m);
+      if (row && str(row.name) && str(row.role)) out[str(row.name)] = str(row.role);
+    }
   }
   return out;
 }

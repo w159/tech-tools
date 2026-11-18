@@ -431,8 +431,15 @@ class IncrementalReadTest(_Root):
         return seen, patch.object(worker_inbox, "_read_tail", spy)
 
     def test_second_drain_reads_only_new_bytes(self):
-        for i in range(2000):
-            self.note("human", "Beta", f"noise-{i}")
+        real_main = atlas_todo.main_channel
+        cache = {}
+        with patch.object(
+            atlas_todo,
+            "main_channel",
+            lambda cwd=None: cache.setdefault(cwd, real_main(cwd)),
+        ):
+            for i in range(2000):
+                self.note("human", "Beta", f"noise-{i}")
         self.note("human", "Alpha", "first")
         self.assertIn("first", worker_inbox.drain(self.root, "Alpha"))
         total = sum(

@@ -502,7 +502,7 @@ def _ponytail_installed(root: str | None = None) -> bool:
 def _commit_nudge(data: dict, command: str) -> str | None:
     """The one-time ponytail nudge for this session, or None (fail open)."""
     try:
-        if os.environ.get("ATLAS_MANDATES") == "off" or not _match_git_commit(command):
+        if os.environ.get("ATLAS_MANDATES", "").strip().lower() == "off" or not _match_git_commit(command):
             return None
         session = str(data.get("session_id") or "")
         if not session or not _ponytail_installed(data.get("cwd")):

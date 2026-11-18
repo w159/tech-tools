@@ -8,7 +8,7 @@ allowed-tools: Read, Glob, Grep, Bash
 # atlas-wiki
 
 Wiki diagram producer for the Atlas single source of truth. This skill is
-the missing producer half of the graphify pipeline: it invokes the repo-root
+the missing producer half of the graphify pipeline: it invokes the
 graphify skill on `docs/architecture/` and lands the rendered
 diagrams in `docs/wiki/diagrams/`. atlas-audit consumes the
 resulting `graph.json` to build its navigable hub; atlas-setup checks the
@@ -35,8 +35,7 @@ come out.
 1. `docs/architecture/` - the architecture folder atlas-setup
    scaffolds and atlas-audit populates. Holds boundaries, component
    maps, ADRs, and `architecture-graph.json`.
-2. The repo-root graphify skill at
-   `skills/graphify/SKILL.md` (relative to the project root).
+2. The `graphify` skill, or a `graphify` binary on PATH. Atlas does not ship it.
 
 ### Outputs
 
@@ -52,13 +51,12 @@ come out.
 
 - Populating `docs/architecture/` - that is atlas-audit's job.
 - Consuming `graph.json` into a hub - that is atlas-audit's Phase 4 job.
-- Editing the repo-root graphify skill - never. graphify is general
-  purpose and lives at the repo root for a reason.
+- Editing the graphify skill - never. graphify is general purpose.
 - Scaffolding the wiki/ folder - that is atlas-setup's scaffold step.
 
 ## Invocation
 
-This skill invokes the repo-root graphify skill as a slash command.
+This skill invokes the graphify skill as a slash command.
 graphify has no `--output` flag; it always writes to `graphify-out/` in
 the current working directory. So the producer runs graphify from the
 repo root, then moves `graphify-out/` into `docs/wiki/diagrams/`.
@@ -99,7 +97,11 @@ Exit 1 with "STALE" means the architecture is newer; continue to Step 3.
 
 ### Step 3 - Invoke graphify
 
-Invoke the repo-root graphify skill on the architecture folder with the
+First confirm graphify exists: a `graphify` skill in this session or
+`command -v graphify`. If neither, say `graphify is not installed: install
+the graphify skill or CLI, then rerun /atlas-wiki` in one line and stop.
+
+Invoke the graphify skill on the architecture folder with the
 `--svg` flag so an embeddable SVG is produced alongside the HTML and
 JSON. Use `--no-viz` only when the HTML is not wanted; by default the
 HTML is the primary navigable artifact and should be kept.

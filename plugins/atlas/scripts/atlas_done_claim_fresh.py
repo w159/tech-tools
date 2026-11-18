@@ -635,10 +635,10 @@ def claude_runner(
         )
     try:
         obj = json.loads(proc.stdout)
-    except ValueError:
+    except ValueError as exc:
         raise RuntimeError(
             f"claude -p {model}: unparseable output (rc={proc.returncode}): {proc.stderr[:300]}"
-        )
+        ) from exc
     if obj.get("is_error"):
         raise RuntimeError(f"claude -p {model}: {str(obj.get('result'))[:300]}")
     return obj.get("result", ""), obj.get("total_cost_usd")

@@ -62,8 +62,9 @@ can see them (`prompt_optimizer_core.crew_command`): on fixture-p (8 modules,
 434 tests) the lead then takes 2 to 3 turns instead of 5 to 6.
 
 `--tests` takes `{stem}`, `{name}` and `{parent}` (for `tests/{parent}/test_{stem}.py`
-in a multi-package tree). `atlas_crew.py plan ...` prints the plan without
-starting anything.
+in a multi-package tree). `atlas_crew.py plan --spec S --files G` prints the automatic plan and
+`atlas_crew.py plan --plan plan.json` prints that plan as loaded and validated (resolved `needs`);
+neither starts anything.
 
 ## What runs
 
@@ -112,6 +113,9 @@ its `unit_check` and an optional `"needs": ["peer", ...]` lists the workers it
 waits for (none by default). The automatic plan fills `needs` from the imports
 between the planned files. The supervisor's fix rounds re-run `unit_check`.
 A check that already calls `irc need`, `irc done` or `irc check` is kept as written.
+`needs` must not form a cycle: at load, an automatic edge that closes one is dropped (listed in `dropped_needs`
+of `plan` and of the `run` start output); a cycle of explicit edges is rejected. A file whose owner has exited
+can be taken with `irc claim <path>` (the lease hook's deny message names the command).
 
 - `owns` must not overlap; `lead` is a reserved name.
 - A context entry `file#Heading` hands over exactly that markdown section

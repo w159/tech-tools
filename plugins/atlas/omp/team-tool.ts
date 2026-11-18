@@ -9,9 +9,20 @@ import type { ChannelOpenInfo, WidgetUi } from "./channel-view";
 import { runCapture } from "./proc";
 
 /** The slice of omp's ExtensionAPI this tool needs (structural, so tests and older hosts can stand in). */
+/** The slice of typebox's `Type` builder the tool schema uses. */
+export interface TypeBuilder {
+	Object(props: Record<string, unknown>): unknown;
+	Union(items: unknown[]): unknown;
+	Literal(value: string): unknown;
+	Optional(item: unknown): unknown;
+	String(opts?: { description?: string }): unknown;
+	Number(): unknown;
+	Array(item: unknown): unknown;
+}
+
 export interface TeamToolHost {
 	registerTool?: (tool: unknown) => void;
-	typebox?: { Type: any };
+	typebox?: { Type: TypeBuilder };
 }
 
 export interface TeamParams {
@@ -112,7 +123,7 @@ export function registerTeamTool(
 	return true;
 }
 
-function teamToolDef(T: any, pluginRoot: string, run: TeamRunner, env: Record<string, string | undefined>, onOpen?: TeamOpen) {
+function teamToolDef(T: TypeBuilder, pluginRoot: string, run: TeamRunner, env: Record<string, string | undefined>, onOpen?: TeamOpen) {
 	// The widget mounts from the `task` channel-open path only, so a tmux team needs its own mount: after spawn (the
 	// result names channel + members) and before each wait (it blocks for minutes; the view's poll keeps painting).
 	const safeOpen = (ui: WidgetUi, info: ChannelOpenInfo) => {

@@ -1,4 +1,4 @@
-"""Test helper: a loopback stand-in for the /v1/systemone decision endpoint (no real model runs)."""
+"""Test-only stub, not a hook and not wired in hooks.json: a loopback stand-in for the /v1/systemone decision endpoint (no real model runs)."""
 
 import json
 import threading
