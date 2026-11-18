@@ -1,8 +1,7 @@
 // Idle polish (wave 44): what a hostile critic found in the idle, expanded and clickable states of the health band, card and side panel. One describe per defect.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readHostEntry } from './fixtures/source-tree';
 import { bandHealth, bandTree, type BandHandlers, type BandModel } from './band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv } from './atlas-ui';
@@ -127,7 +126,7 @@ describe('6: ctx and tokens are one measure, labelled so', () => {
     expect(ih.healthDetail(h, 'context')).toContain('measured on the last response, not a session total');
   });
   test('source: both figures come from the same session.measure event (context.tokens and context.percent)', () => {
-    const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
+    const src = readHostEntry();
     const at = src.indexOf("on('session.measure'");
     const block = src.slice(at, at + 900);
     expect(block).toContain('e.context.tokens');

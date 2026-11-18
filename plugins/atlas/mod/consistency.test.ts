@@ -20,9 +20,10 @@ import { panelModelOf } from './pane/sidebar-model';
 import { panelText, type PanelTab } from './panel-layout';
 import { boardTree } from './todo-panel';
 import type { LiveSnapshot } from './orchestra-types';
+import { pluginRoot } from './fixtures/source-tree';
 
 // The omp painters are loaded at run time: omp/ is checked by Bun's own types, not by the mod type program, so a static import would pull it in.
-const ompAt = '../omp/';
+const ompAt = `${pluginRoot()}/omp/`;
 const ompLoad = (m: string): Promise<any> => import(ompAt + m);
 const { hudText: ompHudText } = await ompLoad('hud-paint');
 const { paintPanel } = await ompLoad('panel-view');

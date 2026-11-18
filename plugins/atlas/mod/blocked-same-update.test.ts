@@ -2,8 +2,7 @@
 // spinnerTickState (the redraw that carries the band) BEFORE it read the Stop verdict, so the band drew the old gates for one more beat. Two guards: both surfaces derive the state from the
 // one snapshot (so a single update flips both), and frameBeat reads the verdict first.
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readHostEntry } from './fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { worldGates, worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { bandTree } from './band';
@@ -40,7 +39,7 @@ describe('5d: the band and the panel flip to blocked on the same update', () => 
     expect(/phase\s+▲ blocked/.test(panel)).toBe(false);
   });
   test('register.ts frameBeat reads the Stop verdict before it bumps the spinner tick (the redraw that carries the band)', () => {
-    const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
+    const src = readHostEntry();
     const beat = src.slice(src.indexOf('async function frameBeat'), src.indexOf('let verdictBusy'));
     const verdict = beat.indexOf('await verdictFast(');
     const bump = beat.indexOf('update($, spinnerTickState');

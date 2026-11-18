@@ -1,7 +1,6 @@
 // round-x.test.ts: round X (critics/spec-x.md X1-X7): every Atlas view draws the status tab's widget set, no view invents data, idle is never empty, the pill breathes visibly in 256 colours and a chevron lives only in a chip.
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readMod } from './fixtures/source-tree';
 import * as statusFrame from './status-frame';
 import { statusFrame as buildStatus } from './status-frame';
 import { cardFrame } from './card-frame';
@@ -45,7 +44,7 @@ describe('X1: one widget set', () => {
   });
   test('no source file keeps the old widgets\' texts (`0└5m`, `checks   ok fail`, `seen ·`)', () => {
     for (const f of ['status-frame.ts', 'tabs-frame.ts', 'card-frame.ts']) {
-      const src = readFileSync(join(import.meta.dir, f), 'utf8');
+      const src = readMod(f);
       expect(src, f).not.toMatch(/0\$\{g\('└'|checks {3}ok fail|activityRows\(|contextRows\(|[^s]gatesRows\(|[^s]hooksRows\(/);
     }
   });
@@ -206,7 +205,7 @@ describe('X6: the 256-colour breath', () => {
     expect(new Set(IDLE_RAMP_256).size).toBeGreaterThanOrEqual(6);
   });
   test('FRAME_MS stays at or under 100', () => {
-    const src = readFileSync(join(import.meta.dir, 'band-motion.ts'), 'utf8');
+    const src = readMod('band-motion.ts');
     expect(Number(src.match(/FRAME_MS\s*=\s*(\d+)/)?.[1] ?? 100)).toBeLessThanOrEqual(100);
   });
 });

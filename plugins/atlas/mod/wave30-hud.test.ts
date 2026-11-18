@@ -2,8 +2,7 @@
 // the host gives it `maxRows` = half the screen less the rows below it (the prompt and Claude Code's own agent list). The band row is `rows - slot - below`, so the slot has to fill what the host gives it from
 // the first working frame to the last, with every box closed. These tests render the whole slot (slot.ts composeSlot) at 150 and 110 columns through 0, 1, 3 running agents, a return and idle.
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readHostEntry } from './fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { runsString, type Ui } from './atlas-ui';
 import { bandTree, type BandModel } from './band';
@@ -176,7 +175,7 @@ describe('4. blocked on the update that carries the Stop refusal', () => {
     expect(stop?.gates.join(' ')).toMatch(/dispatch/);
   });
   test('register.ts hooks classic.Stop and records the refusal before it returns the hook result', () => {
-    const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
+    const src = readHostEntry();
     const at = src.indexOf("on('classic.Stop'");
     expect(at).toBeGreaterThan(-1);
     const body = src.slice(at, src.indexOf('});', at));

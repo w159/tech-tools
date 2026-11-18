@@ -1,7 +1,7 @@
 // Truth 39: the band, the side panel's phase row and the transcript cards print only what is true (critique of build 63934f09). One group per step.
 import { describe, expect, test } from 'claude-code/testing';
 import { newRunClock, runLive, stepRun } from './band-motion';
-import { readFileSync } from 'node:fs';
+import { readHostEntry } from './fixtures/source-tree';
 import { blockedText, runElapsed } from './data/runstate';
 import { noteWorkerFacts, resetWorkerFacts } from './data/live';
 import { busySnap } from './live_fixture';
@@ -116,7 +116,7 @@ describe('step 5: transcript cards are immutable, ordered and complete', () => {
   });
 
   test('the render never places a card itself: register.ts places from the frame beat only', () => {
-    const src = readFileSync(`${import.meta.dir}/register.ts`, 'utf8');
+    const src = readHostEntry();
     const render = src.slice(src.indexOf("noteRunFinal(finalNow)"), src.indexOf("noteRunFinal(finalNow)") + 400);
     expect(render).not.toMatch(/placeFinished/);
     expect(src).toMatch(/if \(cardsDue\(\)\) await placeFinished\(/);

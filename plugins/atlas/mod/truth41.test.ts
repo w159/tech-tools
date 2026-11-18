@@ -1,7 +1,6 @@
 // Truth 41 (critique 40 of build 11e67a82): one frozen run total and one state at run end, on every surface. One group per step; each test names the frame it comes from.
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readHostEntry } from './fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { closedTotal, newRunClock, readRun, runKey, stepRun, type ClockHold, type RunClock } from './band-motion';
 import { elapsedClock, phaseGlyph, type Ui } from './atlas-ui';
@@ -17,7 +16,7 @@ import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
+const src = readHostEntry();
 
 /** A run that opened at 5 s and whose clock closed at `end` ms when the host turn ended (the beat grace never moves it). */
 const runTo = (end: number): { open: RunClock; closed: RunClock } => {

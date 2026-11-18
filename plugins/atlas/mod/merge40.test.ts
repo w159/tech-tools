@@ -1,7 +1,6 @@
 // Wave 40 follow-ups: (A) the HUD draws on the band's clock; (B) a host turn with no live run reads `working` with a moving spinner and no clock, and leaves the closed run alone.
 import { describe, expect, test } from 'claude-code/testing';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readHostEntry } from './fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { bandKindOf, bandRuns, bandTree, type BandModel } from './band';
 import { newRunClock, restSecsOf, runLive, stepRun } from './band-motion';
@@ -21,7 +20,7 @@ const text = (b: BandModel): string => runsText(bandRuns(b));
 const tree = (b: BandModel): string => ((bandTree(els, b) as unknown as Node).props.children as Node[]).map((r) => (r.props.children as Node[]).map((t) => t.props.children).join('')).join('\n');
 
 describe('A: the HUD draws on the band clock', () => {
-  const src = readFileSync(resolve(import.meta.dir, 'register.ts'), 'utf8');
+  const src = readHostEntry();
   test('register.ts hands the HUD the clock the band reads (clockNow), not only the snapshot clock', () => {
     const view = src.slice(src.indexOf('const hudView = {'), src.indexOf('\n', src.indexOf('const hudView = {')));
     expect(view).toContain('clock: clockNow');
