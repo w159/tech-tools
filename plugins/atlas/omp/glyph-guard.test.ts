@@ -22,7 +22,8 @@ const hits = (f: string): number => (code(readFileSync(f, 'utf8')).match(BAD) ??
 
 /** Files that own the rev 4 surfaces: zero hardcoded marks. */
 const OWNED = [
-  'mod/view/panel/panel-layout.ts', 'mod/view/band/core-row.ts', 'mod/host/notify.ts',
+  'mod/view/panel/panel-layout.ts', 'mod/view/panel/panel-shared.ts', 'mod/view/panel/panel-tabs.ts', 'mod/view/panel/panel-cards.ts', 'mod/view/panel/panel-rows-route.ts',
+  'mod/view/panel/panel-rows-team.ts', 'mod/view/panel/panel-rows-gates.ts', 'mod/view/panel/panel-body.ts', 'mod/view/band/core-row.ts', 'mod/host/notify.ts',
   'mod/view/panel/pane/sidebar.tsx', 'mod/view/panel/pane/sidebar-model.ts', 'mod/view/panel/pane/sidebar-paint.tsx', 'mod/view/panel/pane/sidebar-route.tsx', 'mod/view/panel/pane/sidebar-team.tsx',
   'mod/view/panel/pane/sidebar-channel.tsx', 'mod/view/panel/pane/sidebar-gates.tsx', 'mod/view/panel/pane/sidebar-core.tsx', 'mod/view/panel/pane/sidebar-types.ts',
   'mod/view/transcript/cards.tsx', 'omp/panel-view.ts',
