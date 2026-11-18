@@ -10,6 +10,9 @@ import type { UiState } from '../../atlas-ui';
 import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
 import { endedOf, settleDispatch } from '../../data/todos';
 import type { SquadAgent } from '../../contract';
+import { type BoardRow } from './board-model';
+import { textWidth } from '../../theme';
+import { boardFolded, type BoardSource } from './board-model';
 
 const ui = (theme: 'mocha' | 'latte'): Ui => ({ theme, ascii: false, color: 'truecolor' });
 const tiers = [
@@ -302,4 +305,110 @@ describe('returned never draws the amber warning mark on the Board (wave 12 inte
     const head = boardBody(rows, { cols: 110, ui: ui('mocha') })[1]!.runs.find((x) => x.t === '◉')!;
     expect(head.tone).not.toBe('warn');
   });
+});
+
+describe('board-c11', () => {
+// Critique 11 C5: the Board inside the side panel (live-150-5d6a53ef-1 / live-110-5d6a53ef-1 tab-board.png): a nested `ATLAS > BOARD` ribbon under the
+// panel's own `ATLAS > SIDEPANEL`, `5 items` said twice, and the state word glued to the title (110) or to the owner (150).
+
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const row = (label: string, owner = ''): BoardRow => ({ label, state: 'done', owner, detail: '' });
+// The live board: five plan rows, the three explorer dispatches folded into them.
+const live = (): BoardRow[] => [row('T1 read alpha.py', 'alpha-explorer'), row('T2 read beta.py', 'beta-explorer'), row('T3 read gamma.py', 'gamma-explorer'), row('T4 combine the three reports'), row('T5 write the final summary')];
+
+describe('the board inside the side panel', () => {
+  test('critique 12: without its ribbon the board still has one title row (`BOARD  5 items`), no blank row, and the footer carries only the folds', () => {
+    const t = boardText(boardLines(live(), { cols: 44, ui, folded: 3, openFolded: 0, ribbon: false }));
+    expect(t[0]).toBe('  ▸ BOARD  5 items'); // critique 14: the same `▸ BOARD` marker the ribbon has
+    expect(t.join('\n').match(/BOARD/g)!.length).toBe(1); // one title, never nested
+    expect(t[1]).toContain('T1 read alpha.py');
+    expect(t.at(-1)).toBe('  3 dispatches folded');
+    expect(t.join('\n').match(/5 items/g)!.length).toBe(1);
+  });
+  test('with its ribbon (the standalone pane) the count is in the ribbon and the footer does not repeat it', () => {
+    const t = boardText(boardLines(live(), { cols: 80, ui, folded: 3, openFolded: 0 }));
+    expect(t[0]).toContain('BOARD');
+    expect(t.join('\n').match(/5 items/g)!.length).toBe(1);
+    expect(t.at(-1)).toBe('  3 dispatches folded');
+  });
+  test('rich form has no count in its ribbon, so the footer keeps it', () => {
+    const t = boardText(boardLines(live(), { cols: 120, ui, rich: true, folded: 3, openFolded: 0 }));
+    expect(t.join('\n').match(/5 items/g)!.length).toBe(1);
+  });
+});
+
+describe('the state column is padded', () => {
+  const cut = (line: string, word: string): { before: string; after: string } => ({ before: line.slice(0, line.indexOf(word)), after: line.slice(line.indexOf(word) + word.length) });
+  test('a title that fills its column keeps two blank cells before the state word (38 columns: `reports done`)', () => {
+    const lines = boardBody(live(), { cols: 38, ui }).map((l) => l.runs.map((x) => x.t).join(''));
+    for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(38);
+    const rowsOnly = lines.filter((l) => !/^ {4}\S/.test(l)); // the owner stands under its row (critique 15 B5)
+    for (const l of rowsOnly) expect(cut(l, 'done').before).toMatch(/ {2}$/);
+    expect(rowsOnly[3]).toContain('T4 combine the three reports'); // whole: nothing is cut to make the room
+  });
+  test('the owner keeps two blank cells after the state word (54 columns: `done alpha-explorer`)', () => {
+    const lines = boardBody(live(), { cols: 54, ui }).map((l) => l.runs.map((x) => x.t).join(''));
+    for (const l of lines.slice(0, 3)) expect(l).toMatch(/done {2,}\S+-explorer/);
+    for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(54);
+  });
+});
+});
+
+describe('board-c19', () => {
+// Critique 19 C1: the board tab's owners (stoprun-150-232567af-1 and live-110-232567af-2 tab-board.png). At 150 the pane is 64 cells: the owner was cut to
+// `alpha-exp...` with ~15 blank cells before it; at 110 (36 cells) the owners were a detached list under all rows. An owner is drawn whole beside its row
+// or on a sub-line directly under that row, together with the row's reason and age.
+
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const done = (content: string, owner?: string, ownerState?: 'failed'): BoardSource => ({ content, status: 'completed', ...(owner ? { owner } : {}), ...(ownerState ? { ownerState } : {}) });
+// stoprun-150-232567af-1: T2's worker was killed, the lead closed the row (done, amber); the three dispatch rows are folded.
+const plan = (): BoardSource[] => [
+  done('T1 read alpha.py (alpha-explorer)', 'alpha-explorer'),
+  done('T2 read ghost.py (ghost-explorer)', 'ghost-explorer', 'failed'),
+  done('T3 read beta.py (beta-explorer)', 'beta-explorer'),
+  done('T4 combine the reports'),
+  done('T5 write the final summary'),
+  ...['alpha-explorer', 'ghost-explorer', 'beta-explorer'].map((o): BoardSource => ({ content: `read ${o}`, status: 'completed', owner: o, origin: 'dispatch' })),
+];
+const draw = (cols: number, items = plan()): string[] => boardText(boardLines(boardRowsOf(items, 1000), { cols, ui, folded: boardFolded(items), openFolded: 0, ribbon: false }));
+
+describe('critique 19 C1: board owners', () => {
+  test('150 (64-cell pane): every owner is whole, none is cut with an ellipsis, and no row has a 10-cell gap before its owner', () => {
+    const t = draw(64);
+    const all = t.join('\n');
+    for (const n of ['alpha-explorer', 'ghost-explorer', 'beta-explorer']) expect(all).toContain(n);
+    expect(all).not.toContain('...');
+    expect(all).not.toContain('…');
+    for (const l of t.filter((x) => x.includes('explorer'))) expect(l).not.toMatch(/\S {10,}[a-z]+-explorer\s*$/); // the gap the test guards is the one before the owner (wave 30: a title column padded to its widest title is not one)
+    for (const l of t) expect(cells(l)).toBeLessThanOrEqual(64);
+  });
+  test('110 (36-cell pane): each owner is the line directly under its own row, not a list under all rows', () => {
+    const t = draw(36);
+    const at = (s: string): number => t.findIndex((l) => l.includes(s));
+    for (const [row, owner] of [['T1 read alpha.py', 'alpha-explorer'], ['T2 read ghost.py', 'ghost-explorer'], ['T3 read beta.py', 'beta-explorer']] as const) {
+      expect(t[at(row) + 1]).toContain(owner);
+    }
+    expect(t.join('\n').match(/alpha-explorer/g)!.length).toBe(1); // said once, under its row
+    for (const l of t) expect(cells(l)).toBeLessThanOrEqual(36);
+  });
+  test('the owner sub-line carries the row\'s reason (`worker failed` for the doubted done), so the pane\'s room says something', () => {
+    for (const cols of [36, 64]) {
+      const t = draw(cols);
+      const i = t.findIndex((l) => l.includes('T2 read ghost.py'));
+      expect(`${t[i]}\n${t[i + 1]}`).toMatch(/failed/);
+    }
+  });
+  test('an open row with an age says how long it has been open, on its own sub-line', () => {
+    const items: BoardSource[] = [{ content: 'T1 read alpha.py (alpha-explorer)', status: 'in_progress', owner: 'alpha-explorer', claimed_at: 900 }, done('T2 write the summary')];
+    const t = draw(36, items);
+    const i = t.findIndex((l) => l.includes('T1 read alpha.py'));
+    expect(t[i + 1]).toContain('alpha-explorer');
+    expect(t[i + 1]).toMatch(/open 01:40/);
+  });
+  test('a roomy pane keeps the owner beside its row, whole', () => {
+    const t = draw(80, [done('T1 read alpha.py', 'alpha-explorer'), done('T2 write it')]);
+    expect(t.find((l) => l.includes('T1 read alpha.py'))).toContain('alpha-explorer');
+    expect(t.join('\n').match(/alpha-explorer/g)!.length).toBe(1);
+  });
+});
 });
