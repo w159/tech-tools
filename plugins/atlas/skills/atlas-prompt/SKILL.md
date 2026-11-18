@@ -53,6 +53,9 @@ exceptions exactly ("except `src/api/v1`", "5 attempts per minute"). Then:
   destructive or outward actions; drop capitals, "CRITICAL" and "MUST".
 - If two requirements conflict, resolve it or ask; do not pass the conflict on.
 - No placeholders: bake in the content the user gave, or tell the model to ask for it.
+- Set effort with the effort level, not with text such as "think less" or "be quick". Add no such text.
+- If a person will read the agent's replies, the prompt may ask for a one-line opening of what the agent is about to do and a closing recap that stands on its own.
+- If the user wants code restructured, say in the prompt that the user owns the code and the restructuring is in scope.
 
 **Coding agent** (the request is about code, this repository or a task an agent will carry out).
 Short form:
@@ -63,6 +66,7 @@ Short form:
     Done when: <observable check>
     Limits: <the user's limits, verbatim; leave out if none>
     Assumptions: <only what you assumed in step 3; leave out if none>
+    Finish the whole task or name the blocker; do not stop to list what remains.
 
 Full form, in this order, leaving out any section with nothing to say:
 
@@ -75,8 +79,10 @@ Full form, in this order, leaving out any section with nothing to say:
     ## Assumptions    (only what you assumed in step 3)
     ## Ask before     (only irreversible or outward actions the user did not ask for but the work could reach)
 
+    Finish the whole task or name the blocker; do not stop to list what remains.
+
     ## Output style
-    Write your replies, docs and reports in ASDSTE-100 Simplified Technical English, applied about 80%: short sentences (20 words max for procedures, 25 for descriptions), one instruction per sentence, active voice, approved common words, consistent terms. Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity.
+    Write your replies, docs and reports in ASD-STE100 Simplified Technical English, applied about 80%: short sentences, one idea per sentence, active voice, approved common words, consistent terms. Keep technical names, code and quoted text unchanged. Relax a rule when it costs clarity.
 
 The `## Output style` paragraph closes both forms, word for word.
 

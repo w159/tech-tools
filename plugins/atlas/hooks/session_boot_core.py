@@ -466,7 +466,10 @@ def status_contract_lines(active_style=""):
     style = (active_style or "").strip()
     if not style or style == ATLAS_OUTPUT_STYLE:
         return [
-            f"Every user-visible reply opens {_header_rule()}."
+            f"Every user-visible reply opens {_header_rule()}. "
+            "Say in a line what you are about to do before the first tool call, give a one-line update every few tool calls, "
+            "and close with a recap that stands on its own. Work through ordinary obstacles (errors, timeouts, failing tools); "
+            "stop only for a deliberate blocker or a decision that is the user's."
         ]
     return [
         f"STYLE OVERRIDE: outputStyle is {style!r}, not {ATLAS_OUTPUT_STYLE!r}; it may suppress the atlas style. "
@@ -1543,7 +1546,8 @@ def main():
         "Atlas: orchestrator posture. LOOP: research -> theory -> test (failing check) -> "
         "validate -> implement (atlas:implementer only) -> verify (test stamp or "
         "atlas:verifier) -> docs (atlas:docs-curator); evidence before any done claim. "
-        "Route execution to atlas:<role> subagents; invoke atlas-orchestrate for multi-step or whole-codebase work.",
+        "Delegate code edits and separable investigation to atlas:<role> subagents; do a simple task and small lookups yourself. "
+        "A subagent adds cost, so delegate when the work is separable. Invoke atlas-orchestrate for multi-step or whole-codebase work.",
     ]
     if (
         os.environ.get("ATLAS_HARNESS") != "omp"

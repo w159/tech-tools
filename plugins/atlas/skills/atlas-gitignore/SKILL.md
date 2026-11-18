@@ -27,7 +27,7 @@ exits 0 if valid, 1 with a reason if not.
 
 Read the arguments as the stack to cover: languages, frameworks, package managers, build tools, OS, and editors. If the stack list is missing something you need to decide a rule, ask once, then proceed.
 
-Output the .gitignore file only. No prose outside the file.
+Write the .gitignore file with no prose inside it other than its comments. The reply that follows the file uses the REPORT section below.
 
 The file must:
 - Open with a comment block stating the philosophy: deny everything by default, then allowlist intentionally. Each un-ignored path is there on purpose.

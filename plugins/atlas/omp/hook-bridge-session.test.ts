@@ -446,7 +446,7 @@ async function expectFirstOffenseIsAdvisory(fire: Fire) {
 async function expectSecondOffenseAndEdges(fire: Fire) {
 	expect(String((await fire("task", task(`${SPEC_TOOLS}${SCOPED}just fix it once more`)))?.reason)).toContain("unbounded: missing GOAL:");
 	expect(String((await fire("task", task(`${SPEC_TOOLS}${WELL_FORMED_SPEC}GOAL: and also rewrite billing\n`)))?.reason)).toContain("2 GOAL: blocks");
-	expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("never edit target code inline");
+	expect(String((await fire("edit", { path: "src/a.py", input: "x" }))?.reason)).toContain("target code is edited by a dispatched agent");
 	expect(await fire("edit", { path: "docs/CHANGELOG.md", input: "x" })).toBeUndefined();
 }
 
@@ -549,7 +549,7 @@ test("REAL dispatch_tripwire through the bridge: device writes are never 'inline
 		};
 		expect(await fire("write", { path: "xd://mcp__claude_mem_mcp_search_search", content: '{"query":"x"}' })).toBeUndefined();
 		expect(await fire("write", { path: "xd://mcp__lean_ctx_ctx_search", content: '{"pattern":"x"}' })).toBeUndefined();
-		expect(String((await fire("write", { path: "src/a.py", content: "x" }))?.reason)).toContain("never edit target code inline"); // a real file edit is still denied
+		expect(String((await fire("write", { path: "src/a.py", content: "x" }))?.reason)).toContain("target code is edited by a dispatched agent"); // a real file edit is still denied
 	});
 }, REAL_HOOK_TEST_TIMEOUT_MS);
 

@@ -408,11 +408,20 @@ def _scope_of(entry: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+_NOTED_SUFFIX = lre(r"\s*\[noted \d{4}-\d{2}-\d{2}\]$")
+
+
+def _strip_noted(entry: str) -> str:
+    """Drop the trailing ' [noted YYYY-MM-DD]' capture-date suffix (compare only;
+    stored text is unchanged). One source of truth for dedupe keys and `add`."""
+    return _NOTED_SUFFIX.sub("", entry)
+
+
 def _dedupe_key(entry: str) -> str:
     """Collapse near-duplicates: the same lesson captured under six different
     subagent scopes differs ONLY in its `(project)` qualifier. Strip that, fold
     whitespace, and the six become one."""
-    stripped = re.sub(r"\(([^)\n]{1,80})\):", ":", entry, count=1)
+    stripped = re.sub(r"\(([^)\n]{1,80})\):", ":", _strip_noted(entry), count=1)
     return " ".join(stripped.split()).lower()[:160]
 
 
@@ -433,8 +442,11 @@ def filter_for_recall(entries: List[str]) -> List[str]:
             continue
         key = _dedupe_key(text)
         # Same lesson re-captured with a different lead-in shares its tail.
+        undated = _strip_noted(text)
         tail = (
-            ("tail:" + " ".join(text.split()).lower()[-40:]) if len(text) >= 50 else key
+            ("tail:" + " ".join(undated.split()).lower()[-40:])
+            if len(undated) >= 50
+            else key
         )
         if key in seen or tail in seen:
             continue
@@ -514,7 +526,9 @@ def add(target: str, content: str, root: Optional[str] = None) -> Dict[str, Any]
         entries = _read_file(path)
         entries = list(dict.fromkeys(entries))  # dedupe
 
-        if content in entries:
+        if content in entries or _strip_noted(content) in {
+            _strip_noted(e) for e in entries
+        }:
             return {
                 "success": True,
                 "message": "Entry already exists (no duplicate added).",

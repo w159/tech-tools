@@ -555,6 +555,18 @@ class RecallFilterTest(unittest.TestCase):
         ]
         self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)
 
+    def test_entries_differing_only_in_noted_date_collapse_newest_kept(self):
+        base = "User correction (p): always push before claiming the work is done"
+        entries = [base + " [noted 2026-11-17]", base + " [noted 2026-11-18]"]
+        self.assertEqual(
+            atlas_memory.filter_for_recall(entries), [base + " [noted 2026-11-18]"]
+        )
+
+    def test_undated_entry_still_dedupes(self):
+        base = "User correction (%s): always push before claiming the work is done"
+        entries = [base % "a", base % "b"]
+        self.assertEqual(len(atlas_memory.filter_for_recall(entries)), 1)
+
     def test_entry_count_is_capped(self):
         entries = ["Assumption to avoid (p): distinct lesson %d" % i for i in range(40)]
         self.assertLessEqual(

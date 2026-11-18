@@ -19,14 +19,14 @@ CONTEXT:
   - constraints: [<invariants that must hold throughout>]
 CONSTRAINTS:
   - <hard rules: no new deps, no .env edits, idempotent, etc.>
-MUST DO:
+Steps:
   - <research docs before code>
   - <write failing test first if TDD applies>
   - <run the project gate (lint/typecheck/test/build) and show output>
-MUST NOT DO:
-  - <invent API signatures from training data>
-  - <claim done without evidence>
-  - <expand scope beyond the TASK line>
+Avoid:
+  - <invent API signatures from training data> - because <reason>
+  - <claim done without evidence> - because <reason>
+  - <expand scope beyond the TASK line> - because <reason>
 OUTPUT FORMAT:
   - <what the agent returns: a diff, a report, a file path + summary>
 ```
@@ -44,12 +44,14 @@ OUTPUT FORMAT:
   the subagent does not redo discovery.
 - **CONSTRAINTS** - invariants that hold throughout the work. Things the
   agent must not violate while doing anything else.
-- **MUST DO** - the ordered steps the agent performs. Reference real tools
+- **Steps** - the ordered steps the agent performs. Reference real tools
   by name (confirmed to exist in the session, not invented).
-- **MUST NOT DO** - the anti-patterns that would make the output invalid
-  even if it looks correct. Always include the two universal ones:
-  inventing API signatures from training data, and claiming done without
-  evidence.
+- **Avoid** - the anti-patterns that would make the output invalid
+  even if it looks correct. Give a reason on each Avoid item, so the
+  agent can judge edge cases. Always include the two universal ones:
+  inventing API signatures from training data (the code then fails
+  against the real API), and claiming done without evidence (the
+  reviewer cannot check the claim).
 - **OUTPUT FORMAT** - the literal shape of the return message. If the
   agent returns a file path, say so. If it returns a diff, say so.
 

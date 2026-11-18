@@ -22,7 +22,7 @@ Generate a README.md for: $ARGUMENTS
 Read the arguments as: the target repo path, then the audience (contributors, internal, or both). If either is missing or ambiguous, ask once for it, then proceed.
 
 Inspect first, write second:
-- Dispatch atlas:explorer (or an equivalent read-only explorer) to inventory the repo before writing a word. Have it return: entry points, config files, dependency manifests, scripts, the real run/test/build commands, env files, and CI/CD pipeline files. Pass back paths and findings, not file dumps.
+- Inventory the repo first, before you write any README text. When the repo has more than a few directories, dispatch atlas:explorer (or an equivalent read-only explorer) to do it; a small repo you can read yourself. Either way, collect: entry points, config files, dependency manifests, scripts, the real run/test/build commands, env files, and CI/CD pipeline files. Pass back paths and findings, not file dumps.
 - Identify the repo's actual package manager and test runner from the manifests present. Use the commands that exist in the repo. Do not invent or assume them.
 - Document only commands you have seen in a real file. If you must infer a command, mark it [verify] inline so the reader knows it is unconfirmed.
 - Source every env var from the real .env.example, sample config, or settings file. Do not list env vars from memory.

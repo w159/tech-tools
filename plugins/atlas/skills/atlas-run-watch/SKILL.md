@@ -72,14 +72,14 @@ Evidence first, per `references/ci-classification.md`:
 
 - **Progress**: new bytes, still alive or status changed. One status line per tick: `<target> alive - +<N> bytes since last tick (total <M>)`.
 - **Flaky or infra signal** (timeout on a non-correctness step, OOM/disk, runner crash, registry 5xx/DNS/rate-limit, command green on re-run): one bounded re-check. For `cmd:` re-run the command once; for CI, one rerun per the `gh run rerun` mechanics in the reference. Failing again makes it genuine.
-- **Genuine failure** (assertion or compile error traceable to real code, nonzero exit on real work): surface `file:line` evidence from `full.log` by path and stop with `Failed - <evidence path>. Route to atlas-debug`.
+- **Genuine failure** (assertion or compile error traceable to real code, nonzero exit on real work): surface `file:line` evidence from `full.log` by path and stop with `Failed - <evidence path>. Route to atlas-debug`, followed by the one or two full sentences that Step 4 requires.
 - A flake "fixed" by deleting or weakening assertions is genuine.
 
 Done when the tick carries exactly one of progress, flaky re-check or genuine failure.
 
 ## Step 4 - Report
 
-One status line, then a recap a reader can act on: ticks taken, bytes observed, checkpoints, classification calls and why, ledger path, residual state.
+A terminal status line keeps the status word first. Follow each terminal line (Completed, Failed, Blocked) with one or two full sentences that say what ran, what the result was and what the user should do next. Then give a recap a reader can act on: ticks taken, bytes observed, checkpoints, classification calls and why, ledger path, residual state.
 
 ```
 Completed - <target>, <k> ticks, ledger .atlas/.run/runs/<id>/
@@ -89,7 +89,7 @@ Blocked - <target unresolvable, no PID, no CI access>
 Paused (checkpoint) - <state> - resume: re-run atlas-run-watch <target>
 ```
 
-Done when one of these lines is printed with its recap.
+Done when one of these lines is printed with its sentences and recap.
 
 ## Provider notes
 

@@ -13748,5 +13748,41 @@
     "verified_at": "2026-11-18T12:02:48+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "t8865d576-p1-4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "fable52 contract tests, version check, attribution, changelog entries pass",
+    "evidence": [
+      "128 passed, 3 skipped; check_versions ok; plugin.json:3 17.29.0; CHANGELOG line 3 both files"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest -q -p no:cacheprovider test_fable52_guide.py test_atlas_contract.py; check_versions.py; check_attribution.py origin/main..HEAD",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T09:30:12+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "t8865d576-p5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "claim 5 false: git diff HEAD is empty, no uncommitted docs/CHANGELOG.md edit",
+    "evidence": [
+      "git diff HEAD --stat empty; git status --short empty; docs/CHANGELOG.md has no new verification line for 17.29.0"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff HEAD --stat; git status --short",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T09:30:13+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

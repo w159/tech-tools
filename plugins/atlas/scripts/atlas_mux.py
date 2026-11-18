@@ -1285,7 +1285,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
         wake = (
             "If the env var ATLAS_LEAD_AGENT is set to your lead's session name and ListAgents "
             "shows it, send the same report text via SendMessage (to: that name) immediately "
-            "after posting the note. Do not retry sends. Skip entirely when unset or not "
+            "after posting the note. If a send fails, skip it: the board note is the record. Skip entirely when unset or not "
             "listed.\n\n"
         )
     mirror = ""
@@ -1298,7 +1298,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
             "If a TaskCreate tool is available to you, mirror the board item you claim: "
             'TaskCreate with subject "[<phase>] <content>" at claim time and mark it '
             "completed when you post your completion. The atlas board remains the source "
-            "of truth; do not duplicate status updates beyond the one completion.\n\n"
+            "of truth.\n\n"
         )
     return (
         f"{prompt}\n\n# Atlas worker report contract\n"
@@ -1308,7 +1308,7 @@ def _bg_brief(prompt: str, root: str, name: str, chan: str, lead: str) -> str:
         f"    {note_cmd}\n\n"
         f"{wake}"
         f"{mirror}"
-        "Post no other notes to the board."
+        "Post that one report note when you finish; a short progress note at a milestone is welcome."
     )
 
 
@@ -2264,8 +2264,8 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         # report_missing_status error, where the worker meets it
         f"Post {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read {cmd} notes --to {me} {flags}\n"
-        f"Report (stdin, STATUS: DONE|FAILED|BLOCKED): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
-        f"Note {lead} 1st, peers last. End: STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT"
+        f"Report (STATUS: DONE|FAILED|BLOCKED): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
+        f"Note {lead} 1st, peers last. End: STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE/NEXT"
     )
 
 

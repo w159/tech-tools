@@ -64,7 +64,7 @@ The handoff must capture, factually and specifically:
 - Open questions and the single next concrete step.
 - The exact commands to re-run to confirm current state, each with its expected output.
 
-Keep it precise, not narrative. Record only what a new session needs to act. No summary of intent. Omit anything not actionable for a fresh session.
+A fresh session with no context reads this handoff. Write for a low-context reader: the next session saw none of this one. Put the state and the next action first. Use full sentences and no abbreviation that was made up in this session. Record what the next session needs to act, with the reason for each open decision. Omit anything not actionable for a fresh session.
 
 VERIFY before reporting:
 - Confirm every "verified" claim names the command run and the output observed, not an assumption.

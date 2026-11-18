@@ -11,7 +11,7 @@ Loaded by `atlas-refactor` when the request is to simplify, tidy or clean up a f
 - [Step 5 - Verify via atlas:verifier](#step-5---verify-via-atlasverifier-gate-re-run)
 - [Step 6 - Report](#step-6---report)
 
-Simplify recently changed code for clarity, reuse, quality, and efficiency while preserving exact behavior. Prioritize readable, explicit code over compact code - fewer lines is not the goal. This is a bounded POST-IMPLEMENTATION simplification pass over a fresh diff: the change already works and this pass trims it without changing what it does. It does not restructure (that is the target mode of `SKILL.md`), review (that is `atlas-audit` / the review wave), or fix bugs (that is `atlas-debug`).
+Simplify recently changed code for clarity, reuse, quality, and efficiency while preserving exact behavior. Prioritize readable, explicit code over compact code - fewer lines is not the goal. This is a bounded POST-IMPLEMENTATION simplification pass over a fresh diff: the change already works and this pass trims it without changing what it does. It does not restructure beyond consolidating duplicated code in the diff (wider restructuring is the target mode of `SKILL.md`), review (that is `atlas-audit` / the review wave), or fix bugs (that is `atlas-debug`). Within the diff under review, you own this code's structure and its design is up to you: consolidate duplicated code into one shared function. Do not change behavior, and do not add tests or docs that were not asked for.
 
 Dispatch uses the Task/Agent subagent-kit envelope; verification is an independent `atlas:verifier` plus `.atlas/.run/findings.json`. **Never push, open a PR, or merge** - this skill ends at local verification; commits and pushes stay user-gated like every atlas skill.
 

@@ -79,13 +79,13 @@ class SimpleInlineTest(unittest.TestCase):
         self._scope("fix", "low", 1)
         r = self._edit()
         self.assertNotIn('"permissionDecision": "deny"', r.stdout)
-        self.assertNotIn("never edit target code inline", r.stdout)
+        self.assertNotIn("target code is edited by a dispatched agent", r.stdout)
         pre, post = self._shell_burst(10)
         self.assertNotIn('"permissionDecision": "deny"', pre.stdout)
-        self.assertNotIn("STOP", post.stdout)
+        self.assertNotIn("Routing note", post.stdout)
         # Post of an Edit to target code: no STOP nudge either.
         r = T.run_hook(self._p("PostToolUse", "Edit", {"file_path": "src/app.py"}), self.env)
-        self.assertNotIn("STOP", r.stdout)
+        self.assertNotIn("Routing note", r.stdout)
 
     def test_one_seat_medium_scope_is_simple(self):
         self._scope("audit", "medium", 1)
@@ -95,32 +95,32 @@ class SimpleInlineTest(unittest.TestCase):
         self._scope("fix", "medium", 2)
         r = self._edit()
         self.assertIn('"permissionDecision": "deny"', r.stdout)
-        self.assertIn("never edit target code inline", r.stdout)
+        self.assertIn("target code is edited by a dispatched agent", r.stdout)
         pre, post = self._shell_burst(10)
         self.assertIn('"permissionDecision": "deny"', pre.stdout)
         self.assertIn("inline ops since your last dispatch", pre.stdout)
-        self.assertIn("STOP", post.stdout)
+        self.assertIn("Routing note", post.stdout)
 
     def test_no_resolved_scope_behaves_as_before(self):
         r = self._edit()
-        self.assertIn("never edit target code inline", r.stdout)
+        self.assertIn("target code is edited by a dispatched agent", r.stdout)
         pre, post = self._shell_burst(10)
         self.assertIn("inline ops since your last dispatch", pre.stdout)
-        self.assertIn("STOP", post.stdout)
+        self.assertIn("Routing note", post.stdout)
 
     def test_env_switch_restores_the_deny(self):
         self._scope("fix", "low", 1)
         env = dict(self.env, ATLAS_INLINE_SIMPLE="off")
-        self.assertIn("never edit target code inline", self._edit(env).stdout)
+        self.assertIn("target code is edited by a dispatched agent", self._edit(env).stdout)
         pre, post = self._shell_burst(10, env)
         self.assertIn("inline ops since your last dispatch", pre.stdout)
-        self.assertIn("STOP", post.stdout)
+        self.assertIn("Routing note", post.stdout)
 
     def test_team_launch_this_run_ends_simple(self):
         self._scope("fix", "low", 1)
         cmd = 'python3 "/opt/plug/atlas/scripts/atlas_mux.py" spawn-team --class fix --effort low --paths a'
         T.run_hook(self._p("PostToolUse", "Bash", {"command": cmd}), self.env)
-        self.assertIn("never edit target code inline", self._edit().stdout)
+        self.assertIn("target code is edited by a dispatched agent", self._edit().stdout)
 
 
 if __name__ == "__main__":

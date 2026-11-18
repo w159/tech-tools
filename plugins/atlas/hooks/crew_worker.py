@@ -336,8 +336,9 @@ def stop(payload) -> None:
             _out(
                 {
                     "decision": "block",
-                    "reason": f"Your check `{cmd}` still fails (exit {code}); you cannot finish yet "
-                    f"(refusal {n + 1}/{cap}). If the failure is in a peer's file, ask that peer "
+                    "reason": f"Your check `{cmd}` still fails (exit {code}). Diagnose the failure, fix your files "
+                    f"or ask the peer the output names, then run the check again (attempt {n + 1}/{cap}). "
+                    f"If the failure is in a peer's file, ask that peer "
                     f"(irc say --to <peer>); `irc check` already waits for its peers "
                     f"(exit 3 timed out: rerun; exit 4: a peer gave up). Output tail:\n{tail}",
                 }

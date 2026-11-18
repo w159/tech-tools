@@ -827,8 +827,8 @@ class RouteScopeTest(unittest.TestCase):
         self.assertIn("Don't write those files or read them", nudge)
         self.assertIn("--wait 110 --changelog '<one line: what changed>'`", nudge)
         self.assertIn("don't re-run tests", nudge)
-        # the final reply after a green crew run is capped: 3 lines, pass count + files, no recap
-        self.assertIn("at most 3 lines", nudge)
+        # the final reply after a green crew run: short, standalone, pass count + files + next
+        self.assertIn("two or three short sentences", nudge)
         self.assertIn("pass count", nudge)
         self.assertIn("files changed", nudge)
         self.assertLess(len(nudge.encode()), po._CREW_NUDGE_MAX_BYTES)
@@ -1148,6 +1148,19 @@ class RouteScopeDecisionTest(unittest.TestCase):
             ):
                 nudge = po._routed_nudge({"session_id": "", "cwd": os.getcwd()}, "fix the bug in foo.py")
         self.assertIn("audit/high", nudge)
+
+
+class FinishLineTest(unittest.TestCase):
+    def _nudge(self, effort):
+        team = [{"role": "implementer", "count": 1, "model": "sonnet"}]
+        return po._route_nudge("fix", effort, team)
+
+    def test_low_and_medium_carry_finish_line(self):
+        for effort in ("low", "medium"):
+            self.assertIn("Finish the whole task", self._nudge(effort))
+
+    def test_high_omits_finish_line(self):
+        self.assertNotIn("Finish the whole task", self._nudge("high"))
 
 
 class FramingEmitSkipTest(unittest.TestCase):
@@ -1489,7 +1502,7 @@ class OptInGateAndDirectiveTest(unittest.TestCase):
     def test_template_directs_ste_and_does_not_apply_it(self):
         sent = po.build_optimizer_prompt("build the feature")
         self.assertIn("build the feature", sent)
-        self.assertIn("ASDSTE-100", sent)
+        self.assertIn("ASD-STE100", sent)
         self.assertIn("about 80%", sent)
         self.assertIn(po.STE_DIRECTIVE, sent)
         # The optimizer carries the directive; it must not be told to write STE itself.

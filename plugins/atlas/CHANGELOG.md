@@ -48,6 +48,29 @@ Fixes for the 2026-11-18 audit of the operating-contract gates, the status heade
 - Reviewed and kept by design: M8, the idle band keeps one height at every width so it never moves when the pane docks (`mod/view/band/slot-layout.test.ts`).
 - Not in this release: a full CI typecheck. `.github/workflows/tests.yml` runs `tsc` only to fail on an unresolved relative import (TS2307 on `./` and `../` specifiers); the host types are not in a checkout, so the other tsc errors are not gated.
 
+### Prompt text (Fable 5.2 prompting guide)
+
+Atlas prompt text now follows Anthropic's guide "Prompting Claude Fable 5.2": finish the whole task, say who owns the code, keep the user informed, state what a subagent costs, give the reason with every absolute rule, and write reports a cold reader can follow. Wording only; no gate behavior changed. Contract test: `hooks/test_fable52_guide.py`. Design page: `docs/architecture/atlas-fable-5-2-prompting.md`.
+
+Changed:
+
+- References and agents: `references/operating-contract.md` and `references/agent-common.md` gain `## Finishing work` (work through ordinary obstacles, stop only for a deliberate blocker or a decision that is the user's) and `## Communicating clearly` (plain full sentences, a low-context reader, an opening line before the first tool call). All 11 files under `agents/` and `omp/agents/` point at the Finishing work rule and carry the reasons for their "never" lines. Test: `hooks/test_fable52_guide.py` (`test_references`, `test_agents`).
+- Lead output style, AGENTS.md, CLAUDE.md: `output-styles/atlas-orchestrator.md`, root `AGENTS.md` and root `CLAUDE.md` drop hard length caps and standing delegate-everything lines; they name the simple-task exemption, what a subagent costs, and ask for an opening line, updates and a recap. Tests: `hooks/test_fable52_guide.py`, `hooks/test_atlas_contract.py`.
+- `atlas-orchestrate` and the other skills: `skills/atlas-orchestrate/SKILL.md` and its references (`laws-and-gates.md`, `subagent-kit.md`, `anti-rationalization.md`, `squad-and-tiers.md`, `feature-workflow.md` and others), plus the SKILL.md files of atlas-autopilot, atlas-debug, atlas-explain, atlas-plan, atlas-prompt, atlas-ship, atlas-ux-test and others, state reasons with each rule and drop word and token caps. `atlas-refactor` (`SKILL.md`, `references/diff-pass.md`) alone gains the ownership sentence. Test: `hooks/test_fable52_guide.py`.
+- Hook text: `hooks/session_boot_core.py` (opening line, updates, recap, ordinary obstacles, delegate separable work), `hooks/dispatch_tripwire_core.py`, `hooks/completion_gate_core.py`, `hooks/crew_worker.py`, `hooks/worker_report_gate_core.py` and `hooks/prompt_optimizer_core.py` messages now say why, and name the exact action an approval rule covers. Tests: `hooks/test_dispatch_tripwire.py`, `hooks/test_fix_simple_inline.py`, `hooks/test_worker_exemption.py`, `hooks/test_prompt_optimizer.py`, `hooks/test_fable52_guide.py`.
+- Memory capture date and recall dedupe: `hooks/memory_capture.py` appends ` [noted YYYY-MM-DD]` (UTC) to captured corrections and assumptions so a later reader can tell how old a caution is; the dedupe key never includes the date. `scripts/atlas_memory.py` and `scripts/recalled_memory.py` follow the same rule on recall. Tests: `hooks/test_memory_capture.py`, `scripts/test_atlas_memory.py`, `scripts/test_atlas_memory_more.py`.
+- Crew, team and todo prompts: `scripts/atlas_crew.py`, `scripts/atlas_mux.py` and `scripts/atlas_todo.py` worker prompts ask for one or two sentences at the end (what was done, the result, what is next) and tell a worker to diagnose and retry an ordinary error before reporting `blocked`. Tests: `scripts/test_atlas_crew.py`, `scripts/test_atlas_mux.py`.
+- omp addendum and generated agents: `omp/lead-addendum.md`, `omp/README.md`, `omp/atlas-agents.ts` and `omp/agents/*.md` carry the same text as the Claude Code side. Tests: `omp/hook-bridge-session.test.ts`, `hooks/test_fable52_guide.py`.
+- Version 17.28.1 to 17.29.0 in both plugin manifests, `.claude-plugin/marketplace.json`, `README.md`, `plugins/atlas/README.md` and `scripts/test_fix_settings_options.py`.
+
+Not changed, on purpose:
+
+- Agent `effort:` and `model:` values: the guide says to choose effort by a sweep on your own evals, and none was run.
+- Gate behavior and thresholds: wording only. The delegation gates still enforce; the text now names the simple-task exemption and what a subagent costs.
+- No new hook that counts silent tool calls: the Claude Code harness already sends the "user hasn't heard from you" reminder, and the lead text now asks for an opening line, updates and a recap.
+- The ownership sentence is added only to atlas-refactor: the guide says to leave it out where the user owns the code and wants minimal change.
+- Open follow-ups that need verification first: omp system-prompt appends in `omp/advisor.ts`, `omp/mandates.ts` and `omp/hook-bridge.ts`; refusal stop-reason handling in crew and team workers; validation of `xhigh` and `max` effort values.
+
 ## 17.28.1 - 2026-11-17
 
 Audit-fix release: behavior changed after 17.28.0 was tagged (commits #67, #68 and branch `atlas/audit-fixes-1117`).

@@ -1,6 +1,6 @@
 ---
 name: docs-curator
-description: "Post-ship docs writer: updates CHANGELOG, ROADMAP, findings ledger, wiki and docs/lessons from verified changes; writes only docs and durable .atlas paths, never source. Use when a shipped change needs docs updated or repaired."
+description: "Post-ship docs writer: updates CHANGELOG, ROADMAP, findings ledger, wiki and docs/lessons from verified changes; writes only docs and durable .atlas paths, never source. Use when a shipped change needs docs updated or repaired. Costs one fresh write context: skip it for a typo fix the lead can make."
 model: sonnet
 effort: low
 tier_allow: [haiku, sonnet]
@@ -64,6 +64,8 @@ Deferred MCP tools are absent until fetched. **First action:** one `ToolSearch` 
 ## Durable learnings: atlas-compound handoffs (docs/lessons/)
 
 The `atlas-compound` skill hands you capture-ready learnings from a solved, verified run; you are the single writer of durable docs prose (the skill never writes `docs/`). Before writing, read `${CLAUDE_PLUGIN_ROOT}/references/docs-lessons-contract.md`: path and date rules, the frontmatter contract to validate (if a learning cannot support a required field, say so rather than inventing a value), the overlap-update rule (high overlap means update in place, never a duplicate) and the prose-quality rule (keep every fact, number, path and caveat verbatim; carry ungrounded claims as `[unverified]`).
+
+Finishing work: write every step of the update order that applies; do not stop after the first files. See `references/agent-common.md` ("Finishing work").
 
 ## Report back (final message only)
 

@@ -2215,7 +2215,7 @@ class ClaudeBgTests(Base):
             bare = atlas_mux._bg_brief(*args)
             self.assertNotIn("SendMessage", bare)
             self.assertNotIn("ATLAS_LEAD_AGENT", bare)
-            self.assertTrue(bare.endswith("Post no other notes to the board."))
+            self.assertTrue(bare.endswith("Post that one report note when you finish; a short progress note at a milestone is welcome."))
             os.environ["ATLAS_LEAD_AGENT"] = "lead-01a122"
             woke = atlas_mux._bg_brief(*args)
         finally:
@@ -2225,13 +2225,13 @@ class ClaudeBgTests(Base):
         self.assertIn(
             "If the env var ATLAS_LEAD_AGENT is set to your lead's session name and "
             "ListAgents shows it, send the same report text via SendMessage (to: that name) "
-            "immediately after posting the note. Do not retry sends. Skip entirely when "
+            "immediately after posting the note. If a send fails, skip it: the board note is the record. Skip entirely when "
             "unset or not listed.",
             woke,
         )
         # the wake rides after the note command, before the close of the report contract
         self.assertLess(woke.index("--kind report"), woke.index("SendMessage"))
-        self.assertLess(woke.index("SendMessage"), woke.index("Post no other notes"))
+        self.assertLess(woke.index("SendMessage"), woke.index("Post that one report note"))
 
     def test_spawn_claude_bg_forwards_lead_agent_env(self):
         """Lead-exported ATLAS_LEAD_AGENT reaches the claude-bg worker env (FORWARDED_ENV)
@@ -2379,7 +2379,7 @@ class ClaudeBgTests(Base):
             bare = atlas_mux._bg_brief(*args)
             self.assertNotIn("TaskCreate", bare)
             self.assertNotIn("ATLAS_TASKS_MIRROR", bare)
-            self.assertTrue(bare.endswith("Post no other notes to the board."))
+            self.assertTrue(bare.endswith("Post that one report note when you finish; a short progress note at a milestone is welcome."))
             for on in ("1", "true", "ON"):
                 os.environ["ATLAS_TASKS_MIRROR"] = on
                 mirrored = atlas_mux._bg_brief(*args)
@@ -2387,8 +2387,7 @@ class ClaudeBgTests(Base):
                     "If a TaskCreate tool is available to you, mirror the board item you "
                     'claim: TaskCreate with subject "[<phase>] <content>" at claim time and '
                     "mark it completed when you post your completion. The atlas board remains "
-                    "the source of truth; do not duplicate status updates beyond the one "
-                    "completion.",
+                    "the source of truth.",
                     mirrored,
                 )
                 # the mirror rides after the note command, before the close of the contract
@@ -2398,7 +2397,7 @@ class ClaudeBgTests(Base):
                 )
                 self.assertLess(
                     mirrored.index('TaskCreate with subject "[<phase>]'),
-                    mirrored.index("Post no other notes"),
+                    mirrored.index("Post that one report note"),
                 )
             for off in ("0", "false", "OFF", ""):
                 os.environ["ATLAS_TASKS_MIRROR"] = off

@@ -203,7 +203,7 @@ class TripwireTest(unittest.TestCase):
         assert r is not None  # range(4) always runs at least once
         self.assertEqual(r.returncode, 0)
         self.assertIn("additionalContext", r.stdout)
-        self.assertIn("STOP", r.stdout)
+        self.assertIn("Routing note", r.stdout)
 
     def test_dispatch_resets(self):
         for _ in range(3):
@@ -260,7 +260,7 @@ class TripwireTest(unittest.TestCase):
         r = run_hook(self._payload("Bash", {"command": "touch a.txt"}), env)
         self.assertEqual(r.stdout.strip(), "")  # 1 op: silent
         r = run_hook(self._payload("Bash", {"command": "touch a.txt"}), env)
-        self.assertIn("STOP", r.stdout)  # 2nd op: trips at override
+        self.assertIn("Routing note", r.stdout)  # 2nd op: trips at override
 
     def test_dispatch_logged_after_run_finalized(self):
         """A dispatch arriving after the run is finalized must still be logged."""
@@ -769,7 +769,7 @@ class TripwireTest(unittest.TestCase):
                 ),
                 self.env,
             )
-            self.assertNotIn("never edit target code inline", r.stdout, key)
+            self.assertNotIn("target code is edited by a dispatched agent", r.stdout, key)
             self.assertEqual(r.stdout.strip(), "", key)
 
     def test_pre_deny_atlas_dispatch_without_report_block(self):
@@ -877,7 +877,7 @@ class TripwireTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         self.assertIn('"permissionDecision": "deny"', r.stdout)
-        self.assertIn("never edit target code inline", r.stdout)
+        self.assertIn("target code is edited by a dispatched agent", r.stdout)
 
     def test_pre_edit_deny_scopes_to_payload_cwd_not_process_cwd(self):
         """The project scope for the inline-edit deny is the payload's cwd. Run the hook
@@ -903,9 +903,9 @@ class TripwireTest(unittest.TestCase):
         for tool in ("Edit", "Write"):
             r = fire(tool, "src/app.py")
             self.assertEqual(r.returncode, 0)
-            self.assertIn("never edit target code inline", r.stdout, tool)
+            self.assertIn("target code is edited by a dispatched agent", r.stdout, tool)
             r = fire(tool, "docs/notes.md")
-            self.assertNotIn("never edit target code inline", r.stdout, tool)
+            self.assertNotIn("target code is edited by a dispatched agent", r.stdout, tool)
 
     def test_pre_allows_write_to_uri_scheme_path(self):
         """IRC messages and xd:// device calls reach the hook as a Write whose
@@ -1330,12 +1330,12 @@ class InProcessTest(unittest.TestCase):
         for _ in range(4):
             out = self._run_main(self._post("Bash", {"command": "touch a.txt"}))
         self.assertIn("additionalContext", out)
-        self.assertIn("STOP", out)
+        self.assertIn("Routing note", out)
 
     @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_ip_post_edit_to_target_nags(self):
         out = self._run_main(self._post("Edit", {"file_path": "src/foo.py"}))
-        self.assertIn("STOP", out)
+        self.assertIn("Routing note", out)
         self.assertIn("atlas:implementer", out)
 
     def test_ip_pre_deny_notebook_edit(self):
@@ -1574,7 +1574,7 @@ class InProcessTest(unittest.TestCase):
             self._run_main(self._post("Write", {"file_path": "agent://Foo"}))
         out = self._run_main(self._pre("Write", {"file_path": "src/foo.py"}))
         self.assertIn('"permissionDecision": "deny"', out)
-        self.assertIn("never edit target code inline", out)
+        self.assertIn("target code is edited by a dispatched agent", out)
 
     def test_ip_pre_no_active_run_is_silent(self):
         # No run -> nothing to gate.
@@ -1706,7 +1706,7 @@ class InProcessTest(unittest.TestCase):
             self.assertIn("ctx_search", out)
             for _ in range(8):  # well past the env threshold of 4
                 out = self._run_main(self._post("Grep"), env={"HOME": home})
-        self.assertNotIn("STOP", out)
+        self.assertNotIn("Routing note", out)
         conn = self.atlas_db.connect(self.db_path)
         rid = self.atlas_db.current_run_id(conn, "sess-1")
         self.assertEqual(
@@ -1961,7 +1961,7 @@ class SubagentDenyTierSkipTest(unittest.TestCase):
         )
         self.assertEqual(r.returncode, 0)
         self.assertEqual(self._decision(r.stdout), "deny")
-        self.assertIn("never edit target code inline", r.stdout)
+        self.assertIn("target code is edited by a dispatched agent", r.stdout)
 
     def test_inline_op_threshold_is_also_skipped_inside_a_subagent(self):
         last = None
@@ -3787,7 +3787,7 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
         # Production target code is denied outright, independent of the count.
         for tool in ("Edit", "Write"):
             r = self._call("PreToolUse", tool, {"file_path": "src/app.py"})
-            self.assertIn("never edit target code inline", r.stdout, tool)
+            self.assertIn("target code is edited by a dispatched agent", r.stdout, tool)
 
     def test_classifier_unit_cases(self):
         sys.path.insert(0, os.path.dirname(__file__))
@@ -5253,7 +5253,7 @@ class MutationSurvivorKillTest(unittest.TestCase):
 
 
 class ShellTeamLaunchResetTest(unittest.TestCase):
-    """2026-11-10: the lead ran one team and one crew and still got `STOP - 4 inline ops, no dispatch`.
+    """2026-11-10: the lead ran one team and one crew and still got `[atlas] Routing note: 4 inline ops, no dispatch`.
     A Bash or ctx_shell call that runs atlas_mux.py spawn-team or atlas_crew.py run is a dispatch."""
 
     setUp = ReadOnlyInvestigationTest.setUp
@@ -5684,9 +5684,9 @@ class RunOutputIsNotInlineWorkTest(unittest.TestCase):
     def test_docs_edits_never_reach_the_stop_nudge(self):
         for _ in range(2):
             self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
-        for i in range(8):  # the audit saw `STOP - 12 inline ops` while editing docs/audits/
+        for i in range(8):  # the audit saw `STOP - 12 inline ops` (now `Routing note: ...`) while editing docs/audits/
             r = self._call("PostToolUse", "Edit", {"file_path": f"docs/audits/r{i}.md"})
-            self.assertNotIn("STOP", r.stdout, i)
+            self.assertNotIn("Routing note", r.stdout, i)
         self.assertEqual(self._count(), 2)
 
     @property
@@ -5919,7 +5919,7 @@ class InlineOpRuleTest(unittest.TestCase):
         for r in posts:
             self.assertFalse(self._is_deny(r), r.stdout)  # PostToolUse only ever nudges
         self.assertEqual(self._count(), 6)
-        self.assertIn("STOP", posts[-1].stdout)  # the nudge
+        self.assertIn("Routing note", posts[-1].stdout)  # the nudge
         pre = self._call("PreToolUse", "Bash", self.OP)
         self.assertTrue(self._is_deny(pre), pre.stdout)
         self.assertIn("6 inline ops since your last dispatch", pre.stdout)

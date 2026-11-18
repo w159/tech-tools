@@ -12,7 +12,7 @@ This repository is the **atlas marketplace** (`.claude-plugin/marketplace.json`)
 
 When the user says "atlas" or "armada" in a prompt in this repository, they mean **the plugin as a software product you are developing** - its code, functionality, skills, agents, hooks, docs, and dependencies. Every request to "add", "fix", "change", "improve", "rename", or "remove" something in atlas or armada is a request to **edit the plugin source under `plugins/atlas/` or `plugins/armada/`** (and the shared dependencies that back them), then verify the change.
 
-The user is **never** asking you to:
+The user is not asking you to:
 
 - install these plugins, add the marketplace, or run `/plugin` / `/plugins install`;
 - set up, onboard, or configure an atlas or armada *deployment* inside this workspace;
@@ -119,7 +119,7 @@ A tool that an agent might call must be:
 
 ## 5. Validation expectation
 
-When the user asks for a multi-step or wide-blast-radius change, prefer to spawn parallel implementers followed by **chained skeptical validators** (each validator re-reads files, re-builds where appropriate, and assumes the prior agent over-claimed). One validator pass is the bare minimum; for high-impact changes do three.
+When the user asks for a multi-step or wide-blast-radius change, use subagents when the task has parallel parts or needs an independent check; one verifier pass is enough for most changes, and add more only when the change carries high risk. Each verifier re-reads files, re-builds where appropriate, and assumes the prior agent over-claimed. A subagent costs a fresh context and its tokens, and it knows only what the brief says. Delegate when the work is separable, would fill this context, or needs an independent check. Do a single lookup or a one-line answer yourself.
 
 ## 6. Memory / continuity
 

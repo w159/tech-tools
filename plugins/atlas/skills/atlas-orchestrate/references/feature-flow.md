@@ -20,7 +20,7 @@ Follow it in order; each phase's check must pass before the next.
 - If this work is recurring or iterative (a sweep across many endpoints or screens, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
 
 ## Execute through the squad (parallel where independent)
-Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. ALWAYS close the wave with an independent atlas:verifier in a fresh context before integrating results.
+Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, before integrating results.
 - atlas:explorer: map where the new endpoints, models, and UI belong.
 - backend-architect or atlas:implementer: add the API surface, services, and data access.
 - frontend-developer: build the UI against the new endpoints.
@@ -28,7 +28,7 @@ Dispatch all independent jobs in ONE message (multiple Agent calls in a single m
 - atlas:ui-runtime-tester: confirm live UI behavior in the browser.
 
 ## Build rules
-- Backend: validate all inputs; handle the error path; never hardcode secrets (read from env, add keys to .env.example); verify DB writes by reading them back; test the auth path, not just the happy path.
+- Backend: validate all inputs; handle the error path; do not hardcode secrets, because they leak through the repo (read from env, add keys to .env.example); verify DB writes by reading them back; test the auth path, not just the happy path.
 - Frontend: handle loading, empty, error, and success states; inline validation on inputs, not only on submit; mobile-first responsive; one design system (use the project's; a common default is Tailwind plus shadcn/ui).
 
 ## VERIFY (evidence required)

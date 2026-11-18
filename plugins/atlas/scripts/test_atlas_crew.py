@@ -394,7 +394,7 @@ class HookTests(unittest.TestCase):
             for i in (1, 2):
                 out = self._run(env, crew_worker.stop, {})
                 self.assertEqual(out["decision"], "block")
-                self.assertIn(f"refusal {i}/2", out["reason"])
+                self.assertIn(f"attempt {i}/2", out["reason"])
                 self.assertIn("boom", out["reason"])
             self.assertIsNone(self._run(env, crew_worker.stop, {}))
             last = atlas_irc.history(d)[-1]

@@ -635,6 +635,24 @@ class MemoryCaptureHelpersCoverageTest(unittest.TestCase):
         )
         self.assertTrue(any("Assumption to avoid" in f for f in mem_facts), mem_facts)
 
+    def test_noted_date_suffix_written(self):
+        self._seed_run("sfx-sess")
+        atlas_db.insert_signal(
+            self.conn,
+            "sfx-sess",
+            {
+                "message_uuid": "m",
+                "signal_type": "assumption_admission",
+                "weight": 1.0,
+                "snippet": "Assumed X was safe",
+            },
+        )
+        self.conn.commit()
+        _m, facts = memory_capture._extract_facts(self.conn, "sfx-sess", "/repo/atlas")
+        fact = next(f for f in facts if "Assumption to avoid" in f)
+        self.assertRegex(fact, r" \[noted \d{4}-\d{2}-\d{2}\]$")
+        self.assertNotIn("noted", fact.dedupe_key)
+
     def test_extract_improvements(self):
         rid = self._seed_run("imp2-sess")
         atlas_db.record_improvement(
@@ -835,6 +853,21 @@ class MemoryCaptureLoopGuardTest(unittest.TestCase):
             self._run_main(payload)
         self.assertEqual(first, 1, "first call must capture the correction")
         self.assertEqual(len(calls), 1, "repeat must be deduped, not re-captured")
+
+    def test_same_snippet_on_later_date_not_stored_twice(self):
+        self._seed_correction("date-sess", "Always run tests before commit")
+        payload = {"session_id": "date-sess", "cwd": "/repo/atlas"}
+        calls = self._recording_add()
+        with mock.patch.object(atlas_hook_guard, "should_run", return_value=True):
+            with mock.patch.object(
+                memory_capture, "_noted_suffix", return_value=" [noted 2026-01-01]"
+            ):
+                self._run_main(payload)
+            with mock.patch.object(
+                memory_capture, "_noted_suffix", return_value=" [noted 2026-01-02]"
+            ):
+                self._run_main(payload)
+        self.assertEqual(len(calls), 1, "a later date must not defeat the dedupe")
 
     def test_same_snippet_different_cwd_announced_once(self):
         """The fact string embeds os.path.basename(cwd), so a naive dedupe on

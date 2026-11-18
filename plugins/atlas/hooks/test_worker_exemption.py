@@ -92,7 +92,7 @@ class WorkerExemptionTest(unittest.TestCase):
         self._flag()
         edit = {"file_path": "x/app.py", "old_string": "a", "new_string": "b"}
         lead = self._hook("PreToolUse", "Edit", edit, self.env)
-        self.assertIn("never edit target code inline", lead.stdout)
+        self.assertIn("target code is edited by a dispatched agent", lead.stdout)
         worker = self._hook(
             "PreToolUse", "Edit", edit, dict(self.env, ATLAS_WORKER_NAME="W")
         )
@@ -116,7 +116,7 @@ class WorkerExemptionTest(unittest.TestCase):
             r = self._hook(
                 "PreToolUse", "Edit", edit, dict(self.env, ATLAS_WORKER_NAME=blank)
             )
-            self.assertIn("never edit target code inline", r.stdout)
+            self.assertIn("target code is edited by a dispatched agent", r.stdout)
 
     def test_worker_is_never_armed_by_footprint_or_orchestrate_skill(self):
         env = dict(self.env, ATLAS_WORKER_NAME="W")
@@ -147,7 +147,7 @@ class WorkerExemptionTest(unittest.TestCase):
             out += self._hook(
                 "PostToolUse", "Edit", {"file_path": "x/f%d.py" % i}, env
             ).stdout
-        self.assertNotIn("STOP", out)
+        self.assertNotIn("Routing note", out)
 
     def test_arm_orchestration_skips_worker_prompt(self):
         import prompt_optimizer

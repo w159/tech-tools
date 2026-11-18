@@ -2292,7 +2292,7 @@ def channel_brief(
     if role in READ_ONLY_ROLES:
         return (
             head
-            + f'Before your final report post one result line: {base} note --root "{rt}" '
+            + f'Before your final report post one or two sentences (what was done, the result, and what is next): {base} note --root "{rt}" '
             f'--channel "{channel}" --owner {name} --to {lead} "<result>"\n'
             + f'Inbox: {base} inbox --root "{rt}" --owner {name}'
         )
@@ -2306,7 +2306,7 @@ def channel_brief(
         f"--owner {name} --paths <files,dirs>, claim-paths the files, and release-paths "
         f"when done; on conflict, message the owner and wait or pick other work.\n"
         f'Handoff to a sibling: the Post command with --kind handoff --to <sibling> "<result>". '
-        f'Stuck: --kind blocked --to {lead} "<what you need>" instead of idling.\n'
+        f'Stuck on a deliberate blocker or a missing input (after you diagnose and retry an ordinary error): --kind blocked --to {lead} "<what you need>".\n'
         f"Never skip tests or verification because a peer said they passed; only {lead} "
         f"declares work done.\n"
         f'Inbox (run between steps): {base} inbox --root "{rt}" --owner {name}\n'

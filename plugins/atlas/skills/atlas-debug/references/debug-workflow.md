@@ -74,20 +74,25 @@ cheapest moment to catch that. Each hypothesis states:
   never initialized in the constructor path that runs under condition
   Z" is. An ungrounded hypothesis is theorizing - go back and
   instrument.
-- The causal chain from trigger to symptom, step by step, with no
-  gaps.
 - For any uncertain link, a testable PREDICTION: something in a
-  different code path or scenario that must also be true if the chain
-  is correct. Verify the prediction before committing to the cause.
+  different code path or scenario that must also be true if the
+  hypothesis is correct. Verify the prediction before committing to
+  the cause.
+
+Record the ranked list and each prediction in the run's evidence file.
+The reply gives the root cause in one sentence and the evidence for it.
 
 Test the top-ranked hypothesis first. Before forming a new hypothesis,
 review what has already been ruled out and why.
 
 ### Escalation after exhausted hypotheses
 
-After 2-3 hypotheses are exhausted without confirmation, stop guessing.
-Diagnose why they failed and present that diagnosis to the user before
-proceeding - a fourth blind hypothesis costs more than the pause:
+After 2-3 hypotheses are exhausted without confirmation, write down
+which hypothesis the evidence ruled out, form a new one from new
+evidence, and continue. Ask the user only when no grounded new
+hypothesis exists or a decision is theirs. A fourth blind hypothesis
+costs more than the pause, because a blind attempt repeats the failed
+strategy. Use the pattern to choose the new line of inquiry:
 
 | Pattern | Diagnosis | Next move |
 |---------|-----------|-----------|
@@ -98,7 +103,8 @@ proceeding - a fourth blind hypothesis costs more than the pause:
 
 Gate: one sentence naming the root cause and the file:line that owns
 it, backed by the ranked competing hypotheses above. If you cannot
-write that sentence, you have not localized yet.
+write that sentence, you have not localized yet. First try another
+instrument (a log line, a trace, a minimal input), then ask.
 
 ## Stage 3: Fix the cause in place
 
@@ -141,11 +147,14 @@ Do not retry variants of the same theory ("maybe it was the other
 branch", "let me also catch this case"); that is a rationalization
 spiral, not iteration.
 
-**Three failed fixes = escalate.** After three fix attempts fail, the
-root-cause identification was likely wrong. Stop patching. Diagnose
-the failure pattern using stage 2's escalation table, present that
-diagnosis to the user, and re-diagnose from stage 2 with a genuinely
-new hypothesis. Never attempt a fourth patch blind.
+**Three failed fixes = re-diagnose.** After three fix attempts fail,
+the root-cause identification was likely wrong. Stop patching. Write
+down which hypothesis the evidence ruled out, use stage 2's escalation
+table to choose a new line of inquiry, form a new hypothesis from new
+evidence, and continue from stage 2. Ask the user only when no
+grounded new hypothesis exists or a decision is theirs. Never attempt
+a fourth patch blind, because a blind attempt repeats the failed
+strategy.
 
 ## Stage 4: Verify (GREEN)
 

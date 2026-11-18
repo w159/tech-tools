@@ -8,7 +8,7 @@
 - [Step 3 - Hard rules that override convenience](#step-3---hard-rules-that-override-convenience)
 - [Cross-surface fault localization (which layer owns the bug?)](#cross-surface-fault-localization-which-layer-owns-the-bug)
 
-The orchestrator's job is to put the *right* capability on each task. This file maps task signals -> agent type + skill + MCP tools + model. It is a default; always prefer a live-discovered better fit.
+The orchestrator's job is to put the *right* capability on each task. This file maps task signals -> agent type + skill + MCP tools + model. It is a default; always prefer a live-discovered better fit. The model column is a default measured on earlier models; on a new model, re-measure it with an effort sweep.
 
 ## Step 1 - Discover what is actually live (do this once per session, cheaply)
 
@@ -98,7 +98,7 @@ route; a full-file Read is not.
 
 ## Step 3 - Hard rules that override convenience
 
-- **Never grep-then-read when an LSP or lean-ctx call answers it.** For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."
+- **Do not grep-then-read when an LSP or lean-ctx call answers it**, because the call returns the exact span without the file body. For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."
 - **`context7` is mandatory** before any library behavior claim or API-targeted edit. A finding that says "library X is misused" with no doc citation is `unverified`.
 - **`context-mode` for anything noisy.** Bash is only for git/mkdir/rm/mv/navigation and short fixed-output observation.
 - **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.

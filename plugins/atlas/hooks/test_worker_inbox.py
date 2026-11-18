@@ -544,7 +544,7 @@ class TripwireIntegrationTest(_Root):
                 {
                     "hookSpecificOutput": {
                         "hookEventName": "PostToolUse",
-                        "additionalContext": "STOP - route this",
+                        "additionalContext": "[atlas] Routing note: route this",
                     }
                 }
             ),
@@ -559,7 +559,7 @@ class TripwireIntegrationTest(_Root):
         )
         ctx = json.loads(merged)["hookSpecificOutput"]["additionalContext"]
         self.assertIn("[atlas] 1 message for you", ctx)
-        self.assertIn("STOP - route this", ctx)
+        self.assertIn("[atlas] Routing note: route this", ctx)
 
     def test_a_deny_wins_over_the_inbox_text(self):
         deny = json.dumps(
@@ -664,14 +664,14 @@ class RealCollisionTest(_Root):
         alone = json.loads(
             self._call({"ATLAS_WORKER_NAME": "", "ATLAS_PROJECT_ROOT": ""})
         )
-        self.assertIn("STOP", alone["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("Routing note", alone["hookSpecificOutput"]["additionalContext"])
         self.note("human", "Alpha", "ping during an edit")
         both = json.loads(self._call(self.env))  # raises if two documents were printed
         ctx = both["hookSpecificOutput"]["additionalContext"]
         self.assertIn("ping during an edit", ctx)
         self.assertNotIn(
-            "STOP", ctx
-        )  # a worker is a leaf: inbox only, no tripwire STOP
+            "Routing note", ctx
+        )  # a worker is a leaf: inbox only, no tripwire nudge
         self.assertEqual(both["hookSpecificOutput"]["hookEventName"], "PostToolUse")
 
 

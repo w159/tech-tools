@@ -18,6 +18,14 @@ Fixes for the 2026-11-18 audit (`docs/audits/2026-11-18_atlas-contract-header-mo
 - CI (P4): fast and slow atlas Python test tiers (`.github/workflows/tests.yml`, `plugins/atlas/ci-slow-tests.txt`, `scripts/test_ci_tiers.py`); pull requests run all atlas hooks, scripts, mod, omp and herdr tests.
 - Not done: a full CI typecheck. The workflow's `tsc` step only fails on an unresolved relative import; the host types are not in a checkout.
 
+Atlas prompt text follows Anthropic's guide "Prompting Claude Fable 5.2". Wording changed; gate behavior and thresholds did not.
+
+- Operating contract, agent-common, all agents, the lead output style, `AGENTS.md`, `CLAUDE.md`, skills, hook messages and crew, team and todo prompts: finish the whole task, work through ordinary obstacles, give the reason with each absolute rule, open with a line, update, recap, and name what a subagent costs.
+- Memory capture adds a ` [noted YYYY-MM-DD]` date to corrections and assumptions; the recall dedupe key ignores it.
+- New page `docs/architecture/atlas-fable-5-2-prompting.md` maps each guide section to what atlas does and lists open follow-ups; contract test `plugins/atlas/hooks/test_fable52_guide.py`.
+- Version 17.28.1 to 17.29.0. Details: `plugins/atlas/CHANGELOG.md`.
+- Verified on the final tree: `python3 -m pytest -q plugins/atlas/hooks` (3316 passed, 4 skipped), `python3 -m pytest -q plugins/atlas/scripts` (6343 passed, 2 skipped), `bun test omp` in `plugins/atlas` (839 pass, 0 fail).
+
 ## Audit - 2026-11-18
 
 - Read-only audit of the operating-contract gates, the status header, the mods and feature test coverage at atlas 17.28.1: `docs/audits/2026-11-18_atlas-contract-header-mod-audit.md`. No product code changed. Verifier verdicts for the 12 key claims are in `.atlas/findings/2026-11-18_audit-c*.md`.

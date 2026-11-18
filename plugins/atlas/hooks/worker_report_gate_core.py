@@ -457,7 +457,8 @@ def _stop(p, handed):
         "FILES_CHANGED: <path>; <path>   (or: none)\n"
         "EVIDENCE:\n1. <command or read-back> -> <first 3 and last 3 lines of the real output>\n"
         "DELIVERABLE: <the findings or artifact your dispatch asked for; none if only files changed>\n"
-        "NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>"
+        "NEXT: <the exact question for the lead if BLOCKED or FAILED; otherwise: none>\n\n"
+        "Write DELIVERABLE and NEXT in plain full sentences that a reader who saw none of your tool calls can act on."
     )
     print(json.dumps({"decision": "block", "reason": reason}))
     return True

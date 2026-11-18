@@ -553,7 +553,7 @@ class OutputStyleContract(unittest.TestCase):
 
     def test_length_budget_and_decision_rules_present(self):
         body = OUTPUT_STYLE.read_text(encoding="utf-8")
-        self.assertIn("Length budget", body)
+        self.assertIn("Evidence is exempt from brevity", body)
         self.assertIn("DECISION NEEDED", body)
 
     def test_style_file_is_plain_ascii(self):
@@ -1710,9 +1710,9 @@ class DecisionsAreBlockingContract(unittest.TestCase):
 
     def test_output_style_requires_askuserquestion_for_gating_decisions(self):
         text = OUTPUT_STYLE.read_text(encoding="utf-8")
-        self.assertIn("Decisions stop the line", text)
+        self.assertIn("Decisions block only the dependent work", text)
         self.assertIn("AskUserQuestion", text)
-        self.assertIn("gates what", text)
+        self.assertIn("depends on the answer", text)
         # The old rule made prose the default and the tool a preference.
         self.assertNotIn("Prefer the AskUserQuestion tool\nover prose", text)
 

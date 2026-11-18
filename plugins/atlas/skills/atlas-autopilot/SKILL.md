@@ -8,7 +8,7 @@ argument-hint: '[plan-path | debug finding | task description] [budget:3]'
 
 # atlas-autopilot
 
-**This skill is consent-gated: after a local commit it STOPS and requires your explicit confirmation before any push, pull request, or merge; atlas-autopilot never pushes or opens a PR on its own, no exceptions.** The pipeline's machine gates: only a genuinely complete, independently verified implementation return advances the pipeline; a divergent or ambiguous product-shape question routes to `atlas-brainstorm` for a human decision instead of being silently guessed; and bounded repair budgets (default 3 rounds) mean a loop that exhausts its budget states so plainly and stops rather than spinning forever or silently declaring success.
+**This skill is consent-gated: after a local commit it STOPS and requires your explicit confirmation before any push, pull request, or merge; atlas-autopilot never pushes or opens a PR on its own, because a push is visible to others and hard to undo.** The pipeline's machine gates: only a genuinely complete, independently verified implementation return advances the pipeline; an unsettled product-shape question routes to `atlas-brainstorm` for a human decision instead of being silently guessed; and bounded repair budgets (default 3 rounds) mean a loop that exhausts its budget states so plainly and stops rather than spinning forever or silently declaring success.
 
 ## What this is
 
@@ -37,8 +37,8 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 1. **Push, PR, and merge always require explicit user confirmation.** The pipeline runs autonomously through local commit and then STOPS. `atlas-ship` and `atlas-run-watch` are invoked only after the user says yes at the gate. There is no flag, budget, or CI pressure that waives this.
 2. **Only a verified, complete work return advances.** Execution (via `atlas-orchestrate`) must return with independent verification evidence - verifier verdicts stamped in `.atlas/.run/findings.json`, red/green or runtime proof under `.atlas/evidence/`. A partial, unverified, or self-graded return does not advance to simplify/review/commit; recover or re-dispatch first.
-3. **Ambiguous product shape routes to a human, never to a guess.** If mid-pipeline the work forks into a genuine product decision (divergent fix choice, unsettled scope, competing UX shapes), stop the pipeline and route to `atlas-brainstorm`. Do not pick silently; do not implement the most convenient branch.
-4. **Repair budgets are hard.** The review-fix loop and (post-consent) CI-repair loop each get a bounded budget, default 3 rounds. On exhaustion with issues remaining: write the residual state, state plainly what failed and why, and stop. Never loop forever, never declare success with known issues.
+3. **Stop mid-pipeline only for a product-shape question.** If the work forks into an unsettled scope or competing UX shapes, stop the pipeline and route to `atlas-brainstorm`. For a divergent fix choice, take the lowest-risk option, state the assumption in the report, and continue. Do not implement the most convenient branch of a product-shape fork.
+4. **Repair budgets are hard.** The review-fix loop and (post-consent) CI-repair loop each get a bounded budget, default 3 rounds. On exhaustion with issues remaining: write the residual state, state plainly what failed and why, and stop. Do not loop past the budget, and do not declare success with known issues, because the budget exists to prevent silent infinite repair.
 5. **Review is report-only; mutation is filtered and delegated.** `atlas-review` findings are applied only when they are high-confidence AND mechanically safe, and only through `atlas:implementer` dispatches - never by editing inline in this skill, never because severity looked scary.
 6. **Residuals are persisted, not dropped.** Every finding not applied, every deferred decision, every budget exhaustion lands in `.atlas/.run/findings.json` and, where durable, in `docs/ROADMAP.md` - the next session must be able to see what was left on the table and why.
 
@@ -74,4 +74,5 @@ The repair budget applies to the review-fix loop (step 5) and, after explicit co
 - Per-step outcomes with evidence: verification verdicts and finding paths from execution, simplify counts, review verdict, fixes applied/skipped with the filter reasons, residuals written (paths), compound skip-or-write, UI evidence or skip reason.
 - The commit SHA and changed-file summary.
 - The consent-gate summary as it will be presented to the user, and - if the user consented - the push/PR outcome, CI/babysit rounds used against budget, and the closeout residuals.
+- Any assumption taken at a divergent fix choice (rule 3), stated with the option chosen.
 - If the pipeline stopped early: which gate failed, exactly what is unverified or unresolved, and what the user needs to decide.

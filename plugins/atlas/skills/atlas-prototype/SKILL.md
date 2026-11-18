@@ -47,7 +47,7 @@ If there is no person to experience the prototype - a hands-off pipeline run, a 
 
 | Phase | What happens | Reference |
 |---|---|---|
-| 1. Scope | Read the conversation and any named brainstorm/plan; dispatch `atlas:explorer` for the scoped repo read of what the question touches; classify narrow vs wide; size the build; get the go-ahead. | `references/scoping.md` |
+| 1. Scope | Read the conversation and any named brainstorm/plan; dispatch `atlas:explorer` for the scoped repo read of what the question touches; classify narrow vs wide; size the build; ask the user to confirm the scope in one line, and say what the yes covers. | `references/scoping.md` |
 | 2. Build | Write prototype code under the run directory at the fidelity the question needs; web by default; recreate, do not rebuild the app. | `references/building.md` |
 | 3. Show | Serve it, verify the rendered result yourself (via `atlas:ui-runtime-tester` when UI-shaped), hand over the URL, and run the react/revise loop with the human. | `references/preview.md` |
 | 4. Settle | Promote decisions into `atlas-brainstorm`/`atlas-plan` or recap; discard or keep the code per the user's call; stamp the outcome in `.atlas/.run/findings.json`. | `references/settle.md` |
@@ -56,7 +56,7 @@ Read each phase's reference before doing that phase's work. Read `references/cra
 
 ## Speaking cadence
 
-After they proceed, speak only when they can act on something new, in one short line naming what happened: a screen is up, the URL is live, or a blocker only they can lift. After each applied revision, one short line: what changed, and that the page reloaded or needs a reload. Silence while waiting for their reaction is correct; narrating build steps is not.
+After they proceed, speak only when they can act on something new, in one short line naming what happened: a screen is up, the URL is live, or a blocker only they can lift. After each applied revision, one short line: what changed, and that the page reloaded or needs a reload. Silence while waiting for their reaction is correct. During the build, give one short line every few tool calls on what is being built.
 
 ## The decisions capsule
 
