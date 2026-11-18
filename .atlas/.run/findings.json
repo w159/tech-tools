@@ -13673,5 +13673,43 @@
     "verified_at": "2026-11-18T10:41:23+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "t49363e-weight-guardcodes",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "_weight/_guard_codes hardening: no implementer change present to verify",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_crew.py:1254 still 'f.is_file()' unguarded; git status clean, no implementer note on board"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --short; git diff --stat; atlas_todo.py notes --to verifier-6219",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T10:49:54+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-6219"
+  },
+  {
+    "id": "crew-guard-fanout",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "green-check guard runs identical checks once and caps concurrent shell commands; _weight treats an over-long entry as literal text",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_crew.py:1254",
+      "plugins/atlas/scripts/atlas_crew.py:1372",
+      "plugins/atlas/scripts/test_atlas_crew.py::SupervisorOverlapTests::test_guard_runs_one_command_once_for_every_worker_sharing_it"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest -q plugins/atlas/scripts/test_atlas_crew.py plugins/atlas/scripts/test_atlas_crew_hardening.py (278 passed)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T10:52:32+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

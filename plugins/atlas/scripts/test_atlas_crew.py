@@ -1373,6 +1373,10 @@ class StaggerTests(unittest.TestCase):
             self.assertLess(atlas_crew._weight(w, tmp), 200)
             self.assertEqual(atlas_crew._weight({"name": "b", "owns": ["a.py"]}, tmp), 0)
 
+    def test_weight_treats_an_overlong_single_line_entry_as_literal_text(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(atlas_crew._weight({"name": "a", "context": ["x" * 400 + "#head"]}, tmp), 0)
+
     def test_gen_rate_is_400(self):
         self.assertEqual(atlas_crew.GEN_CHARS_PER_S, 400)
 
@@ -1855,6 +1859,52 @@ class SupervisorOverlapTests(unittest.TestCase):
             workers[5]["unit_check"] += " -x"  # a flag is passed through; still one verdict per worker
             Path(tmp, "test_m5.py").write_text("def test_f():\n    assert False\n")
             atlas_crew.green_check_guard({"workers": workers}, tmp)
+
+    def test_guard_runs_one_command_once_for_every_worker_sharing_it(self):
+        # an automatic plan with a global --check gives every worker the same unit_check: 88 workers started 88
+        # identical pytest runs at once (load average 239); the command runs once and each index gets its code
+        with tempfile.TemporaryDirectory() as tmp:
+            counter = Path(tmp, "count")
+            workers = [{"name": f"w{i}", "unit_check": f"echo x >> count; exit 1"} for i in range(20)]
+            atlas_crew.green_check_guard({"workers": workers}, tmp)
+            self.assertEqual(counter.read_text().count("x"), 1)
+            counter.unlink()
+            codes = atlas_crew._guard_codes([(i, "echo x >> count; exit 3") for i in range(20)], tmp, 30)
+            self.assertEqual(codes, {i: 3 for i in range(20)})
+            self.assertEqual(counter.read_text().count("x"), 1)
+            counter.unlink()
+            green = [{"name": f"g{i}", "unit_check": "echo x >> count; true"} for i in range(20)]
+            with self.assertRaises(ValueError) as ctx:
+                atlas_crew.green_check_guard({"workers": green}, tmp)
+            self.assertIn("g0", str(ctx.exception))
+            self.assertEqual(counter.read_text().count("x"), 1)
+            self.assertEqual(
+                atlas_crew._guard_codes([(i, "echo x >> count; true") for i in range(20)], tmp, 30), {i: 0 for i in range(20)}
+            )
+
+    def test_guard_caps_the_single_commands_running_at_once(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp, "log")
+            prog = (
+                "import sys,time; f=open('log','a'); f.write('+\\n'); f.close(); time.sleep(0.3); "
+                "f=open('log','a'); f.write('-\\n'); f.close(); raise SystemExit(1)"
+            )
+            units = [(i, f"{shlex.quote(sys.executable)} -c {shlex.quote(prog)} {i}") for i in range(9)]
+            with mock.patch.object(atlas_crew, "GUARD_MAX_SINGLES", 3, create=True):
+                t0 = time.monotonic()
+                codes = atlas_crew._guard_codes(units, tmp, 30)
+                self.assertLess(time.monotonic() - t0, 4.0)
+            self.assertEqual(codes, {i: 1 for i in range(9)})
+            running = peak = 0
+            for line in log.read_text().split():
+                running += 1 if line == "+" else -1
+                peak = max(peak, running)
+            self.assertEqual(running, 0)
+            self.assertLessEqual(peak, 3)
+
+    def test_guard_cap_is_at_least_four_and_the_cpu_count(self):
+        self.assertGreaterEqual(atlas_crew.GUARD_MAX_SINGLES, 4)
+        self.assertGreaterEqual(atlas_crew.GUARD_MAX_SINGLES, os.cpu_count() or 1)
 
     def test_parser_accepts_allow_green_check(self):
         self.assertTrue(atlas_crew.parser().parse_args(["run", "--allow-green-check"]).allow_green_check)

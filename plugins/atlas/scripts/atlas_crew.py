@@ -1251,7 +1251,11 @@ def _weight(w: dict, root) -> int:
     for e in w.get("context") or []:
         path, _, head = str(e).partition("#")
         f = Path(root) / path
-        if head and "\n" not in path and f.is_file():
+        try:
+            is_path = bool(head) and "\n" not in path and f.is_file()
+        except OSError:  # stat raises on an over-long name (ENAMETOOLONG): it is literal text
+            is_path = False
+        if is_path:
             sec = section(f.read_text(encoding="utf-8", errors="replace"), head)
             n += len(sec or "")
     return n
@@ -1341,6 +1345,8 @@ def lead_session(flag=None) -> str:
 # the last DONE and the published summary was 0.44-0.91 s, mostly a 0.5 s sleep; a stat per poll costs nothing.
 POLL_S = 0.05
 GREEN_CHECK_TIMEOUT = 300
+# Most shell commands the green-check guard runs at the same time (88 identical pytest runs at once: load 239).
+GUARD_MAX_SINGLES = max(4, os.cpu_count() or 1)
 
 
 _GUARD_DRIVER = (
@@ -1367,8 +1373,11 @@ def _guard_codes(units: list, root, timeout) -> dict:
     """{index: exit code} of each (index, unit check) pair. Plain-pytest checks run as one `pytest.main` per test
     file inside a few shared interpreters (min(cpus, files) of them, grouped by interpreter and flags) instead of
     one process per worker: 16 pytest start-ups on 4 cpus were 1.3 s, and the exit code of each file is the one
-    its own command line gives. Anything else runs as its own shell command."""
+    its own command line gives. Anything else runs as its own shell command; identical command texts run once and
+    every index with that text gets the shared exit code, and at most GUARD_MAX_SINGLES shell commands run at the
+    same time (the fallback of a failed shared interpreter counts against the same cap)."""
     codes: dict = {}
+    gate = threading.BoundedSemaphore(max(1, GUARD_MAX_SINGLES))
     text = dict(units)
     groups: dict = {}
     singles = []
@@ -1399,13 +1408,23 @@ def _guard_codes(units: list, root, timeout) -> dict:
             res = {}
         for f, idxs in files:
             for i in idxs:  # no verdict (driver died): run the worker's own command, as before
-                codes[i] = res[f] if f in res else _run_check(text[i], root, timeout=timeout)[0]
+                if f in res:
+                    codes[i] = res[f]
+                else:
+                    with gate:
+                        codes[i] = _run_check(text[i], root, timeout=timeout)[0]
 
-    def one(i, unit):
-        codes[i] = _run_check(unit, root, timeout=timeout)[0]
+    def one(unit, idxs):
+        with gate:
+            code = _run_check(unit, root, timeout=timeout)[0]
+        for i in idxs:
+            codes[i] = code
 
+    by_text: dict = {}
+    for i, unit in singles:
+        by_text.setdefault(unit, []).append(i)
     threads = [threading.Thread(target=run_group, args=j, daemon=True) for j in jobs]
-    threads += [threading.Thread(target=one, args=u, daemon=True) for u in singles]
+    threads += [threading.Thread(target=one, args=u, daemon=True) for u in by_text.items()]
     for t in threads:
         t.start()
     for t in threads:
@@ -1417,7 +1436,8 @@ def green_check_guard(plan: dict, root, timeout=GREEN_CHECK_TIMEOUT) -> None:
     """Raise ValueError when a worker unit check already exits 0 before any work. crew_worker ends a worker as
     soon as its check passes, so a check that is green at launch would end it mid-work and report DONE falsely.
     The checks run at once, not one after another (8 pytest start-ups held every worker back about 4 s, and one
-    hung check held the rest up to `timeout` each), and plain-pytest checks share interpreters (_guard_codes)."""
+    hung check held the rest up to `timeout` each), and plain-pytest checks share interpreters (_guard_codes).
+    Workers with the same check text share one run, and at most GUARD_MAX_SINGLES commands run at once."""
     units = [(w, (w.get("unit_check") or "").strip()) for w in plan["workers"]]
     units = [(w, u) for w, u in units if u]
     codes = _guard_codes([(i, u) for i, (_, u) in enumerate(units)], root, timeout)
