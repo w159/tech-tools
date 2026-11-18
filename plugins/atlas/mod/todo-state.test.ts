@@ -5,7 +5,7 @@ import { worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { todoState } from './data/todos';
 import { liveWorkers, queuedMembers } from './data/live';
 import { agentModel, hudAgents, hudLines } from './hud';
-import { hudPhases } from './band';
+import { hudPhases } from './view/band/band';
 import { panelModelOf } from './pane/sidebar-model';
 import { panelText } from './panel-layout';
 import type { Ui } from './atlas-ui';

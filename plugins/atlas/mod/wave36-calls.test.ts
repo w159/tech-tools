@@ -2,14 +2,14 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { resetWorkerFacts } from './data/live';
 import type { Ui } from './atlas-ui';
-import { hudPhases } from './band';
+import { hudPhases } from './view/band/band';
 import type { SquadAgent } from './contract';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
-import { composeSlot } from './slot';
+import { composeSlot } from './view/band/slot';
 import { notificationTree } from './view/transcript/cards';
 import { finishedWorkers } from './view/transcript/placed';
 

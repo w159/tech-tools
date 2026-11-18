@@ -2,14 +2,14 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { readHostEntry } from './fixtures/source-tree';
-import { bandHealth, bandTree, type BandHandlers, type BandModel } from './band';
+import { bandHealth, bandTree, type BandHandlers, type BandModel } from './view/band/band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv } from './atlas-ui';
 import { healthCardRows, padRows } from './hud-surface';
 import { bodyLines, lineText, type PanelModel } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
-import { composeSlot } from './slot';
+import { composeSlot } from './view/band/slot';
 import * as ih from './data/idle-health';
 import type { Health } from './data/idle-health';
 import { hookStats, noteHook, resetHookLog } from './host/hook-log';

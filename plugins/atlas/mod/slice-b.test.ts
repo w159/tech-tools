@@ -8,10 +8,10 @@ import { EMPTY_ORCH, onSpawn } from './data/orchestration';
 import { blockReasons, gateTally } from './data/runstate';
 import { agentRows, type AgentRow } from './hud-surface';
 import { agentName } from './hud';
-import { coreReport } from './core-row';
+import { coreReport } from './view/band/core-row';
 import { coreModel } from './data/core';
 import { bodyLines, lineText, panelText, type PanelModel } from './panel-layout';
-import { bandLines, missionLines, runsText, type MissionModel } from './mission-layout';
+import { bandLines, missionLines, runsText, type MissionModel } from './view/band/mission-layout';
 import type { GateGroup } from './pane/sidebar-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

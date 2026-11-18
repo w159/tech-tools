@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { Ui } from '../atlas-ui';
 import { spinFrameOf, spinnerGlyph } from '../atlas-ui';
-import { missionLines, runsText, type MissionModel, type MissionWorker } from '../mission-layout';
+import { missionLines, runsText, type MissionModel, type MissionWorker } from '../view/band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({

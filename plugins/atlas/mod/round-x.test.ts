@@ -7,7 +7,7 @@ import { cardFrame } from './card-frame';
 import { tabFrame, tabText, type TabIn, type TabId } from './tabs-frame';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import type { Health, HealthCheck } from './data/idle-health';
-import { IDLE_RAMP_256 } from './band-motion';
+import { IDLE_RAMP_256 } from './view/band/band-motion';
 import { textWidth } from './theme';
 import { gateValue } from './tabs-frame';
 import { ribbonRow, type PanelModel } from './panel-layout';
@@ -234,7 +234,7 @@ describe('X7: a chevron only inside a chip', () => {
 });
 
 describe('X5: the band at the pane-open width keeps state, gates chip and the spark with its unit', async () => {
-  const { bandTree } = await import('./band');
+  const { bandTree } = await import('./view/band/band');
   const { busySnap } = await import('./live_fixture');
   type N = { kind: string; props: Record<string, any> };
   const mk = (kind: string) => (props: Record<string, any>): N => ({ kind, props });

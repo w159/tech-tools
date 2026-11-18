@@ -2,7 +2,7 @@
 // (`todo -`, `no agents`, `no tasks yet`, `no agents yet`), and a clickable `▸ health` control expands it.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, type BandHandlers, type BandModel } from '../band';
+import { bandTree, type BandHandlers, type BandModel } from '../view/band/band';
 import { liveWorkers } from './live';
 import { busySnap, NOW } from '../live_fixture';
 import { uiFromEnv } from '../atlas-ui';
@@ -10,7 +10,7 @@ import { healthCardRows, todoRows, agentRows } from '../hud-surface';
 import { bodyLines, lineText, type PanelModel } from '../panel-layout';
 import { panelWorld } from '../../contracts/panel-world';
 import { textWidth } from '../theme';
-import { composeSlot } from '../slot';
+import { composeSlot } from '../view/band/slot';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

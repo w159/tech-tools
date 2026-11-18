@@ -1,0 +1,116 @@
+// slot.ts: the AbovePrompt slot as one pure plan. register.ts hands it the band builder, the HUD input and the row budget; it answers with the HUD rows, the band
+// model, the blank row between them and the rows the slot holds. Pure: nothing here reads the host or keeps state (the caller keeps `held`).
+import { bandKindOf, bandRowCount, bandSpareRows, type BandModel } from './band';
+import { hudBudget, hudCompactRows, hudFloorRows, hudHoldRows, hudListsAgents, hudRows, hudWantRows, isAlive, isRunning, namedAgents, reclaimBlanks, type HudInput, type HudOpts } from '../../hud';
+import type { Segment } from '../../runs';
+
+/** The Mission Control band keeps at least this many rows; the HUD takes the rest of the budget. */
+export const BAND_MIN_ROWS = 7;
+/** Rows the band keeps once the HUD has taken the SUBAGENTS column names and the blank under the agents: its title row. */
+export const BAND_KEEP_ROWS = 1;
+
+/** Rows the HUD may take of `budget`. `hudBudget` gives the compact floor (the plan, the agents, no column names); where the slot can also hold the
+ * blank between the plan and the agents, the floor is raised to hold it. `want` (hud.ts hudWantRows) is what the HUD asks for: every plan row and agent row with both closing rules. The HUD is given
+ * that much whenever the band keeps its title row and, with agents listed, the one blank under them, so a slot that fits the plan shows every row; hud-surface fitRows gives up decoration (rules, column
+ * names) before a row (critique 23: `2 more todos not shown` at 150 columns beside spare rows). */
+export function hudSlotCap(budget: number, compact: number, floor: number, bandRows: number, running: boolean, agentsListed: boolean, want = 0): number {
+	const base = hudBudget(budget, compact, bandRows, running);
+	const room = budget - BAND_KEEP_ROWS - (agentsListed ? 1 : 0); // the most the HUD can take while the band keeps its title row (and the blank under the agents)
+	const asked = want > 0 ? Math.min(want, room) : 0;
+	if (!agentsListed) return Math.max(base, asked);
+	const cap = Math.max(budget - floor - 1 >= BAND_KEEP_ROWS ? Math.max(base, floor) : base, asked); // floor: hudFloorRows, the compact form with the blank between the blocks
+	// While an agent runs the band keeps its row (critique 17: 110 columns, 10 rows, 3 agents: the HUD took all 10 and no band line was drawn); the HUD folds to fit (hud-surface fitRows).
+	return running && budget > BAND_KEEP_ROWS + 1 ? Math.min(cap, budget - BAND_KEEP_ROWS) : cap;
+}
+
+/** The HUD rows that leave the band at least one row of the budget (band row, never the HUD, is the one thing that must not vanish: round 3). `gapOf` is the breathing blank the rows would draw.
+ * A budget below one row means the slot is closed (the band draws nothing by design), so nothing is trimmed. */
+export function fitHudToBand<R>(hud: readonly R[], budget: number, gapOf: (rows: readonly R[]) => number): readonly R[] {
+	if (budget < 1) return hud;
+	let rows = hud;
+	while (rows.length > 0 && rows.length + gapOf(rows) > budget - 1) rows = rows.slice(0, -1);
+	return rows;
+}
+
+/** Blank rows between the last agent row and the band: one, while the band keeps its title row. */
+export function hudGapRows(listsAgents: boolean, hudRowCount: number, budget: number): number {
+	return listsAgents && budget - hudRowCount - 1 >= BAND_KEEP_ROWS ? 1 : 0;
+}
+
+/** Rows the slot holds (band, blank, HUD, pad) from the first frame of a run to its last (critique 26: the band jumped from row 31 to row 24 when SUBAGENTS appeared). It starts at what the run's full HUD
+ * asks (`reserve`, hud.ts hudRunRows), never falls while the run lasts and never passes the budget; at rest nothing is held (0). The slot is bottom-anchored above the prompt, so a constant height is a band that stays on one screen row. */
+export function slotHold(prev: number, running: boolean, used: number, reserve: number, budget: number): number {
+	if (!running || budget < 1) return 0;
+	return Math.min(budget, Math.max(prev, used, reserve));
+}
+
+export type SlotInput = {
+	/** The rows the slot may hold (0 when the host reported no slot: `hasSlot` false). */
+	budget: number;
+	hasSlot: boolean;
+	hudOn: boolean;
+	/** A run is on (the host turn, or the run clock): the slot keeps one height until it closes. */
+	runOn: boolean;
+	columns: number;
+	hudIn: HudInput;
+	hudView: Omit<HudOpts, 'maxRows'>;
+	/** An agent runs / any agent is listed. */
+	running: boolean;
+	agentsListed: boolean;
+	/** Whether a phase header, a plan or an agent exists: the run is orchestrated. */
+	orchestrated: boolean;
+	now: number;
+	/** The band model for the HUD rows drawn: `maxRows` is the band's own allotment (undefined with no slot). */
+	bandIn: (hudRowsDrawn: Segment[][], maxRows: number | undefined) => BandModel;
+	/** The slot height held so far (the caller keeps it between renders). */
+	held: number;
+	/** Wave 42: the expanded health card (hud-surface healthCardRows), drawn in the HUD's place while the band's `▾ health` button is open and nothing else would draw. */
+	healthCard?: Segment[][];
+};
+/** `lead`: empty host-coloured rows above the band that make up the budget (never filled bars); `held` is the content height (band area, blank, boxes) the run has reached. */
+export type SlotPlan = { hud: Segment[][]; band: BandModel; gap: number; pad: number; held: number; lead: number };
+
+/** The fixed shape (critique 31, 17.15.1): from the first working frame to idle the band is one row at the top of the slot and the HUD starts on the very next row in every state (the TODO box never moves
+ * under the band). The slot is exactly the rows drawn: the band row and the HUD rows, with no spacer above or below. 17.15.0 padded the slot to the host's whole budget (half the screen less the rows
+ * below it) with blank rows UNDER the HUD, which left an empty gap between the mod and the prompt and pushed the host's status line down; the host anchors the slot above the prompt, so a shorter slot
+ * is a band that sits lower, never a hole. The HUD takes every row of the budget the band leaves and folds (hud-surface fitRows) when the plan is longer. */
+function composeFixed(i: SlotInput): SlotPlan {
+	const { budget, hudIn, hudView } = i;
+	// Wave 37 (110 columns: `1/5 · +3 more` with two rows drawn and blank rows under them): the HUD may use every row of the budget the band leaves, so a plan that fits is never folded.
+	const hudCap = Math.max(0, budget - BAND_KEEP_ROWS); // the band keeps its row; the HUD takes every other row it can use
+	const kind = bandKindOf(i.bandIn([], 1));
+	const idle = kind === 'idle';
+	const hud = hudRows(hudIn, { ...hudView, maxRows: hudCap, reserve: true, settled: true, ...(idle ? { idle: true } : {}), ...(kind === 'working' ? { working: true } : {}) }) as Segment[][];
+	const band = i.bandIn(hud, 1);
+	return { hud, band, gap: 0, pad: 0, held: BAND_KEEP_ROWS + hud.length, lead: 0 };
+}
+
+/** The band model with the HUD's own verdict on its agents: one the SUBAGENTS block draws running (listed, resumed or named by an open dispatch row) keeps the band working, so the band never reads `idle` beside a turning spinner (wave 33). */
+const withAgents = (i: SlotInput): SlotInput => {
+	const running = [...i.hudIn.agents, ...namedAgents(i.hudIn.todos, i.hudIn.agents)].some(isAlive); // wave 34: only an agent that works holds the band working; a queued one (an open dispatch row the host never listed) is drawn but does nothing once the turn is over
+	return running ? { ...i, bandIn: (rows, maxRows) => ({ ...i.bandIn(rows, maxRows), agentsRunning: true }) } : i;
+};
+
+export function composeSlot(input: SlotInput): SlotPlan {
+	const i = withAgents(input);
+	const fixed = i.hasSlot && i.hudOn && i.budget >= 1 && (i.runOn || i.agentsListed || i.hudIn.todos.length > 0);
+	if (fixed) return composeFixed(i);
+	const { budget, columns, hudIn, hudView } = i;
+	let showsCard = false; // set once the HUD proper turns out empty: the open health card then stands in its place, with the blank row a HUD block has under the band
+	const gapOf = (rows: readonly Segment[][]): number => hudGapRows(showsCard || hudListsAgents(rows as Segment[][]), rows.length, budget);
+	const bandFor = (rows: Segment[][]): BandModel => i.bandIn(rows, i.hasSlot ? budget - rows.length - gapOf(rows) : undefined);
+	const want = hudWantRows(hudIn, columns, i.now);
+	const hudCap = hudSlotCap(budget, hudCompactRows(hudIn, columns), hudFloorRows(hudIn, columns, i.now), BAND_MIN_ROWS, i.running, i.agentsListed, want);
+	const drawHud = (maxRows: number): Segment[][] => hudRows(hudIn, { ...hudView, maxRows });
+	// The band's breathing blanks go to the plan before it is folded to "N more todos not shown".
+	const hudFull = i.hudOn ? (reclaimBlanks(drawHud(hudCap), hudCap, budget, (rows) => bandSpareRows(bandFor(rows as Segment[][])), drawHud) as Segment[][]) : [];
+	// The band row never goes: whatever the HUD drew, at least one row of the budget stays for the band (a frame with no band was the hole in the readout).
+	showsCard = hudFull.length === 0 && !!i.healthCard?.length;
+	const hudBase = showsCard ? i.healthCard! : hudFull; // wave 43: also with ATLAS_HUD=off, where the band's `▸ health` button still opens it
+	const hud = i.hasSlot ? (fitHudToBand(hudBase, budget, (rows) => gapOf(rows)) as Segment[][]) : hudBase;
+	const gap = gapOf(hud);
+	// One slot height for the whole run: the band sits at the top of a bottom-anchored slot, so a HUD that grows (the SUBAGENTS block appearing) or an idle row that goes would move it on screen.
+	const used = bandRowCount(bandFor(hud), true) + gap + hud.length;
+	const held = i.hudOn && i.hasSlot ? slotHold(i.held, i.runOn, used, BAND_KEEP_ROWS + 1 + hudHoldRows(hudIn, columns, i.now, i.orchestrated), budget) : 0;
+	return { hud, band: bandFor(hud), gap, pad: Math.max(0, held - used), held, lead: 0 };
+}

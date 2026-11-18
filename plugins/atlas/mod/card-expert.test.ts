@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import type { AtlasSnapshot, SquadAgent } from './contract';
-import { bandTree, type BandHandlers, type BandModel } from './band';
+import { bandTree, type BandHandlers, type BandModel } from './view/band/band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv, type Run } from './atlas-ui';
 import { healthCardRows } from './hud-surface';

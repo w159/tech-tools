@@ -6,7 +6,7 @@ import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { panelWorld } from "../contracts/panel-world";
 import { worldSidebar } from "../contracts/world-live";
 import type { Ui } from "../mod/atlas-ui";
-import { BAND_BUTTONS } from "../mod/band";
+import { BAND_BUTTONS } from "../mod/view/band/band";
 import { coreModel } from "../mod/data/core";
 import * as L from "../mod/panel-layout";
 import { type PanelTab, panelText } from "../mod/panel-layout";

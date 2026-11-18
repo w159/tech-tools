@@ -8,7 +8,7 @@
 // Single fixture world for every rev 4 mock. Every number in every mock is derived from these lists.
 
 import type { Ui, UiState } from "../mod/atlas-ui";
-import type { MissionModel, WorkerState } from "../mod/mission-layout";
+import type { MissionModel, WorkerState } from "../mod/view/band/mission-layout";
 
 export type WorldTodo = { id: string; label: string; state: UiState; owner: string; detail: string };
 export type WorldWorker = { name: string; state: UiState; model: string; task: string; ctx: number | null; last_tool: string; steps_done: number; steps_total: number };

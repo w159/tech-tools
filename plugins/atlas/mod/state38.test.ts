@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { xtermHex, type Ui } from './atlas-ui';
-import { bandTree, hudPhases, type BandModel } from './band';
+import { bandTree, hudPhases, type BandModel } from './view/band/band';
 import type { AtlasSnapshot, SquadAgent, TodoItem } from './contract';
 import * as runstate from './data/runstate';
 import { liveWorkers, queuedMembers, resetWorkerFacts, workerFacts } from './data/live';
@@ -12,9 +12,9 @@ import { hudAgents, hudLines, isRunning, outcomeOf, type HudAgent, type HudInput
 import { busySnap, NOW } from './live_fixture';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { bandFrame, forgetBandFrame, noteBandFrame } from './motion/motion';
-import { KIND_HOLD_MS, newKindHold, stepKind, type KindHold, type KindWord } from './band-motion';
+import { KIND_HOLD_MS, newKindHold, stepKind, type KindHold, type KindWord } from './view/band/band-motion';
 import type { LiveSnapshot } from './orchestra-types';
-import { composeSlot } from './slot';
+import { composeSlot } from './view/band/slot';
 import { notificationTree } from './view/transcript/cards';
 import { verdictOf } from './view/transcript/leadheader';
 import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './view/transcript/placed';

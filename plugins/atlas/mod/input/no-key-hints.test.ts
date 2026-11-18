@@ -2,7 +2,7 @@
 // a leading chevron in the accent with a hover style, or, for a tab, an accent chip (the lit tab filled) with a hover style.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, type BandHandlers, type BandModel } from '../band';
+import { bandTree, type BandHandlers, type BandModel } from '../view/band/band';
 import { liveWorkers } from '../data/live';
 import { busySnap, NOW } from '../live_fixture';
 import { uiFromEnv } from '../atlas-ui';
@@ -11,7 +11,7 @@ import * as panelLayout from '../panel-layout';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from '../pane/sidebar';
 import { panelWorld } from '../../contracts/panel-world';
 import { activeChipStyle } from './clickable';
-import { bandKindOf } from '../band';
+import { bandKindOf } from '../view/band/band';
 import { PANEL_TABS } from '../panel-layout';
 import { bandKind } from '../pane/band-kind';
 

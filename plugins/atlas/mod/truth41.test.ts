@@ -2,9 +2,9 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { readHostEntry } from './fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
-import { closedTotal, newRunClock, readRun, runKey, stepRun, type ClockHold, type RunClock } from './band-motion';
+import { closedTotal, newRunClock, readRun, runKey, stepRun, type ClockHold, type RunClock } from './view/band/band-motion';
 import { elapsedClock, phaseGlyph, type Ui } from './atlas-ui';
-import { bandLines, runsText, type MissionModel } from './mission-layout';
+import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { lineText, panelLines, bodyLines } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
@@ -175,7 +175,7 @@ import { runsString } from './atlas-ui';
 import { ownTodos } from './data/todos';
 import { functionsIn } from './hud';
 import { blockedText } from './data/runstate';
-import { beatDue, KIND_HOLD_MS, newKindHold, stepKind, type KindWord } from './band-motion';
+import { beatDue, KIND_HOLD_MS, newKindHold, stepKind, type KindWord } from './view/band/band-motion';
 
 describe('step 4: a refused stop or a failed worker reads blocked, never idle, and no working glyph is ever drawn frozen', () => {
   const base: MissionModel = { cols: 110, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'implement', 'done'], phase: 'implement', done: 4, total: 5, workers: [{ name: 'ghost-explorer', state: 'failed', secs: 4 }, { name: 'alpha-explorer', state: 'done', secs: 13 }], checks: null, ui, ranSecs: 38, restSecs: 3, tally: { running: 0, waiting: 0, queued: 0, failed: 1, done: 2, blocked: 0 } as never };

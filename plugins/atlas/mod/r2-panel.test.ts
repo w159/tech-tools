@@ -9,7 +9,7 @@ import { bodyLines, headerRows, lineText, panelLines, ribbonRow, tabRows, type P
 import { panelWorld } from '../contracts/panel-world';
 import { goldenModel } from './pane/sidebar.golden-cases';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
-import { bandTree, type BandHandlers, type BandModel } from './band';
+import { bandTree, type BandHandlers, type BandModel } from './view/band/band';
 import { busySnap, NOW } from './live_fixture';
 import { register, resetCore } from './register';
 import { memState } from './test_helpers';

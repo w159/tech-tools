@@ -9,7 +9,7 @@ import { worldCard } from '../contracts/panel-world';
 import { paintHud } from '../omp/hud-paint';
 import { paintPanel } from '../omp/panel-view';
 import { runsString, type Ui } from './atlas-ui';
-import { bandSpareRows, bandTree } from './band';
+import { bandSpareRows, bandTree } from './view/band/band';
 import type { TodoItem } from './contract';
 import { coreModel } from './data/core';
 import { ownTodos } from './data/todos';

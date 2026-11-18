@@ -1,4 +1,4 @@
-// atlas-ui.ts: the ATLAS design primitives (design system rev 4), shared by the Claude Code band (mod/band.tsx) and the
+// atlas-ui.ts: the ATLAS design primitives (design system rev 4), shared by the Claude Code band (mod/view/band/band.tsx) and the
 // omp panel (omp/mission-panel.ts). Everything here is pure and host free: it returns tone-tagged Runs (or plain
 // strings), and each host paints a Run with `toneHex` / `ansiFg` / `ansiBg`. Surfaces import from here and never
 // hardcode a glyph, a hex or a gauge character.

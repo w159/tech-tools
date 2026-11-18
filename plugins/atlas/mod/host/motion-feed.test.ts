@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { hudAgents, hudLines, type HudInput } from '../hud';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { hudPhases } from '../band';
+import { hudPhases } from '../view/band/band';
 import { runsString, type Ui } from '../atlas-ui';
 import { busySnap, NOW } from '../live_fixture';
 import { Motion, windowOf } from '../motion/motion';

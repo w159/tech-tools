@@ -6,7 +6,7 @@ import type { ClientElements, RenderElement } from 'claude-code';
 import type { SquadAgent, TodoItem } from './contract';
 import type { LiveSnapshot } from './orchestra-types';
 import { hostTo256, spinClock, withSpinFrame, type Ui } from './atlas-ui';
-import { bandTree } from './band';
+import { bandTree } from './view/band/band';
 import { hudAgents, hudRows } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';

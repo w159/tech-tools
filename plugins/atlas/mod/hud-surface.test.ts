@@ -6,7 +6,7 @@ import { chipCount, elapsedClock, leadSpinnerGlyph, runsCells, runsString, type 
 import { COUNT_ORDER, type UiState } from './atlas-ui';
 import { textWidth } from './theme';
 import type { ClientElements } from 'claude-code';
-import { bandTree, hudPhases, type BandModel } from './band';
+import { bandTree, hudPhases, type BandModel } from './view/band/band';
 import type { SquadAgent, TodoItem } from './contract';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { liveWorkers, queuedMembers } from './data/live';
@@ -14,7 +14,7 @@ import { ownTodos } from './data/todos';
 import { hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
-import { composeSlot } from './slot';
+import { composeSlot } from './view/band/slot';
 import { agentRows, fitStack, padRows, rowSpinnerGlyph, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

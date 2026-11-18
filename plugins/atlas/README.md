@@ -917,7 +917,7 @@ each segment, row and rule also carries a fill or a colour that plain text canno
 show.
 
 **One clock and one glyph key.** A single 100 ms frame loop (`FRAME_MS` in
-`mod/band-motion.ts`, armed in `mod/register.ts`) advances one spinner index: at
+`mod/view/band/band-motion.ts`, armed in `mod/register.ts`) advances one spinner index: at
 most 10 redraws a second, the host's cap. The band, the HUD and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
 screen shows the same frame. One glyph set turns on it: the band, the TODO and
@@ -946,7 +946,7 @@ STATE (glyph, word, clock)  |  PLAN (todo n/m)  |  WORKERS (counts)
 ```
 
 The STATE segment reads one of four words (`runStateOf` in
-`mod/mission-layout.ts`) and is filled to match: `working` with a turning spinner
+`mod/view/band/mission-layout.ts`) and is filled to match: `working` with a turning spinner
 (fill 141), `done` (114, bold dark ink), `blocked` (203), or `idle` (240, with 252
 text). The pill is a fixed 97. The PLAN segment is `todo n/m` with a `▰▱` meter
 when the row is 120 columns or wider, and a `■1` beside it when a worker failed.
@@ -960,11 +960,11 @@ Rules the band follows:
 - **Working** is shown whenever the host reports its turn is on, a worker runs or a
   plan row is running, until the host reports the turn over. The run clock starts at your prompt, never steps
   back, and ends when the host reports the turn idle (`stepRun`,
-  `mod/band-motion.ts`). A closed run has one total, set when it closed and
+  `mod/view/band/band-motion.ts`). A closed run has one total, set when it closed and
   never raised after (`closedTotal`): the band, the run card, the side panel's
   phase row, the board footer and axis all print that same figure. A host turn with no live run, such as a slash command
   typed after a run finished, reads `◐ working` with no clock and opens no run
-  (`hostOnly` in `mod/band.tsx`).
+  (`hostOnly` in `mod/view/band/band.tsx`).
 - **Done** shows the run total, frozen (`● done 1:08` stays 1:08 and does not count on), for 30 seconds
   (`IDLE_AFTER_SECS`), then the segment turns idle (`○ idle · 1:08`).
 - **Blocked** reads `▲ blocked · stop refused 0:37` when the Stop hook refused (or
@@ -972,14 +972,14 @@ Rules the band follows:
   0:37` when workers failed. Those are the only two reasons. A run that ends with a
   failed worker (its dispatch row not closed) or a refused stop reads blocked from
   the end of the run until a new run starts, never `idle` (`failedOpen` in
-  `runStateOf`, `mod/mission-layout.ts`). The band and the side
+  `runStateOf`, `mod/view/band/mission-layout.ts`). The band and the side
   panel read the Stop verdict on the same beat, so both switch on the same update.
 - **Width.** Below the full form the meter goes first, then `todo`, then the
   counts shrink to bare figures, then the state word goes and the clock stays.
   The host draws its own `[-]` handle at the right end of the row; the band does
   not draw one.
 
-At 150 columns (`mod/mission-layout.ts` `standardForms`, via `bandLines`):
+At 150 columns (`mod/view/band/mission-layout.ts` `standardForms`, via `bandLines`):
 
 ```
 ◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo ▰▰▰▰▱▱▱▱▱▱ 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
@@ -1090,7 +1090,7 @@ Code. Click a chip to switch tabs and a `▸` row to expand it.
 **TODO and SUBAGENTS.** `mod/hud.ts` and `mod/hud-surface.ts` draw the HUD under
 the band as closed rounded boxes with one blank row between them. The slot above
 the prompt is exactly the rows drawn: the band row, then the HUD rows, with no
-spacer rows above or below (`composeFixed` in `mod/slot.ts`). The HUD takes every
+spacer rows above or below (`composeFixed` in `mod/view/band/slot.ts`). The HUD takes every
 row of the slot's budget the band leaves and folds when the plan is longer, so a
 host clip eats HUD rows and never the band. 17.15.0 padded the slot to the whole
 budget with blank rows under the HUD; that left an empty gap between the mod and
@@ -1374,7 +1374,7 @@ These are read by the mod (`mod/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/look.
 | -------- | ------- | ------ |
 | `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/register.ts`) |
 | `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/register.ts`) |
-| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/band.tsx`, `mod/look.ts`) |
+| `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/look.ts`) |
 | `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/atlas-ui.ts`) |
 | `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/atlas-ui.ts`) |
 | `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts`; `reducedMotion`, `mod/motion/motion.ts`) |

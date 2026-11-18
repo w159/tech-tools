@@ -1,7 +1,7 @@
 // Round W2 (items F-N of critics/spec-w.md): one chip idiom, honest gate wording, pill caps on the band fill, gates rows cut at the end with a fixed verdict column and `×N` merging,
 // empty tabs with a skeleton and last-run figures, 110 parity, the slow pill breathe, and a real per-gate `last` age.
 import { describe, expect, test } from 'claude-code/testing';
-import { bandRuns, type BandModel } from './band';
+import { bandRuns, type BandModel } from './view/band/band';
 import { hostEnv, uiFromEnv, xtermHex, type Run, type Ui } from './atlas-ui';
 import { busySnap } from './live_fixture';
 import { bodyLines, lineText, panelLines, type PanelModel } from './panel-layout';

@@ -4,7 +4,7 @@ import { cardFrame } from './card-frame';
 import { CARD_MORE_KEY, GOTO_PREFIX, ROUND_BUCKETS, bucketLabel, ctxLevel, roundBucket } from './status-frame';
 import { tabFrame, tabText, type TabId, type TabIn } from './tabs-frame';
 import { hexTo256, uiFromEnv, type Run, type Ui } from './atlas-ui';
-import { bandLook } from './band-frame';
+import { bandLook } from './view/band/band-frame';
 import { chipStyle, tileOf } from './input/clickable';
 import type { Health, HealthCheck } from './data/idle-health';
 

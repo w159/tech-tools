@@ -9,7 +9,7 @@ import { openRowName, ownPlan, todoState } from './data/todos';
 import { plannedText } from './data/core';
 import { hudLines, type HudAgent } from './hud';
 import { CLOSED_KILLED } from './hud-surface';
-import { bandLines, runsText, type MissionModel } from './mission-layout';
+import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };

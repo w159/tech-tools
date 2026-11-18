@@ -899,7 +899,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/band.tsx": {
+    "plugins/atlas/mod/view/band/band.tsx": {
       "crap_moderate": {
         "count": 1
       }
@@ -1838,7 +1838,7 @@
   },
   "runtime_coverage_findings": [],
   "target_keys": [
-    "plugins/atlas/mod/band.tsx:high impact",
+    "plugins/atlas/mod/view/band/band.tsx:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/machine-colonies.js:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/terminal.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/nav-order.js:high impact",

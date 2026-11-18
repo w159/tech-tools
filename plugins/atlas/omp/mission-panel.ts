@@ -1,5 +1,5 @@
 /**
- * Mission Control panel for the omp widget: a thin adapter over mod/mission-layout.ts, the layout the Claude Code band
+ * Mission Control panel for the omp widget: a thin adapter over mod/view/band/mission-layout.ts, the layout the Claude Code band
  * draws too. renderPanel turns the omp PanelModel into a MissionModel, paints each layout run in ANSI truecolor from
  * the shared tone palette, and fills the board slot with the omp todo list. omp renders widget strings through
  * pi-tui Text, which is ANSI aware. Every line is clipped by code point OUTSIDE escape sequences and filled with the
@@ -7,12 +7,12 @@
  * Gate status comes from a throttled async cache over atlas_gates.py.
  */
 import type { MotionCtx, MotionItem } from "../mod/motion/motion";
-import { coreCells } from "../mod/core-row";
+import { coreCells } from "../mod/view/band/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/host/gates";
 import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
-import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
+import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/view/band/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
 import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { withOwnerStates } from "../mod/data/live";
@@ -116,7 +116,7 @@ const channelScope = (c?: string | null) => (c ? c.replace(/\/[^/]*$/, "") : "")
 const channelLead = (c?: string | null) => (c?.includes("/") ? c.slice(c.lastIndexOf("/") + 1) : "");
 
 /** A worker's state: the source's own when it has one (`queued` for a dispatched member the registry does not list yet), else
- * running: the registry lists it, with a tool in flight or thinking between calls (twin: mod/band.tsx workerState; the one rule is mod/data/live.ts workerWord). */
+ * running: the registry lists it, with a tool in flight or thinking between calls (twin: mod/view/band/band.tsx workerState; the one rule is mod/data/live.ts workerWord). */
 const stateOf = (w: PanelWorker): WorkerState => w.state ?? (w.tool && w.tool.active ? "running" : "thinking");
 
 const missionWorker = (w: PanelWorker): MissionWorker => ({

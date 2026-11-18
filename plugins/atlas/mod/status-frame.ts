@@ -9,7 +9,7 @@
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
 import { dataCell, dataStateOf, type DataState } from './data/datastate';
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
-import { bandLook, ctxLevel, latencyLevel } from './band-frame';
+import { bandLook, ctxLevel, latencyLevel } from './view/band/band-frame';
 import { WIRED_HOOKS } from './host/hook-log';
 import { agoText, gatesSummary, promptedOf, severityOf, teamOf, tokenText, type Health } from './data/idle-health';
 import { bucketLabel, chartSeries, CHART_AXIS_MIN, chartMinutes, metricsOf, P95_MIN_SAMPLES, PANEL_CHART_COLS, ROUND_BUCKETS, roundBucket, runFigures, runsOf, STATUS_BUCKETS, type ChartData } from './data/metrics';

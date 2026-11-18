@@ -1,7 +1,7 @@
 // Idle polish, round 2: what the second hostile critic found in the idle and empty states at 110 and 150. One describe per defect.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandRowCount, bandTree, type BandHandlers, type BandModel } from './band';
+import { bandRowCount, bandTree, type BandHandlers, type BandModel } from './view/band/band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv } from './atlas-ui';
 import { healthCardRows } from './hud-surface';

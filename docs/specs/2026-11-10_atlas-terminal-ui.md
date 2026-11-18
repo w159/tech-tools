@@ -37,7 +37,7 @@ Taken from GitHub's Primer CLI guidelines, clig.dev and Evil Martians' progress-
 
 ## Layout
 
-One layout module, `plugins/atlas/mod/mission-layout.ts`, produces tone-tagged runs. `mod/band.tsx` (Claude Code) and
+One layout module, `plugins/atlas/mod/view/band/mission-layout.ts`, produces tone-tagged runs. `mod/view/band/band.tsx` (Claude Code) and
 `omp/mission-panel.ts` (omp) are adapters that paint those runs, so the two harnesses print the same text by
 construction. `contracts/band-golden.ts` asserts it on both.
 
@@ -102,7 +102,7 @@ scorer parses by glyph (TODO, board, plan and band worker rows) keep the circle 
 Every statement below is backed by the file named beside it (paths under `plugins/atlas/`).
 
 - One phase rail. `mod/rail.ts` (`railIds`, `railOf`, `railNo`) is the only place a rail is cut from the contract phases
-  (`RAIL_SKIP` drops `validate`, `blocked`, `done`). The band (`mod/band.tsx`), the side panel model
+  (`RAIL_SKIP` drops `validate`, `blocked`, `done`). The band (`mod/view/band/band.tsx`), the side panel model
   (`mod/pane/sidebar-model.ts`), the panel layout (`mod/panel-layout.ts`) and the omp mission panel
   (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
 - Gauges need an estimate. The Board and the HUD TODO draw `of mm:ss` and the elapsed gauge only for an item that carries
@@ -110,7 +110,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
   `elapsed 00:42` with no gauge; there is no default budget.
 - One tab list. `STRIP_TABS` (`mod/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
   the list the Claude Code side panel strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
-  footer buttons (`BAND_BUTTONS` in `mod/band.tsx`) all draw.
+  footer buttons (`BAND_BUTTONS` in `mod/view/band/band.tsx`) all draw.
 - Board key. `o` runs `openBoard` (`mod/register.ts`). When the Atlas pane is shown, the board is drawn inside that pane
   (view `board`) and a second `o` returns to the route; otherwise it opens the `atlas-board` pane.
 - Compact board. At 60 to 99 cells the state column is set from the widest label, not fixed at 26, so a label is not cut

@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from './contract';
 import { currentPhase, dispatchOpen } from './data/todos';
-import { finalSecsOf, newRunClock, stepRun } from './band-motion';
+import { finalSecsOf, newRunClock, stepRun } from './view/band/band-motion';
 import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
 import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './hud';
 import { RETURNED, markToken, rowWordTone, runsString, stateGlyph, type Ui } from './atlas-ui';

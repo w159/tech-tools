@@ -1,11 +1,11 @@
 /**
  * `/atlas-core`: the four Atlas pillars (contract, verdicts, offload, route) as plain text, from a fresh read of
- * <root>/.atlas/.run. The text is coreReport() from mod/core-row.ts, so it matches the Claude mod's /atlas-core.
+ * <root>/.atlas/.run. The text is coreReport() from mod/view/band/core-row.ts, so it matches the Claude mod's /atlas-core.
  */
 import { statSync } from "node:fs";
 import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { coreReport } from "../mod/core-row";
+import { coreReport } from "../mod/view/band/core-row";
 import { hasCore } from "../mod/data/core";
 import { openGateCount, parseGates } from "../mod/host/gates";
 import { type CoreSource, createCoreSource } from "./core-source";

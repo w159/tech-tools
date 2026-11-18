@@ -2,10 +2,10 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { Run, Ui } from './atlas-ui';
 import { dataInk } from './atlas-ui';
-import { newKindHold, stepKind } from './band-motion';
-import { bandFrameRuns } from './band-frame';
+import { newKindHold, stepKind } from './view/band/band-motion';
+import { bandFrameRuns } from './view/band/band-frame';
 import { eventBuckets, noteHook, resetHookLog } from './host/hook-log';
-import { bandLines, runsText, runStateOf, type MissionModel } from './mission-layout';
+import { bandLines, runsText, runStateOf, type MissionModel } from './view/band/mission-layout';
 import { healthCardRows } from './hud-surface';
 import { fitFields, gateOf, healthDetail, healthRows, type Health } from './data/idle-health';
 import { bodyLines, lineText } from './panel-layout';

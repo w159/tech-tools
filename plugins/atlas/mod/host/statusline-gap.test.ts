@@ -6,7 +6,7 @@ import type { ClientElements, EngineInterface } from 'claude-code';
 import type { Ui } from '../atlas-ui';
 import { stopRefusal } from '../data/runstate';
 import { hudAgents, isRunning, type HudInput } from '../hud';
-import { bandKindOf, bandTree, hudPhases, type BandModel } from '../band';
+import { bandKindOf, bandTree, hudPhases, type BandModel } from '../view/band/band';
 import type { SquadAgent, TodoItem } from '../contract';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
@@ -14,7 +14,7 @@ import { busySnap, NOW } from '../live_fixture';
 import type { LiveSnapshot } from '../orchestra-types';
 import { publishHudState, resetHudStateSig } from '../register';
 import type { Segment } from '../runs';
-import { composeSlot, type SlotPlan } from '../slot';
+import { composeSlot, type SlotPlan } from '../view/band/slot';
 
 type Node = { kind: string; props: Record<string, unknown> };
 const mk = (kind: string) => (props: Record<string, unknown>): Node => ({ kind, props });

@@ -3,12 +3,12 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { panelWorld } from '../contracts/panel-world';
-import { bandTree } from './band';
+import { bandTree } from './view/band/band';
 import { STATE_GLYPHS, STATE_TOKEN, warnMark, type Ui } from './atlas-ui';
 import { blockReasons, gateTally, withCoreTally } from './data/runstate';
 import { busySnap, NOW } from './live_fixture';
 import { bodyLines, lineText } from './panel-layout';
-import { bandLines, runsText, type MissionModel } from './mission-layout';
+import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

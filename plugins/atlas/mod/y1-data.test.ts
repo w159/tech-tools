@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface } from 'claude-code';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
-import { bandFrameRuns } from './band-frame';
+import { bandFrameRuns } from './view/band/band-frame';
 import { cardFrame } from './card-frame';
 import { composeHistory, emptyHistory, flushHistory, HIST_LAT, HIST_MINUTES, HIST_RUNS, historyView, loadHistory, noteHistoryCtx, noteHistoryRun, parseHistory, resetHistory, serializeHistory, type History } from './data/history';
 import { eventMinutes, hookStats, noteHook, noteHookMs, resetHookLog, seedHookLatency } from './host/hook-log';

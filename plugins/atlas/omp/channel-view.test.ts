@@ -310,7 +310,7 @@ const model = (over: Partial<PanelModel> = {}): PanelModel => ({
 	width: 120, maxLines: 10, phase: "implement", spin: "◆", laneSpin: "◐", tick: 1, done: 5, total: 9,
 	workers: [
 		{ name: "explorer-a324", secs: 72, tool: { tool: "ctx_search", target: "dispatch_tripwire.py", active: true }, spark: [1, 3, 5, 2, 6, 7, 4, 2, 5, 6, 3, 1] },
-		{ name: "implementer-band", secs: 48, role: "implementer", tool: { tool: "Edit", target: "mod/band.tsx", active: false } },
+		{ name: "implementer-band", secs: 48, role: "implementer", tool: { tool: "Edit", target: "mod/view/band/band.tsx", active: false } },
 		{ name: "verifier-ui", secs: 12, state: "queued" },
 	],
 	notes: [{ from: "explorer-a324", to: "implementer-band", text: "found 3 call sites" }, { from: "implementer-band", to: "all", text: "band.tsx compiles" }],

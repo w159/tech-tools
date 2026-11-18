@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
-import { coreReport } from "../mod/core-row";
+import { coreReport } from "../mod/view/band/core-row";
 import { coreModel } from "../mod/data/core";
 import type { CoreSource } from "./core-source";
 import * as realPanel from "./mission-panel";

@@ -2,7 +2,7 @@
 // one tab strip in one order, one chip idiom, and tabs that do not repeat each other.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
-import { bandRuns, type BandModel } from './band';
+import { bandRuns, type BandModel } from './view/band/band';
 import { cardFrame } from './card-frame';
 import type { Health, HealthCheck } from './data/idle-health';
 import { busySnap, NOW } from './live_fixture';

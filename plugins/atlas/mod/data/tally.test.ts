@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'claude-code/testing';
-import { bandMotionItems, type MissionModel, type MissionWorker } from '../mission-layout';
+import { bandMotionItems, type MissionModel, type MissionWorker } from '../view/band/mission-layout';
 import { countWords } from '../panel-layout';
 import { stateCounts } from '../hud-surface';
 import type { UiState } from '../atlas-ui';

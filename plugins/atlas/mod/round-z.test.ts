@@ -2,7 +2,7 @@
 // with real data, the active tab always in the strip, one live health figure on the idle band, and the card in the status tab's order.
 import { describe, expect, test } from 'claude-code/testing';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
-import { bandRuns, type BandModel } from './band';
+import { bandRuns, type BandModel } from './view/band/band';
 import { cardFrame } from './card-frame';
 import { busySnap, NOW } from './live_fixture';
 import type { Health, HealthCheck } from './data/idle-health';

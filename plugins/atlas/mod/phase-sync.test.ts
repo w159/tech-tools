@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { bodyLines, type PanelModel } from './panel-layout';
 import { hudAgents, hudLines, type HudInput } from './hud';
-import { hudPhases } from './band';
+import { hudPhases } from './view/band/band';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';

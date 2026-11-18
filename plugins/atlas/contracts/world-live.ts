@@ -1,5 +1,5 @@
 // The fixture world (contracts/band-world.ts) as the inputs the real adapters take, so one frame can be rendered through the Claude Code
-// paths (mod/band.tsx missionModel, mod/hud.ts, mod/view/board/todo-panel.tsx, mod/pane/sidebar-model.ts panelModelOf) and the omp painters
+// paths (mod/view/band/band.tsx missionModel, mod/hud.ts, mod/view/board/todo-panel.tsx, mod/pane/sidebar-model.ts panelModelOf) and the omp painters
 // (omp/mission-panel.ts, omp/hud-paint.ts, omp/todo-panel.ts, omp/panel-view.ts) from ONE world. Nothing here restates a number: counts,
 // phases, gates, worker and todo states and ages all come from `world`. The cross-surface test is mod/consistency.test.ts.
 import type { ChannelNote, SquadAgent, TodoItem } from "../mod/contract";

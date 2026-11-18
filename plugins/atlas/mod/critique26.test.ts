@@ -6,8 +6,8 @@
 //   5  one spinner frame for every surface of a render, even when two renders overlap
 //   6  an idle band's `△` and its words are dim, amber only while working or blocked
 import { describe, expect, test } from 'claude-code/testing';
-import { bandTree } from './band';
-import { bandLines } from './mission-layout';
+import { bandTree } from './view/band/band';
+import { bandLines } from './view/band/mission-layout';
 import { hudAgents, hudRows } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';

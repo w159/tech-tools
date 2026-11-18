@@ -32,7 +32,7 @@ export const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
 ];
 
 /** The tab strip both hosts draw: the five views, then the board toggle (it opens the Board pane, it is not a view). The band's footer
- * buttons (mod/band.tsx BAND_BUTTONS) are this list. Each tab is a click chip named by its label alone. */
+ * buttons (mod/view/band/band.tsx BAND_BUTTONS) are this list. Each tab is a click chip named by its label alone. */
 export const STRIP_TABS: readonly { id: PanelTab | 'board'; label: string }[] = [...PANEL_TABS, { id: 'board', label: 'board' }];
 /** Cells a chip adds around its label (one space each side). */
 export const CHIP_PAD = 2;

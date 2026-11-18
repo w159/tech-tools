@@ -10,10 +10,10 @@ import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement 
 import { SnapshotBuilder } from './data/snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './input/intents';
-import { bandBlockedOf, bandHealth, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
+import { bandBlockedOf, bandHealth, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './view/band/band';
 import { bandKind } from './pane/band-kind';
 import { noteStopVerdict } from './view/transcript/superseded';
-import { composeSlot } from './slot';
+import { composeSlot } from './view/band/slot';
 import { healthCardRows } from './hud-surface';
 import { CARD_MORE_KEY } from './status-frame';
 import { healthLine, type HealthIn } from './data/idle-health';
@@ -22,7 +22,7 @@ import { denyAgeSecs, noteBilling, noteDenied, noteMeasure, noteRunEnd, pulseOf,
 import { healthStripRows, STRIP_ROWS, stripWanted } from './strip-frame';
 import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './data/history';
 import { deniedCalls, gateCounts } from './vocab';
-import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
+import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './view/band/band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';
 import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
@@ -35,7 +35,7 @@ import { ownTodos, planBasis } from './data/todos';
 import { asksUser, gateTally, leadBusy, planBusy, stepBlocked, stopRefusal, withCoreTally } from './data/runstate';
 import { gatesError, headerGroup, openGateCount, parseGates } from './host/gates';
 import { coreModel, hasCore, type CoreModel, type ReportNote } from './data/core';
-import { coreReport } from './core-row';
+import { coreReport } from './view/band/core-row';
 import { noteUsage, type UsageKey } from './host/usage';
 import { registerRouting, registerCompletion } from './input/routing';
 import { disciplinePrompt, reinforceLine, registerDiscipline, type DisciplineDeps } from './host/discipline';
@@ -43,7 +43,7 @@ import { drawnHeaderTally, forgetDrawnHeaders, headerPhaseOf, noteHeaderPattern,
 import { isOlder, registerNotify } from './host/notify';
 import { cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placeFinished } from './view/transcript/placed';
 import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from './atlas-ui';
-import { IDLE_AFTER_SECS } from './mission-layout';
+import { IDLE_AFTER_SECS } from './view/band/mission-layout';
 import { clearLook, lookOf } from './look';
 import { hoverStyle } from './input/clickable';
 import { Motion, MotionDriver, reducedMotion } from './motion/motion';
@@ -434,7 +434,7 @@ export function atlasSlot(els: ClientElements, parts: { /** Y1d: the narrow idle
 	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(parts.lead ? [els.Box({ height: parts.lead, flexShrink: 0, children: [] })] : []), ...(parts.strip ?? []), parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
 }
 
-export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './slot';
+export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from './view/band/slot';
 /** The module's hold across renders: a pure function of the run, reset when no run is on. Test seam: `resetSlotHold`. */
 let slotHeld = 0;
 export const resetSlotHold = (): void => { slotHeld = 0; };

@@ -7,7 +7,7 @@ import { cells, type Ui } from './atlas-ui';
 import type { CoreModel } from './data/core';
 import { asksUser, blockReasons, gateTally } from './data/runstate';
 import { bodyLines, lineText, panelText } from './panel-layout';
-import { bandLines, missionLines, runsText, type MissionModel } from './mission-layout';
+import { bandLines, missionLines, runsText, type MissionModel } from './view/band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const m = (cols: number, over: Partial<MissionModel> = {}): MissionModel => ({

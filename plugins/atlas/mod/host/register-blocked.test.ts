@@ -8,7 +8,7 @@ import { memState } from '../test_helpers';
 import { readHostEntry } from '../fixtures/source-tree';
 import type { ClientElements } from 'claude-code';
 import { worldGates, worldSidebar, worldSnapshot } from '../../contracts/world-live';
-import { bandTree } from '../band';
+import { bandTree } from '../view/band/band';
 import { liveWorkers } from '../data/live';
 import { panelModelOf } from '../pane/sidebar-model';
 import { bodyLines, lineText } from '../panel-layout';

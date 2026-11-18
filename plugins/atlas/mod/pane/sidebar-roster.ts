@@ -3,7 +3,7 @@
 // follow as `unknown` teammates. Pure over the snapshot: the panel model (sidebar-model.ts) turns these into rows.
 import type { SquadAgent } from '../contract';
 import type { LiveSnapshot, Mood } from '../orchestra-types';
-import { isMessageKind } from '../mission-layout';
+import { isMessageKind } from '../view/band/mission-layout';
 import { scrub } from './chrome';
 
 export const isLeadName = (n: string | undefined): boolean => !!n && (n === 'lead' || n.startsWith('lead-'));

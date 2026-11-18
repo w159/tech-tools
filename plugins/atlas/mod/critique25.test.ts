@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { worldGates, worldSidebar, worldSnapshot } from '../contracts/world-live';
 import { PALETTE5, SPIN_FRAMES, leadSpinnerGlyph, spinnerGlyph, toneHex, spinClock, spinFrameOf, DONE_DOUBT, rowWordTone, runsString, type Ui } from './atlas-ui';
-import { bandTree } from './band';
+import { bandTree } from './view/band/band';
 import { boardRowsOf, boardText, boardLines } from './view/board/board-model';
 import { liveWorkers } from './data/live';
 import { todoState } from './data/todos';
