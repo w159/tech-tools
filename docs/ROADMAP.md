@@ -411,7 +411,7 @@ Unreleased, test-verified in source (see `docs/CHANGELOG.md` Unreleased). The he
 - Per-wave cost/token ledger + rollup (persona P2).
 - `atlas-release` changelog assembly from merged PRs (P6).
 - Sweep historical-duplicate detection + contributor reply kit (P6).
-- Signed audit-pack export + read-only connector profile across 13 connectors (P4).
+- Signed audit-pack export + read-only connector profile across 12 connectors (P4).
 - Telemetry gaps 1-7 of findings.json mapping (friction_events, verifications, error_clusters, skill_usage, insights report, pattern_miner) (obs #26593).
 - Headless per-stage orchestration loop for `context_limit_exceeded`.
 - Worktree isolation: worktree live-dispatch gate exercise.
@@ -535,13 +535,12 @@ this session:
    `https://github.com/w159/tech-tools.git`; no `.gitmodules`, no nested `.git`. npm git URLs
    have no subdirectory form, so a git+ URL today would install the whole monorepo, not one
    server.
-2. 6 of 10 (as counted at approval; re-count with `grep -l 'file:../../mcp_node' mcp_servers/*/package.json` before restating) depend on local `file:../../mcp_node/node-*` paths and cannot install standalone:
-   blumira-mcp, kaseya-spanning-backup-mcp, ninjaone-mcp, paylocity-mcp, threatlocker-mcp,
-   vanta-mcp.
-3. `dist/` is gitignored for all 10, and only 3 of 10 (blumira, cipp, threatlocker; re-count with `grep -L prepare mcp_servers/*/package.json`) have a
+2. 5 of 9 (as counted at approval; re-count with `grep -l 'file:../../mcp_node' mcp_servers/*/package.json` before restating) depend on local `file:../../mcp_node/node-*` paths and cannot install standalone:
+   kaseya-spanning-backup-mcp, ninjaone-mcp, paylocity-mcp, threatlocker-mcp, vanta-mcp.
+3. `dist/` is gitignored for all 9, and only 2 of 9 (cipp, threatlocker; re-count with `grep -L prepare mcp_servers/*/package.json`) have a
    `prepare` script. npm runs `prepare` (not `build`) on git installs, so the other 7 would
    install as empty packages.
-4. None of the 10 are published to npm. All names are unscoped (auvik-mcp, blumira-mcp,
+4. None of the 9 are published to npm. All names are unscoped (auvik-mcp,
    cipp-mcp, connectwise-manage-mcp, kaseya-spanning-backup-mcp, knowbe4-mcp, ninjaone-mcp,
    paylocity-mcp, threatlocker-mcp, vanta-mcp).
 

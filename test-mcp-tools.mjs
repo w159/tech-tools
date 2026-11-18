@@ -25,11 +25,10 @@
 //   4. SHAPE     - every tool has a non-empty description and an object inputSchema.
 //
 // Enumerating the whole surface, not just the easy part:
-//   - A connector whose tools hide behind a `*_navigate` domain step (blumira) is
+//   - A connector whose tools hide behind a `*_navigate` domain step is
 //     driven through every domain its navigate tool advertises; `tools/list` is
-//     re-issued after each and the results are unioned. `blumira_navigate` swaps
-//     the listed surface rather than adding to it, so without the union a bare
-//     `tools/list` sees 2 of 31 tools.
+//     re-issued after each and the results are unioned, because a gating navigate
+//     tool swaps the listed surface rather than adding to it.
 //   - A Python connector (falcon) is spawned exactly the way plugins/armada/.mcp.json
 //     spawns it (`uv run --project ... python mcp/_env/load.py <module>`), not as
 //     `node server.mjs`. It registers its domain modules only after a successful
@@ -86,19 +85,6 @@ const CONNECTORS = {
   auvik: {
     floor: 39,
     nocreds: { status: 'auvik_status', bare: ['auvik_navigate', 'auvik_status'], needs: ['AUVIK_USERNAME', 'AUVIK_API_KEY'] },
-  },
-  blumira: {
-    // blumira_navigate + blumira_status + the five domains' tools (29), unioned = 31.
-    // blumira_back is defined in src/domains/navigation.ts but never registered by
-    // server.ts, so it is not part of the shipped surface. A bare `tools/list` shows
-    // 2: blumira_navigate swaps the listed surface per domain, so the harness
-    // navigates all five and unions (see navigate expansion below).
-    floor: 31,
-    nocreds: {
-      status: 'blumira_status',
-      bare: ['blumira_navigate', 'blumira_status'],
-      needs: ['BLUMIRA_JWT_TOKEN', 'BLUMIRA_CLIENT_ID', 'BLUMIRA_CLIENT_SECRET'],
-    },
   },
   cipp: {
     floor: 43,
@@ -370,7 +356,7 @@ function startAuthStub() {
 //
 // A `*_navigate` tool either only describes its domains (knowbe4, ninjaone, panos,
 // paylocity, sonicwall, spanning, threatlocker, vanta - all of which list everything up
-// front) or actually swaps which tools are listed (blumira). Unioning covers
+// front) or actually swaps which tools are listed (a gating navigate tool). Unioning covers
 // both: the describe-only case contributes nothing, the gating case contributes
 // the tools a bare `tools/list` can never show.
 // ---------------------------------------------------------------------------

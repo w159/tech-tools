@@ -7,75 +7,69 @@
   "bundles": {
     "auvik": {
       "package": "mcp_servers/auvik-mcp",
-      "source_sha256": "4c68292c1bec7a8d4e8adfa736d85fcd762ed159b28e7a70d1f1716cd38b28fe",
-      "bundle_sha256": "16287787af1eadff8087210677835377e3f426ca7a75467625a1ecd30388144f",
-      "bytes": 1312071
-    },
-    "blumira": {
-      "package": "mcp_servers/blumira-mcp",
-      "source_sha256": "e4f4ee1a70195976704cedfd3215754a69177dcd38e6dfb12b7be3692320c518",
-      "bundle_sha256": "b61b6abb33af1d0a137f204c573278e48956745f60728295cd76acfd18d3b8e5",
-      "bytes": 789202
+      "source_sha256": "a8f183f0df23baa3021c05fcb98ed4afe0fb4ff567f29ce7d59502e97504b66d",
+      "bundle_sha256": "9c6d17d597cc57a01961e19c30e9a0b8f48cb453f011e31627cfd695ea1d7613",
+      "bytes": 1312023
     },
     "cipp": {
       "package": "mcp_servers/cipp-mcp",
-      "source_sha256": "a7c98fda98cf5d209cf62219474f546251238fe6a7256123215abd9ecb99d6b8",
+      "source_sha256": "1a6a7cc58144348f3a4914b772cb6b0ad81a1d738e7d7bd13e39f9da87a8bfa8",
       "bundle_sha256": "2f1687b52c9f80d6b49846a853478d32a9b6b8e857cb388f5b62b62e6ddcb305",
       "bytes": 986313
     },
     "connectwise": {
       "package": "mcp_servers/connectwise-manage-mcp",
-      "source_sha256": "ff5924b36dd0964b973d410db0ae5a150d2ec39ebe7ab7f37a953d60d431e493",
-      "bundle_sha256": "131152666e147f64d02a767c515863cb9b93c1e66146662f7127d511003dc916",
-      "bytes": 876985
+      "source_sha256": "ba6a1b34ba8189d49e74685cb5c4c8450a296d7852640c8d936cd7dee2f65f1c",
+      "bundle_sha256": "ee3a9886d9d162cc7ffd7e096cc42ecaf56b652a6778ab3e0379ccb6269ddc47",
+      "bytes": 877041
     },
     "knowbe4": {
       "package": "mcp_servers/knowbe4-mcp",
-      "source_sha256": "17b69873be5b378ee818e956cd1095d473db135f4b0446a23aa4e015994ce429",
-      "bundle_sha256": "df115a4a84bb0616eab64184e0b66e557b951b4a2080f1cd5c4658a243e9934b",
-      "bytes": 840401
+      "source_sha256": "fa350e9aac6ff3b6e62feb7946628fcb3f74a0fdd071bbb9a4ff79ee6795c8fd",
+      "bundle_sha256": "b5600c39e5e8e67acee786d52cb4a76ddb74231b0e345458399ad9cef7877147",
+      "bytes": 840353
     },
     "ninjaone": {
       "package": "mcp_servers/ninjaone-mcp",
-      "source_sha256": "87f2813b4d7a7d36d00e75c3899c05eb7aac777e78a1f5a08d46a1e3e8d75a79",
-      "bundle_sha256": "64a2e10ca5db0c81cefb8e2e68c851b5fa9b24fa5513d9d6321a63a7b6d62127",
-      "bytes": 883307
+      "source_sha256": "dd2340c4056a4e0310249b99f77a3db75f2beea5bebbeb735cdd83011525852a",
+      "bundle_sha256": "9ca58e1c5ae9f3e4ca22ed38b29071aa3bc62542cefddd8bf4b550e47edcaee4",
+      "bytes": 883259
     },
     "panos": {
       "package": "mcp_servers/panos-mcp",
-      "source_sha256": "b66fc7d8e4e83a704ad1d21fc1c32983ad4cb5c4aec02c471d03a5d8692d7ea9",
+      "source_sha256": "f5f645e04d8a2153fcf8a51ea03d44cc3dbf892aef3e282da97c4c6273381b87",
       "bundle_sha256": "2f62a6bc506698261894c1deac539c6e875fe08a27896f6cd9c4012950775b86",
       "bytes": 887643
     },
     "paylocity": {
       "package": "mcp_servers/paylocity-mcp",
-      "source_sha256": "097f4bea3069e32a58c8f1bf6377ed67c7880ed05813815db8eaf9fcff6c70d8",
-      "bundle_sha256": "151f8c59304bfb9b4f9f7ae5f6871668cfbe7fe0bc523d847e9d91751fc6105a",
-      "bytes": 780801
+      "source_sha256": "75a6d8c29fb4ebe072e2cb86e8b00efdcf0dea214f939f4d2e71b1a9a6d1f3f4",
+      "bundle_sha256": "2055d5f43249f8625ffab71e03bb3013cbd29ad66cad278bdc91e670c9d535ee",
+      "bytes": 780753
     },
     "sonicwall": {
       "package": "mcp_servers/sonicwall-mcp",
-      "source_sha256": "5e0ae5188d1b1cc982a1ed870e581b27a0051e2f393f8f97d0570bfa8b71c934",
+      "source_sha256": "e9471d1f03223e746b2881f4e9feea027c57f53c6973ead8e052e385750536f9",
       "bundle_sha256": "369cbb2ba4e1e9c4987372d39ba57338dfd046d6ffdfe33d4e4dba2d942cdf20",
       "bytes": 1024205
     },
     "spanning": {
       "package": "mcp_servers/kaseya-spanning-backup-mcp",
-      "source_sha256": "f602a0cad8ffcfaf270c40858812e5dd798b9679990fbbb028c2c708966c45ea",
+      "source_sha256": "56cdaa96088a6e43ad60aca790d7827206dde2d42b80266d03b3f17331259fc9",
       "bundle_sha256": "055851702f5abd2af350a78626d71c7a4908461023cc41b4aebe26b10f8e6d4a",
       "bytes": 776146
     },
     "threatlocker": {
       "package": "mcp_servers/threatlocker-mcp",
-      "source_sha256": "7ba5e7d51baa09fdf9e52821153a0feaabb9c8aee088cc89dbb29cd1f6031aa0",
-      "bundle_sha256": "6b37d9f0482ca7ce2e735654da0bcce80a0844ea64e22c911eabc8ede00b7930",
-      "bytes": 811349
+      "source_sha256": "c72ea782033836fb006f5c5b23391024e63a27dde485ddd72a1b4c9dc8314580",
+      "bundle_sha256": "bd4c705bb7047919fa7bc84d69c582798e9edc8b8e6473023eae44453cc05b43",
+      "bytes": 811411
     },
     "vanta": {
       "package": "mcp_servers/vanta-mcp",
-      "source_sha256": "4b4c87c4263c03edc8ab2a49d1e49238e09d9a878e4980b6445fe62ebfd58c84",
-      "bundle_sha256": "ce3802ea6d33d25d6634bf0111b08dd6c7c40362f3d10ce9a105def24e76b029",
-      "bytes": 782511
+      "source_sha256": "526e459fb3276bf9002e1db296df4ca50003ead59d7b5e3b78d6651d11dcca0f",
+      "bundle_sha256": "ee7b29e3365b712647a0ba0f905c3757839c3e037d10238115266493facc0388",
+      "bytes": 782463
     }
   }
 }

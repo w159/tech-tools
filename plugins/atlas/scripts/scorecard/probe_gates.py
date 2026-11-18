@@ -1283,8 +1283,8 @@ def probe_credwatch(ctx):
     }  # noqa: E731
     must_silent = [
         (
-            "blumira-finding-text",
-            "mcp__plugin_armada_blumira__blumira_findings_list",
+            "vanta-finding-text",
+            "mcp__plugin_armada_vanta__vanta_findings_list",
             txt(
                 json.dumps(
                     {

@@ -128,9 +128,8 @@ harness never lists is a tool whose safety signals were never checked, so a
 credential-less `tools/list` is not the end of the probe:
 
 - A connector that swaps its listed surface behind a `<vendor>_navigate` domain
-  step is walked domain by domain and the results unioned. `blumira` lists 2 tools
-  cold and 30 more across its five domains (findings, agents, users, msp,
-  resolutions), so it is gated no longer: 32 tools, all four checks applied.
+  step is walked domain by domain and the results unioned, so every tool is
+  gated and all four checks apply.
 - A connector that registers its tools only after a successful credential
   exchange gets a stub, not a skip. `falcon` registers its domain modules only
   after an OAuth token exchange - 4 inert diagnostic tools otherwise - so the
@@ -140,7 +139,7 @@ credential-less `tools/list` is not the end of the probe:
 - `GATED` and `SKIP` verdicts still exist for a surface that genuinely cannot be
   enumerated (a missing `uv` or venv for falcon reports a named SKIP with the
   command that fixes it), but nothing currently uses them: the run reports
-  `N/N connector(s), T tools` (13 connectors ship in armada; re-run the harness and quote its total) fully enumerated, 0 gated, 0 skipped. A new
+  `N/N connector(s), T tools` (12 connectors ship in armada; re-run the harness and quote its total) fully enumerated, 0 gated, 0 skipped. A new
   connector that cannot be fully enumerated must say why in its COVERAGE line
   rather than pass quietly on a partial surface.
 
@@ -152,8 +151,7 @@ tools write. The harness refuses to hide this: such a row reads
 `ok (no prose effect markers - agreement check vacuous here)` rather than a bare
 `ok` (`test-mcp-tools.mjs:562`). As of 2026-09-17 that applies to auvik,
 connectwise, falcon (145 tools, 45 annotated `readOnlyHint: false`, zero prose
-markers), knowbe4, paylocity and vanta. It no longer applies to blumira, which
-reports 6 marked against 6 annotated-mutating once its domains are walked.
+markers), knowbe4, paylocity and vanta.
 
 `.atlas/.run/vacuous-check.mjs` is the second-order heuristic used to probe that
 blind spot from the other side: it flags tools that *look* like writes (an HTTP

@@ -15,18 +15,6 @@
       "stateful": false
     },
     {
-      "id": "blumira",
-      "compatRole": "Blumira",
-      "command": "node",
-      "args": [
-        "${BACKENDS_ROOT}/blumira/server.mjs"
-      ],
-      "envPrefixes": [
-        "BLUMIRA_"
-      ],
-      "stateful": true
-    },
-    {
       "id": "cipp",
       "compatRole": "CIPP",
       "command": "node",

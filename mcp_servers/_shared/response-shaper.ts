@@ -319,7 +319,7 @@ export function extractShapeArgs(args: Record<string, unknown>): ShapeArgs {
  *
  * Use this with servers that build tools via the plain MCP `Tool` type and a
  * JSON-schema `inputSchema` object (tsup-based servers such as vanta, paylocity,
- * auvik, blumira, kaseya-spanning, threatlocker).
+ * auvik, kaseya-spanning, threatlocker).
  *
  * Usage:
  * ```ts

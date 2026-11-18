@@ -479,10 +479,6 @@ def _connector_usage_map() -> dict:
 # dashboard test asserts every .mcp.json server has an entry and every key exists.
 CONNECTOR_AUTH = {
     "auvik": [["AUVIK_USERNAME", "AUVIK_API_KEY"]],
-    "blumira": [
-        ["BLUMIRA_JWT_TOKEN"],
-        ["BLUMIRA_CLIENT_ID", "BLUMIRA_CLIENT_SECRET"],
-    ],
     # URL-only remote MCP server: the oauth client id has a shipped default.
     "cipp": [["CIPP_MCP_URL"]],
     "connectwise": [

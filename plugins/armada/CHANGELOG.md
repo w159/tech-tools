@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- Security: gateway mode (`AUTH_MODE=gateway`) in the connectwise-manage and threatlocker MCP servers kept each request's header credentials in `process.env` and never cleared them, so a later request with no headers, or a concurrent one, ran with the previous caller's credentials (CodeQL alerts 61 and 62, `js/user-controlled-bypass`). Credentials now live only in a per-request `AsyncLocalStorage` context, the same design as auvik-mcp and knowbe4-mcp, and `process.env` is never written from a request. Stdio and env-configured mode read env as before. New tests per server prove a request without headers does not see the previous request's credentials. Versions: connectwise-manage-mcp 1.5.5, threatlocker-mcp 1.5.2; armada bundles rebuilt.
+
+### Removed
+
+- Removed: Blumira connector (deprecated): blumira-mcp, node-blumira, armada bundle and references.
+
 ## 2.4.1 - 2026-11-17
 
 ### Fixed

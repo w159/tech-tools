@@ -46,8 +46,7 @@ describe("catalog", () => {
     expect(() => parseCatalog(JSON.stringify({ version: 1, connectors: [c, c] }), "/x")).toThrow(/duplicate connector id "a"/);
   });
 
-  it("the shipped catalog marks blumira stateful and has unique ids", () => {
-    expect(catalog.find((s) => s.id === "blumira")?.stateful).toBe(true);
+  it("the shipped catalog has unique ids", () => {
     expect(new Set(catalog.map((s) => s.id)).size).toBe(catalog.length);
   });
 });
@@ -55,7 +54,7 @@ describe("catalog", () => {
 describe("BackendPool (acceptance 8)", () => {
   let now = 1_000;
   const clock = (): number => now;
-  const stateful = spec("blumira", true);
+  const stateful = spec("stateful-fixture", true);
   const shared = spec("vanta");
 
   function makePool(max = 50) {
@@ -78,15 +77,15 @@ describe("BackendPool (acceptance 8)", () => {
 
   it("gives two users two instances of a stateful connector", () => {
     const { pool, made } = makePool();
-    const a = pool.get("blumira", "u1");
-    const b = pool.get("blumira", "u2");
+    const a = pool.get("stateful-fixture", "u1");
+    const b = pool.get("stateful-fixture", "u2");
     expect(a).not.toBe(b);
-    expect(made.filter((m) => m.spec.id === "blumira")).toHaveLength(2);
+    expect(made.filter((m) => m.spec.id === "stateful-fixture")).toHaveLength(2);
   });
 
   it("gives the same user the same instance", () => {
     const { pool, made } = makePool();
-    expect(pool.get("blumira", "u1")).toBe(pool.get("blumira", "u1"));
+    expect(pool.get("stateful-fixture", "u1")).toBe(pool.get("stateful-fixture", "u1"));
     expect(made).toHaveLength(1);
   });
 
@@ -98,9 +97,9 @@ describe("BackendPool (acceptance 8)", () => {
 
   it("reapIdle closes children idle past the timeout and keeps fresh ones", async () => {
     const { pool, made } = makePool();
-    pool.get("blumira", "old");
+    pool.get("stateful-fixture", "old");
     now += 9_000;
-    pool.get("blumira", "fresh");
+    pool.get("stateful-fixture", "fresh");
     now += 2_000;
     expect(await pool.reapIdle()).toBe(1);
     expect(made[0]?.backend.closed).toBe(true);
@@ -110,13 +109,13 @@ describe("BackendPool (acceptance 8)", () => {
 
   it("evicts the least recently used child at the cap", () => {
     const { pool, made } = makePool(2);
-    pool.get("blumira", "u1");
+    pool.get("stateful-fixture", "u1");
     now += 1;
-    pool.get("blumira", "u2");
+    pool.get("stateful-fixture", "u2");
     now += 1;
-    pool.get("blumira", "u1"); // u1 is now newer than u2
+    pool.get("stateful-fixture", "u1"); // u1 is now newer than u2
     now += 1;
-    pool.get("blumira", "u3");
+    pool.get("stateful-fixture", "u3");
     expect(pool.perUserCount()).toBe(2);
     expect(made[1]?.backend.closed).toBe(true); // u2 evicted
     expect(made[0]?.backend.closed).toBe(false);
@@ -124,13 +123,13 @@ describe("BackendPool (acceptance 8)", () => {
 
   it("transient children are outside the per-user bookkeeping", () => {
     const { pool } = makePool();
-    pool.transient("blumira");
+    pool.transient("stateful-fixture");
     expect(pool.perUserCount()).toBe(0);
   });
 
   it("closeAll closes shared and per-user children", async () => {
     const { pool, made } = makePool();
-    pool.get("blumira", "u1");
+    pool.get("stateful-fixture", "u1");
     pool.get("vanta", "u1");
     await pool.closeAll();
     expect(made.every((m) => m.backend.closed)).toBe(true);

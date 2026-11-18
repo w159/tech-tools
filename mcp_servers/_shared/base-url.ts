@@ -31,7 +31,6 @@
  */
 export type VendorKey =
   | "auvik"
-  | "blumira"
   | "cipp"
   | "connectwise"
   | "kaseya_spanning"
@@ -49,7 +48,6 @@ export type VendorKey =
  *
  * Sources:
  *   auvik        https://support.auvik.com/hc/en-us/articles/204309844
- *   blumira      https://docs.blumira.com/reference
  *   kaseya_spanning  https://developer.kaseya.com/spanning
  *   knowbe4      https://developer.knowbe4.com (US datacenter)
  *   ninjaone     https://app.ninjarmm.com (US region)
@@ -61,7 +59,6 @@ export type VendorKey =
  */
 export const VENDOR_DEFAULTS: Partial<Record<VendorKey, string>> = {
   auvik:           "https://auvikapi.us1.my.auvik.com/v1",
-  blumira:         "https://api.blumira.com/public-api/v1",
   kaseya_spanning: "https://o365-api.spanning.com",
   knowbe4:         "https://us.api.knowbe4.com/v1",
   ninjaone:        "https://app.ninjarmm.com",

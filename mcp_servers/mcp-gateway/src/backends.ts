@@ -14,7 +14,7 @@ export interface BackendSpec {
   command: string;
   args: string[];
   envPrefixes: string[];
-  // Keeps per-session state (Blumira's domain navigation): one child per user.
+  // Keeps per-session state (for example a connector with domain navigation): one child per user.
   stateful: boolean;
 }
 

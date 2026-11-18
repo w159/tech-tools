@@ -76,16 +76,6 @@
       ]
     },
     {
-      "file": "mcp_servers/blumira-mcp/src/domains/*.ts",
-      "exports": [
-        "findingsHandler",
-        "agentsHandler",
-        "usersHandler",
-        "mspHandler",
-        "resolutionsHandler"
-      ]
-    },
-    {
       "file": "mcp_servers/kaseya-spanning-backup-mcp/src/domains/*.ts",
       "exports": [
         "usersHandler",

@@ -27,8 +27,8 @@
 #
 # Project notes:
 #   - TypeScript/Node.js monorepo with three top-level domains:
-#       mcp_node/    — 7 SDK client libraries (node-auvik, node-blumira, etc.)
-#       mcp_servers/ — 10 MCP server packages (auvik-mcp, cipp-mcp, etc.)
+#       mcp_node/    — 6 SDK client libraries (node-auvik, node-ninjaone, etc.)
+#       mcp_servers/ — 9 MCP server packages (auvik-mcp, cipp-mcp, etc.)
 #       plugins/     — 12 domain-cluster Claude plugin definitions (marketplace)
 #   - *.mcpb bundle files are NOT tracked — GitHub's 100 MB hard limit blocks pushes
 #     once bundled node_modules grow past it. Bundles are published as GitHub Release
@@ -183,14 +183,14 @@ telemetry/server/.vercel/
 !.github/**
 
 # ---- mcp_node — TypeScript SDK client libraries ----
-# Covers: node-auvik, node-blumira, node-ninjaone, node-paylocity,
+# Covers: node-auvik, node-ninjaone, node-paylocity,
 #         node-spanning, node-threatlocker, node-vanta
 # Section 5 strips dist/, node_modules/, coverage/, .env* from within.
 !mcp_node/
 !mcp_node/**
 
 # ---- mcp_servers — MCP server packages ----
-# Covers: auvik-mcp, blumira-mcp, cipp-mcp, connectwise-manage-mcp,
+# Covers: auvik-mcp, cipp-mcp, connectwise-manage-mcp,
 #         kaseya-spanning-backup-mcp, knowbe4-mcp, ninjaone-mcp,
 #         paylocity-mcp, threatlocker-mcp, vanta-mcp, _shared/
 # Section 5 strips dist/, node_modules/, .env*, .archive/, *.zip from within.

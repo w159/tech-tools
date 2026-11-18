@@ -571,7 +571,6 @@ In chat, `/atlas:atlas-setup connectors` walks you through setup.
 | NinjaOne | RMM, patching, scripts | `ninjaone_client_id`, `ninjaone_client_secret` | `ninjaone_status` |
 | Kaseya Spanning | Backup (M365/GWS/Salesforce) | `spanning_admin_email`, `spanning_api_token` | `spanning_status` |
 | CIPP | Microsoft 365 multi-tenant | `cipp_base_url` + API key, or client-id/secret | `cipp_status` |
-| Blumira | SIEM / XDR | `blumira_jwt_token` or `blumira_client_id`+`blumira_client_secret` | `blumira_status` |
 | KnowBe4 | Security-awareness data | `knowbe4_api_key` | `knowbe4_status` |
 | ThreatLocker | Zero-trust app control | `threatlocker_api_key` | `threatlocker_status` |
 | Vanta | GRC / compliance | `vanta_client_id`, `vanta_client_secret` | `vanta_status` |
@@ -977,7 +976,7 @@ tech-tools/
 |- plugins/
 |  |- atlas/                 # the plugin
 |  |  |- .claude-plugin/     # plugin.json (userConfig: `atlas_mod_sound` plus 8 decision, Ollama and analytics keys mapped to ATLAS_* by scripts/atlas_env.py; connector keys live in armada)
-|  |  |- (no .mcp.json or mcp/: the 13 connectors ship in plugins/armada/)
+|  |  |- (no .mcp.json or mcp/: the 12 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents

@@ -37,8 +37,8 @@ mode"). Key facts, verified live 2026-10-28 (full detail:
 
   | Role | Connectors (read/write unless noted) |
   |---|---|
-  | `it` | auvik, panos, sonicwall, ninjaone, falcon, threatlocker, blumira, cipp (read+write+destructive); connectwise, knowbe4, spanning, vanta (read+write) |
-  | `compliance` | vanta, knowbe4, threatlocker, blumira, falcon, auvik (read+write) |
+  | `it` | auvik, panos, sonicwall, ninjaone, falcon, threatlocker, cipp (read+write+destructive); connectwise, knowbe4, spanning, vanta (read+write) |
+  | `compliance` | vanta, knowbe4, threatlocker, falcon, auvik (read+write) |
   | `accounting` | connectwise (read+write) |
   | `hr` | paylocity, knowbe4 (read+write) |
   | `planning` | connectwise (read+write); ninjaone, spanning (read) |
@@ -227,7 +227,6 @@ Assign Entra groups (not individuals) to the enterprise application
 | Vendor | Read role | Write role |
 |---|---|---|
 | Auvik | Auvik.Read | Auvik.Write |
-| Blumira | Blumira.Read | Blumira.Write |
 | CIPP | CIPP.Read | CIPP.Write |
 | ConnectWise | ConnectWise.Read | ConnectWise.Write |
 | CrowdStrike Falcon | Falcon.Read | Falcon.Write |
@@ -386,14 +385,11 @@ vendor console alone does not update any of them:
 
 ## Known limits
 
-- Blumira keeps navigation state per MCP session. Through the stateless gateway
-  all users share one child, so one user's `blumira_navigate` changes what
-  others see. The Container App is pinned `minReplicas: 1, maxReplicas: 1`
-  (changed live 2026-09-28, was `maxReplicas: 3` as checked 2026-09-24) so
-  navigation state is now shared between users but at least consistent -
-  every request lands on the same replica. This trades away the 3x
-  restart/deploy availability headroom; a real fix (expose Blumira's tools
-  flat, or keep a child per user) still hasn't shipped.
+- The gateway runs a shared child per connector unless the catalog marks it
+  `stateful: true` (one child per user). No shipped connector is stateful
+  today. The Container App stays pinned `minReplicas: 1, maxReplicas: 1` (set
+  live 2026-09-28 for the earlier stateful connector; re-evaluate the cap
+  separately).
 - Enterprise Managed Auth (Claude's "Managed authorization", silent connection
   via an identity assertion) needs an authorization server that accepts the
   RFC 7523 jwt-bearer grant. Entra does not accept that grant for this purpose,

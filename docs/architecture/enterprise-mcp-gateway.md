@@ -38,7 +38,7 @@ Gaps, each confirmed in source:
 | Access rules are code, not config: adding a connector or a role needs a code change and a rebuild | `src/backends.ts:25-43`, `src/policy.ts` |
 | No Google support. Google's OAuth has no DCR, no CIMD, opaque access tokens, and no group claims, so "IdP as the authorization server" cannot work for Google | Google discovery doc fetched 2026-10-27: no `registration_endpoint`, no `client_id_metadata_document_supported` |
 | Entra as the AS has no DCR or CIMD, so every MCP client needs a pre-registered client ID typed in by hand, and silent Enterprise Managed Auth is impossible (Entra does not accept the RFC 7523 grant for this) | `mcp-gateway-design.md` Known limits |
-| One shared child process per vendor for all users: stateful servers leak state across users (Blumira navigation) | `mcp-gateway-design.md` Known limits |
+| One shared child process per vendor for all users: stateful servers leak state across users | `mcp-gateway-design.md` Known limits |
 | Audit goes to stdout only, has no schema version, request ID, IdP, client ID, or effect class, and there are no saved queries | `src/gateway.ts:95-117` |
 | No IaC. The deployment was built by hand with `az`, and the build script hard-codes one organization's subscription and registry | `scripts/acr-build.sh:21-23` |
 | Not packaged: no plugin, skill, or agent knows the gateway exists | repo-wide grep |
@@ -167,7 +167,7 @@ live tool catalog before any policy change ships.
 
 - Each connector runs as its own stdio child with only its own env prefix
   (kept from today).
-- Connectors declared `stateful: true` in the catalog (Blumira today) get a
+- Connectors declared `stateful: true` in the catalog (none today) get a
   child per user, reaped after an idle timeout. Others share one child.
   Fixes the cross-user state leak.
 - The catalog moves from code to a JSON file generated from

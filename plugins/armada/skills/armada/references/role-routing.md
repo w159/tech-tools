@@ -8,7 +8,7 @@ connectors each department uses.
 | Department | Skills available | Agents | Vendor connectors |
 |---|---|---|---|
 | it-operations | change-management, compliance-tracking, process-optimization, resource-planning, risk-assessment, vendor-management, auvik-*, ninjaone-*, psa-*, spanning-* | armada:it-ops | NinjaOne, ConnectWise, Auvik, Spanning |
-| security | approval-queue-triage, audit-forensics, blumira-*, evidence-gap-hunter, framework-audit-readiness, knowbe4-*, risk-heatmap, threatlocker-*, vanta-* | armada:security | Vanta, KnowBe4, ThreatLocker, Blumira |
+| security | approval-queue-triage, audit-forensics, evidence-gap-hunter, framework-audit-readiness, knowbe4-*, risk-heatmap, threatlocker-*, vanta-* | armada:security | Vanta, KnowBe4, ThreatLocker |
 | microsoft-365 | api-patterns, calendar, cipp-*, graph-*, licensing, mailboxes, security, teams, users, files | armada:m365 | CIPP |
 | hr | compensation-benchmarking, employee-handbook, interview-prep, org-planning, paylocity-*, people-analytics, recruiting-pipeline | armada:hr | Paylocity |
 | finance | audit-support, close-management, financial-statements, journal-entry-prep, pandadoc-*, pax8-*, reconciliation, variance-analysis | armada:finance | PandaDoc, Pax8 |

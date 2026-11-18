@@ -45,7 +45,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { getConfig, CwManageClient } from "./api-client.js";
+import { getConfig, CwManageClient, configStorage, normalizeBaseUrl, DEFAULT_BASE_URL, type CwManageConfig } from "./api-client.js";
 import { getEntraConfig, createJwksClient, validateToken } from "./auth/middleware.js";
 import {
   handleProtectedResource,
@@ -361,6 +361,9 @@ async function startHttpTransport(): Promise<void> {
         // ------------------------------------------------------------------
         // Gateway mode: extract CW credentials from headers
         // ------------------------------------------------------------------
+        // Header credentials are scoped to this request via AsyncLocalStorage;
+        // process.env is never written from a request.
+        let requestConfig: CwManageConfig | undefined;
         if (isGatewayMode) {
           const headers = req.headers as Record<
             string,
@@ -390,31 +393,33 @@ async function startHttpTransport(): Promise<void> {
             return;
           }
 
-          process.env.CW_MANAGE_COMPANY_ID = companyId;
-          process.env.CW_MANAGE_PUBLIC_KEY = publicKey;
-          process.env.CW_MANAGE_PRIVATE_KEY = privateKey;
-          process.env.CW_MANAGE_CLIENT_ID = clientId;
-          if (baseUrl) {
-            process.env.CW_MANAGE_BASE_URL = baseUrl;
-          }
+          requestConfig = {
+            baseUrl: normalizeBaseUrl(baseUrl?.trim() || DEFAULT_BASE_URL),
+            companyId,
+            publicKey,
+            privateKey,
+            clientId,
+          };
         }
 
         // ------------------------------------------------------------------
         // MCP handler
         // ------------------------------------------------------------------
-        const server = createMcpServer();
-        const transport = new StreamableHTTPServerTransport({
-          sessionIdGenerator: undefined,
-          enableJsonResponse: true,
-        });
+        await configStorage.run(requestConfig as CwManageConfig, async () => {
+          const server = createMcpServer();
+          const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true,
+          });
 
-        res.on("close", () => {
-          transport.close();
-          server.close();
-        });
+          res.on("close", () => {
+            transport.close();
+            server.close();
+          });
 
-        await server.connect(transport as unknown as Transport);
-        transport.handleRequest(req, res);
+          await server.connect(transport as unknown as Transport);
+          transport.handleRequest(req, res);
+        });
       };
 
       handleMcp().catch((err) => {

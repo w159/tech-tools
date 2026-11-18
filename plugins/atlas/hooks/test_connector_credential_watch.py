@@ -78,7 +78,7 @@ class CredentialWatchFalsePositives(unittest.TestCase):
         b = self._blocks
         benign = [
             (
-                "mcp__plugin_armada_blumira__blumira_findings_list",
+                "mcp__plugin_armada_vanta__vanta_findings_list",
                 b(
                     json.dumps(
                         {

@@ -488,7 +488,6 @@ const REAL_DEVICES: Array<[string, string]> = [
 	["mcp__atlas_connectwise_cw_status", "mcp__atlas_connectwise__cw_status"],
 	["mcp__atlas_connectwise_cw_test_connection", "mcp__atlas_connectwise__cw_test_connection"],
 	["mcp__atlas_auvik_auvik_status", "mcp__atlas_auvik__status"],
-	["mcp__atlas_blumira_blumira_status", "mcp__atlas_blumira__status"],
 	["mcp__atlas_cipp_cipp_status", "mcp__atlas_cipp__status"],
 	["mcp__azure_azure_acr", "mcp__azure__azure_acr"],
 	["mcp__azure_azure_role", "mcp__azure__azure_role"],
@@ -510,8 +509,8 @@ const REAL_DEVICES: Array<[string, string]> = [
 	["mcp__plaid_get_mock_data_prompt", "mcp__plaid__get_mock_data_prompt"],
 ];
 
-test("all 31 real device names classify as the MCP tool, never as a file Write", () => {
-	expect(REAL_DEVICES.length).toBe(31);
+test("all 30 real device names classify as the MCP tool, never as a file Write", () => {
+	expect(REAL_DEVICES.length).toBe(30);
 	for (const [device, expected] of REAL_DEVICES) {
 		expect(claudeNamesForCall("write", { path: `xd://${device}`, content: "{}" })).toEqual([expected]);
 	}

@@ -18,7 +18,6 @@ loaders fall back to values saved under the atlas plugin, and
 | Vanta | security | vanta_client_id, vanta_client_secret | client_id + client_secret |
 | KnowBe4 | security | knowbe4_api_key | api_key |
 | ThreatLocker | security | threatlocker_api_key | api_key |
-| Blumira | security | blumira_jwt_token (or blumira_client_id + blumira_client_secret) | jwt_token OR client_id + client_secret |
 | CIPP | microsoft-365 | cipp_mcp_url, cipp_client_id | mcp_url (client id has a working default) |
 | CrowdStrike Falcon | security | falcon_client_id, falcon_client_secret, falcon_base_url, falcon_member_cid | client_id + client_secret |
 | Paylocity | hr | paylocity_client_id, paylocity_client_secret, paylocity_company_id | client_id + client_secret + company_id |

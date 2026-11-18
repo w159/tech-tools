@@ -1,7 +1,7 @@
 import { createServer as createHttpServer } from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createMcpServer } from './server.js';
-import { getCredentials, resetClient } from './utils/client.js';
+import { getCredentials, credentialsStorage } from './utils/client.js';
 import { logger } from './utils/logger.js';
 
 function startHttpServer(): void {
@@ -34,18 +34,17 @@ function startHttpServer(): void {
       return;
     }
 
+    // Header credentials live only in this request's AsyncLocalStorage context;
+    // process.env is never written. No headers means no credentials, and
+    // tools/list still works without them.
+    let requestCreds: { apiKey: string; organizationId: string } | undefined;
     if (isGatewayMode) {
       const apiKey = req.headers['x-threatlocker-api-key'] as string;
       const organizationId = req.headers['x-threatlocker-organization-id'] as string;
-      if (apiKey && organizationId) {
-        // Reset client when credentials change
-        resetClient();
-        process.env.THREATLOCKER_API_KEY = apiKey;
-        process.env.THREATLOCKER_ORGANIZATION_ID = organizationId;
-      }
-      // Don't reject — tools/list works without credentials
+      if (apiKey && organizationId) requestCreds = { apiKey, organizationId };
     }
 
+    await credentialsStorage.run(requestCreds as { apiKey: string; organizationId: string }, async () => {
     // Create fresh server + transport per request (stateless)
     const server = await createMcpServer();
     const transport = new StreamableHTTPServerTransport({
@@ -60,6 +59,7 @@ function startHttpServer(): void {
 
     await server.connect(transport);
     await transport.handleRequest(req, res);
+    });
   });
 
   httpServer.listen(port, host, () => {

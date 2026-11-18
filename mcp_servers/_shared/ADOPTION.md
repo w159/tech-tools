@@ -60,7 +60,7 @@ Note: path aliases require a loader at runtime (e.g. `tsconfig-paths`) for plain
 With tsup, add `alias: { "@shared": "../../_shared" }` in `tsup.config.ts` — no
 runtime loader needed.
 
-### tsup servers (auvik, blumira, kaseya-spanning, paylocity, threatlocker, vanta)
+### tsup servers (auvik, kaseya-spanning, paylocity, threatlocker, vanta)
 
 tsup bundles relative imports across directory boundaries without any tsconfig change to
 `rootDir` for the JS output. However, if the server uses `dts: true` in `tsup.config.ts`,
@@ -81,7 +81,7 @@ params on a tool.  Pick exactly one depending on how your server registers tools
 
 Use this when your server builds tool definitions as plain objects conforming to
 the MCP SDK's `Tool` type and sets an `inputSchema` property.  This covers every
-tsup-based server in the repo: vanta, paylocity, auvik, blumira, kaseya-spanning,
+tsup-based server in the repo: vanta, paylocity, auvik, kaseya-spanning,
 threatlocker.
 
 ```typescript

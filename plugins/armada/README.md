@@ -32,7 +32,7 @@ The skill asks the admin one question at a time, shows a dry run, and changes no
 | Department | Covers | Agent | Connectors |
 |---|---|---|---|
 | it-operations | MSP IT ops: RMM, PSA, networking, backup | `armada-it-ops` | NinjaOne, ConnectWise, Auvik, Spanning |
-| security | GRC, SIEM, EDR, awareness training | `armada-security` | Vanta, KnowBe4, ThreatLocker, Blumira |
+| security | GRC, SIEM, EDR, awareness training | `armada-security` | Vanta, KnowBe4, ThreatLocker |
 | microsoft-365 | M365 administration and identity | `armada-m365` | CIPP |
 | hr | HR and payroll operations | `armada-hr` | Paylocity |
 | finance | Finance and revenue ops | `armada-finance` | PandaDoc, Pax8 |
@@ -57,7 +57,7 @@ or describe the task and let `references/role-routing.md` pick the agent.
 
 ## Credentials
 
-Armada owns the 13 vendor connectors (`plugins/armada/.mcp.json`, servers under
+Armada owns the 12 vendor connectors (`plugins/armada/.mcp.json`, servers under
 `plugins/armada/mcp/`) and their `userConfig` keys. Set credentials through
 `/plugin config` on armada. The connector loaders also fall back to values
 saved under the atlas plugin, and `~/.config/atlas/atlas.env` still works.

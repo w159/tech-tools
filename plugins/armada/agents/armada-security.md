@@ -1,6 +1,6 @@
 ---
 name: armada-security
-description: "Security & Compliance department agent for armada. Security and compliance operations: GRC (Vanta), security awareness (KnowBe4), zero-trust endpoint (ThreatLocker), and SIEM/detection (Blumira). Covers audit readiness, evidence-gap tracking, risk heatmaps, and approval triage. Carries org branding, policies, and compliance context for this department. Route here when a user's task falls within this department's domain."
+description: "Security & Compliance department agent for armada. Security and compliance operations: GRC (Vanta), security awareness (KnowBe4), and zero-trust endpoint (ThreatLocker). Covers audit readiness, evidence-gap tracking, risk heatmaps, and approval triage. Carries org branding, policies, and compliance context for this department. Route here when a user's task falls within this department's domain."
 ---
 
 # armada-security - Security & Compliance department agent
@@ -12,15 +12,15 @@ do within this domain.
 
 ## Domain
 
-Security and compliance operations: GRC (Vanta), security awareness (KnowBe4), zero-trust endpoint (ThreatLocker), and SIEM/detection (Blumira). Covers audit readiness, evidence-gap tracking, risk heatmaps, and approval triage.
+Security and compliance operations: GRC (Vanta), security awareness (KnowBe4), and zero-trust endpoint (ThreatLocker). Covers audit readiness, evidence-gap tracking, risk heatmaps, and approval triage.
 
 ## Vendor connectors
 
-Vanta, KnowBe4, ThreatLocker, Blumira
+Vanta, KnowBe4, ThreatLocker
 
 ## Skills in this department
 
-approval-queue-triage, audit-forensics, blumira-agents, blumira-api-patterns, blumira-findings, blumira-msp, blumira-resolutions, blumira-users, evidence-gap-hunter, framework-audit-readiness, knowbe4-api-patterns, knowbe4-phishing, knowbe4-reporting, knowbe4-training, knowbe4-users, risk-heatmap, threatlocker-api-patterns, threatlocker-approval-requests, threatlocker-audit-log, threatlocker-computer-groups, threatlocker-computers, threatlocker-organizations, vanta-vendor-risk-rollup, vanta-vulnerability-triage
+approval-queue-triage, audit-forensics, evidence-gap-hunter, framework-audit-readiness, knowbe4-api-patterns, knowbe4-phishing, knowbe4-reporting, knowbe4-training, knowbe4-users, risk-heatmap, threatlocker-api-patterns, threatlocker-approval-requests, threatlocker-audit-log, threatlocker-computer-groups, threatlocker-computers, threatlocker-organizations, vanta-vendor-risk-rollup, vanta-vulnerability-triage
 
 These are reference files, not registered skills: read one with the Read tool, not the Skill tool. Each lives at
 `${CLAUDE_PLUGIN_ROOT}/skills/armada/departments/security/skills/<name>/SKILL.md`;

@@ -243,7 +243,6 @@ Still open:
   contributes no sub-discovery. The only fix inside atlas would be moving the omp-native files to `agents/`, which
   Claude Code also reads, so none is made. Workaround, outside the source tree: load the directory
   (`omp --extension <repo>/plugins/atlas/omp` or `extensions:` in `config.yml`; `omp/README.md`, Install).
-- `node test-mcp-tools.mjs`: blumira lists 31 tools vs recorded floor 32.
 
 - Completion-gate conditions (a)–(l), self-improvement nudge, chronicle and ingest now
   run in omp through `omp/stop-bridge.ts` (see the matrix). Memory capture runs there too
@@ -289,6 +288,6 @@ Mux workers: `scripts/atlas_mux.py` translates Claude-only agent vocabulary befo
 Other plugins on Codex:
 
 - `programmer`: installs (`codex plugin add programmer@tech-tools`, skills `programmer:principles` and `programmer:review` listed). Its opt-in scan-on-edit hook reads `tool_input.file_path`, which `apply_patch` does not carry, so it does nothing there; its `principles-judge` agent cannot ship in a plugin (convert it the same way if wanted).
-- `armada`: not supported. Its 13 connectors are `.mcp.json` entries configured through `userConfig` and `${user_config.*}` substitution; the Codex manifest has no `userConfig` and the installed binary contains neither `userConfig` nor `${user_config`, so every connector would start with literal placeholders. Its 11 department agents also cannot ship in a plugin. No `.codex-plugin` manifest is added, so the Codex marketplace does not list it.
+- `armada`: not supported. Its 12 connectors are `.mcp.json` entries configured through `userConfig` and `${user_config.*}` substitution; the Codex manifest has no `userConfig` and the installed binary contains neither `userConfig` nor `${user_config`, so every connector would start with literal placeholders. Its 11 department agents also cannot ship in a plugin. No `.codex-plugin` manifest is added, so the Codex marketplace does not list it.
 
 Gaps: no Codex Read/Grep/Glob tool; hooks need trust in Codex (`/hooks`); live hook execution inside a Codex model turn is unverified (no login).

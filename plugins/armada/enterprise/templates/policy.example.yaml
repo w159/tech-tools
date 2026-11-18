@@ -43,7 +43,7 @@ grants:
 
   # Security reads everything it monitors and can write in the SIEM and EDR.
   - role: security
-    connectors: [blumira, falcon, threatlocker, vanta]
+    connectors: [falcon, threatlocker, vanta]
     effects: [read, write]
   - role: security
     connectors: [auvik, cipp, panos, sonicwall, spanning, paylocity]

@@ -183,18 +183,18 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(sorted(used - set(manifest["userConfig"])), [])
 
     def test_armada_declares_the_vendor_connectors_and_atlas_declares_none(self):
-        """The 13 vendor MCP connectors and their 54 credential keys live on armada."""
+        """The 12 vendor MCP connectors and their 50 credential keys live on armada."""
         manifest = json.loads((PLUGIN / ".claude-plugin" / "plugin.json").read_text())
         self.assertEqual(manifest.get("mcpServers"), "./.mcp.json")
         servers = json.loads((PLUGIN / ".mcp.json").read_text())["mcpServers"]
         self.assertEqual(
             sorted(servers),
             sorted(
-                "auvik blumira cipp connectwise falcon knowbe4 ninjaone panos "
+                "auvik cipp connectwise falcon knowbe4 ninjaone panos "
                 "paylocity sonicwall spanning threatlocker vanta".split()
             ),
         )
-        self.assertEqual(len(manifest["userConfig"]), 54)
+        self.assertEqual(len(manifest["userConfig"]), 50)
         for name in servers:
             self.assertTrue(
                 (PLUGIN / "mcp" / name).is_dir(), f"mcp/{name} missing on armada"

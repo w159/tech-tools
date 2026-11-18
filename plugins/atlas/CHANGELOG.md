@@ -1,6 +1,8 @@
 # Changelog
 ## Unreleased
 
+- Removed: Blumira connector (deprecated): blumira-mcp, node-blumira, armada bundle and references.
+
 - Colony herdr-web-ui CodeQL triage: ssh known_hosts is created atomically with mode 0o600 (no exists-then-write race); anchored a regex alternation in fresh-install-docker.ts.
 
 - Security (CodeQL triage): test and parity-rig chmod calls now use owner-only modes (0o700/0o600/0o400); the recall-gate marker dir and file are created 0o700/0o600; `sprite_review.ts` writes into a `mkdtemp` dir instead of fixed `/tmp` paths; `fault-log.ts` and `gen-agents.ts` drop their exists-then-use races; the dashboard hash router parses params into null-prototype objects; `atlas_doctor` anchors its github.com remote check; `atlas_control` logs connector names with `%r`; test regexes are grouped and `esc` helpers escape backslashes.

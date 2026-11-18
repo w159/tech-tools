@@ -1,7 +1,7 @@
 # Contributing
 
 This repo is the `tech-tools` plugin marketplace for Claude Code. It publishes three plugins
-(atlas, armada, programmer) and holds the MCP servers and Node libraries behind armada's 13 vendor
+(atlas, armada, programmer) and holds the MCP servers and Node libraries behind armada's 12 vendor
 connectors. Read `CLAUDE.md` and `AGENTS.md` before making changes - they define the layout and
 the propagation rules that keep the layers in sync.
 
@@ -50,7 +50,7 @@ committed so the test harness runs against a fresh clone without a build step.
   one; `--list` prints the known names.
 - The harness launches each connector exactly as `plugins/armada/.mcp.json` declares it - the
   twelve Node connectors as `plugins/armada/mcp/<name>/server.mjs` over MCP stdio, `falcon`
-  through its `uv run --project plugins/armada/mcp/falcon ...` entry (13 servers in all) - with placeholder
+  through its `uv run --project plugins/armada/mcp/falcon ...` entry (12 servers in all) - with placeholder
   credentials in a from-scratch child environment, so it needs no real
   credentials and cannot reach a live vendor appliance. Per connector it checks BOOT
   (`initialize` + `tools/list` answered), FLOOR (no tool-count regression below the baseline
@@ -61,10 +61,9 @@ committed so the test harness runs against a fresh clone without a build step.
   intentional tool-surface change updates that connector's floor in the same commit.
 - Every tool a connector can register must be reachable by the gate: a tool the harness never
   lists is a tool whose safety signals were never checked. Connectors that swap their listed
-  surface behind a `<vendor>_navigate` step are walked domain by domain and unioned (`blumira`:
-  2 cold + 30 across 5 domains), and `falcon`, which registers its domain modules only after an
+  surface behind a `<vendor>_navigate` step are walked domain by domain and unioned, and `falcon`, which registers its domain modules only after an
   OAuth exchange, is probed against a loopback stub answering `POST /oauth2/token` and nothing
-  else. A clean run enumerates every one of the 13 connectors fully, with 0 gated and 0 skipped.
+  else. A clean run enumerates every one of the 12 connectors fully, with 0 gated and 0 skipped.
 - `GATED` and `SKIP` are still real verdicts for a surface that cannot be enumerated (a missing
   `uv` or venv for falcon reports a named SKIP with the fix command). Neither is a clean pass
   and neither is a failure; if you add a connector that cannot be fully enumerated, say why in

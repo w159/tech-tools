@@ -1,6 +1,6 @@
 {
   "name": "connectwise-manage-mcp",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "ConnectWise Manage (PSA) MCP server for Claude",
   "type": "module",
   "main": "dist/index.js",

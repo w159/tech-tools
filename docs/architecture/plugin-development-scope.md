@@ -96,8 +96,8 @@ Edit targets for an atlas change: whichever of `skills/`, `agents/`, `hooks/`,
 
 ```
 plugins/armada/
-├── .mcp.json           # 13 vendor connector server definitions
-├── mcp/                # the 13 connector bundles
+├── .mcp.json           # 12 vendor connector server definitions
+├── mcp/                # the 12 connector bundles
 ├── agents/             # one department agent per file (armada-data.md, armada-it-ops.md, ...)
 └── skills/             # department skills carrying org branding, policy, compliance context
 ```
@@ -119,7 +119,7 @@ the plugins are built on:
 
 - **Shared plugin libraries:** `plugins/_standards/` and `plugins/_templates/`.
 - **Vendor connectors that armada department agents call:**
-  - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, Blumira, CIPP,
+  - `mcp_servers/<svc>-mcp/` - the MCP server per vendor (Auvik, CIPP,
     ConnectWise Manage, KnowBe4, NinjaOne, PAN-OS, Paylocity, SonicWall, Spanning, ThreatLocker, Vanta;
     CrowdStrike Falcon is a Python connector under `plugins/armada/mcp/falcon`).
   - `.mcpb` archives some of those servers pack into (currently threatlocker and panos).

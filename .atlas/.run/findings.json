@@ -13820,5 +13820,59 @@
     "verified_at": "2026-11-18T13:30:46+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gateway-creds-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Gateway-mode blumira/connectwise-manage/threatlocker scope header credentials per request (ALS); fixes CodeQL 61/62",
+    "evidence": [
+      "new gateway-credentials tests fail on old code (3/2/2 failed) and pass on new; vitest 22/51/30 pass; builds ok; armada tests 47 pass; check_versions ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/<svc>-mcp && npx vitest run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T13:39:25+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "fallow-resetclient-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Removed unused threatlocker resetClient; gateway-creds suites still green",
+    "evidence": [
+      "vitest threatlocker 30, blumira 22, connectwise-manage 51 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd mcp_servers/<svc>-mcp && npx vitest run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T13:49:07+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "blumira-removal-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Blumira connector removed; connectwise-manage and threatlocker gateway credentials per request",
+    "evidence": [
+      "pytest CI set 315 passed; atlas touched tests 41 passed; bun 5141 pass 0 fail; vitest connectwise 51, threatlocker 30, mcp-gateway 223 passed; check_versions ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "python -m pytest -q scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T14:10:49+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

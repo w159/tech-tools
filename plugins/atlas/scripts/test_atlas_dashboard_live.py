@@ -402,7 +402,7 @@ class ConnectorTruth(LiveCase):
         # single-secret vendors are genuinely usable; everything else needs more
         self.assertEqual(
             {n for n, r in rows.items() if r["configured_hint"]},
-            {"blumira", "knowbe4", "threatlocker"},
+            {"knowbe4", "threatlocker"},
         )
         self.assertEqual(rows["auvik"]["missing_required"], ["AUVIK_USERNAME"])
         self.assertEqual(rows["auvik"]["health"], "unconfigured")
@@ -412,7 +412,6 @@ class ConnectorTruth(LiveCase):
     def test_valid_alternate_setups_are_configured(self):
         rows = self.status(
             {
-                "BLUMIRA_JWT_TOKEN": "j",
                 "CIPP_MCP_URL": "https://cipp.example/api/ExecMcp",
                 "PANOS_HOST": "fw.example",
                 "PANOS_API_KEY": "k",
@@ -422,7 +421,7 @@ class ConnectorTruth(LiveCase):
                 "AUVIK_API_KEY": "k",
             }
         )
-        for name in ("blumira", "cipp", "panos", "ninjaone", "auvik"):
+        for name in ("cipp", "panos", "ninjaone", "auvik"):
             self.assertTrue(rows[name]["configured_hint"], name)
             self.assertEqual(rows[name]["missing_required"], [], name)
         self.assertEqual(rows["auvik"]["health"], "idle")

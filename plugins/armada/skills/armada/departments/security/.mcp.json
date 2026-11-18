@@ -12,10 +12,6 @@
     "threatlocker": {
       "providedBy": "plugins/armada/.mcp.json",
       "server": "threatlocker"
-    },
-    "blumira": {
-      "providedBy": "plugins/armada/.mcp.json",
-      "server": "blumira"
     }
   }
 }

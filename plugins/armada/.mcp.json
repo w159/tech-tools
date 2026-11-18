@@ -15,22 +15,6 @@
         "CFG_AUVIK_REGION": "${user_config.auvik_region}"
       }
     },
-    "blumira": {
-      "command": "node",
-      "args": [
-        "--import",
-        "${CLAUDE_PLUGIN_ROOT}/mcp/_env/load.mjs",
-        "${CLAUDE_PLUGIN_ROOT}/mcp/blumira/server.mjs"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio",
-        "ATLAS_ENV_FILE": "${CLAUDE_PLUGIN_ROOT}/.env",
-        "CFG_BLUMIRA_JWT_TOKEN": "${user_config.blumira_jwt_token}",
-        "CFG_BLUMIRA_CLIENT_ID": "${user_config.blumira_client_id}",
-        "CFG_BLUMIRA_CLIENT_SECRET": "${user_config.blumira_client_secret}",
-        "CFG_BLUMIRA_BASE_URL": "${user_config.blumira_base_url}"
-      }
-    },
     "cipp": {
       "type": "http",
       "url": "${user_config.cipp_mcp_url}",

@@ -24,7 +24,7 @@ Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in 
 | Role agents (`atlas:*`) | 11 | `plugins/atlas/agents/` |
 | Hooks | 19 programs, 24 bindings, 9 lifecycle events | `plugins/atlas/hooks/hooks.json` |
 | Scripts | 78 non-test Python files | `plugins/atlas/scripts/` |
-| MCP connectors | 13, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
+| MCP connectors | 12, each off until credentials exist | `plugins/armada/.mcp.json` (shipped by the optional armada plugin) |
 | omp agents | 11, generated | `plugins/atlas/omp/agents/` |
 
 The marketplace also carries `armada` (an optional organization layer: department agents and the vendor connectors) and `programmer` (code review based on The Pragmatic Programmer). Their licenses and contents are listed in [plugins/README.md](plugins/README.md).

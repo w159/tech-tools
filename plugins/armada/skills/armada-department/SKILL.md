@@ -25,7 +25,7 @@ ls "${CLAUDE_PLUGIN_ROOT}/skills/armada/departments"
 | Department | Covers | Agent | Connectors |
 |---|---|---|---|
 | it-operations | MSP IT ops: RMM, PSA, networking, backup | armada-it-ops | NinjaOne, ConnectWise, Auvik, Spanning |
-| security | GRC, SIEM, EDR, awareness training | armada-security | Vanta, KnowBe4, ThreatLocker, Blumira |
+| security | GRC, SIEM, EDR, awareness training | armada-security | Vanta, KnowBe4, ThreatLocker |
 | microsoft-365 | M365 administration and identity | armada-m365 | CIPP |
 | hr | HR and payroll operations | armada-hr | Paylocity |
 | finance | Finance and revenue ops | armada-finance | PandaDoc, Pax8 |

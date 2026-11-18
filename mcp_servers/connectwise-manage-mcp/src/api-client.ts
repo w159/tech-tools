@@ -15,6 +15,7 @@
  *   CW_MANAGE_REJECT_UNAUTHORIZED - Set to "false" to allow self-signed certs (default: "true")
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import http from "node:http";
 import https from "node:https";
 import { cleanEnv } from "@shared/clean-env.js";
@@ -28,7 +29,27 @@ export interface CwManageConfig {
   clientId: string;
 }
 
+/**
+ * Gateway mode: credentials from request headers live only in this store for
+ * the duration of one request. They are never written to process.env, so one
+ * caller's credentials cannot be seen by another.
+ */
+export const configStorage = new AsyncLocalStorage<CwManageConfig>();
+
+/** Strip trailing slashes and default to https:// when no scheme is given. */
+export function normalizeBaseUrl(raw: string): string {
+  const rawUrl = raw.replace(/\/+$/, "");
+  return rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
+    ? rawUrl
+    : `https://${rawUrl}`;
+}
+
+export const DEFAULT_BASE_URL = "https://api-na.myconnectwise.net";
+
 export function getConfig(): CwManageConfig | null {
+  const requestConfig = configStorage.getStore();
+  if (requestConfig) return requestConfig;
+
   const companyId = process.env.CW_MANAGE_COMPANY_ID;
   const publicKey = process.env.CW_MANAGE_PUBLIC_KEY;
   const privateKey = process.env.CW_MANAGE_PRIVATE_KEY;
@@ -45,17 +66,11 @@ export function getConfig(): CwManageConfig | null {
   // template placeholder `${user_config.cw_manage_base_url}` through as the env
   // value when the optional config field is left blank. Strip those, plus any
   // empty/whitespace-only values, before deciding to fall back to the default.
-  const DEFAULT_BASE_URL = "https://api-na.myconnectwise.net";
-
-  const rawUrl = (
+  const baseUrl = normalizeBaseUrl(
     cleanEnv(process.env.CW_MANAGE_BASE_URL) ||
-    cleanEnv(process.env.CW_MANAGE_URL) ||
-    DEFAULT_BASE_URL
-  ).replace(/\/+$/, "");
-  const baseUrl =
-    rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
-      ? rawUrl
-      : `https://${rawUrl}`;
+      cleanEnv(process.env.CW_MANAGE_URL) ||
+      DEFAULT_BASE_URL,
+  );
 
   return { baseUrl, companyId, publicKey, privateKey, clientId };
 }

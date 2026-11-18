@@ -10,7 +10,7 @@ mapping per department.
 | Department dir | Display name | Domain | Owning agent | Vendor connectors |
 |---|---|---|---|---|
 | it-operations | IT Operations | MSP IT ops: RMM, PSA, networking, backup | armada:it-ops | NinjaOne, ConnectWise, Auvik, Spanning |
-| security | Security and Compliance | GRC, SIEM, EDR, awareness | armada:security | Vanta, KnowBe4, ThreatLocker, Blumira |
+| security | Security and Compliance | GRC, SIEM, EDR, awareness | armada:security | Vanta, KnowBe4, ThreatLocker |
 | microsoft-365 | Microsoft 365 | M365 administration and identity | armada:m365 | CIPP |
 | hr | HR and Payroll | HR and payroll operations | armada:hr | Paylocity |
 | finance | Finance and Revenue Ops | Finance, proposals, licensing, invoicing | armada:finance | PandaDoc, Pax8 |

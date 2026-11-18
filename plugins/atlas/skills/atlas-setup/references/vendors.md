@@ -1,6 +1,6 @@
 # Atlas connectors reference
 
-Thirteen vendor MCP connectors are bundled inside the armada plugin under a **flat**
+Twelve vendor MCP connectors are bundled inside the armada plugin under a **flat**
 layout: `plugins/armada/mcp/<name>/` (install atlas and armada together). All Node connectors ship as a single
 `server.mjs` ESM bundle. Falcon ships as vendored Python source
 (`pyproject.toml` + `falcon_mcp/`) and is launched with `uv`.
@@ -11,7 +11,7 @@ plugin defaults to `""`. Filling a vendor's required keys **on the armada plugin
 
 | Kind | Connectors |
 | --- | --- |
-| Node bundles (`mcp/<name>/server.mjs`) | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
+| Node bundles (`mcp/<name>/server.mjs`) | auvik, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
 | Python vendored (`mcp/falcon/`) | falcon (requires `uv` on PATH) |
 
 ## userConfig key reference
@@ -27,7 +27,6 @@ Verified 2026-09-02 against `plugins/armada/.mcp.json`,
 | Connector | Entry point | userConfig keys | Required to enable | Base-URL / region default | Where to get credentials |
 |---|---|---|---|---|---|
 | Auvik | `mcp/auvik/server.mjs` | auvik_username, auvik_api_key, auvik_region | auvik_username, auvik_api_key | region default `us1` | Auvik web app: Admin → API |
-| Blumira | `mcp/blumira/server.mjs` | blumira_jwt_token, blumira_client_id, blumira_client_secret, blumira_base_url | Either blumira_jwt_token **or** blumira_client_id + blumira_client_secret | base_url default `https://api.blumira.com/public-api/v1` | Blumira app: Settings → API keys |
 | CIPP | `mcp/cipp/server.mjs` | cipp_base_url, cipp_api_key, cipp_tenant_id, cipp_client_id, cipp_client_secret | cipp_base_url, plus EITHER cipp_api_key **or** cipp_tenant_id + cipp_client_id + cipp_client_secret | self-hosted CIPP URL (no public default) | Self-hosted CIPP / Entra app registration |
 | ConnectWise Manage | `mcp/connectwise/server.mjs` | cw_manage_company_id, cw_manage_public_key, cw_manage_private_key, cw_manage_client_id, cw_manage_base_url | all four non-base_url keys | base_url default `https://api-na.myconnectwise.net` | CW Manage API Members + developer.connectwise.com clientId |
 | Spanning | `mcp/spanning/server.mjs` | spanning_admin_email, spanning_api_token, spanning_platform, spanning_api_url | spanning_admin_email, spanning_api_token | platform default `m365` | Spanning admin console → API token |
@@ -45,7 +44,6 @@ Verified 2026-09-02 against `plugins/armada/.mcp.json`,
 | Pattern | Connectors | Cold-start tools/list (this workspace) |
 |---|---|---|
 | Credential-gated shell | connectwise | 2 until keys complete |
-| Navigate + status shell | blumira | 2 |
 | Always-on full catalog + `*_status` | auvik 39, cipp 43, spanning 14, knowbe4 30, ninjaone 45, paylocity 16, threatlocker 19, vanta 28 | full list; domain tools fail with MISSING_CREDENTIALS when unconfigured |
 | Falcon inert-then-full | falcon | **4** tools unconfigured (`falcon_status` → MISSING_CREDENTIALS); full catalog after auth |
 

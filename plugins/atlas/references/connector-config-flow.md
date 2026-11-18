@@ -161,8 +161,8 @@ For each connector:
 
 1. **Initialize** over stdio JSON-RPC (`initialize` + `notifications/initialized`).
 2. **List tools** (`tools/list`) - expect at least a `*_status` tool. Some
-   connectors expand tool count only after credentials resolve (ConnectWise /
-   Blumira progressive disclosure). Unconfigured **Falcon** stays inert with a
+   connectors expand tool count only after credentials resolve (ConnectWise
+   progressive disclosure). Unconfigured **Falcon** stays inert with a
    4-tool diagnostic surface including `falcon_status`.
 3. **Call status** (`tools/call` on `*_status`) with no arguments.
 4. Interpret status honestly:
@@ -185,7 +185,7 @@ Dashboard-side checks:
 
 Dated test logs (per-connector tool counts, harness runs, the unexpanded-placeholder case) are kept in [docs/archive/connector-config-observed-2026.md](../../../docs/archive/connector-config-observed-2026.md). They are historical records, not the current contract. The current floors are in `connector-tool-disclosure.md`.
 
-Current state of the wiring: all 13 connectors declared in `plugins/armada/.mcp.json` (auvik, blumira, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta) expose a `*_status` tool (`cw_status` for connectwise). Falcon boots inert without credentials, with 4 diagnostic tools including `falcon_status`, and registers its full catalog only after auth succeeds. Blumira and ConnectWise disclose tools progressively. Run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from this repo so the dashboard's health `script` points at source, not an install or cache copy.
+Current state of the wiring: all 12 connectors declared in `plugins/armada/.mcp.json` (auvik, cipp, connectwise, falcon, knowbe4, ninjaone, panos, paylocity, sonicwall, spanning, threatlocker, vanta) expose a `*_status` tool (`cw_status` for connectwise). Falcon boots inert without credentials, with 4 diagnostic tools including `falcon_status`, and registers its full catalog only after auth succeeds. ConnectWise discloses tools progressively. Run `python3 plugins/atlas/scripts/atlas_dashboard.py ensure` from this repo so the dashboard's health `script` points at source, not an install or cache copy.
 
 ## Troubleshooting
 

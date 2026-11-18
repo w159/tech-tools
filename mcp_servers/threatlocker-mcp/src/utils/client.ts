@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { ThreatLockerClient } from 'node-threatlocker';
 import { resolveBaseUrl } from '../domains/_helpers.js';
 import { logger } from './logger.js';
@@ -18,23 +19,22 @@ interface Credentials {
   baseUrl: string;
 }
 
+// Gateway mode: header credentials for the current request only. Never copied
+// into process.env, so one caller's key cannot reach another caller.
+export const credentialsStorage = new AsyncLocalStorage<{ apiKey: string; organizationId: string }>();
+
 export function getCredentials(): Credentials | null {
-  const apiKey = cleanEnv(process.env.THREATLOCKER_API_KEY);
+  const requestCreds = credentialsStorage.getStore();
+  const apiKey = requestCreds?.apiKey ?? cleanEnv(process.env.THREATLOCKER_API_KEY);
   if (!apiKey) {
     logger.warn('Missing THREATLOCKER_API_KEY');
     return null;
   }
-  const organizationId = cleanEnv(process.env.THREATLOCKER_ORGANIZATION_ID) || undefined;
+  const organizationId = requestCreds?.organizationId ?? (cleanEnv(process.env.THREATLOCKER_ORGANIZATION_ID) || undefined);
   // resolveBaseUrl returns the env-var value when set, or the hardcoded
   // default (https://portalapi.g.threatlocker.com/portalapi) when unset.
   const baseUrl = resolveBaseUrl('threatlocker', cleanEnv(process.env.THREATLOCKER_BASE_URL))!;
   return { apiKey, organizationId, baseUrl };
-}
-
-export function resetClient(): void {
-  _client = null;
-  _credKey = null;
-  logger.debug('Reset ThreatLocker client');
 }
 
 export async function getClient(): Promise<any> {

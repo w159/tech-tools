@@ -15,7 +15,6 @@ first two columns, the placeholder pass checks the floor) and by
 | Connector | Tools unconfigured | Configured floor | Meta tools listed without credentials |
 |---|---|---|---|
 | auvik | 2 | 39 | `auvik_navigate`, `auvik_status` |
-| blumira | 2 | 31 | `blumira_navigate`, `blumira_status` (domain tools appear after `blumira_navigate`) |
 | cipp | 1 | 43 | `cipp_status` |
 | connectwise | 2 | 52 | `cw_status`, `cw_test_connection` |
 | falcon | 4 | 145 | `falcon_status`, `falcon_check_connectivity`, `falcon_list_enabled_modules`, `falcon_list_enabled_tools` |
@@ -39,7 +38,7 @@ as configure-and-restart, not as an endpoint sweep (enforced by
 The dashboard decides per connector from `CONNECTOR_AUTH` in
 `scripts/atlas_dashboard.py`, mirroring what each `*_status` names as required:
 a secret alone is not enough (auvik also needs a username, vanta a client id, panos
-a host, ...), and alternate setups count (blumira JWT only, cipp base URL + API key,
+a host, ...), and alternate setups count (cipp base URL + API key,
 ninjaone `NINJAONE_AUTH_MODE=user`). "Test connector" starts the server exactly as
 `.mcp.json` does, calls `<vendor>_status`, and reports `configured` from it.
 

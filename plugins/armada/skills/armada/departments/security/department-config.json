@@ -1,7 +1,7 @@
 {
   "name": "security-compliance",
   "version": "1.2.3",
-  "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), ThreatLocker (zero-trust endpoint), and Blumira (SIEM and detection), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
+  "description": "Security and compliance operations. Bundles Vanta (SOC 2/ISO/HIPAA GRC), KnowBe4 (security awareness), and ThreatLocker (zero-trust endpoint), alongside core audit-readiness, evidence-gap, risk-heatmap, and approval-triage skills.",
   "mcpServers": "./.mcp.json",
   "author": {
     "name": "w159",
@@ -24,8 +24,6 @@
     "audit",
     "phishing",
     "evidence",
-    "blumira",
-    "siem",
     "email-security"
   ],
   "userConfig": {
@@ -77,28 +75,6 @@
       "type": "string",
       "title": "ThreatLocker base URL",
       "description": "Optional. Leave blank to use the default shard."
-    },
-    "blumira_client_id": {
-      "type": "string",
-      "title": "Blumira client ID",
-      "description": "Blumira OAuth2 client ID. Use this plus the secret, or supply a JWT token instead."
-    },
-    "blumira_client_secret": {
-      "type": "string",
-      "title": "Blumira client secret",
-      "description": "Blumira OAuth2 client secret.",
-      "sensitive": true
-    },
-    "blumira_jwt_token": {
-      "type": "string",
-      "title": "Blumira JWT token",
-      "description": "Pre-issued Blumira JWT bearer token (alternative to client ID/secret).",
-      "sensitive": true
-    },
-    "blumira_base_url": {
-      "type": "string",
-      "title": "Blumira base URL",
-      "description": "Optional. Leave blank to use the default (https://api.blumira.com/public-api/v1)."
     }
   }
 }

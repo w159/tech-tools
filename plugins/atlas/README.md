@@ -16,7 +16,7 @@ session, so your context window holds reports instead of raw output.
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
-| Connectors | None. The 13 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
+| Connectors | None. The 12 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
 
 ## Contents
 

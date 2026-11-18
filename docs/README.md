@@ -32,7 +32,7 @@ appliance. Four checks per connector: BOOT, FLOOR (no tool-count regression), AG
 (`DESTRUCTIVE:` / `VISIBLE-TO-OTHERS:` prose must carry `readOnlyHint: false`), SHAPE. The
 contract it enforces is `standards/connector-safety-signals.md`.
 
-Last run: exit 0, PASS - 575 tools across 13 connectors (re-run `node test-mcp-tools.mjs` and quote the printed total), 0 safety-signal mismatches, and every
+Last run: exit 0, PASS - 543 tools across 12 connectors (re-run `node test-mcp-tools.mjs` and quote the printed total), 0 safety-signal mismatches, and every
 connector fully enumerated (0 gated, 0 skipped). "Fully enumerated" is the point: a tool the
 harness never lists is a tool whose safety signals were never checked, so connectors that hide
 tools behind a `<vendor>_navigate` step are walked domain by domain and unioned, and falcon -
@@ -42,7 +42,6 @@ stub that answers `POST /oauth2/token` and nothing else.
 | Server | Status | Tools (floor) | Notes |
 |--------|--------|---------------|-------|
 | auvik | PASS | 39 (39) | no prose effect markers, so AGREEMENT is vacuous here |
-| blumira | PASS | 32 (32) | 6 marked, 6 annotated; 2 listed cold + 30 behind 5 `blumira_navigate` domains |
 | cipp | PASS | 43 (43) | 12 marked mutating, 15 annotated mutating |
 | connectwise | PASS | 52 (52) | no prose effect markers, so AGREEMENT is vacuous here |
 | falcon | PASS | 145 (145) | Python connector, launched via `uv`; 45 annotated mutating, 0 prose markers, so AGREEMENT is vacuous here |

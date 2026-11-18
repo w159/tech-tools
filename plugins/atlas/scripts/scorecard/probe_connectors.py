@@ -69,7 +69,7 @@ def run(opts):
 only_secret = run({k: "x" for k in sens})
 unusable = ["auvik", "cipp", "connectwise", "spanning", "falcon", "ninjaone", "paylocity", "vanta", "panos"]
 fp = [n for n in unusable if only_secret.get(n)]
-valid = [("blumira", {"blumira_jwt_token": "x"}), ("panos", {"panos_host": "h", "panos_api_key": "x"}),
+valid = [("panos", {"panos_host": "h", "panos_api_key": "x"}),
          ("cipp", {"cipp_base_url": "u", "cipp_api_key": "x"}),
          ("ninjaone", {"ninjaone_client_id": "x", "ninjaone_auth_mode": "user"})]
 fn = [n for n, o in valid if not run(o).get(n)]

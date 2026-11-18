@@ -1,11 +1,11 @@
 # Atlas connectors setup guide
 
-The armada plugin bundles **thirteen** vendor MCP connectors (atlas and armada
+The armada plugin bundles **twelve** vendor MCP connectors (atlas and armada
 must be installed together; `plugins/armada/` paths below):
 
 | Kind | Path | Connectors |
 | --- | --- | --- |
-| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, blumira, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
+| Node ESM bundles | `mcp/<name>/server.mjs` | auvik, cipp, connectwise, spanning, knowbe4, ninjaone, panos, paylocity, threatlocker, vanta, sonicwall |
 | Python (uv project) | `mcp/falcon/` | falcon |
 
 There is **no** department subdirectory layout (`mcp/hr/`, `mcp/security/`, ...) in
@@ -27,14 +27,14 @@ After any of the above: **reload Claude Code**. Full verified flow + E2E matrix:
 `../../references/connector-config-flow.md`.
 
 **Elicitation:** when the user has not named a vendor, ask ONE multiSelect of the
-thirteen connectors with enabled/disabled state (detected, not guessed). Never
+twelve connectors with enabled/disabled state (detected, not guessed). Never
 collect secrets in free-text chat.
 
 Per-vendor keys: `vendors.md` next to this file.
 
-## The thirteen connectors
+## The twelve connectors
 
-auvik, blumira, cipp, connectwise, falcon, spanning, knowbe4, ninjaone, panos,
+auvik, cipp, connectwise, falcon, spanning, knowbe4, ninjaone, panos,
 paylocity, sonicwall, threatlocker, vanta.
 
 Falcon needs `uv` on PATH; the other twelve (including panos and sonicwall) need Node.
@@ -42,7 +42,7 @@ Falcon needs `uv` on PATH; the other twelve (including panos and sonicwall) need
 ## No-args behavior: status scan
 
 1. Read effective armada credentials (pluginConfigs / `.env` / dashboard marks).
-2. Mark each of the thirteen ENABLED iff required keys in `vendors.md` are non-empty.
+2. Mark each of the twelve ENABLED iff required keys in `vendors.md` are non-empty.
 3. Prefer `*_status` tools for runtime confirmation (including `falcon_status`).
    Unconfigured Falcon stays inert with a 4-tool diagnostic surface.
 

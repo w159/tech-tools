@@ -19,7 +19,6 @@ plugins/armada/
       load.mjs           # Node env preloader (ATLAS_ENV_FILE + CFG_* → canonical env)
       load.py            # Python twin for Falcon
     auvik/server.mjs
-    blumira/server.mjs
     cipp/server.mjs
     connectwise/server.mjs
     spanning/server.mjs
@@ -47,7 +46,7 @@ obsolete.
 Every `userConfig` key in `plugin.json` defaults to the empty string. Node
 connectors start over stdio and expose at least a `*_status` / `cw_status` tool;
 with required keys empty, domain tools return MISSING_CREDENTIALS / NOT
-CONFIGURED (ConnectWise/Blumira additionally shrink the tool list until configured).
+CONFIGURED (ConnectWise additionally shrink the tool list until configured).
 
 **Falcon:** boots inert without credentials (diagnostic tools + `falcon_status`
 only) and expands to the full catalog after successful auth. Match that pattern

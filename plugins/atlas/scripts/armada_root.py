@@ -1,6 +1,6 @@
 """Locate the armada plugin root, which owns the vendor MCP connectors.
 
-The 13 vendor connectors (.mcp.json, mcp/<vendor>/, their userConfig) moved from
+The 12 vendor connectors (.mcp.json, mcp/<vendor>/, their userConfig) moved from
 atlas to armada. The atlas dashboard and control plane still show them, so they
 read armada's files from here. One resolver, used by atlas_dashboard.py and
 atlas_control.py.
