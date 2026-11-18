@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Falcon connector: `falcon_status` now attempts one re-authentication when the 30 minute OAuth token has expired, instead of reporting AUTH_FAILED for a long-running process with valid credentials.
 - CI: the new armada-bundles job failed on a clean runner with "Cannot find module 'typescript'": tsup 8.5.1 requires typescript as a peer, and the toolchain only found it through a global install on the dev box. `mcp_servers/_toolchain` now pins typescript 5.9.3 (the version the connectors lock). A clean clone without NODE_PATH rebuilds byte-identical bundles. No shipped file changed.
 
 ### Changed

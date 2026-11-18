@@ -338,6 +338,13 @@ class FalconMCPServer:
         authenticated = bool(
             self.falcon_client is not None and self.falcon_client.is_authenticated()
         )
+        # The OAuth token expires after 30 minutes and only real tool calls refresh
+        # it, so a long-running process would report AUTH_FAILED here with valid
+        # credentials. Try one re-authentication before reporting.
+        if self.mode != "inert" and self.falcon_client is not None and not authenticated:
+            authenticated = bool(self.falcon_client.authenticate())
+            if not authenticated:
+                self.auth_error = self.falcon_client.auth_failure_message()
         if self.mode == "inert":
             if self.auth_error and self.auth_error.startswith("MISSING_CREDENTIALS"):
                 state = "MISSING_CREDENTIALS"
