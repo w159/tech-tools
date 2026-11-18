@@ -2,6 +2,22 @@
 
 ## atlas 17.28.0 (unreleased additions) - 2026-11-17
 
+- Audit fixes (branch `atlas/audit-fixes-1117`, crew `crew-1649305f31`), each with a regression test in `hooks/test_audit_*.py` or `scripts/test_audit_scripts.py`:
+  - `hooks/git_guard.py` `_relevant` also tests the command with quotes and backslashes removed, so `g""it push origin main` reaches the protected-branch check.
+  - `hooks/bash_advisor.py` scans the whole command for `sh -c` and `eval` wrappers (the 8192-character window is gone) and counts a wrapper only in command position, so a quoted argument that mentions `sh -c "git commit"` is no longer read as a commit.
+  - `hooks/dispatch_tripwire_core.py` `_scope_problem` denies a dispatch that carries more than one distinct `SCOPE:` line.
+  - `hooks/event_dispatch.py` prints a systemMessage naming the PreToolUse hooks it skipped when the event budget is spent.
+  - `hooks/dispatch_tripwire.py`, `session_boot.py` and `prompt_optimizer.py` fail open with a fault row and a visible message when their core cannot be imported.
+  - `hooks/completion_gate_core.py` `_nondocs_changed` ignores paths under `.atlas/`. Files that were already dirty at session start are not yet excluded.
+  - `scripts/atlas_mux.py` `seat_model` honors the scope-matrix model for every seat on the claude harness; audit/high explorers now run on sonnet as `atlas_resolve.py` reports.
+  - `scripts/atlas_crew.py` `_stop_pidfile` returns None when the pid's argv cannot be read.
+  - `tsc --noEmit -p plugins/atlas/tsconfig.json` reports 0 errors (was 82), and `.github/workflows/tests.yml` runs it. The CI step pins `typescript@5` through `bunx` and has not run in CI yet.
+  - `colony/herdr-web-ui/server/machine-security.ts` `canSendSecret` accepts `x-forwarded-proto: https` only beside other proxy evidence.
+  - Root `CLAUDE.md` cites symbols instead of line numbers; `docs/architecture/atlas-harness-parity.md` cites point at the `_core` files; the README says which tools read-only agents lose.
+  - Verified 2026-11-17: `atlas_test.py run --jobs 8` hooks PASS 78 files, scripts PASS 170 files; `bun test omp mod` 5017 pass, 0 fail; herdr `bun test server/machine` 58 pass.
+
+- Audit record, no source change: a read-only audit of `plugins/atlas/` on 2026-11-17 (4-worker team `td2d9a3` plus static checks) reported 36 issues, 15 medium and 21 low; the next entry fixes 14 of the medium ones. Baseline at the time: hooks suite 3277 passed, scripts suite 6328 passed, `bun test omp mod` 0 fail (9 fail under `NO_COLOR=1`), `tsc --noEmit -p plugins/atlas/tsconfig.json` 82 errors. The completion gate asked for this entry (condition f) although `git status` showed no tracked change.
+
 - Crew workers take their role's tier: a worker with no model or effort from env, worker entry or plan now gets `model:` and `effort:` from `agents/<role>.md` (`atlas_crew.py` `worker_model`, `worker_effort`, `role_effort`).
 - New `plugins/atlas/scripts/atlas_test.py`: `run` runs each test file of the hooks and scripts suites as its own process from a pool (`--jobs`, `--suite`, `--changed [BASE]`), and `select <path>...` prints the test files a change can affect. Each file runs under pytest from the first interpreter that has it (`ATLAS_TEST_PYTHON`, `.venv/bin/python`, then PATH). Measured 2026-11-17 on 18 cores at `--jobs 8`: both suites (241 files) in 172.9 s wall, against about 17 minutes one suite after the other. Documented in `docs/AGENTS.md` Commands.
 - Completion gate (b): `_canon_segments` in `hooks/completion_gate_core.py` compares a compound reproduction per `;`, `&&`, `||` segment, so a self-stamped row whose segment ran passing is credited. Limit: pass status is the whole command's. Documented in `docs/reference/atlas-reference.md`.

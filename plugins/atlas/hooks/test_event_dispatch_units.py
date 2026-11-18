@@ -449,7 +449,12 @@ class RunEventEdgeTest(unittest.TestCase):
             hot = sys.modules["atlas_analytics_hot"]
             out = ed.run_event("PreToolUse", '{"tool_name": "Bash"}', harness="claude")
         self.assertEqual(ran, [])
-        self.assertEqual(out, (0, "", ""))
+        code, stdout, stderr = out
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr, "")
+        message = json.loads(stdout)["systemMessage"]
+        self.assertRegex(message, r"\ba\b")
+        self.assertRegex(message, r"\bb\b")
         self.assertEqual([c.args[0] for c in fault.call_args_list], ["a", "b"])
         self.assertIsInstance(fault.call_args_list[0].args[1], TimeoutError)
         recorded = hot.record.call_args.args[0]

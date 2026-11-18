@@ -1,4 +1,5 @@
 import type { SshTarget } from "../shared/machines.ts";
+import { cameThroughProxy } from "./access.ts";
 
 export function shellQuote(value: string): string { return `'${value.replaceAll("'", "'\\''")}'`; }
 
@@ -25,7 +26,17 @@ export function sameOrigin(request: Request): boolean {
     return new URL(origin).origin === expected.origin;
   } catch { return false; }
 }
+
+// x-forwarded-proto counts only beside other proxy evidence (access.ts cameThroughProxy). The header itself and the Host
+// (a direct LAN client has a non-loopback Host too) prove nothing, so both are neutralised before asking.
+function forwardedHttps(request: Request): boolean {
+  if (request.headers.get("x-forwarded-proto") !== "https") return false;
+  const rest = new Headers(request.headers);
+  rest.delete("x-forwarded-proto");
+  rest.set("host", "localhost");
+  return cameThroughProxy(rest);
+}
 export function canSendSecret(request: Request): boolean {
   const url = new URL(request.url);
-  return url.protocol === "https:" || request.headers.get("x-forwarded-proto") === "https" || ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  return url.protocol === "https:" || forwardedHttps(request) || ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
 }

@@ -1,7 +1,7 @@
 // Every delegated worker shows its name in its role's colour (agents/<role>.md `color:`), whether it runs in-process or as a tmux
 // team or crew worker. The table lives inline in theme.ts (the host loader refuses .md imports from mod modules), so this test is
 // what keeps it in step with the agent files.
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'claude-code/testing';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseFrontmatter, personaColor, PERSONA_COLORS } from './data/personas';

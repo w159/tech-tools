@@ -448,6 +448,25 @@ def _strip_updated_input(merged):
     return code, json.dumps(doc) + "\n", err
 
 
+def _add_system_message(merged, skipped):
+    """Tell the model and user which hooks the spent budget skipped (a skip is not a deny)."""
+    code, out, err = merged
+    if code == 2:
+        return merged
+    msg = "[atlas] event_dispatch budget spent: skipped hook(s) %s, so those gates did not run for this call." % (
+        ", ".join(dict.fromkeys(skipped))
+    )
+    try:
+        doc = json.loads(out) if out.strip() else {}
+        if not isinstance(doc, dict):
+            return merged
+    except ValueError:
+        return merged
+    prior = doc.get("systemMessage")
+    doc["systemMessage"] = prior + "\n\n" + msg if isinstance(prior, str) and prior else msg
+    return code, json.dumps(doc) + "\n", err
+
+
 def run_event(event, raw, harness=None):
     """Run every applicable hook for one event payload; returns (exit code, stdout, stderr).
     Codex apply_patch / spawn_agent / update_plan payloads are rewritten to the Claude shape first
@@ -463,7 +482,7 @@ def run_event(event, raw, harness=None):
     budget = BUDGET_S.get(event, 30.0)
     results = []
     global _FAULTS
-    faults, slow = [], []
+    faults, slow, skipped = [], [], []
     _FAULTS = faults
     for variant in variants:
         vraw = json.dumps(variant) if atlas_harness.was_translated(variant) else raw
@@ -479,6 +498,7 @@ def run_event(event, raw, harness=None):
             if left <= 0:
                 _fault(name, TimeoutError("event_dispatch budget spent"), cwd)
                 faults.append(name)
+                skipped.append(name)
                 continue
             gate = _PREFILTER.get(name)
             if gate is not None and not gate.search(vraw):
@@ -492,6 +512,8 @@ def run_event(event, raw, harness=None):
     merged = _codex_safe(event, payload, merge(event, results))
     if translated:
         merged = _strip_updated_input(merged)
+    if skipped and event == "PreToolUse":
+        merged = _add_system_message(merged, skipped)
     _record_analytics(event, variants[0], results, (time.monotonic() - started) * 1000.0, slow, faults)
     return merged
 

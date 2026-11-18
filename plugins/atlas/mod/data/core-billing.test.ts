@@ -1,6 +1,6 @@
 // Dollars only for a worker billed per token: a plan login (init apiKeySource "none") still writes a
 // total_cost_usd estimate in its result event, which is not a charge.
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'claude-code/testing';
 import { coreModel, type CoreInput } from './core';
 
 const emptyIn = (over: Partial<CoreInput> = {}): CoreInput =>

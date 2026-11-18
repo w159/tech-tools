@@ -736,6 +736,8 @@ def _nondocs_changed(changed_paths: list) -> bool:
     for p in changed_paths:
         if is_uri_path(p):
             continue
+        if ".atlas/" in p.replace("\\", "/") and (p.startswith(".atlas/") or "/.atlas/" in p.replace("\\", "/")):
+            continue  # .atlas/ is runtime state, never shipped code
         if not (p.startswith("docs/") or "/docs/" in p):
             return True
     return False

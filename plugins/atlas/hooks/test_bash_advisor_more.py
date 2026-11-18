@@ -331,9 +331,10 @@ class ProgramInvocations(unittest.TestCase):
     def test_program_filter_is_a_prefilter_only(self):
         self.assertEqual(self.prog("gh x", programs=("hub",)), [])
 
-    def test_body_head_bound(self):
+    def test_wrapper_found_beyond_old_head_window(self):
         pad = "x" * (ba._SEGMENT_HEAD * 4 + 10)
-        self.assertEqual(self.prog("echo %s; bash -c 'gh a'" % pad), [])  # the quoted body lies beyond the scan window
+        # the whole command is scanned for shell wrappers, so a late bash -c is still seen
+        self.assertEqual(self.prog("echo %s; bash -c 'gh a'" % pad), [["gh", "a"]])
         self.assertEqual(self.prog("bash -c 'gh a'; echo %s" % pad), [["gh", "a"]])
 
 

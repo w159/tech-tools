@@ -12932,5 +12932,51 @@
     "verified_at": "2026-11-17T19:32:59+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-b3ae16-1794951974",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py 2>&1 | tail -2`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_214614_gate-rerun_b3ae16.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T21:46:14+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "audit-fixes-2026-11-17",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "14 medium audit findings fixed on atlas/audit-fixes-1117; full hooks and scripts suites, tsc and bun tests green",
+    "evidence": [
+      "atlas_test.py run --jobs 8: hooks PASS 78 files, scripts PASS 170 files",
+      "tsc --noEmit: 0 errors; bun test omp mod: 5017 pass 0 fail; herdr bun test server/machine: 58 pass",
+      "docs/CHANGELOG.md"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run --jobs 8",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-17T22:40:24+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-b3ae16-1794955285",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/hooks/test_audit_doc_cites.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-17_224125_gate-rerun_b3ae16.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-17T22:41:25+00:00",
+    "verified_by": "completion-gate"
   }
 ]

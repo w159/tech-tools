@@ -9,7 +9,7 @@ import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } 
 import { world } from '../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from './atlas-ui';
 import { coreModel, type CoreModel } from './data/core';
-import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelGateLine, type PanelModel, type PanelTab } from './panel-layout';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
@@ -162,7 +162,7 @@ describe('gates tab', () => {
   // fix1728: a completion line is pending until a Stop refuses; the refused Stop (a record, never a gate row) keeps these lines real failures
   const STOP = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'verification coverage' };
   const base = [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }];
-  const g = (over: { lines?: object[] } = {}) => [{ id: 'completion', title: 'Completion gate', ...over, lines: [...(over.lines ?? base), STOP] }];
+  const g = (over: { lines?: PanelGateLine[] } = {}) => [{ id: 'completion', title: 'Completion gate', ...over, lines: [...(over.lines ?? base), STOP] }];
   test('fix1728: no Stop refused, the group reads pending on the same count column', () => {
     const row = rows('gates', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base }] }).find((l) => l.includes('Completion gate'))!;
     expect(row).toMatch(/^▸ ◇ Completion gate {2}pending +2 pass · 0 deny$/);

@@ -1,7 +1,7 @@
 // fix1728 panel: every completion-group condition is decided by Stop alone, so while no Stop has been refused a failing
 // completion line reads pending (never deny, never red); a refused Stop makes the failing lines red again. The band's
 // denied chip never counts a pending line.
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'claude-code/testing';
 import { gateTally, withPending, STOP_LINE } from './runstate';
 import { deniedCalls } from '../vocab';
 import type { GateGroup } from '../pane/sidebar-types';

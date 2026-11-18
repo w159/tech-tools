@@ -1,5 +1,5 @@
 // The pulse reports the host's cost only for a login billed per token (`billing: api` from the status line): a plan login or an unknown billing shows no dollar figure.
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, test } from 'claude-code/testing';
 import { resetHookLog } from './hook-log';
 import { noteBilling, noteMeasure, pulseOf, resetPulse } from './pulse';
 

@@ -4,7 +4,7 @@
 // missing, ATLAS_MOD=off, or anything in the draw path throws: restyles decorate, never break.
 
 import { atom, read, update } from 'claude-code'
-import type { AgentInfo, EngineInterface, On, RenderElement, RenderNode } from 'claude-code'
+import type { AgentInfo, EngineInterface, On, PlacedProps, RenderElement, RenderNode } from 'claude-code'
 import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
 import { PHASES } from './intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
@@ -28,6 +28,9 @@ import type { Outcome } from './transcript/outcome'
 // exactly the restyled sites (null outside an atlas session).
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null)
 const headerPhaseState = atom({ plugin: 'atlas', key: 'headerPhase' } as const, null) // register.ts sets it per answer
+// the host's `Placed` site props (not in the generated types): a row this plugin put in the transcript with $.ui.place
+const isPlacedProps = (p: unknown): p is PlacedProps => typeof p === 'object' && p !== null && typeof (p as PlacedProps).id === 'string'
+const PLACED_SITE = 'Placed' as unknown as 'Pane' // the generated RenderComponent union predates the host's Placed site: typed as the nearest site, props re-checked by isPlacedProps
 
 // ---- structural props the tree builders read (sites' real props satisfy these) ----
 
@@ -425,12 +428,13 @@ export function registerRestyle(on: On): void {
  })
 
  // The finish card the mod placed itself (transcript/placed.ts): drawn as the host's notification row is. Another plugin's row passes.
- on('ui.render', { component: 'Placed' }, async ($, e, next) => {
+ on('ui.render', { component: PLACED_SITE }, async ($, e, next) => {
   try {
-   if (e.props.plugin !== 'atlas') return next(e)
+   const props: unknown = e.props
+   if (!isPlacedProps(props) || props.plugin !== 'atlas') return next(e)
    const now = ((await read($, snapshotState)) as AtlasSnapshot | null)?.now ?? 0 // read while drawing: the card redraws as the snapshot's clock moves
-   const aged = cardAged(e.props.id, now)
-   return placedTree(e.props.id, (await lookOf($)).ui, aged, { cols: e.viewport?.columns ?? 0, fade: cardFade(e.props.id, now) }) ?? next(e)
+   const aged = cardAged(props.id, now)
+   return placedTree(props.id, (await lookOf($)).ui, aged, { cols: e.viewport?.columns ?? 0, fade: cardFade(props.id, now) }) ?? next(e)
   } catch { return next(e) }
  })
 

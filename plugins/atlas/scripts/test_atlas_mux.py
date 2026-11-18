@@ -3751,7 +3751,7 @@ class TeamSeatTests(unittest.TestCase):
             for i in range(n)
         ]
         self.assertEqual(want, [m["name"] for m in rec["members"]])
-        self.assertTrue(all("seat" not in m and "model" not in m for m in rec["members"]))
+        self.assertTrue(all("seat" not in m for m in rec["members"]))
 
     def test_same_role_without_labels_or_with_repeated_labels_is_refused(self):
         import atlas_mux
@@ -3836,7 +3836,8 @@ class TeamSeatTests(unittest.TestCase):
     def test_unlabelled_seats_still_resolve_their_tier_from_the_definition(self):
         import atlas_mux
 
-        self.assertIsNone(atlas_mux.seat_model({"name": "explorer-aaaa", "role": "explorer", "model": "sonnet"}, "claude"))
+        self.assertEqual("sonnet", atlas_mux.seat_model({"name": "explorer-aaaa", "role": "explorer", "model": "sonnet"}, "claude"))
+        self.assertIsNone(atlas_mux.seat_model({"name": "explorer-aaaa", "role": "explorer", "model": "sonnet"}, "omp"))
         self.assertEqual("haiku", atlas_mux.seat_model({"role": "db-prober", "seat": "x", "model": "haiku"}, "claude"))
         self.assertIsNone(atlas_mux.seat_model({"role": "db-prober", "seat": "x", "model": "haiku"}, "codex"))
 

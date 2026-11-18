@@ -2634,7 +2634,8 @@ class ColonyDenyTest(unittest.TestCase):
         tinput = {
             "subagent_type": agent,
             "name": "tier-slice",
-            "prompt": self.SPEC + (f"\nSCOPE: {scope}\n" if scope else ""),
+            "prompt": (self.SPEC if scope is None else self.SPEC.replace("SCOPE: fix/medium\n", ""))
+            + (f"\nSCOPE: {scope}\n" if scope else ""),
             **extra,
         }
         return self._pre(tinput)
@@ -4836,11 +4837,11 @@ class ScopeGateTest(unittest.TestCase):
         _, reason = self._decision(self._dispatch("atlas:implementer", "verify/low"))
         self.assertIn("SCOPE: implement/medium", reason)
 
-    def test_j_any_scope_line_in_a_shared_context_may_cover_the_role(self):
-        # omp prepends the batch context: its SCOPE line must not shadow the task's own.
+    def test_j_two_distinct_scope_lines_are_denied(self):
+        # One dispatch carries one SCOPE line: a prompt must not pass on whichever of several fits.
         spec = SPEC_BLOCK.replace("SCOPE: fix/medium\n", "")
         prompt = f"SCOPE: docs/low\n{TOOLS_BLOCK}{spec}SCOPE: verify/medium\n"
-        self.assertIsNone(self._raw("atlas:verifier", prompt)[0])
+        self.assertEqual(self._raw("atlas:verifier", prompt)[0], "deny")
 
     def test_k_toolkit_scope_spec_problems_arrive_in_one_deny(self):
         decision, reason = self._raw("atlas:explorer", "GOAL: map it.\n")

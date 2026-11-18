@@ -4,7 +4,7 @@
 // card is stamped from the same rebuild tick as the HUD row. The host's own notification row for that worker is then drawn empty (one
 // card per finish, never two), and drawn whole when no card was placed (no surface, a failed place, the host row won the race).
 
-import type { EngineInterface, RenderElement } from 'claude-code'
+import type { EngineInterface, PlaceUi, RenderElement } from 'claude-code'
 import type { AtlasSnapshot } from '../contract'
 import type { LiveSnapshot } from '../orchestra-types'
 import { endedAt, liveWorkers, factsSeq, workerFactsAt, type WorkerFacts } from '../data/live'
@@ -101,7 +101,7 @@ export async function placeFinished($: EngineInterface, prev: AtlasSnapshot | nu
       observed.delete(w.name)
       rows.set(id, { name: w.name, role: w.role, text: textOf(w), failed: w.failed, ...(calls ? { calls } : {}), ...(facts ? { facts } : {}) })
       capped(rows)
-      const res = await $.ui.place({ id })
+      const res = await ($.ui as PlaceUi).place({ id })
       if (res.isPlaced) bump(unclaimed, w.name, 1)
       else { rows.delete(id); if (tries < MAX_TRIES) owed.set(w.name, { w, tries }) }
     } catch {
@@ -132,7 +132,7 @@ async function placeRun($: EngineInterface, prev: AtlasSnapshot | null, next: At
     const id = `done-run-${++counter}`
     rows.set(id, { name: 'run', role: '', text: '', failed: false, fact })
     capped(rows)
-    const res = await $.ui.place({ id })
+    const res = await ($.ui as PlaceUi).place({ id })
     if (res.isPlaced) { runCarded = true; redrawChips($) } // the lead's `done 5/5` chip may have been drawn before this card existed: it draws again, and draws nothing
     else rows.delete(id)
   } catch { /* a card is display only */ } finally { if (mine) runPlacing = false }
@@ -148,7 +148,7 @@ async function placeBlocked($: EngineInterface): Promise<void> {
     const id = `done-blocked-${++counter}`
     rows.set(id, { name: 'blocked', role: '', text: '', failed: true, blocked: blockedNote })
     capped(rows)
-    const res = await $.ui.place({ id })
+    const res = await ($.ui as PlaceUi).place({ id })
     if (res.isPlaced) blockedCarded = true
     else rows.delete(id)
   } catch { /* a card is display only */ } finally { if (mine) blockedPlacing = false }

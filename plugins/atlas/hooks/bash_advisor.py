@@ -325,14 +325,18 @@ _SHLEX_MAX = 16384
 
 
 # `sh -c '...'` / `bash -lc "..."`: the quoted script runs as its own command line.
+_CMDPOS = (
+    r"(?:^|[;&|(`\n])[ \t]*(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S*|command|exec|sudo|env"
+    r"|nohup|time|then|do|else|!|\{)[ \t]+)*(?:\S*/)?"
+)
 _SHELL_C = lre(
-    r"""\b(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1""",
+    _CMDPOS + r"""(?:ba|z|da|k)?sh\s+(?:-[A-Za-z]*\s+)*-[A-Za-z]*c[A-Za-z]*\s+(['"])(.*?)\1""",
     re.S,
 )
 
 
 # `eval "git commit -m x"`: the quoted argument is re-parsed as a command line.
-_EVAL_Q = lre(r"""\beval\s+(['"])(.*?)\1""", re.S)
+_EVAL_Q = lre(_CMDPOS + r"""eval\s+(['"])(.*?)\1""", re.S)
 
 
 def _regex_segments(command: str):
@@ -434,9 +438,9 @@ def _git_invocations(command: str, _depth: int = 0):
     if "git" not in command:
         return
     if _depth < 2:
-        for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
+        for m in _SHELL_C.finditer(command):
             yield from _git_invocations(m.group(2), _depth + 1)
-        for m in _EVAL_Q.finditer(command[: _SEGMENT_HEAD * 4]):
+        for m in _EVAL_Q.finditer(command):
             yield from _git_invocations(m.group(2), _depth + 1)
     for tokens in _command_segments(command):
         tokens = _strip_wrappers(tokens)
@@ -468,9 +472,9 @@ def _program_invocations(command: str, programs: tuple, _depth: int = 0):
     if not any(p in command for p in programs):
         return
     if _depth < 2:
-        for m in _SHELL_C.finditer(command[: _SEGMENT_HEAD * 4]):
+        for m in _SHELL_C.finditer(command):
             yield from _program_invocations(m.group(2), programs, _depth + 1)
-        for m in _EVAL_Q.finditer(command[: _SEGMENT_HEAD * 4]):
+        for m in _EVAL_Q.finditer(command):
             yield from _program_invocations(m.group(2), programs, _depth + 1)
     for tokens in _command_segments(command):
         tokens = _strip_wrappers(tokens)

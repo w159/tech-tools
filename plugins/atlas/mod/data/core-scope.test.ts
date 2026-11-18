@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, test } from "claude-code/testing";
 import { type CoreInput, coreModel } from "./core";
 
 const SINCE = Date.parse("2026-11-16T10:00:00Z");

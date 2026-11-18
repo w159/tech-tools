@@ -162,6 +162,11 @@ export type Usage = { tokens: number | null; costUsd?: number | null; contextPct
 export type SpinnerTick = number;
 
 declare module 'claude-code' {
+	// The generated host types (.claude-plugin/types) predate `$.ui.place` and the `Placed` render site; declared here, not there.
+	/** `$.ui` with `place`: puts a row of the plugin's own at the transcript's end, drawn through the `Placed` site. */
+	type PlaceUi = EngineInterface['ui'] & { place(input: { id: string }): Promise<{ isPlaced: boolean }> };
+	/** Props of the `Placed` render site. */
+	interface PlacedProps { plugin: string; id: string }
 	interface PluginState {
 		atlas: {
 			snapshot: LiveSnapshot | null;

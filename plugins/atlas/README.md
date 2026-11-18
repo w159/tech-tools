@@ -802,8 +802,8 @@ its `references/`.
 ## Agents
 
 11 agents, registered as `atlas:<role>`. Each pins its model and effort in
-frontmatter (a fork inherits the parent's instead); read-only agents have every
-write and edit tool removed.
+frontmatter (a fork inherits the parent's instead); read-only agents have Write, Edit,
+MultiEdit, NotebookEdit and ctx_patch removed (Bash and ctx_shell stay available).
 
 | Agent                 | Model / effort  | Job                                                               | Writes code |
 | --------------------- | --------------- | ----------------------------------------------------------------- | ----------- |

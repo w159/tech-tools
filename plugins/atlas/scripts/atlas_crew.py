@@ -2206,7 +2206,7 @@ def _stop_pidfile(path: Path, needle: str, wait_s: float = 3.0) -> int | None:
         if not _argv_is_ours(_read_argv(pid), needle):
             return None
     except OSError:
-        pass  # argv unreadable: trust the file
+        return None  # argv unreadable: the pid cannot be shown to be ours
 
     def send(sig):
         try:

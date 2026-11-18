@@ -343,7 +343,10 @@ def _relevant(tool: str, ti: dict) -> bool:
     if tool == "Bash":
         cmd = ti.get("command")
         return isinstance(cmd, str) and bool(
-            re.search(r"\b(?:git|gh|hub)\b|atlas_git\.py", cmd)
+            any(
+                re.search(r"\b(?:git|gh|hub)\b|atlas_git\.py", t)
+                for t in (cmd, "".join(c for c in cmd if c not in "\"\\" + chr(39)))
+            )
         )
     if tool == "Write":
         return str(ti.get("file_path") or "").startswith("xd://github")

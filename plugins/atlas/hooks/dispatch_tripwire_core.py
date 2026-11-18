@@ -446,6 +446,11 @@ def _scope_problem(tinput):
             f"{', '.join(efforts)}{_scope_suggestion(agent)}\nAdd `SCOPE: <class>/<effort>` "
             f"to the prompt and re-dispatch. 2+ workers: run them as tmux panes with\n  {SPAWN_TEAM_CMD}"
         )
+    if len({(c.lower(), e.lower()) for c, e in found}) > 1:
+        return (
+            f"DENY - this dispatch to {agent} carries {len(found)} SCOPE lines; one dispatch carries "
+            f"one SCOPE line. Keep the single `SCOPE: <class>/<effort>` that fits and re-dispatch:\n  {RESOLVE_CMD}"
+        )
     role = agent.split(":", 1)[1]
     errors, off_team = [], []
     for cls, effort in found:

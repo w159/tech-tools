@@ -2117,7 +2117,7 @@ def seat_model(member: dict, harness: str) -> str | None:
     """The model a labelled seat pins for its worker. Unlabelled seats return None and keep resolving from the
     role definition (unchanged). Only the claude harness takes the explicit selector: omp and codex
     resolve tiers from their own role tables, where a bare `haiku` is not a selector."""
-    return member.get("model") if member.get("seat") and harness == "claude" else None
+    return member.get("model") if harness == "claude" else None
 
 
 def assign_team_providers(rec: dict, harness: str) -> None:
@@ -2179,9 +2179,9 @@ def build_team(
                 "role": spec["role"],
                 "tools_profile": spec.get("tools_profile"),
             }
-            if label:  # a labelled seat keeps its own model tier (see seat_model)
+            member["model"] = spec.get("model")  # the matrix model, honored on the claude harness (see seat_model)
+            if label:
                 member["seat"] = label
-                member["model"] = spec.get("model")
             members.append(member)
     return {
         "team_id": tid,
