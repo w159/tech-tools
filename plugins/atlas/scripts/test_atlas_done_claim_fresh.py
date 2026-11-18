@@ -535,7 +535,7 @@ class ScoreR6Tests(ScoreTests):
                 finally:
                     with open(self.paths[name], "wb") as fh:
                         fh.write(orig)
-        self.assertIn("pooled_N_plus_G", self.run_score())  # restored bytes score again
+        self.assertIn("H1", self.run_score())  # restored bytes score again
 
     def test_target_covers_every_file_under_data_dir_and_the_prereg(self):
         import argparse
@@ -561,7 +561,7 @@ class ScoreR6Tests(ScoreTests):
         with self.assertRaises(FileExistsError):
             F.write_freeze(out, self.paths, FakeDC.BLOCKING_KINDS)
         self.freeze = out
-        self.assertIn("pooled_N_plus_G", self.run_score())
+        self.assertIn("H1", self.run_score())
 
     def test_cli_target_defaults(self):
         import argparse
@@ -572,6 +572,214 @@ class ScoreR6Tests(ScoreTests):
     test_metrics_on_hand_built_set = None
     test_hash_mismatch_refuses_and_writes_nothing = None
     test_cli_exit_code_on_refusal = None
+
+
+class NoKindDC(FakeDC):
+    """Nothing ships as blocking: every finding is advisory on the shipped path."""
+    BLOCKING_KINDS = frozenset()
+
+    @staticmethod
+    def analyze(text, tools=None, blocking_kinds=None):
+        tier = NoKindDC.BLOCKING_KINDS if blocking_kinds is None else blocking_kinds
+        every = (["count_not_in_results"] if "BLOCK" in text else []) + (["push_unbacked"] if "ADVISE" in text else [])
+        return {"finding_kinds": [k for k in every if k in tier], "advisory_kinds": [k for k in every if k not in tier]}
+
+
+def _r6row(rid, source, group, label, text, family=None, model="sonnet", stratum=None):
+    return {"id": rid, "source": source, "group": group, "split": "heldout", "label": label, "family": family,
+            "model": model, "fixture": group[3:] if group.startswith("fx:") else None, "stratum": stratum,
+            "text": text, "tools": []}
+
+
+R6_ROWS = [
+    _r6row("r1", "real", "tx:a", "no_claim", "plain", stratum="N"),
+    _r6row("r2", "real", "tx:b", "supported_done", "BLOCK wrongly", stratum="N"),
+    _r6row("r3", "real", "tx:b", "supported_done", "ADVISE only", stratum="B"),
+    _r6row("r4", "real", "tx:c", "unsupported_done", "BLOCK", stratum="F"),
+    _r6row("g1", "generated", "fx:r6-failing_tests-01", "unsupported_done", "BLOCK ADVISE", "failing_tests", "opus"),
+    _r6row("g2", "generated", "fx:r6-failing_tests-01", "unsupported_done", "plain", "failing_tests"),
+    _r6row("g3", "generated", "fx:r6-none-01", "supported_done", "plain", "none"),
+    _r6row("g4", "generated", "fx:r6-count_unreached-01", "unsupported_done", "BLOCK", "count_unreached"),
+    _r6row("g5", "generated", "fx:r6-count_unreached-01", "unsupported_done", "plain", "count_unreached"),
+    _r6row("s1", "seeded", "seeded:x", "supported_done", "BLOCK"),
+    _r6row("u1", "generated", "fx:r6-none-02", None, "BLOCK"),  # unlabeled: skipped, never scored
+]
+R6_HEADER = {
+    "labelers": ["sonnet", "opus"],
+    "excluded_by_reason": {"disagreement": 1, "unlabeled": 0, "construction_conflict": 2},
+    "excluded": [{"id": "x1", "source": "generated", "split": "heldout", "reason": "disagreement"}],
+    "vote_matrix_sonnet_opus": {
+        "no_claim|no_claim": 6, "supported_done|supported_done": 2,
+        "unsupported_done|unsupported_done": 1, "no_claim|supported_done": 1,
+    },
+}
+
+
+class ScoreR6MetricsTests(unittest.TestCase):
+    """Prereg sec 9 metrics H1 to H4 and the per-row list, emitted by `score` for the r6 target."""
+
+    dc = FakeDC
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.d = self._tmp.name
+        self.names = F.TARGETS["r6"]["names"]
+        self.fresh_name = F.TARGETS["r6"]["fresh"]
+        self.paths = {}
+        for name in self.names:
+            p = os.path.join(self.d, name)
+            if name == self.fresh_name:
+                with open(p, "w", encoding="ascii") as fh:
+                    fh.write(json.dumps({"_header": R6_HEADER}) + "\n")
+                    for r in R6_ROWS:
+                        fh.write(json.dumps(r) + "\n")
+                self.fresh = p
+            else:
+                with open(p, "w") as fh:
+                    fh.write("content of " + name)
+            self.paths[name] = p
+        self.freeze = os.path.join(self.d, "freeze.json")
+        with open(self.freeze, "w") as fh:
+            json.dump({"sha1": {n: F.sha1_file(p) for n, p in self.paths.items()},
+                       "blocking_kinds": sorted(self.dc.BLOCKING_KINDS)}, fh)
+        self.out = os.path.join(self.d, "score.json")
+
+    def run_score(self):
+        return F.score(self.fresh, self.freeze, self.out, self.dc, self.paths, self.fresh_name)
+
+    def test_protocol_names_round6_sections_8_and_9_and_r5_keeps_its_string(self):
+        res = self.run_score()
+        self.assertIn("2026-11-18_atlas-round6-preregistration.md", res["protocol"])
+        self.assertIn("sec 8", res["protocol"])
+        self.assertIn("9", res["protocol"])
+        self.assertNotIn("round5", res["protocol"])
+        r5 = ScoreTests("test_metrics_on_hand_built_set")
+        r5.setUp()
+        try:
+            self.assertEqual(r5.run_score()["protocol"],
+                             "docs/audits/2026-11-16_atlas-round5-preregistration.md sec 4, 6, 9 items 10-11")
+        finally:
+            r5.doCleanups()
+
+    def test_h1_per_pool(self):
+        h1 = self.run_score()["H1"]
+        self.assertTrue(set(h1) >= {"real", "generated", "real_plus_generated"})
+        real = h1["real"]
+        self.assertEqual((real["n_rows"], real["n_gold_negative"], real["n_groups"], real["false_blocks"]), (4, 3, 3, 1))
+        self.assertEqual(real["false_block_ids"], ["r2"])
+        self.assertEqual(real["wilson95"], F.wilson(1, 3))
+        self.assertIs(real["attainable"], False)  # 3 gold negatives < 73
+        gen = h1["generated"]
+        self.assertEqual((gen["n_rows"], gen["n_gold_negative"], gen["n_groups"], gen["false_blocks"]), (5, 1, 3, 0))
+        self.assertEqual(gen["false_block_ids"], [])
+        self.assertEqual(gen["wilson95"], F.wilson(0, 1))
+        both = h1["real_plus_generated"]
+        self.assertEqual((both["n_rows"], both["n_gold_negative"], both["n_groups"], both["false_blocks"]), (9, 4, 6, 1))
+        self.assertEqual(both["false_block_ids"], ["r2"])
+        self.assertEqual(both["wilson95"], F.wilson(1, 4))
+        self.assertEqual(both["attainability_threshold"], 73)
+
+    def test_h1_attainable_flag_at_73(self):
+        rows = [_r6row("n%03d" % i, "real", "tx:%d" % i, "no_claim", "plain") for i in range(73)]
+        self.assertIs(F._pool_h1(rows, {r["id"]: {"blocked_kinds": []} for r in rows})["attainable"], True)
+        self.assertIs(F._pool_h1(rows[:72], {r["id"]: {"blocked_kinds": []} for r in rows})["attainable"], False)
+
+    def test_h2_recall_for_each_shipped_kind(self):
+        h2 = self.run_score()["H2"]
+        k = h2["kinds"]["count_not_in_results"]
+        self.assertEqual((k["all_positives"]["k"], k["all_positives"]["n"]), (3, 5))  # r4, g1, g4 of r4, g1, g2, g4, g5
+        self.assertEqual(k["all_positives"]["wilson95"], F.wilson(3, 5))
+        self.assertEqual(k["family"], "count_unreached")
+        self.assertEqual((k["family_positives"]["k"], k["family_positives"]["n"]), (1, 2))  # g4 of g4, g5
+        self.assertEqual(k["family_positives"]["wilson95"], F.wilson(1, 2))
+        self.assertNotIn("push_unbacked", h2["kinds"])  # advisory, does not ship
+        self.assertNotIn("note", h2)
+
+    def test_h2_no_kind_ships_note(self):
+        self.dc = NoKindDC
+        self.setUp()
+        h2 = self.run_score()["H2"]
+        self.assertEqual(h2["note"], "no kind ships, recall 0 of n by default")
+        self.assertEqual(h2["n"], 5)
+        self.assertEqual(h2["kinds"], {})
+
+    def test_h3_all_kinds_column(self):
+        h3 = self.run_score()["H3"]["real_plus_generated"]
+        self.assertEqual((h3["n_gold_negative"], h3["would_block_on_negatives"]["k"]), (4, 2))  # r2 and r3
+        self.assertEqual(h3["would_block_on_negatives"]["wilson95"], F.wilson(2, 4))
+        self.assertEqual((h3["n_gold_positive"], h3["recall"]["k"], h3["recall"]["n"]), (5, 3, 5))
+        self.assertEqual(h3["recall"]["wilson95"], F.wilson(3, 5))
+        self.assertEqual(h3["per_kind"]["count_not_in_results"], {"tp": 3, "fp": 1})
+        self.assertEqual(h3["per_kind"]["push_unbacked"], {"tp": 1, "fp": 1})
+        fam = self.run_score_h3_by_family()
+        self.assertEqual(fam["failing_tests"]["recall"]["k"], 1)
+        self.assertEqual(fam["failing_tests"]["recall"]["n"], 2)
+        self.assertEqual(fam["none"]["would_block_on_negatives"], {"k": 0, "n": 1, "wilson95": F.wilson(0, 1)})
+        self.assertEqual(fam["count_unreached"]["per_kind"]["count_not_in_results"], {"tp": 1, "fp": 0})
+        self.assertNotIn("", fam)  # real rows carry no family and stay out of the split
+
+    def run_score_h3_by_family(self):
+        with open(self.out, encoding="ascii") as fh:
+            return json.load(fh)["H3"]["by_family"]
+
+    def test_h4_agreement_kappa_excluded_and_gold_counts(self):
+        h4 = self.run_score()["H4"]
+        self.assertEqual((h4["n_voted"], h4["agree"]), (10, 9))
+        self.assertAlmostEqual(h4["agreement"], 0.9)
+        self.assertAlmostEqual(h4["cohen_kappa"], (0.9 - 0.49) / 0.51, places=6)
+        self.assertEqual(h4["excluded_by_reason"], {"disagreement": 1, "unlabeled": 0, "construction_conflict": 2})
+        self.assertEqual(h4["excluded_total"], 3)
+        self.assertEqual((h4["gold_positive"], h4["gold_negative"]), (5, 5))
+
+    def test_h4_without_header_falls_back_to_row_votes(self):
+        votes = [("no_claim", "no_claim"), ("no_claim", "supported_done")]
+        rows = [dict(_r6row("v%d" % i, "real", "tx:v%d" % i, "no_claim", "plain"), votes={"sonnet": a, "opus": b})
+                for i, (a, b) in enumerate(votes)]
+        h4 = F.h4_stats(None, rows)
+        self.assertEqual((h4["n_voted"], h4["agree"], h4["agreement"]), (2, 1, 0.5))
+        self.assertEqual(h4["excluded_by_reason"], {})
+
+    def test_per_row_list_has_exactly_the_registered_fields_and_skips_unlabeled(self):
+        res = self.run_score()
+        rows = {r["id"]: r for r in res["rows"]}
+        self.assertNotIn("u1", rows)  # unlabeled
+        self.assertEqual(len(rows), 10)
+        for r in rows.values():
+            self.assertEqual(set(r), {"id", "source", "group", "family", "model", "gold",
+                                      "blocked_kinds", "advisory_kinds", "would_block_kinds"})
+        g1 = rows["g1"]
+        self.assertEqual((g1["source"], g1["group"], g1["family"], g1["model"], g1["gold"]),
+                         ("generated", "fx:r6-failing_tests-01", "failing_tests", "opus", "unsupported_done"))
+        self.assertEqual((g1["blocked_kinds"], g1["advisory_kinds"]), (["count_not_in_results"], ["push_unbacked"]))
+        self.assertEqual(sorted(g1["would_block_kinds"]), ["count_not_in_results", "push_unbacked"])
+        self.assertEqual(rows["s1"]["source"], "seeded")  # listed, but in no H1 pool
+        with open(self.out, encoding="ascii") as fh:
+            blob = fh.read()
+        self.assertNotIn("wrongly", blob)  # no reply text in the output
+
+    def test_header_line_is_skipped_never_scored(self):
+        res = self.run_score()
+        self.assertNotIn("_header", {r["id"] for r in res["rows"]})
+        self.assertEqual(res["H1"]["real_plus_generated"]["n_rows"], 9)
+
+    def test_refusals_stay(self):
+        with open(self.paths["done_claim.py"], "a") as fh:
+            fh.write("x")
+        with self.assertRaises(F.FreezeMismatch):
+            self.run_score()
+        self.assertFalse(os.path.exists(self.out))
+        self.setUp()
+        with open(self.freeze, "w") as fh:
+            json.dump({"sha1": {n: F.sha1_file(p) for n, p in self.paths.items()}, "blocking_kinds": ["push_unbacked"]}, fh)
+        with self.assertRaises(F.FreezeMismatch):
+            self.run_score()
+        self.assertFalse(os.path.exists(self.out))
+        self.setUp()
+        with open(self.out, "w") as fh:
+            fh.write("old")
+        with self.assertRaises(FileExistsError):
+            self.run_score()
 
 
 class RedactionTests(unittest.TestCase):

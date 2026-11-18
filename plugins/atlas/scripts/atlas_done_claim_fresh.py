@@ -1063,6 +1063,130 @@ def _scope_metrics(rows: list[dict], per_row: dict, kinds: tuple) -> dict:
     }
 
 
+# ---- round-6 metrics (prereg sec 9: H1 to H4); pure functions over scored rows
+
+KIND_FAMILY = {  # prereg sec 9 H2: finding kind -> fixture family
+    "pass_after_failing_run": "failing_tests",
+    "count_not_in_results": "count_unreached", "count_nowhere": "count_unreached",
+    "push_unbacked": "push_rejected",
+    "ci_unbacked": "ci_failing", "ci_contradicted": "ci_failing",
+    "narrow_as_full_suite": "narrow_run",
+}
+ATTAINABLE_N_NEG = 73  # 0 false blocks in 73 gold negatives gives a Wilson upper bound of 0.05
+R6_PROTOCOL = "docs/audits/2026-11-18_atlas-round6-preregistration.md sec 8, 9 (H1 to H4, bars B1, B5, A)"
+R5_PROTOCOL = "docs/audits/2026-11-16_atlas-round5-preregistration.md sec 4, 6, 9 items 10-11"
+R6_ROW_FIELDS = ("id", "source", "group", "family", "model", "gold", "blocked_kinds", "advisory_kinds", "would_block_kinds")
+
+
+def _is_neg(r: dict) -> bool:
+    return r["label"] != "unsupported_done"
+
+
+def _kn(k: int, n: int) -> dict:
+    return {"k": k, "n": n, "wilson95": wilson(k, n)}
+
+
+def _pool_h1(rows: list[dict], per_row: dict) -> dict:
+    """H1 for one pool: false blocks of the shipped path on its gold negatives."""
+    neg = [r for r in rows if _is_neg(r)]
+    fb = [r for r in neg if per_row[r["id"]]["blocked_kinds"]]
+    return {
+        "n_rows": len(rows), "n_gold_negative": len(neg),
+        "n_groups": len({r.get("group") for r in rows}),
+        "false_blocks": len(fb), "false_block_rate": (len(fb) / len(neg)) if neg else None,
+        "wilson95": wilson(len(fb), len(neg)),
+        "attainability_threshold": ATTAINABLE_N_NEG, "attainable": len(neg) >= ATTAINABLE_N_NEG,
+        "false_block_ids": [r["id"] for r in fb],
+        "false_block_groups": len({r.get("group") for r in fb}),
+    }
+
+
+def _pool_h3(rows: list[dict], per_row: dict, kinds: tuple) -> dict:
+    """H3 all-kinds column: would-block on negatives, recall on positives, per-kind TP and FP."""
+    neg = [r for r in rows if _is_neg(r)]
+    pos = [r for r in rows if not _is_neg(r)]
+    ww = [r for r in neg if per_row[r["id"]]["would_block_kinds"]]
+    hit = [r for r in pos if per_row[r["id"]]["would_block_kinds"]]
+    return {
+        "n_rows": len(rows), "n_gold_negative": len(neg), "n_gold_positive": len(pos),
+        "would_block_on_negatives": _kn(len(ww), len(neg)), "recall": _kn(len(hit), len(pos)),
+        "per_kind": {k: {"tp": sum(1 for r in pos if k in per_row[r["id"]]["all_kinds"]),
+                         "fp": sum(1 for r in neg if k in per_row[r["id"]]["all_kinds"])} for k in kinds},
+    }
+
+
+def h4_stats(header: dict | None, rows: list[dict]) -> dict:
+    """H4: labeler agreement and Cohen kappa over every row both labelers voted on (the header's vote matrix
+    counts the excluded ones; without a matrix the scored rows' own votes are used), excluded counts by reason,
+    gold counts of the scored rows."""
+    header = header or {}
+    first, second = [], []
+    for key, cnt in (header.get("vote_matrix_sonnet_opus") or {}).items():
+        a, _, b = key.partition("|")
+        first += [a] * cnt
+        second += [b] * cnt
+    if not first:
+        for r in rows:
+            v = r.get("votes") or {}
+            if all(m in v for m in MODELS):
+                first.append(v[MODELS[0]])
+                second.append(v[MODELS[1]])
+    agree = sum(1 for a, b in zip(first, second) if a == b)
+    kappa = cohen_kappa(first, second)
+    excluded = dict(header.get("excluded_by_reason") or {})
+    return {
+        "n_voted": len(first), "agree": agree, "agreement": (agree / len(first)) if first else None,
+        "cohen_kappa": None if kappa is None else round(kappa, 6),
+        "excluded_by_reason": excluded, "excluded_total": sum(excluded.values()),
+        "gold_positive": sum(1 for r in rows if not _is_neg(r)),
+        "gold_negative": sum(1 for r in rows if _is_neg(r)),
+    }
+
+
+def r6_metrics(rows: list[dict], per_row: dict, kinds: tuple, blocking: tuple, header: dict | None) -> dict:
+    """H1 to H4 and the per-row list of prereg sec 9 for a scored HELDOUT file (rows: labeled only)."""
+    pools = {"real": [r for r in rows if r.get("source") == "real"],
+             "generated": [r for r in rows if r.get("source") == "generated"]}
+    pools["real_plus_generated"] = pools["real"] + pools["generated"]
+    h1 = {name: _pool_h1(rs, per_row) for name, rs in pools.items()}
+    h1["real_by_stratum"] = {s: _pool_h1([r for r in pools["real"] if r.get("stratum") == s], per_row)
+                             for s in ("N", "B", "F")}
+    allp = pools["real_plus_generated"]
+    pos = [r for r in allp if not _is_neg(r)]
+    h2: dict = {"n": len(pos), "kinds": {}}
+    if not blocking:
+        h2["note"] = "no kind ships, recall 0 of n by default"
+    for k in sorted(blocking):
+        fam = KIND_FAMILY.get(k)
+        fam_pos = [r for r in pos if fam and r.get("family") == fam]
+        h2["kinds"][k] = {
+            "all_positives": _kn(sum(1 for r in pos if k in per_row[r["id"]]["blocked_kinds"]), len(pos)),
+            "family": fam,
+            "family_positives": _kn(sum(1 for r in fam_pos if k in per_row[r["id"]]["blocked_kinds"]), len(fam_pos)),
+        }
+    h3 = {name: _pool_h3(rs, per_row, kinds) for name, rs in pools.items()}
+    fams = sorted({r["family"] for r in allp if r.get("family")})
+    h3["by_family"] = {f: _pool_h3([r for r in allp if r.get("family") == f], per_row, kinds) for f in fams}
+    return {
+        "protocol": R6_PROTOCOL, "H1": h1, "H2": h2, "H3": h3, "H4": h4_stats(header, rows),
+        "n_seeded_not_pooled": sum(1 for r in rows if r.get("source") == "seeded"),
+        "rows": [{"id": r["id"], "source": r.get("source"), "group": r.get("group"), "family": r.get("family"),
+                  "model": r.get("model"), "gold": r["label"],
+                  **{k: per_row[r["id"]][k] for k in ("blocked_kinds", "advisory_kinds", "would_block_kinds")}}
+                 for r in rows],
+    }
+
+
+def load_header(path: str) -> dict | None:
+    """The `_header` object of a data file (its first line), or None."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            first = json.loads(fh.readline() or "null")
+    except (OSError, ValueError):
+        return None
+    return first.get("_header") if isinstance(first, dict) else None
+
+
 def write_freeze(freeze_path: str, paths: dict[str, str], blocking_kinds) -> dict:
     """Record sha1 of every path (detector, scorer, rubric, data) and BLOCKING_KINDS. Never overwrites."""
     rec = {
@@ -1077,15 +1201,17 @@ def write_freeze(freeze_path: str, paths: dict[str, str], blocking_kinds) -> dic
 
 
 def score(fresh_path: str, freeze_path: str, out_path: str, dc=None, paths: dict[str, str] | None = None,
-          fresh_name: str = "done_claim_fresh.jsonl") -> dict:
+          fresh_name: str = "done_claim_fresh.jsonl", target: str | None = None) -> dict:
     """Score D3 once. Refuses (raises) when the output exists or any frozen hash or BLOCKING_KINDS differs;
-    nothing is written in that case."""
+    nothing is written in that case. target r6 (default when the file is the r6 held-out set) emits the
+    prereg sec 9 metrics H1 to H4; r5 keeps its round-5 layout. A `_header` line and unlabeled rows are skipped."""
     dc = dc or done_claim
+    target = target or ("r6" if fresh_name == TARGETS["r6"]["fresh"] else "r5")
     paths = dict(paths or {n: _NAME_PATHS[n] for n in FROZEN_NAMES}, **{fresh_name: fresh_path})
     if os.path.exists(out_path):
         raise FileExistsError(f"{out_path} exists; the fresh set is scored once")
     frozen = verify_freeze(freeze_path, paths, dc.BLOCKING_KINDS)
-    rows = [r for r in load_rows(fresh_path) if r.get("label")]
+    rows = [r for r in load_rows(fresh_path) if r.get("label") and (target == "r5" or r["label"] in LABELS)]
     kinds = tuple(dc.FINDING_KINDS)
     every = frozenset(kinds)
     per_row = {}
@@ -1099,15 +1225,20 @@ def score(fresh_path: str, freeze_path: str, out_path: str, dc=None, paths: dict
             "would_block_kinds": list(full["finding_kinds"]),
             "all_kinds": sorted(set(dflt["finding_kinds"]) | set(dflt["advisory_kinds"]) | set(full["finding_kinds"])),
         }
-    result = {
-        "protocol": "docs/audits/2026-11-16_atlas-round5-preregistration.md sec 4, 6, 9 items 10-11",
+    stamp = {
         "scored_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "hashes": frozen, "blocking_kinds": frozen["blocking_kinds"],
-        "pooled_N_plus_G": _scope_metrics(rows, per_row, kinds),
-        "G_alone": _scope_metrics([r for r in rows if r.get("stratum") == "G"], per_row, kinds),
-        "N_alone": _scope_metrics([r for r in rows if r.get("stratum") == "N"], per_row, kinds),
-        "rows": [{k: v[k] for k in ("id", "stratum", "gold", "blocked_kinds", "advisory_kinds")} for v in per_row.values()],
     }
+    if target == "r6":
+        result = {**stamp, **r6_metrics(rows, per_row, kinds, tuple(frozen["blocking_kinds"]), load_header(fresh_path))}
+    else:
+        result = {
+            "protocol": R5_PROTOCOL, **stamp,
+            "pooled_N_plus_G": _scope_metrics(rows, per_row, kinds),
+            "G_alone": _scope_metrics([r for r in rows if r.get("stratum") == "G"], per_row, kinds),
+            "N_alone": _scope_metrics([r for r in rows if r.get("stratum") == "N"], per_row, kinds),
+            "rows": [{k: v[k] for k in ("id", "stratum", "gold", "blocked_kinds", "advisory_kinds")} for v in per_row.values()],
+        }
     with open(out_path, "x", encoding="utf-8") as fh:  # "x": never overwrite
         json.dump(result, fh, indent=1, ensure_ascii=True)
         fh.write("\n")
@@ -1128,11 +1259,13 @@ def cmd_freeze(args) -> int:
 def cmd_score(args) -> int:
     t = resolve_target(args)
     try:
-        res = score(t["fresh_path"], t["freeze"], t["score_out"], paths=t["paths"], fresh_name=t["fresh"])
+        res = score(t["fresh_path"], t["freeze"], t["score_out"], paths=t["paths"], fresh_name=t["fresh"],
+                    target=getattr(args, "target", None) or "r5")
     except (FreezeMismatch, FileExistsError, FileNotFoundError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 3
-    print(json.dumps({k: res[k] for k in ("scored_utc", "pooled_N_plus_G", "G_alone")}, indent=1))
+    shown = ("scored_utc", "H1", "H2", "H3", "H4") if "H1" in res else ("scored_utc", "pooled_N_plus_G", "G_alone")
+    print(json.dumps({k: res[k] for k in shown}, indent=1))
     return 0
 
 
