@@ -84,6 +84,8 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | t8865d576-p1-4 | verified | fable52 contract tests, version check, attribution, changelog entries pass | [2026-11-18_t8865d576-p1-4.md](2026-11-18_t8865d576-p1-4.md) |
 | 2026-11-18 | t83cd4026 | rejected | 6b9d922 claims panel-layout split but the 7 modules and panel-acyclic test are not in the commit or tree | [2026-11-18_t83cd4026.md](2026-11-18_t83cd4026.md) |
 | 2026-11-18 | resolve-context-oserror | verified | resolve_context returns an over-long single-line context entry as literal text | [2026-11-18_resolve-context-oserror.md](2026-11-18_resolve-context-oserror.md) |
+| 2026-11-18 | release-1118 | verified | atlas 17.30.2, armada 2.5.0, marketplace 5.37.0; connector-count test fixed | [2026-11-18_release-1118.md](2026-11-18_release-1118.md) |
+| 2026-11-18 | release-1118-tests | verified | Release test pins updated to 17.30.2; full suite failures resolved | [2026-11-18_release-1118-tests.md](2026-11-18_release-1118-tests.md) |
 | 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | gateway-creds-1118 | verified | Gateway-mode blumira/connectwise-manage/threatlocker scope header credentials per request (ALS); fixes CodeQL 61/62 | [2026-11-18_gateway-creds-1118.md](2026-11-18_gateway-creds-1118.md) |
 | 2026-11-18 | fallow-resetclient-1118 | verified | Removed unused threatlocker resetClient; gateway-creds suites still green | [2026-11-18_fallow-resetclient-1118.md](2026-11-18_fallow-resetclient-1118.md) |

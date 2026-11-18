@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 2.5.0 - 2026-11-18
+
+Gateway credentials are now per request in connectwise-manage and threatlocker, and the Blumira connector, its commands, skills and two agents are removed.
 
 ### Security
 

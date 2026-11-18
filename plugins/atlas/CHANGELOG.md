@@ -1,5 +1,7 @@
 # Changelog
-## Unreleased
+## 17.30.2 - 2026-11-18
+
+Blumira connector removed and CodeQL triage hardening in tests, hooks and scripts.
 
 - Removed: Blumira connector (deprecated): blumira-mcp, node-blumira, armada bundle and references.
 

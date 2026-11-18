@@ -1,5 +1,17 @@
 # Changelog
 
+## atlas 17.30.2 - 2026-11-18
+
+- Removed: Blumira connector; CodeQL triage hardening in tests, hooks and scripts.
+- Fixed: `test_connectors_wiring.py` expects 12 harness connectors after the Blumira removal.
+- Version 17.30.1 to 17.30.2. Details: `plugins/atlas/CHANGELOG.md` and the "Release detail" section below.
+
+## armada 2.5.0 - 2026-11-18
+
+- Security: connectwise-manage and threatlocker gateway mode keeps header credentials per request.
+- Removed: Blumira connector, its 6 commands, 6 skills and two agents.
+- Version 2.4.1 to 2.5.0. Details: `plugins/armada/CHANGELOG.md` and the "Release detail" section below.
+
 ## atlas 17.30.1 - 2026-11-18
 
 - Fixed, crew: `scripts/atlas_crew.py` `resolve_context` and `_weight` treat an over-long single-line `context` entry as literal text instead of raising `OSError: File name too long`; `_guard_codes` runs identical worker checks once and caps concurrent shell commands at `GUARD_MAX_SINGLES`.
@@ -1106,7 +1118,7 @@ Cost tiering, the Atlas Colony workspace TUI, a single-sourced status header, co
 - tmux is the default colony transport whenever it is installed (session `atlas-<run>`, one window per worker); `claude-bg` is only the fallback and `ATLAS_COLONY_TRANSPORT=herdr|tmux|claude-bg` still forces one.
 - Removed the herdr Terminal iframe page (`js/pages/herdr.js`); the Terminal page is the native tmux workspace.
 
-## Unreleased
+## Release detail for atlas 17.30.2 and armada 2.5.0 - 2026-11-18
 
 ### Security
 
