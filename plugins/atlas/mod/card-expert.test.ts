@@ -11,7 +11,7 @@ import { bodyLines, lineText } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
 import { gateLine, gatesTotal } from './vocab';
-import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './transcript/placed';
+import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './view/transcript/placed';
 import type { Pulse } from './pulse';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };

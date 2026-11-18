@@ -10,9 +10,9 @@ import { bodyLines, lineText } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { boardTimeline, boardText } from './board-model';
-import { notificationTree } from './transcript/cards';
-import { durationTree } from './restyle';
-import { forgetPlaced, placedTree, placeFinished } from './transcript/placed';
+import { notificationTree } from './view/transcript/cards';
+import { durationTree } from './view/transcript/restyle';
+import { forgetPlaced, placedTree, placeFinished } from './view/transcript/placed';
 import type { AtlasSnapshot } from './contract';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -68,8 +68,8 @@ const GREEN = '#87d787'; // 114
 
 
 
-import { assistantTree } from './restyle';
-import { noteRunSecs, runCardPlaced } from './transcript/placed';
+import { assistantTree } from './view/transcript/restyle';
+import { noteRunSecs, runCardPlaced } from './view/transcript/placed';
 
 const GATES: never[] = [];
 const withGates = (s: never, view: SidebarView, columns: number, rows: number, run: Run | null = RUN, gates: unknown[] = GATES): string[] => {

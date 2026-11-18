@@ -13,8 +13,8 @@ import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
 import { Motion, MOTION_MS } from './motion';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
-import { leadOf, leadRow } from './transcript/leadheader';
-import { bubbleTree, notificationTree, workerCard, type CallLike } from './transcript/cards';
+import { leadOf, leadRow } from './view/transcript/leadheader';
+import { bubbleTree, notificationTree, workerCard, type CallLike } from './view/transcript/cards';
 import { noteToastRuns, toastRuns } from './panel-layout';
 import { paintAnsi } from './atlas-ui';
 

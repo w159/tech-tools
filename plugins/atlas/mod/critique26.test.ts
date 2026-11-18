@@ -16,8 +16,8 @@ import { Motion } from './motion';
 import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from './atlas-ui';
 import { sidebarTree } from './pane/sidebar';
 import { boardTimeline } from './board-model';
-import { notificationTree } from './transcript/cards';
-import { outcomeText } from './transcript/outcome';
+import { notificationTree } from './view/transcript/cards';
+import { outcomeText } from './view/transcript/outcome';
 import { worldGates, worldIdleSnapshot } from '../contracts/world-live';
 import { els, fadeSurfaces, indicesOf, on, PALETTE_INDICES, scene, sidebarModel, surfaces, textOf, UI256 } from './surface_indices';
 

@@ -15,9 +15,9 @@ import { bandFrame, forgetBandFrame, noteBandFrame } from './motion';
 import { KIND_HOLD_MS, newKindHold, stepKind, type KindHold, type KindWord } from './band-motion';
 import type { LiveSnapshot } from './orchestra-types';
 import { composeSlot } from './slot';
-import { notificationTree } from './transcript/cards';
-import { verdictOf } from './transcript/leadheader';
-import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './transcript/placed';
+import { notificationTree } from './view/transcript/cards';
+import { verdictOf } from './view/transcript/leadheader';
+import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './view/transcript/placed';
 import { planWindow } from './hud-surface';
 import { runsString } from './atlas-ui';
 

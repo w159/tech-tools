@@ -262,9 +262,9 @@ The shipped fixes are in `plugins/atlas/CHANGELOG.md` (17.4.1 and 17.4.2).
 - [planned] Completion gate (r) returns before the other conditions are evaluated, so a blocked `done` reply hides other failing letters. An (r) block also restarts the (n) loop count.
 - [planned] Dashboard page helpers that `fallow dupes` reports as duplicated (802 lines) were left in place by the 17.4.2 dead-code pass.
 - [planned] Doctor layout: a stray whose archive destination would sit inside the stray itself is reported but never archived by `--fix`. Decide its archive base.
-- [planned] Worker card head row overflows: `plugins/atlas/mod/transcript/cards.tsx` `headRow` (about lines 125-127) fits the meta text against a fixed pad of 24 and does not fit the name chip. Proof: name `implementer-root-cause-2` in a 40-column card gives row widths 45/40/40. Below about 15 columns the label rows are left unfitted as well.
+- [planned] Worker card head row overflows: `plugins/atlas/mod/view/transcript/cards.tsx` `headRow` (about lines 125-127) fits the meta text against a fixed pad of 24 and does not fit the name chip. Proof: name `implementer-root-cause-2` in a 40-column card gives row widths 45/40/40. Below about 15 columns the label rows are left unfitted as well.
 - [planned] Wide-character table: `plugins/atlas/mod/theme.ts` (about line 172) counts U+2705 and U+26A0 U+FE0F as one cell each, so a row that contains either is one cell too wide.
-- [planned] A running worker can read as ended: `plugins/atlas/mod/transcript/outcome.ts` (about lines 22 and 78) shows `finished` when `agent.list()` throws, when the worker's row is absent, or when its status is `idle`.
+- [planned] A running worker can read as ended: `plugins/atlas/mod/view/transcript/outcome.ts` (about lines 22 and 78) shows `finished` when `agent.list()` throws, when the worker's row is absent, or when its status is `idle`.
 
 ### Atlas 17.0.0 follow-ups (added 2026-11-05)
 

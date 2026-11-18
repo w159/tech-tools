@@ -5,25 +5,25 @@
 
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, PlacedProps, RenderElement, RenderNode } from 'claude-code'
-import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
-import { PHASES } from './input/intents'
-import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
-import { glyph } from './theme'
-import { shortTool } from './band'
-import type { ActivityEntry, LiveSnapshot } from './orchestra-types'
-import { openItems } from './data/core'
-import { activeCount, liveWorkers } from './data/live'
-import type { LiveWorker } from './data/live'
-import { bubbleTree, waveTree, workerCard } from './transcript/cards'
-import type { CardExtra } from './transcript/cards'
-import { cardExtra, launchedId, notificationRow } from './transcript/outcome'
-import { barFade, cardAged, cardFade, hideNotification, placedTree, runCardPlaced, runSecs } from './transcript/placed'
-import { noteDoneChip, onSuperseded } from './transcript/superseded'
-import { lookOf } from './look'
-import { elapsedClock, hexIn, PALETTE5, type Ui } from './atlas-ui'
-import { lookUi } from './look'
-import { displayDelta, leadOf, leadRow, partialLead, verdictOf } from './transcript/leadheader'
-import type { Outcome } from './transcript/outcome'
+import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
+import { PHASES } from '../../input/intents'
+import type { AgentState, AtlasSnapshot, Persona, PhaseId } from '../../contract'
+import { glyph } from '../../theme'
+import { shortTool } from '../../band'
+import type { ActivityEntry, LiveSnapshot } from '../../orchestra-types'
+import { openItems } from '../../data/core'
+import { activeCount, liveWorkers } from '../../data/live'
+import type { LiveWorker } from '../../data/live'
+import { bubbleTree, waveTree, workerCard } from './cards'
+import type { CardExtra } from './cards'
+import { cardExtra, launchedId, notificationRow } from './outcome'
+import { barFade, cardAged, cardFade, hideNotification, placedTree, runCardPlaced, runSecs } from './placed'
+import { noteDoneChip, onSuperseded } from './superseded'
+import { lookOf } from '../../look'
+import { elapsedClock, hexIn, PALETTE5, type Ui } from '../../atlas-ui'
+import { lookUi } from '../../look'
+import { displayDelta, leadOf, leadRow, partialLead, verdictOf } from './leadheader'
+import type { Outcome } from './outcome'
 
 // The live snapshot is read from $.state while drawing, so a snapshot write redraws
 // exactly the restyled sites (null outside an atlas session).
@@ -250,7 +250,7 @@ function noteDrawn(snap: AtlasSnapshot, id: string | undefined, text: string): v
 // Wave 37 (critique 36: `▌ done 5/5` under `◆ ATLAS ● done 5/5 · 3 workers`): a sentence that only restates the count or says the run is over (`5/5`, `complete`, `run complete`, `all 5 done`) is the run card again.
 const BARE_DONE = /^(?:(?:all|run|everything|work)\s+)?(?:\d+\/\d+\s+)?(?:done|complete|completed|finished|all finished|all done|\d+\/\d+)(?:\s+\d+\/\d+)?[.!]?$/i
 
-/** The lead's header as a chip drawn from either form of the line (contract or display, mod/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
+/** The lead's header as a chip drawn from either form of the line (contract or display, mod/view/transcript/leadheader.ts): no fill, a bar in the phase colour, the phase word, the state.
  * `quiet` (the previous header was this phase) drops the word; `superseded` is a done chip a Stop refusal overturned. A finished first line that is no header stays the host's own row. */
 export function assistantTree(snap: AtlasSnapshot, props: AssistantPropsLike, columns = 0, superseded = false, ui: Ui = lookUi(), quiet = false): RenderElement | null {
  if (props.isSummary || !props.text) return null

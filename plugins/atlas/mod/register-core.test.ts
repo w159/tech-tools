@@ -6,7 +6,7 @@ import { coreMatrix } from '../contracts/core-fixture';
 import { buildCore, coreTick, headerTallyOf, register, resetCore, resetSessionStart } from './register';
 import { memState } from './test_helpers';
 import { withHeaderTally } from './data/runstate';
-import { forgetDrawnHeaders } from './restyle';
+import { forgetDrawnHeaders } from './view/transcript/restyle';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;

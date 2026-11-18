@@ -8,9 +8,9 @@ import { bodyLines, lineText } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { boardTimeline } from './board-model';
-import { notificationTree } from './transcript/cards';
-import { cleanRun, forgetPlaced, placedTree, placeFinished } from './transcript/placed';
-import { durationTree } from './restyle';
+import { notificationTree } from './view/transcript/cards';
+import { cleanRun, forgetPlaced, placedTree, placeFinished } from './view/transcript/placed';
+import { durationTree } from './view/transcript/restyle';
 import type { AtlasSnapshot } from './contract';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -66,8 +66,8 @@ const GREEN = '#87d787'; // 114
 
 
 // ---- wave 35 fixtures -----------------------------------------------------------------------------------------------------------
-import { assistantTree } from './restyle';
-import { noteRunSecs, runCardPlaced } from './transcript/placed';
+import { assistantTree } from './view/transcript/restyle';
+import { noteRunSecs, runCardPlaced } from './view/transcript/placed';
 import { gateTally, withCoreTally } from './data/runstate';
 
 const GATES = [

@@ -10,8 +10,8 @@ import { bodyLines, lineText, channelLabel, cardBarTone, toastRuns, noteToastRun
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { boardTimeline } from './board-model';
-import { notificationTree } from './transcript/cards';
-import { leadRow, verdictOf, type Lead } from './transcript/leadheader';
+import { notificationTree } from './view/transcript/cards';
+import { leadRow, verdictOf, type Lead } from './view/transcript/leadheader';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

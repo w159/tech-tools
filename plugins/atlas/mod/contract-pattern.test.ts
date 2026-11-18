@@ -5,7 +5,7 @@ import { expect, test } from 'claude-code/testing';
 import contract from '../contracts/operating-contract.json';
 import corpus from '../contracts/header-corpus.json';
 import { HEADER_FIRST_LINE_PATTERN, PHASE_TABLE, firstHeaderLine } from './contract-pattern';
-import { leadOf, displayDelta } from './transcript/leadheader';
+import { leadOf, displayDelta } from './view/transcript/leadheader';
 
 test('HEADER_FIRST_LINE_PATTERN equals contracts/operating-contract.json headerFirstLinePattern', () => {
   expect(HEADER_FIRST_LINE_PATTERN).toBe((contract as { headerFirstLinePattern: string }).headerFirstLinePattern);

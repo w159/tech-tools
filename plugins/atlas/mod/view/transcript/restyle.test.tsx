@@ -1,4 +1,4 @@
-// Tests for mod/restyle.tsx — pure tree builders plus the registration wiring.
+// Tests for mod/view/transcript/restyle.tsx — pure tree builders plus the registration wiring.
 // Runs under `claude plugin test` (claude-code/testing): no fs, network or process.
 
 import { expect, test } from 'claude-code/testing'
@@ -18,13 +18,13 @@ import {
   toolUseTree,
   type ReceiptTracker,
 } from './restyle'
-import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
-import { runHex } from './atlas-ui'
-import { lookUi } from './look'
-import type { AtlasSnapshot } from './contract'
-import { formatDuration, textWidth } from './theme'
-import { memState } from './test_helpers'
-import { noteRunSecs } from './transcript/placed'
+import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
+import { runHex } from '../../atlas-ui'
+import { lookUi } from '../../look'
+import type { AtlasSnapshot } from '../../contract'
+import { formatDuration, textWidth } from '../../theme'
+import { memState } from '../../test_helpers'
+import { noteRunSecs } from './placed'
 
 // ---- fixtures ----
 

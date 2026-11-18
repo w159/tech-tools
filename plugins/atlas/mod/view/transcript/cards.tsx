@@ -3,16 +3,16 @@
 // ToolUse / ToolGroup / UserMessage and falls back to next(e) on null or a throw.
 
 import type { RenderElement, RenderNode } from 'claude-code'
-import type { AgentState } from '../contract'
-import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../atlas-ui'
-import { lookUi } from '../look'
-import { CARD_W, cardBarTone, toastRuns } from '../panel-layout'
-import { cells } from '../atlas-ui'
-import { clipE as clip, ELLIPSIS } from '../board-model'
-import { displayName } from '../hud'
-import { workerFacts, type WorkerFacts } from '../data/live'
-import { fitText } from '../theme'
-import { wordOf } from '../pane/activity'
+import type { AgentState } from '../../contract'
+import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../../atlas-ui'
+import { lookUi } from '../../look'
+import { CARD_W, cardBarTone, toastRuns } from '../../panel-layout'
+import { cells } from '../../atlas-ui'
+import { clipE as clip, ELLIPSIS } from '../../board-model'
+import { displayName } from '../../hud'
+import { workerFacts, type WorkerFacts } from '../../data/live'
+import { fitText } from '../../theme'
+import { wordOf } from '../../pane/activity'
 
 export interface CallLike { tool: string; input: unknown; output?: unknown; isRunning: boolean; isErrored: boolean; isInterrupted: boolean }
 type AgentInput = { subagent_type?: string; subagentType?: string; name?: string; description?: string; prompt?: string; model?: string; effort?: string }

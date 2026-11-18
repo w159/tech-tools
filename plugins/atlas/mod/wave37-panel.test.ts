@@ -8,9 +8,9 @@ import { type Ui } from './atlas-ui';
 import { forgetPhases } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { boardLines, type BoardRow } from './board-model';
-import { notificationTree } from './transcript/cards';
-import { assistantTree, durationTree } from './restyle';
-import { forgetPlaced, noteRunSecs, placedTree, placeFinished, runCardPlaced } from './transcript/placed';
+import { notificationTree } from './view/transcript/cards';
+import { assistantTree, durationTree } from './view/transcript/restyle';
+import { forgetPlaced, noteRunSecs, placedTree, placeFinished, runCardPlaced } from './view/transcript/placed';
 import type { AtlasSnapshot } from './contract';
 
 type Node = { kind: string; props: Record<string, any> };

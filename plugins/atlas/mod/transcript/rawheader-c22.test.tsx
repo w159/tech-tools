@@ -4,7 +4,7 @@
 // contract pattern, so the chip is the first thing the host receives, for the exact lines those frames show and for every prefix of them.
 import { expect, test } from 'claude-code/testing'
 import type { EngineInterface, On } from 'claude-code'
-import { registerRestyle } from '../restyle'
+import { registerRestyle } from '../view/transcript/restyle'
 
 type Hook = (d: unknown, e: unknown, n: (x?: unknown) => unknown) => unknown
 function sites(): Record<string, Hook> {

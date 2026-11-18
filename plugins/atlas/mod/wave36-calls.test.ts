@@ -10,8 +10,8 @@ import { hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';
 import { composeSlot } from './slot';
-import { notificationTree } from './transcript/cards';
-import { finishedWorkers } from './transcript/placed';
+import { notificationTree } from './view/transcript/cards';
+import { finishedWorkers } from './view/transcript/placed';
 
 /** The text of an element tree, run records included. */
 function flat(n: unknown): string {

@@ -1,11 +1,11 @@
 // The reply header line draws as `ATLAS <glyph> <phase> | <state>`, the whole line in the phase colour (17.14.0 redesign had dropped the brand, the glyph and the line colour).
 import { expect, test } from 'claude-code/testing'
-import contract from '../../contracts/operating-contract.json'
-import { HEADER_FIRST_LINE_PATTERN } from '../contract-pattern'
-import { assistantTree, forgetDrawnHeaders } from '../restyle'
+import contract from '../../../contracts/operating-contract.json'
+import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
+import { assistantTree, forgetDrawnHeaders } from './restyle'
 import { displayDelta } from './leadheader'
-import type { AtlasSnapshot } from '../contract'
-import type { Ui } from '../atlas-ui'
+import type { AtlasSnapshot } from '../../contract'
+import type { Ui } from '../../atlas-ui'
 
 const snap = { contract: { headerFirstLinePattern: HEADER_FIRST_LINE_PATTERN } } as unknown as AtlasSnapshot
 const glyphOf = (phase: string): string => (contract as { phases: { id: string; glyph: string }[] }).phases.find((p) => p.id === phase)!.glyph

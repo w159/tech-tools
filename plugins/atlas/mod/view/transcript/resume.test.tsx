@@ -3,9 +3,9 @@
 // card said `explorer killed` in one run (150-2 f0068.ans:13) and `explorer failed` in another (150-3): one verb for a TaskStop kill.
 import { expect, test as base } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
-import type { AtlasSnapshot, SquadAgent } from '../contract'
-import { forgetHealth, registerRestyle } from '../restyle'
-import { memState } from '../test_helpers'
+import type { AtlasSnapshot, SquadAgent } from '../../contract'
+import { forgetHealth, registerRestyle } from './restyle'
+import { memState } from '../../test_helpers'
 import { noteFailed } from './outcome'
 import { forgetPlaced } from './placed'
 

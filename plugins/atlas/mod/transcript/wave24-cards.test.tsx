@@ -4,9 +4,9 @@ import { expect, test } from 'claude-code/testing'
 import contract from '../../contracts/operating-contract.json'
 import { uiFromEnv } from '../atlas-ui'
 import type { AtlasSnapshot } from '../contract'
-import { assistantTree } from '../restyle'
-import { notificationTree } from './cards'
-import { forgetSuperseded, noteDoneChip, noteStopVerdict } from './superseded'
+import { assistantTree } from '../view/transcript/restyle'
+import { notificationTree } from '../view/transcript/cards'
+import { forgetSuperseded, noteDoneChip, noteStopVerdict } from '../view/transcript/superseded'
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const }
 type El = { type?: string; props: Record<string, unknown>; children?: unknown }

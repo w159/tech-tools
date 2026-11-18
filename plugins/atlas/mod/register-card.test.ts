@@ -3,7 +3,7 @@
 import { expect, test } from 'claude-code/testing';
 import type { AgentInfo, EngineInterface, On } from 'claude-code';
 import { rebuild, register, resetCore } from './register';
-import { forgetPlaced } from './transcript/placed';
+import { forgetPlaced } from './view/transcript/placed';
 import { memState } from './test_helpers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;

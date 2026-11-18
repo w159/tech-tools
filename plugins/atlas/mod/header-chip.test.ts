@@ -3,7 +3,7 @@
 // pattern and the exact first lines the live runs showed raw for 3-5 frames (150-1 f0128-f0130, 150-3 f0123-f0127, 110-3 f0098-f0100).
 import { expect, test } from 'claude-code/testing';
 import contract from '../contracts/operating-contract.json';
-import { assistantTree } from './restyle';
+import { assistantTree } from './view/transcript/restyle';
 import type { AtlasSnapshot } from './contract';
 
 const pattern = (contract as { headerFirstLinePattern: string }).headerFirstLinePattern;

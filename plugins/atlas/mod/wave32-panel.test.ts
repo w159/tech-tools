@@ -10,8 +10,8 @@ import { type Ui } from './atlas-ui';
 import { bodyLines, lineText, type PanelLine } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
-import { placedTree, placeFinished, forgetPlaced } from './transcript/placed';
-import { durationTree } from './restyle';
+import { placedTree, placeFinished, forgetPlaced } from './view/transcript/placed';
+import { durationTree } from './view/transcript/restyle';
 import { memState } from './test_helpers';
 
 type Node = { kind: string; props: Record<string, any> };
@@ -164,7 +164,7 @@ describe('item 5: one spinner vocabulary (critique 30: circles in the panel, bra
 });
 
 import { toastRuns } from './panel-layout';
-import { workerCard } from './transcript/cards';
+import { workerCard } from './view/transcript/cards';
 function toastWith(frame: number) {
   const card = workerCard({ tool: 'Agent', input: { subagent_type: 'atlas:implementer', name: 'impl-a', description: 'd', prompt: 'GOAL: x', model: 'sonnet' }, isRunning: true, isErrored: false, isInterrupted: false } as never, 'running', 60, undefined, '', { now: 'Grep', wave: 1, frame } as never);
   return card as never;

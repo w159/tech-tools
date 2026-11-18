@@ -9,8 +9,8 @@ import { boardText, boardTimeline } from './board-model';
 import { bodyLines, lineText } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
-import { FINISH_W, finishWidth, notificationTree } from './transcript/cards';
-import { cardFade, cardAged, forgetPlaced } from './transcript/placed';
+import { FINISH_W, finishWidth, notificationTree } from './view/transcript/cards';
+import { cardFade, cardAged, forgetPlaced } from './view/transcript/placed';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

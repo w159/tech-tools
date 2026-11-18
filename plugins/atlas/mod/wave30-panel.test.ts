@@ -8,8 +8,8 @@ import { PALETTE5, type Ui } from './atlas-ui';
 import { bodyLines, lineText, toastRuns } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
-import { notificationTree } from './transcript/cards';
-import { leadRow, type Lead } from './transcript/leadheader';
+import { notificationTree } from './view/transcript/cards';
+import { leadRow, type Lead } from './view/transcript/leadheader';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

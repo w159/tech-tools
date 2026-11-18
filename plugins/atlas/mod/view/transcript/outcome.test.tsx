@@ -2,11 +2,11 @@
 // and a 2-agent batch is folded by the engine, so its result must land on the task-notification row).
 import { expect, test } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
-import { registerRestyle } from '../restyle'
-import type { AtlasSnapshot } from '../contract'
-import { memState } from '../test_helpers'
+import { registerRestyle } from './restyle'
+import type { AtlasSnapshot } from '../../contract'
+import { memState } from '../../test_helpers'
 import { cardExtra, forgetFailed, launchedId, notifiedMs, outcomeText, reportOf } from './outcome'
-import { spin } from '../theme'
+import { spin } from '../../theme'
 
 const SNAP = {
   root: null, sessionId: 's1', channel: 'c', todos: [], notes: [], members: [], squad: [], contextPct: 0, now: 0,

@@ -11,7 +11,7 @@ import { blockedText } from './data/runstate';
 import { noteWorkerFacts, resetWorkerFacts } from './data/live';
 import { busySnap } from './live_fixture';
 import type { AtlasSnapshot } from './contract';
-import { forgetPlaced, noteBlocked, placedTree, placeFinished } from './transcript/placed';
+import { forgetPlaced, noteBlocked, placedTree, placeFinished } from './view/transcript/placed';
 
 // the run of stoprun-110-1: it began at 6 s and its clock closed at 35.2 s (host turn flag fell), with 0:29 on the clock
 const closed = (): RunClock => stepRun(stepRun(stepRun(newRunClock(), true, 6_000), true, 35_100), false, 35_200, { hostIdle: true });

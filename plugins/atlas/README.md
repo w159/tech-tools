@@ -1301,7 +1301,7 @@ A failed worker reads `■ failed` on every tab. A dispatch row that a plan row 
 folds into that plan row; the rest list under a `dispatches` group.
 
 **Transcript cards.** Cards are one row each, `min(56, cols - 4)` cells wide and
-never wrapped (`finishRow` in `mod/transcript/cards.tsx`). Each starts with a bar
+never wrapped (`finishRow` in `mod/view/transcript/cards.tsx`). Each starts with a bar
 `▌` that is 141 for its first moments and 245 afterwards, then the dim brand mark.
 A worker's finish card shows the state glyph and word, the worker name and, flush
 right, the run time and call count from the worker's SUBAGENTS row (`-` where the
@@ -1324,7 +1324,7 @@ splitting on newline only, that is non-empty once ASCII whitespace is stripped
 (`PHASE_TABLE` in `mod/contract-pattern.ts`, from `phases[]` in the contract). The lead's `ATLAS | ...`
 header line is rewritten for the screen by the classic `MessageDisplay` hook to
 `phase n/m · state` in lower case (`displayLine` in
-`mod/transcript/leadheader.ts`); the stored message and the Stop gate keep the
+`mod/view/transcript/leadheader.ts`); the stored message and the Stop gate keep the
 contract form. Session start says `atlas mod: not confirmed active (<reason>)` when
 the surface cannot show the mod (cloud session, SDK or headless entry point, unknown
 entry point), and `atlas_doctor.py` prints the same reason as a warn-only `mod-surface`
@@ -1333,7 +1333,7 @@ so a confirmed surface means assumed, not proven (`mod_surface_status` in
 `hooks/session_boot_core.py`). When `contracts/operating-contract.json` cannot be read,
 session start gives the header template and says the phase glyph table is unavailable
 (use the phase names) instead of dropping it silently. A turn footer is frozen at its first draw and prints the band's
-run clock (`run 4:12`, `durationTree` in `mod/restyle.tsx`). Worker
+run clock (`run 4:12`, `durationTree` in `mod/view/transcript/restyle.tsx`). Worker
 cards are drawn only on omp, where a running worker is a 44-cell box
 (`cardLines` and `CARD_W` in `mod/panel-layout.ts`, painted by `omp/panel-view.ts`):
 

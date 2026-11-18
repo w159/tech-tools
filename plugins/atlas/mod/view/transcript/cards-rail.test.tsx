@@ -1,7 +1,7 @@
 // Design rev 5, slice C3: one rail style for dispatch, done, failed and killed cards: `▌` in the state colour, the state word in a fixed-width column so the name starts
 // at the same column on every card, and a failed card keeps its error colour (rail, glyph, word) as it ages.
 import { expect, test } from 'claude-code/testing'
-import { uiFromEnv } from '../atlas-ui'
+import { uiFromEnv } from '../../atlas-ui'
 import { notificationTree, workerCard, type CallLike } from './cards'
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const }

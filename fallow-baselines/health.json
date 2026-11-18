@@ -1052,7 +1052,7 @@
         "count": 10
       }
     },
-    "plugins/atlas/mod/restyle.test.tsx": {
+    "plugins/atlas/mod/view/transcript/restyle.test.tsx": {
       "complexity_critical": {
         "count": 1
       },
@@ -1060,7 +1060,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/restyle.tsx": {
+    "plugins/atlas/mod/view/transcript/restyle.tsx": {
       "crap_critical": {
         "count": 4
       },
@@ -1870,7 +1870,7 @@
     "mcp_servers/auvik-mcp/scripts/smoke.ts:complexity",
     "plugins/atlas/mod/pane/sidebar-team.tsx:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/settings-row.js:untested risk",
-    "plugins/atlas/mod/restyle.tsx:high impact",
+    "plugins/atlas/mod/view/transcript/restyle.tsx:high impact",
     "plugins/atlas/mod/register.ts:high impact",
     "plugins/atlas/omp/channels.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/agents-store.js:high impact",
@@ -1906,7 +1906,7 @@
     "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
     "mcp_servers/paylocity-mcp/src/utils/client.ts:high impact",
     "plugins/atlas/omp/workers.ts:high impact",
-    "plugins/atlas/mod/transcript/cards.tsx:high impact",
+    "plugins/atlas/mod/view/transcript/cards.tsx:high impact",
     "mcp_servers/threatlocker-mcp/src/utils/logger.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/supervision-lens.js:untested risk",

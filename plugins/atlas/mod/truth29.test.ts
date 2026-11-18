@@ -9,7 +9,7 @@ import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './hud';
 import { RETURNED, markToken, rowWordTone, runsString, stateGlyph, type Ui } from './atlas-ui';
 import { DONE_HOLD_MS, MOTION_FRAME_MS, MOTION_STEP_MS, Motion, animateRow, trackBusy, windowOf, type MotionItem } from './motion';
 import * as reg from './register';
-import { displayLine, leadOf, leadRow } from './transcript/leadheader';
+import { displayLine, leadOf, leadRow } from './view/transcript/leadheader';
 import { slotHold } from './register';
 
 const row = (over: Partial<TodoItem>): TodoItem => ({ id: 'x', content: 'T1 read alpha.py', status: 'completed', session_id: 's1', ...over });

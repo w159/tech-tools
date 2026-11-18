@@ -10,7 +10,7 @@ import { dataWord } from './data/datastate';
 import { atom, read, update } from 'claude-code';
 import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
-import { headerPhaseOf } from './restyle';
+import { headerPhaseOf } from './view/transcript/restyle';
 import type { HeaderCheck } from './gates';
 import { hookDone, hookStamp, noteHook } from './hook-log';
 import { EMPTY_ORCH, LEAD, onStep, onToolEnd, onToolStart } from './data/orchestration';

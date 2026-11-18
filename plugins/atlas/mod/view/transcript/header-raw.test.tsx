@@ -4,10 +4,10 @@
 // shows the chip. The one host event that sees those batches is the classic `MessageDisplay`; it rewrites a batch for the screen alone. This pins the exact sequences the frames show.
 import { expect, test } from 'claude-code/testing'
 import type { EngineInterface, On } from 'claude-code'
-import contract from '../../contracts/operating-contract.json'
-import type { AtlasSnapshot } from '../contract'
-import { HEADER_FIRST_LINE_PATTERN } from '../contract-pattern'
-import { assistantTree, forgetDrawnHeaders, forgetHeaderPattern, noteHeaderPattern, registerRestyle } from '../restyle'
+import contract from '../../../contracts/operating-contract.json'
+import type { AtlasSnapshot } from '../../contract'
+import { HEADER_FIRST_LINE_PATTERN } from '../../contract-pattern'
+import { assistantTree, forgetDrawnHeaders, forgetHeaderPattern, noteHeaderPattern, registerRestyle } from './restyle'
 import { displayDelta, leadOf, partialLead } from './leadheader'
 
 type Flush = { index: number; final: boolean; delta: string }

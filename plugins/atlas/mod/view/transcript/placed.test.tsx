@@ -2,10 +2,10 @@
 // after the worker ended in live-150-61858003-2 and -3, against 1.03 s for the HUD row). The mod places its own card from the rebuild tick.
 import { expect, test as base } from 'claude-code/testing'
 import type { AgentInfo, EngineInterface, On } from 'claude-code'
-import type { AtlasSnapshot, SquadAgent } from '../contract'
-import { registerRestyle } from '../restyle'
-import { memState } from '../test_helpers'
-import { uiFromEnv } from '../atlas-ui'
+import type { AtlasSnapshot, SquadAgent } from '../../contract'
+import { registerRestyle } from './restyle'
+import { memState } from '../../test_helpers'
+import { uiFromEnv } from '../../atlas-ui'
 import { cardAged, finishedWorkers, forgetPlaced, hideNotification, placeFinished, placedTree } from './placed'
 
 const snap = (now: number, squad: SquadAgent[], over: Record<string, unknown> = {}): AtlasSnapshot => ({

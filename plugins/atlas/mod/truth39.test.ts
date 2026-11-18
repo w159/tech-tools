@@ -6,7 +6,7 @@ import { blockedText, runElapsed } from './data/runstate';
 import { noteWorkerFacts, resetWorkerFacts } from './data/live';
 import { busySnap } from './live_fixture';
 import type { AtlasSnapshot } from './contract';
-import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree, placeFinished } from './transcript/placed';
+import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree, placeFinished } from './view/transcript/placed';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { panelWorld } from '../contracts/panel-world';
 import type { Ui } from './atlas-ui';

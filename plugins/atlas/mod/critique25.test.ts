@@ -10,8 +10,8 @@ import { todoState } from './data/todos';
 import { hudAgents, hudLines } from './hud';
 import { panelModelOf } from './pane/sidebar-model';
 import { bodyLines, lineText, noteToastText, toastRuns, toastText } from './panel-layout';
-import { notificationTree } from './transcript/cards';
-import { workerCard } from './transcript/cards';
+import { notificationTree } from './view/transcript/cards';
+import { workerCard } from './view/transcript/cards';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 

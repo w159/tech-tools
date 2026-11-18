@@ -5,7 +5,7 @@ import { bandTree, type BandHandlers, type BandModel } from './band';
 import { beatDue, idleLevel, idlePhase, idleRamp, IDLE_PHASES, IDLE_RAMP_256 } from './band-motion';
 import { runHex, uiFromEnv, xtermHex, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
-import { durationTree } from './restyle';
+import { durationTree } from './view/transcript/restyle';
 import { textWidth } from './theme';
 import type { Health } from './idle-health';
 import type { Pulse } from './pulse';

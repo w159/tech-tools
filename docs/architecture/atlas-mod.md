@@ -29,7 +29,7 @@ This section wins over the 12.x sections below where they differ. Paths are unde
 - **Frame clock.** `FRAME_MS = 100` (`mod/band-motion.ts:51`), the loop armed at `mod/register.ts:1097`: at most 10 redraws a second. One frame index per render is shared by every surface (`withSpinFrame`, `mod/atlas-ui.ts:647`).
 - **Spinner set.** One set on every surface: circle quarters `◐◓◑◒` (`SPIN_FRAMES`, `mod/atlas-ui.ts`; `LEAD_FRAMES` and `leadSpinnerGlyph` are aliases kept for their readers) on the band lead and counts, TODO and SUBAGENTS rows and titles, panel agent and phase rows, board and cards; ASCII mode turns `|/-\`. `sharedSpinFrame` wraps at 4, the same phase as `spinFrameOf`, so the panel and the band never drift. The capture scorer reads row state from these marks.
 - **Fit ladder.** `fitRows` (`mod/hud-surface.ts:437`): progress rail, blank row, both closing rules together, finished TODO rows (`n/m · k done`), agent rows (down to one), TODO rows, the TODO box, the SUBAGENTS column names last. Overflow is one wording in the title: `figure · +N more` (`:172`), `3 running · +2 more` (`:285`). Boxes are closed on both blocks or flat on both, never a top rule without a bottom (`titleRow(..., flat)`, `:57`).
-- **Truth.** The side panel draws the snapshot as is, with no hold. The phase is never `done` while a dispatch row is open or a worker runs (`currentPhase`, `mod/data/todos.ts:270`). The status tab's phase row is built from the band's own inputs and glyph function (`phaseRow`, `phaseGlyph`, `mod/panel-layout.ts`), so it matches the band on one frame; lane and event times come from the same worker clock and one run start (`originOf`, `runBandModel`, `mod/register.ts`). A row whose owner returned is a neutral `◉` with the word in 245 (`mod/hud-surface.ts:25`). The lead header line is lower case with no `▌` after the host's `●` (`displayLine`, `mod/transcript/leadheader.ts:41`; the chip, `:64`).
+- **Truth.** The side panel draws the snapshot as is, with no hold. The phase is never `done` while a dispatch row is open or a worker runs (`currentPhase`, `mod/data/todos.ts:270`). The status tab's phase row is built from the band's own inputs and glyph function (`phaseRow`, `phaseGlyph`, `mod/panel-layout.ts`), so it matches the band on one frame; lane and event times come from the same worker clock and one run start (`originOf`, `runBandModel`, `mod/register.ts`). A row whose owner returned is a neutral `◉` with the word in 245 (`mod/hud-surface.ts:25`). The lead header line is lower case with no `▌` after the host's `●` (`displayLine`, `mod/view/transcript/leadheader.ts:41`; the chip, `:64`).
 - **Durations.** An agent's run is `m:ss` (`h:mm:ss` from an hour) on every surface (`elapsedClock`, `mod/atlas-ui.ts:413`). A plan row's `ran` and `elapsed ... of` detail is `mm:ss` (`mod/hud.ts:99`, `mod/board-model.ts:66`).
 - **Palette.** `PALETTE5` (`mod/atlas-ui.ts:405`): accent 141, ok 114, warn 179, error 203, neutrals 236, 240, 245, 252. In 256-colour output every surface is limited to those, the panel fills 234 and 235, and 231 as a fade's first step (`PALETTE_INDICES`, `mod/surface_indices.ts:24`, checked by `mod/critique26.test.ts:39`).
 - **Done motion.** A done mark holds its first state `DONE_HOLD_MS = 1000` (`mod/motion.ts:29`), then three `MOTION_STEP_MS = 200` beats (`:23`); the timer runs at `MOTION_FRAME_MS = 100` (`:16`).
@@ -60,7 +60,7 @@ The phase comes from the last header in `turn.complete` (matched with the contra
 
 ### Transcript cards (12.2.0)
 
-`mod/transcript/cards.tsx` holds pure tree builders that `restyle.tsx` wires into the ToolUse, ToolGroup and UserMessage sites; on `null` or a throw the site falls back to `next(e)`.
+`mod/view/transcript/cards.tsx` holds pure tree builders that `restyle.tsx` wires into the ToolUse, ToolGroup and UserMessage sites; on `null` or a throw the site falls back to `next(e)`.
 
 - **Worker card** (`workerCard`): an `Agent`/`Task` call to an `atlas:*` role renders as a card with the phase mark, worker name, role, the prompt's `GOAL:` line (else the description) and, when finished, the first line of the result.
 - **Wave strip** (`waveTree`): a tool group of 2+ calls that are all atlas `Agent`/`Task` dispatches renders as a wave header plus one worker card per call, side by side when the width allows.
@@ -83,7 +83,7 @@ One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on t
 
 **`$.state` keys** (atoms declared at `register.ts:51-66`; handlers and ticks write, render hooks only read): `sidebarRecipient`, `sidebarExpanded`, `sidebarDraft`, `atlasView` (the active `SidebarView`), `gates` (script groups) and `lastHeader`.
 
-### Restyled built-in sites (`mod/restyle.tsx`)
+### Restyled built-in sites (`mod/view/transcript/restyle.tsx`)
 
 - **`AssistantMessage`** (`restyle.tsx:153-182` `assistantTree`) draws the contract header verbatim on one styled row — ` ATLAS ` (inverse brand chip) `| <phase label>[ n/m]` (phase-colored) ` | <sentence>` (fit to the remaining width) — when the reply's first line matches `headerFirstLinePattern`; the pipes are kept. A reply whose first line does not match is left to the engine's own default render (no header row is drawn).
 - **`Spinner`** becomes a braille-globe frame next to the phase capsule; when any squad member is `running`/`spawning` it appends a live agent count and that agent's current task.
@@ -97,7 +97,7 @@ One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on t
 Gated by `ATLAS_MOD!=off` plus an interactive session; every hook fails open and only ever adds model-only context or a rate-limited toast. Wired by `registerDiscipline(on, { reinforce })` in `register.ts`. The `reinforce` line is `atlas contract: open replies with <headerTemplate> (phase: <phase>)` from `reinforceLine`; it carries the template from the operating contract, not the regex:
 
 - **Heavy inline calls.** A `Read`/`Grep`/`Glob`/`Bash` call whose tool-result text is 4000+ characters, with no `Task`/`Agent` dispatch yet this turn, counts as one heavy inline call; the 4th in a turn toasts a delegate-to-role suggestion.
-- **Contract drift.** A first line that does not match `headerFirstLinePattern` toasts a missing-header warning. The phase is read with the shared parser `headerPhaseOf` (`mod/restyle.tsx`).
+- **Contract drift.** A first line that does not match `headerFirstLinePattern` toasts a missing-header warning. The phase is read with the shared parser `headerPhaseOf` (`mod/view/transcript/restyle.tsx`).
 - **Vague-prompt sharpening.** A short, path-free, test-word-free composer prompt gets an `atlas facts: …` line appended to the model's context for that turn only.
 
 ## Data plane
@@ -208,7 +208,7 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 ## Failure reporting and the core report (17.4.1)
 
 - **Failures are visible.** `reportFailure` (`mod/register.ts`) writes the debug log and shows one toast per distinct message, cut at 200 characters. Toast texts: `atlas: boot failed: ...`, `atlas: rebuild failed: ...`, `atlas: <component> <module> <phase>: <reason>` (a `ui.fault`, a tree the host refused), `atlas: core tick failed: ...`. A new boot clears the set, so a new session toasts again.
-- **Header pill.** `headerPhaseOf` in `mod/restyle.tsx` is the only header parser (`register.ts` re-exports it). It returns no phase, and so no pill, when `headerFirstLinePattern` is empty, the first line does not match, or the phase is not one of the eight. The pill never falls back to the snapshot phase.
+- **Header pill.** `headerPhaseOf` in `mod/view/transcript/restyle.tsx` is the only header parser (`register.ts` re-exports it). It returns no phase, and so no pill, when `headerFirstLinePattern` is empty, the first line does not match, or the phase is not one of the eight. The pill never falls back to the snapshot phase.
 - **Todo board read errors.** A `todos.json` that exists but is corrupt or unreadable keeps the last good rows and toasts `atlas: todos.json is corrupt, showing the last good board` (or `unreadable`). A missing file is an empty board (`mod/data/todos.ts`).
 - **`/atlas-core`.** One finding counts once, by its latest entry (`latestPerId` in `mod/data/core.ts`). The line reads `VERDICTS  <n> findings: <v> verified, <r> refuted, <o> open  |  <c> claims this run, <u> unchecked`. Entries without `id` or `title` use `batch` and `claim`. Row caps in `mod/core-row.ts`: 12 verdict rows (refuted and open first), 3 unchecked rows, 8 worker rows, then `... N more`.
 

@@ -4,14 +4,14 @@
 
 import { atom, read } from 'claude-code'
 import type { AgentInfo, EngineInterface, RenderElement } from 'claude-code'
-import { EMPTY_ORCH } from '../data/orchestration'
-import { endedAt, liveWorkers } from '../data/live'
-import type { ActivityEntry, LiveSnapshot } from '../orchestra-types'
-import { spin } from '../theme'
-import { msClock } from '../atlas-ui'
+import { EMPTY_ORCH } from '../../data/orchestration'
+import { endedAt, liveWorkers } from '../../data/live'
+import type { ActivityEntry, LiveSnapshot } from '../../orchestra-types'
+import { spin } from '../../theme'
+import { msClock } from '../../atlas-ui'
 import { notificationTree, resultLine, stripStatus } from './cards'
-import { lookOf } from '../look'
-import { agentName } from '../hud'
+import { lookOf } from '../../look'
+import { agentName } from '../../hud'
 import type { CardExtra } from './cards'
 
 // Read-only views of register.ts's atoms (same plugin/key): the spinner clock and spawn metadata.

@@ -382,7 +382,7 @@ describe('256-colour mapping: the exact xterm index of each token', () => {
 
 import { surfaceHex as surfaceHexW, cells as cellsW } from './atlas-ui';
 import { PHASE_TABLE as PHASES_W } from './contract-pattern';
-import { leadRow as leadRowW } from './transcript/leadheader';
+import { leadRow as leadRowW } from './view/transcript/leadheader';
 
 
 describe('phase glyph width at 80 columns (audit UX item 9)', () => {
