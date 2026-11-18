@@ -5,6 +5,16 @@ import { textWidth } from '../theme';
 import { gateTally, blockReasons, warningText, ranWorkers } from './runstate';
 import { endedOf, settleDispatch } from './todos';
 import { bandLines, runsText, missionLines, type MissionModel } from '../mission-layout';
+import type { ClientElements } from 'claude-code';
+import { bandTree } from '../band';
+import { busySnap } from '../live_fixture';
+import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
+import { panelWorld } from '../../contracts/panel-world';
+import { coreModel } from './core';
+import { withHeaderTally } from './runstate';
+import { panelText } from '../panel-layout';
+import type { PanelModel } from '../panel-layout';
+import type { GateGroup } from '../pane/sidebar-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['plan', 'research', 'build', 'verify', 'ship'] as const;
@@ -128,4 +138,67 @@ describe('runstate: dispatch rows close from agent completion (S1)', () => {
     const rows = settleDispatch([{ status: 'pending', owner: 'alpha', origin: 'dispatch' }], ended);
     expect(rows[0]!.status).toBe('ended');
   });
+});
+
+describe('runstate-band', () => {
+// Band adapter side of the one run-state model: the checks row and the last-run count come from the same data as the other surfaces.
+
+type Node = { kind: string; props: Record<string, any> };
+const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
+const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
+const text = (row: Node): string => (row.props.children as Node[]).map((t) => t.props.children).join('');
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const idleSnap = (over: Record<string, unknown> = {}) => busySnap({ squad: [], activity: {}, comms: [], ...over } as never);
+const render = (snapshot: ReturnType<typeof busySnap>, gates: unknown[], columns = 120): string => {
+  const node = bandTree(els, { snapshot, live: [], gates, columns, tick: 0, maxRows: 12, ui } as never) as unknown as Node;
+  return (node.props.children as Node[]).map(text).join('\n');
+};
+const grp = (id: string, ok: boolean) => ({ id, title: id, lines: [{ id: `${id}-l`, label: id, ok }] });
+
+describe('band: one run state', () => {
+  test('the checks row lists the same groups as the gates tab, header included', () => {
+    const out = render(idleSnap(), [grp('completion', true), grp('tripwire', false), grp('routing', true), grp('header', true)]);
+    for (const id of ['completion', 'tripwire', 'routing', 'header']) expect(out).toContain(id);
+  });
+  test('last run counts the dispatches that ran, not the workers still listed', () => {
+    const rows = ['alpha', 'beta', 'gamma', 'delta'].map((owner, n) => ({ id: `d${n}`, content: `dispatch ${owner}`, status: 'completed', origin: 'dispatch', owner }));
+    expect(render(idleSnap({ todos: rows }), [])).toContain('4 workers');
+  });
+});
+});
+
+describe('truth-a', () => {
+// Critique 8, slice A: the header contract has one evaluation (core row and gates tab), and BLOCKED follows the Stop verdict only.
+
+const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
+const headerPass = { id: 'header', title: 'Header contract', lines: [{ id: 'header-matched', label: 'Last reply header matched', ok: true, detail: 'declared phase: research' }] } as GateGroup;
+const core = (ok: number, total: number) => coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok, total }, openGates: 0 });
+const text = (tab: PanelModel['tab'], over: Partial<PanelModel>): string[] => panelText(panelWorld(tab, 120, ui, { rows: 40, ...over }));
+
+describe('A3: header n of m and the Header contract row are one evaluation', () => {
+  test('the last reply matched but 6 of 8 replies did: the gate is not passing', () => {
+    const groups = withHeaderTally([headerPass], { ok: 6, total: 8 });
+    expect(groups[0]!.lines).toEqual([{ id: 'header-matched', label: 'Replies with header matched', ok: false, detail: '6 of 8' }]);
+    const t = gateTally(groups as never);
+    expect(t.failing).toEqual(['header']);
+  });
+  test('every reply matched: the gate passes and says n of n', () => {
+    const groups = withHeaderTally([headerPass], { ok: 8, total: 8 });
+    expect(groups[0]!.lines[0]).toMatchObject({ ok: true, detail: '8 of 8' });
+  });
+  test('no replies counted yet: the gate keeps its own line', () => {
+    expect(withHeaderTally([headerPass], { ok: 0, total: 0 })[0]).toBe(headerPass);
+    expect(withHeaderTally([headerPass], undefined)[0]).toBe(headerPass);
+    expect(withHeaderTally([], { ok: 1, total: 2 })).toEqual([]);
+  });
+  test('the gates tab reads the core tally: core amber 6 of 8 never sits beside a passing Header contract', () => {
+    const rows = text('gates', { gates: [headerPass] as never, core: core(6, 8) }).join('\n');
+    expect(rows).toMatch(/△ Header contract +warning/);
+    expect(rows).not.toContain('Last reply header matched');
+    expect(rows).toContain('6 pass · 2 deny'); // critique 19 C4: the figure is the reply tally, not the one line's `0/1 green`
+    const all = text('gates', { gates: [headerPass] as never, core: core(8, 8) }).join('\n');
+    expect(all).not.toMatch(/Header contract +warning/);
+    expect(all).toContain('Header contract');
+  });
+});
 });
