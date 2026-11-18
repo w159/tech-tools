@@ -14198,5 +14198,95 @@
     "verified_at": "2026-11-18T16:31:29+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r6c-verify-freeze",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "round5 freeze hashes validate vs moved files; implementer/implementer-2 DONE not yet posted",
+    "evidence": [
+      "freeze.json hashes: corpus,gtrain,fresh,rubric True; done_claim.py matches 9d8ea23f only"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -c hashlib check; python3 plugins/atlas/hooks/done_claim.py --eval; --latency",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T16:41:59+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-12eb"
+  },
+  {
+    "id": "t08cc5ca0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "manifest_m2: 125 fixtures, rules 1,2,4,5 clean; rule 3 gap: push checker reports state_true True when nothing was committed (r6-push_rejected-05..24, push twins none-07,12,17,22,27)",
+    "evidence": [
+      "evals/done_claim/fixtures/r6-push_rejected-05/check.py kind=push (HEAD vs ls-remote origin); initial-state run gives state_true true for all 20 push fixtures; mirrors plugins/atlas/scripts/atlas_done_claim_positives.py:594"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -I scratchpad/h.py (prepare+run_check on each m2 fixture from worktree b507); h2.py applies reference impl/commit+push",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T17:05:11+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "t4532d9bd-D2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "D2 push_unbacked sha-under-named-ref rule",
+    "evidence": [
+      "16 probes, 15 as expected, 4 pre-fix misses now fire; done_claim.py:505-530"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest 134 passed; python3 scratchpad/probe.py; done_claim.py --eval diff HEAD identical; --latency p95=2.26ms",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T17:09:25+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "t4532d9bd-D5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "D5 pass_after_failing_run subject/elsewhere rule",
+    "evidence": [
+      "16 probes match stated rule; caveat 'failed on CI' fires even when claim is about CI; done_claim.py:106-132"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest 134 passed; python3 scratchpad/probe.py; done_claim.py --eval diff HEAD identical; --latency p95=2.26ms",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T17:09:25+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "t4532d9bd-D3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "D3 count_nowhere kept for header phrase without record",
+    "evidence": [
+      "6 probes, behavior identical HEAD vs tree; CORPUS_PATH ok; done_claim.py:78"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest 134 passed; python3 scratchpad/probe.py; done_claim.py --eval diff HEAD identical; --latency p95=2.26ms",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T17:09:25+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

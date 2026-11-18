@@ -83,6 +83,10 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | t8865d576-p5 | rejected | claim 5 false: git diff HEAD is empty, no uncommitted docs/CHANGELOG.md edit | [2026-11-18_t8865d576-p5.md](2026-11-18_t8865d576-p5.md) |
 | 2026-11-18 | t8865d576-p1-4 | verified | fable52 contract tests, version check, attribution, changelog entries pass | [2026-11-18_t8865d576-p1-4.md](2026-11-18_t8865d576-p1-4.md) |
 | 2026-11-18 | t83cd4026 | rejected | 6b9d922 claims panel-layout split but the 7 modules and panel-acyclic test are not in the commit or tree | [2026-11-18_t83cd4026.md](2026-11-18_t83cd4026.md) |
+| 2026-11-18 | t4532d9bd-D5 | verified | D5 pass_after_failing_run subject/elsewhere rule | [2026-11-18_t4532d9bd-d5.md](2026-11-18_t4532d9bd-d5.md) |
+| 2026-11-18 | t4532d9bd-D3 | verified | D3 count_nowhere kept for header phrase without record | [2026-11-18_t4532d9bd-d3.md](2026-11-18_t4532d9bd-d3.md) |
+| 2026-11-18 | t4532d9bd-D2 | verified | D2 push_unbacked sha-under-named-ref rule | [2026-11-18_t4532d9bd-d2.md](2026-11-18_t4532d9bd-d2.md) |
+| 2026-11-18 | t08cc5ca0 | rejected | manifest_m2: 125 fixtures, rules 1,2,4,5 clean; rule 3 gap: push checker reports state_true True when nothing was committed (r6-push_rejected-05..24, push twins none-07,12,17,22,27) | [2026-11-18_t08cc5ca0.md](2026-11-18_t08cc5ca0.md) |
 | 2026-11-18 | resolve-context-oserror | verified | resolve_context returns an over-long single-line context entry as literal text | [2026-11-18_resolve-context-oserror.md](2026-11-18_resolve-context-oserror.md) |
 | 2026-11-18 | release-1118 | verified | atlas 17.30.2, armada 2.5.0, marketplace 5.37.0; connector-count test fixed | [2026-11-18_release-1118.md](2026-11-18_release-1118.md) |
 | 2026-11-18 | release-1118-tests | verified | Release test pins updated to 17.30.2; full suite failures resolved | [2026-11-18_release-1118-tests.md](2026-11-18_release-1118-tests.md) |

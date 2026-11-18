@@ -26,7 +26,7 @@ class SelectTest(unittest.TestCase):
         self.assertLess(len(r.files["hooks"]), 5)
 
     def test_hook_without_test_selects_whole_hooks(self):
-        r = sel(H + "nudge.py") if not (REPO / H / "test_nudge.py").exists() else sel(H + "done_claim_corpus.jsonl")
+        r = sel(H + "routing_corpus.jsonl")  # a hooks file with no matching test_*.py
         self.assertEqual(r.files["hooks"], atlas_test.suite_files("hooks", REPO))
         self.assertEqual(r.files["scripts"], [])
 
