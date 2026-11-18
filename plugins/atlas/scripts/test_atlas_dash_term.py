@@ -942,5 +942,49 @@ class RealServeTests(unittest.TestCase):
             shutil.rmtree(home, ignore_errors=True)
 
 
+class AnonymousPtyAccessTests(unittest.TestCase):
+    """X2: nothing without the owner's credential reaches the pty shell, upgrade included."""
+
+    def setUp(self):
+        import http.server
+
+        import atlas_dashboard as D
+
+        self.D = D
+        self.httpd = http.server.ThreadingHTTPServer((D.LOOPBACK, 0), D.Handler)
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.port = self.httpd.server_address[1]
+
+    def test_ws_upgrade_without_a_ticket_never_gets_101(self):
+        tok = self.D.DASH_TOKEN
+        for headers, path in (
+            ({}, "/api/v2/term/ws?kind=shell"),
+            ({"Cookie": f"atlas_dash={tok}"}, "/api/v2/term/ws?kind=shell"),
+            ({"X-Atlas-Token": tok}, "/api/v2/term/ws?kind=shell"),
+            ({}, f"/api/v2/term/ws?kind=shell&token={tok}"),
+            ({}, "/api/v2/term/ws?ticket=forged"),
+        ):
+            c = WsClient(self.port, path, headers)
+            try:
+                self.assertEqual(c.status, 403, (headers, path, c.head))
+                self.assertNotIn(b"101", c.head.split(b"\r\n")[0])
+            finally:
+                c.close()
+
+    def test_ticket_mint_needs_the_owner_token(self):
+        for headers in ({}, {"X-Atlas-Token": "nope"}, {"Cookie": f"atlas_dash={self.D.DASH_TOKEN}"}):
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{self.port}/api/v2/term/ticket",
+                data=json.dumps({"kind": "shell"}).encode(),
+                headers={"Content-Type": "application/json", **headers},
+                method="POST",
+            )
+            with self.assertRaises(urllib.error.HTTPError) as cm:
+                urllib.request.urlopen(req, timeout=5)
+            self.assertEqual(cm.exception.code, 401, headers)
+
+
 if __name__ == "__main__":
     unittest.main()

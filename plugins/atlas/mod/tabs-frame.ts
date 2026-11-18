@@ -9,6 +9,7 @@
 //
 // Overflow (2.8, Y2a): the content collapses its expanded rows first (the oldest done item first); then the shared section goes whole (never cut mid-way) and the body ends in a chip `+N more ›` that opens the
 // view holding it; spare rows go to the shared section (the chart grows, the RECENT log lengthens); two blank rows (three on chat) stay above the footer.
+import { dataWord } from './data/datastate';
 import { elapsedClock, type Run, type Ui, type UiState } from './atlas-ui';
 import type { CoreModel } from './data/core';
 import { agoText, teamOf, type Health } from './idle-health';
@@ -331,7 +332,7 @@ function routingPart(a: TabIn, kit: Kit): Run[][] {
   if (!routes.length) return [];
   const out: Run[][] = [ribbon('ROUTING', metaText(`${routes.length} ${routes.length === 1 ? 'route' : 'routes'}`))];
   for (const r of routes.slice(0, 6)) {
-    const how = `${r.cls}/${r.effort} · ${r.transport ?? 'unknown'}`;
+    const how = `${r.cls}/${r.effort} · ${r.transport ?? dataWord({ kind: 'empty' })}`;
     out.push(row([txt(fitText(r.name, Math.max(4, kit.u - 6 - textWidth(how))))], [dim(how)]));
   }
   return out;

@@ -1514,6 +1514,85 @@ class SettingsDataTest(unittest.TestCase):
         self.assertIn("roles", state["omp"])
 
 
+class OwnerUrlAndTokenFileTest(unittest.TestCase):
+    """X2 follow-ups: every command that hands out a URL hands one that opens; no unreadable token."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name)
+        p = mock.patch.object(self.mod, "STATE_DIR", self.home)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_url_command_prints_the_launch_url_not_the_bare_one(self):
+        import contextlib
+        import io
+
+        (self.home / f"dashboard-{self.mod.DEFAULT_PORT}.token").write_text("tok-abc")
+        out = io.StringIO()
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            contextlib.redirect_stdout(out),
+        ):
+            rc = self.mod.main(["url"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            out.getvalue().strip(), self.mod.dashboard_url() + "?launch=tok-abc"
+        )
+
+    def test_url_command_without_token_file_fails_instead_of_printing_a_dead_url(self):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            rc = self.mod.main(["url"])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_ensure_reports_the_launch_url(self):
+        ver = json.loads(
+            (Path(self.mod.__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json").read_text()
+        )["version"]
+        (self.home / "dashboard-17499.token").write_text("tok-xyz")
+        with (
+            mock.patch.object(self.mod, "_guard_shared_port", return_value=None),
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            mock.patch.object(self.mod, "_patient_health", return_value={"pid": 1, "version": ver}),
+            mock.patch.object(self.mod, "_daemon_db_ok", return_value=True),
+        ):
+            res = self.mod.ensure_daemon(17499)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["url"], self.mod.dashboard_url(17499) + "?launch=tok-xyz")
+
+    def test_serve_fails_closed_when_the_token_file_cannot_be_written(self):
+        httpd = mock.MagicMock()
+        with (
+            mock.patch.dict(os.environ, {}),
+            mock.patch.object(self.mod, "_guard_shared_port", return_value=None),
+            mock.patch.object(self.mod, "dashboard_db_path", return_value=str(self.home / "a.db")),
+            mock.patch.object(self.mod, "_Server", return_value=httpd),
+            mock.patch.object(self.mod, "_write_pidfile") as pidfile,
+            mock.patch.object(self.mod, "_write_token_file", side_effect=PermissionError("ro")),
+            mock.patch.object(self.mod.sys, "stderr", new=__import__("io").StringIO()),
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                self.mod.serve(self.mod.LOOPBACK, 17498)
+        self.assertEqual(cm.exception.code, 1)
+        httpd.serve_forever.assert_not_called()
+        httpd.server_close.assert_called_once()
+        pidfile.assert_not_called()  # no record of a daemon nobody can open
+
+
 if __name__ == "__main__":
     unittest.main()
 

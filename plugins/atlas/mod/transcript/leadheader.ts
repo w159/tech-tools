@@ -2,7 +2,7 @@
 //
 // Two forms of the same line reach the AssistantMessage site: the contract's own form, and the display form this mod writes through the classic `MessageDisplay` hook.
 // Why the display form exists (critique 23, 37 raw frames in 11 of 12 runs): while a reply streams, the host paints each flushed batch of whole lines itself and
-// does not ask `ui.render` for the message until it is complete (live-110-513bb41c-1 f0062-f0064: the raw the raw `● ATLAS` pipe row row stands three 0.5 s frames
+// does not ask `ui.render` for the message until it is complete (live-110-513bb41c-1 f0062-f0064: the raw `● ATLAS | 🔍 research | ...` row stands three 0.5 s frames
 // while the body streams under it, and the chip arrives at f0065). `MessageDisplay` is the one host event that sees those batches and may rewrite them for the screen
 // alone, so the first batch is rewritten to `research 1/3 · state`: never a pipe, never an emoji. The stored message, the model and the Stop gate keep the contract form.
 //
@@ -48,7 +48,7 @@ export const displayLine = (l: Lead, ascii = false): string => `ATLAS ${ascii ? 
 
 /** A MessageDisplay batch with its first line rewritten from the contract form to the display form; null when the batch holds no header (or already the display form). */
 export function displayDelta(delta: string, pattern: string, ascii = false): string | null {
-  const lead0 = /^(?:[ \t]*\r?\n)*/.exec(delta)?.[0] ?? '' // blank lines before the header stay as they are
+  const lead0 = /^(?:[ \t\v\f\r]*\n)*/.exec(delta)?.[0] ?? '' // blank lines before the header stay as they are
   const body = delta.slice(lead0.length)
   const nl = body.indexOf('\n')
   const first = nl < 0 ? body : body.slice(0, nl)
@@ -63,8 +63,8 @@ const txt = (props: Props, ...children: RenderNode[]): RenderElement => ({ type:
 const keep = (child: RenderElement): RenderElement => ({ type: 'Box', props: { flexShrink: 0 }, children: [child] })
 const fixed = { wrap: 'truncate-end' }
 
-/** The bar colour of a lead status line: four values and no others (critique 25: five bar colours on one screen). Accent 141 for an active phase, ok 114 for done, error 203 for blocked; the quiet
- * and superseded bars and the notes' bars take the secondary grey (245). */
+/** The bar colour of a lead status line: the phase's own tone from PHASE_TABLE (eight phases, eight distinct tones; operating-contract.json phases[].tone). The quiet and superseded bars and the
+ * notes' bars take the secondary grey (sub). */
 export const leadTone = (phase: PhaseId): Tone => PHASE_TONE[phase] ?? 'accent'
 
 /** Wave 33 (critique 31: a green `▌ done all finished` over a failed worker and an open dispatch row): what the run really closed with. `done` with a failure reads `▌ done · 1 failed` in the warn amber (179); when the

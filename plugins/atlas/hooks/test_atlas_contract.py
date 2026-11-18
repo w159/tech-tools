@@ -1927,7 +1927,7 @@ class HeaderSsotTests(unittest.TestCase):
 
     def test_contract_has_header_fields(self):
         doc = self._doc()
-        self.assertEqual(doc["headerTemplate"], "ATLAS | <glyph> <phase> | <state>")
+        self.assertEqual(doc["headerTemplate"], "**ATLAS** | <glyph> <phase> | <state>")
         self.assertEqual(len(doc["phases"]), 8)
         rx = re.compile(doc["headerFirstLinePattern"])
         self.assertTrue(rx.match("ATLAS | \U0001f50d research 2/5 | hello"))
@@ -2194,7 +2194,7 @@ class HeaderCorpusContract(unittest.TestCase):
 
     def test_corpus_covers_the_audited_cases(self) -> None:
         names = " | ".join(c["name"] for c in self._corpus())
-        for want in ("leading blank line", "leading spaces", "bold brand", "missing glyph", "n/m counter", "wrong case", "not on the first non-empty line"):
+        for want in ("leading blank line", "leading spaces", "bold brand", "missing glyph", "n/m counter", "wrong case", "not on the first non-empty line", "crlf", "vertical tab", "form feed", "line separator", "byte order mark"):
             self.assertIn(want, names)
 
     def test_phase_table_has_fixed_case_label_and_distinct_known_tone(self) -> None:
@@ -2206,6 +2206,20 @@ class HeaderCorpusContract(unittest.TestCase):
                 self.assertEqual(p["label"], p["label"].lower())
                 self.assertIn(p["tone"], tokens)
         self.assertEqual(len({p["tone"] for p in phases}), len(phases))
+
+    def test_phase_table_has_one_single_cell_glyph_per_phase(self) -> None:
+        phases = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))["phases"]
+        for p in phases:
+            with self.subTest(phase=p["id"]):
+                self.assertEqual(len(p["cell"]), 1)
+        self.assertEqual(len({p["cell"] for p in phases}), len(phases))
+
+    def test_header_template_is_the_bold_brand_and_the_plain_form_still_matches(self) -> None:
+        doc = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))
+        self.assertTrue(doc["headerTemplate"].startswith("**ATLAS** | "))
+        pattern = re.compile(doc["headerFirstLinePattern"])
+        self.assertTrue(pattern.match("ATLAS | \U0001f527 implement | x"))
+        self.assertTrue(pattern.match("**ATLAS** | \U0001f527 implement | x"))
 
     def test_output_style_asks_for_bold_brand_and_gate_accepts_both_brands(self) -> None:
         style = (PLUGIN_ROOT / "output-styles" / "atlas-orchestrator.md").read_text(encoding="utf-8")

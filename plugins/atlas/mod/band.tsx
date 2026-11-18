@@ -305,7 +305,7 @@ export function bandSpareRows(b: BandModel): number {
   return blanks + Math.max(0, maxRows - drawn);
 }
 
-/** The band's lines and the model behind them. `on`: the handlers are wired. The idle footer holds its key row from 80 columns up; below that the band is its one row. */
+/** The band's lines and the model behind them. `on`: the handlers are wired. The idle footer then always holds its key row, so the row count of an idle band never depends on the width. */
 function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: MissionModel; lines: Line[] } | null {
   const cols = Math.max(1, b.columns);
   const maxRows = b.maxRows ?? 12;
@@ -315,8 +315,10 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   const m: MissionModel = m0.health ? { ...m0, health: { ...m0.health, ...(on ? { button: true } : {}) } } : m0;
   const idle = !m.workers.some((w) => w.state !== 'done' && w.state !== 'failed');
   const keys = on && idle && !m.health; // round 2 (D9): with health the band is one row and the tabs live only in the panel: no key row at any width (no orphan row under the band)
-  // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns there is no key row at all (the band is one row there)
+  // keys while idle; omp has none, a running band keeps its rows for workers. Under 80 columns the row stays and reads blank: the band never moves when the pane docks (critique 26: row 24 to 25)
   const lines = missionLines({ ...m, keysWidth: keys ? KEYS_W : 0 });
+  // The narrow form (one band row, no footer) still ends in the key row, blank under 80 columns: an idle band is as tall at 79 columns as at 80, so it never moves when the pane docks.
+  if (keys && !lines.some((l) => l.keys) && lines.reduce((n, l) => n + (l.board ?? 1), 0) < maxRows) lines.push({ runs: [], keys: true });
   return { cols, ui, m, lines };
 }
 
@@ -339,7 +341,7 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
   noteBandFrame(m.now === undefined ? m.tick : sharedSpinFrame(m.now), kind === 'working' ? (m.hostOnly ? null : m.turnSecs ?? m.elapsedSecs ?? 0) : kind === 'blocked' ? m.ranSecs ?? m.lastRun?.secs ?? m.turnSecs ?? null : m.ranSecs ?? m.lastRun?.secs ?? null, m.now, kind);
   const rows: Row[] = lines.flatMap((l): Row[] => {
     if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
-    if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [];
+    if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
     if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];
     return [segs(l, ui)];
   });

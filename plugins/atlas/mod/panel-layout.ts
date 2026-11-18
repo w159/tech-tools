@@ -6,6 +6,7 @@
 // Rules: marks come from the state glyph map in atlas-ui (queued, running, done, failed, blocked, waiting; never a
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
+import { phaseFigure, workerTally } from './data/tally';
 import { chipRun, tileOf } from './clickable';
 import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from './idle-health';
 import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
@@ -220,8 +221,9 @@ const WIDE = 100;
 
 // ---- header: ribbon and tab strip ---------------------------------------------------------------------------------
 
-const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
-  const n = (s: UiState): number => workers.filter((w) => w.state === s).length;
+export const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
+  const tally = workerTally(workers);
+  const n = (s: UiState): number => tally[s];
   return UI_STATES.filter((s) => n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(ui)} `);
 };
 
@@ -524,7 +526,7 @@ function phaseChainRuns(m0: PanelModel, compact: boolean | 'short' | 'one', raw:
   if (compact === 'one') { // a narrow pane: the current stage and its place on the rail, nothing else (`● research 1/5`)
     const at = lit >= 0 ? lit : kind === 'done' ? m.phases.length - 1 : Math.max(0, lastEntered);
     const g: Run = lit < 0 ? (kind === 'done' ? stateRun('done', m.ui) : { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' }) : kind === 'blocked' ? stateMark('blocked', m, 'phase') : kind === 'idle' ? { t: m.ui.ascii ? GLYPH5_ASCII.idle : GLYPH5.idle, tone: 'muted' } : stateMark('running', m, 'phase');
-    runs.push({ ...g, t: `${g.t} ` }, r(m.phases[at]!, kind === 'idle' ? 'dim' : 'text', kind === 'idle' ? {} : { bold: true }), r(` ${at + 1}/${m.phases.length}`, 'dim'));
+    runs.push({ ...g, t: `${g.t} ` }, r(m.phases[at]!, kind === 'idle' ? 'dim' : 'text', kind === 'idle' ? {} : { bold: true }), r(` ${phaseFigure(m.phases.length, at)}`, 'dim'));
     return [line(raw ? runs : fitRuns(runs, m.cols))];
   }
   const enteredAt = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'done' || (litAt >= 0 && i < litAt)); // a phase is green only once the run was in it (never from the final status)
@@ -858,7 +860,8 @@ function sparkAxis(m: PanelModel, g: TeamGrid): PanelLine[] {
 
 /** The team's totals under its rows: `workers  0 running · 2 done · 1 killed` and `total  0:27 · 9 worker calls` (the run from the first start to the last end). Running always reads; the other states only when not zero. */
 function leadSummary(m: PanelModel): PanelLine[] {
-  const n = (s: UiState): number => m.workers.filter((w) => w.state === s).length;
+  const counts = workerTally(m.workers);
+  const n = (s: UiState): number => counts[s];
   const tally = (all: boolean): string => UI_STATES.filter((s) => (all && s === 'running') || n(s)).map((s) => `${n(s)} ${wordOf(s)}`).join(` ${dot(m.ui)} `);
   const head = `${' '.repeat(GRID_LEAD)}workers  `;
   const parts = cells(head) + cells(tally(true)) <= m.cols - 1 ? tally(true) : tally(false) || tally(true); // a narrow pane drops the `0 running` before it cuts a figure

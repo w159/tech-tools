@@ -352,12 +352,23 @@ _CONTRACT_FILE = os.path.join(
 _FALLBACK_TEMPLATE = "ATLAS | <glyph> <phase> | <state>"
 
 
+_CONTRACT_FAULT = ""  # why the last read failed; "" when it succeeded
+
+
 def _contract():
+    global _CONTRACT_FAULT
     try:
         with open(_CONTRACT_FILE, encoding="utf-8") as fh:
             doc = json.load(fh)
-        return doc if isinstance(doc, dict) else {}
-    except Exception:
+        if not isinstance(doc, dict):
+            raise ValueError("operating-contract.json is not a JSON object")
+        _CONTRACT_FAULT = ""
+        return doc
+    except Exception as exc:
+        fault = f"{type(exc).__name__}: {exc}"
+        if fault != _CONTRACT_FAULT:  # one log row per distinct fault, not one per call
+            _boot_log("operating-contract", fault)
+        _CONTRACT_FAULT = fault
         return {}
 
 
@@ -385,6 +396,12 @@ def _header_rule():
     if tpl.startswith("ATLAS"):
         tpl = "**ATLAS**" + tpl[len("ATLAS"):]
     glyphs = _status_glyphs()
+    if _CONTRACT_FAULT:  # no glyph table to give: say so instead of dropping it silently
+        return (
+            f"`{tpl}` (phase glyph table unavailable: contracts/operating-contract.json "
+            "unreadable, see colony-boot.log; use the phase names research, theory, test, "
+            "validate, implement, verify, done, blocked)"
+        )
     return f"`{tpl}` ({glyphs})" if glyphs else f"`{tpl}`"
 
 

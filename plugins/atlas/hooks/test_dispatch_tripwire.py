@@ -5323,6 +5323,31 @@ class ToolReachabilityTest(unittest.TestCase):
         with self._which(False):  # configured but the binary is off PATH
             self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
 
+    def test_gap_is_not_denied_when_the_server_is_only_named_in_an_enabled_list(self):
+        # enabledMcpjsonServers approves servers that .mcp.json defines; with no definition anywhere
+        # nothing can load, so a TOOLS line naming lean-ctx cannot be obeyed.
+        (self.root / ".claude").mkdir()
+        (self.root / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledMcpjsonServers": ["lean-ctx"]})
+        )
+        with self._which(True):
+            self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
+
+    def test_gap_is_not_denied_when_the_server_is_disabled(self):
+        self._configure_lean()
+        (self.root / ".claude").mkdir()
+        (self.root / ".claude" / "settings.local.json").write_text(
+            json.dumps({"disabledMcpjsonServers": ["lean-ctx"]})
+        )
+        with self._which(True):
+            self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
+        (self.root / ".claude" / "settings.local.json").unlink()
+        (self.home / ".claude.json").write_text(
+            json.dumps({"projects": {str(self.root): {"disabledMcpServers": ["lean-ctx"]}}})
+        )
+        with self._which(True):
+            self.assertIsNone(self.dt._toolkit_gap(self.BARE, self.root))
+
     def test_gap_is_denied_when_lean_ctx_is_reachable(self):
         self._configure_lean()
         with self._which(True):
@@ -5448,6 +5473,34 @@ class ParallelReadOnlyExemptionTest(unittest.TestCase):
         self.assertTrue(
             self.dt._cheap_exploration({"subagent_type": "atlas:explorer", "model": "opus"})
         )
+
+    def _second_dispatch_is_concurrent(self, exempt: bool, tag: str) -> bool:
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        env = {"ATLAS_BURST_SECS": "10", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": ""}
+        with patch.dict(os.environ, env):
+            with patch("time.time", return_value=0.0):
+                self.dt._burst_note(Path(tmp.name), tag, exempt, tool_use_id="A")
+            with patch("time.time", return_value=1.0):
+                concurrent, _ = self.dt._burst_note(Path(tmp.name), tag, exempt, tool_use_id="B")
+        return concurrent
+
+    def test_read_only_role_pinned_to_opus_is_not_exempt_and_is_denied_in_parallel(self):
+        # The pin decides: only a haiku/sonnet pin is cheap exploration. An opus-pinned read-only role costs
+        # like an editor, so it keeps the one-at-a-time rule.
+        with patch.object(self.dt, "_frontmatter_model", return_value="opus"):
+            exempt = self.dt._cheap_exploration({"subagent_type": "atlas:explorer", "model": "haiku"})
+        self.assertFalse(exempt)
+        self.assertTrue(self._second_dispatch_is_concurrent(exempt, "opus-pin"))
+
+    def test_read_only_role_with_no_pin_is_not_exempt_and_is_denied_in_parallel(self):
+        with patch.object(self.dt, "_frontmatter_model", return_value=""):
+            exempt = self.dt._cheap_exploration({"subagent_type": "atlas:explorer", "model": "haiku"})
+        self.assertFalse(exempt)
+        self.assertTrue(self._second_dispatch_is_concurrent(exempt, "no-pin"))
+
+    def test_cheap_pin_is_not_concurrent(self):
+        self.assertFalse(self._second_dispatch_is_concurrent(True, "cheap-pin"))
 
     def test_working_and_closing_roles_are_not_exempt(self):
         for role in ("atlas:implementer", "atlas:verifier", "general-purpose"):
@@ -5622,6 +5675,72 @@ class LazyGateImportTest(unittest.TestCase):
         self.assertEqual(out, ["False", "True", "True"])
 
 
+class DispatchDenyCounterTest(unittest.TestCase):
+    """S4: every dispatch deny code is one analytics counter `dispatch.deny.<code>`, counts only (no prompt,
+    path or name), emitted where the deny is issued, like the completion gate's `gate.<letter>.block`."""
+
+    CODES = (
+        "builtin_agent", "name", "model_override", "effort_override", "toolkit", "scope",
+        "spec", "multi_goal", "steps", "team", "mux",
+    )
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_analytics
+        import atlas_db
+        import dispatch_tripwire
+
+        self.A, self.atlas_db, self.dt = atlas_analytics, atlas_db, dispatch_tripwire
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        self.conn = atlas_db.connect(os.path.join(self.tmp, "atlas.db"))
+        atlas_db.init(self.conn)
+        self.addCleanup(self.conn.close)
+
+    def test_each_code_records_exactly_its_counter(self):
+        secret = {"subagent_type": "atlas:implementer", "name": "secret-name", "prompt": "GOAL: /home/u/secret.py"}
+        for code in self.CODES:
+            with patch.object(self.A, "record") as rec:
+                self.dt._record_dispatch_deny(self.conn, self.atlas_db, "s1", "Agent", secret, code)
+            rec.assert_called_once_with(f"dispatch.deny.{code}")
+            self.assertTrue(self.A.valid_key(f"dispatch.deny.{code}"), code)
+
+    def test_nested_dispatch_deny_is_counted(self):
+        with patch.object(self.A, "record") as rec, contextlib.redirect_stdout(io.StringIO()):
+            self.dt._deny_nested_dispatch("Agent")
+        rec.assert_called_once_with("dispatch.deny.nested")
+
+    def test_a_real_deny_through_main_counts_once_with_its_code(self):
+        db = os.path.join(self.tmp, "run.db")
+        conn = self.atlas_db.connect(db)
+        self.atlas_db.init(conn)
+        pid = self.atlas_db.register_project(conn, "/repo/x")
+        self.atlas_db.start_run(conn, pid, "sess-1")
+        self.atlas_db.mark_orchestrating(conn, "sess-1")
+        conn.close()
+        payload = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "sess-1",
+            "cwd": self.tmp,
+            "tool_name": "Agent",
+            "tool_input": {"subagent_type": "atlas:implementer", "name": "secret-name", "prompt": "GOAL: x\n"},
+        }
+        env = {"ATLAS_DB": db, "ATLAS_TRIPWIRE": "on", "ATLAS_TRIPWIRE_HARD": "on"}
+        out = io.StringIO()
+        with (
+            patch.dict(os.environ, env),
+            patch("sys.stdin", new=io.StringIO(json.dumps(payload))),
+            patch.object(self.A, "record") as rec,
+            contextlib.redirect_stdout(out),
+        ):
+            self.dt.main()
+        self.assertIn('"permissionDecision": "deny"', out.getvalue())
+        keys = [c.args[0] for c in rec.call_args_list]
+        self.assertEqual(len(keys), 1, keys)
+        self.assertRegex(keys[0], r"^dispatch\.deny\.[a-z_]+$")
+        self.assertTrue(self.A.valid_key(keys[0]))
+
+
 class InlineOpRuleTest(unittest.TestCase):
     """G6: the one stated rule. The 7th unsanctioned inline op (6 prior) is denied; it is not denied for a
     simple task, read-only/collection calls, bookkeeping, team calls, docs/.atlas edits and scratch writes."""
@@ -5630,6 +5749,47 @@ class InlineOpRuleTest(unittest.TestCase):
         import dispatch_tripwire as d
 
         self.assertEqual(d.DENY_THRESHOLD, 6)
+
+    setUp = ReadOnlyInvestigationTest.setUp
+    tearDown = ReadOnlyInvestigationTest.tearDown
+    _call = ReadOnlyInvestigationTest._call
+    _count = ReadOnlyInvestigationTest._count
+
+    OP = {"command": "touch a.txt"}
+
+    def _is_deny(self, r):
+        return '"permissionDecision": "deny"' in r.stdout
+
+    def test_six_ops_nudge_then_the_seventh_is_denied(self):
+        posts = [self._call("PostToolUse", "Bash", self.OP) for _ in range(6)]
+        for r in posts:
+            self.assertFalse(self._is_deny(r), r.stdout)  # PostToolUse only ever nudges
+        self.assertEqual(self._count(), 6)
+        self.assertIn("STOP", posts[-1].stdout)  # the nudge
+        pre = self._call("PreToolUse", "Bash", self.OP)
+        self.assertTrue(self._is_deny(pre), pre.stdout)
+        self.assertIn("6 inline ops since your last dispatch", pre.stdout)
+
+    def test_six_prior_ops_are_needed_before_the_deny(self):
+        for _ in range(5):
+            self._call("PostToolUse", "Bash", self.OP)
+        self.assertFalse(self._is_deny(self._call("PreToolUse", "Bash", self.OP)))
+
+    def test_a_dispatch_in_between_resets_the_count(self):
+        for _ in range(5):
+            self._call("PostToolUse", "Bash", self.OP)
+        self._call(
+            "PostToolUse",
+            "Agent",
+            {"subagent_type": "atlas:explorer", "name": "x-explorer", "prompt": "GOAL: x\n"},
+        )
+        self.assertEqual(self._count(), 0)
+        for _ in range(5):  # 5 more: still under the threshold, so the 6th op is allowed
+            self._call("PostToolUse", "Bash", self.OP)
+        self.assertEqual(self._count(), 5)
+        self.assertFalse(self._is_deny(self._call("PreToolUse", "Bash", self.OP)))
+        self._call("PostToolUse", "Bash", self.OP)
+        self.assertTrue(self._is_deny(self._call("PreToolUse", "Bash", self.OP)))
 
 
 if __name__ == "__main__":

@@ -1692,7 +1692,6 @@ def ensure_daemon(port: int | None = None) -> dict:
 
 
 def _ensure_daemon_locked(port: int) -> dict:
-    url = dashboard_url(port)
     want_db = dashboard_db_path()
 
     reason = _guard_shared_port(port)
@@ -1739,7 +1738,7 @@ def _ensure_daemon_locked(port: int) -> dict:
             return {
                 "ok": True,
                 "already_running": True,
-                "url": url,
+                "url": launch_url(port),  # the bare URL answers 401 (X2)
                 "pid": h.get("pid"),
                 "port": port,
                 "db_path": want_db,
@@ -1784,7 +1783,7 @@ def _ensure_daemon_locked(port: int) -> dict:
             return {
                 "ok": True,
                 "already_running": False,
-                "url": url,
+                "url": launch_url(port),  # the bare URL answers 401 (X2)
                 "pid": proc.pid,
                 "port": port,
                 "db_path": want_db,
@@ -3421,11 +3420,14 @@ def serve(host: str, port: int):
     httpd = _Server((host, port), Handler)
     global _HTTPD
     _HTTPD = httpd
-    _write_pidfile(os.getpid(), port, dashboard_db_path())
     try:
         _write_token_file(port)
     except OSError as e:
+        # Fail closed: a daemon whose token nobody can read serves a page no owner can open.
         sys.stderr.write(f"[atlas-dashboard] cannot write the 0600 token file: {e}\n")
+        httpd.server_close()
+        raise SystemExit(1)
+    _write_pidfile(os.getpid(), port, dashboard_db_path())
     me = os.getpid()
     atexit.register(_clear_pidfile, me, port)
 
@@ -3476,8 +3478,12 @@ def main(argv=None):
         return 0
     if args.cmd == "url":
         if _port_open(LOOPBACK, DEFAULT_PORT):
-            print(dashboard_url(DEFAULT_PORT))
-            return 0
+            # The bare URL answers 401 since X2, so hand out the one that opens.
+            url = launch_url(DEFAULT_PORT)
+            if url:
+                print(url)
+                return 0
+            sys.stderr.write("no token file: run `atlas_dashboard.py ensure` first\n")
         return 1
     if args.cmd == "launch":
         url = launch_url(args.port)

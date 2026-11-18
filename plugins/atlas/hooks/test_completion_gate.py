@@ -2841,6 +2841,40 @@ class DocsFilesNeverHadTest(unittest.TestCase):
         self.assertEqual(ev["docs_advisory"], [])
 
 
+class GateFaultVisibilityTest(unittest.TestCase):
+    def test_unrecorded_fault_is_visible_in_the_gate_output(self):
+        import io
+        from unittest import mock
+
+        sys.path.insert(
+            0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts")
+        )
+        import atlas_db
+        import completion_gate_core as core
+
+        del core._GATE_FAULTS[:]
+        self.addCleanup(lambda: core._GATE_FAULTS.clear())
+        with mock.patch.object(
+            atlas_db, "connect", side_effect=OSError("db locked")
+        ), mock.patch("sys.stderr", io.StringIO()):
+            core._record_gate_fault("todo board", ValueError("bad"), "s")
+        notice = core._faults_notice()
+        self.assertIn("todo board", notice)
+        self.assertIn("not recorded", notice)
+        self.assertIn("db locked", notice)
+
+
+class DocsLettersTest(unittest.TestCase):
+    def test_absent_file_is_advisory_present_empty_file_blocks(self):
+        import completion_gate_core as core
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "docs").mkdir()
+            self.assertEqual(core._docs_letters(Path(d), True), (True, True, True, ["c", "d", "e"]))
+            _empty_docs(d)
+            self.assertEqual(core._docs_letters(Path(d), True), (False, False, False, []))
+            self.assertEqual(core._docs_letters(Path(d), False), (True, True, True, []))
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -4708,7 +4742,7 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn('"decision": "block"', out)
         reason = json.loads(out)["reason"]  # the model sees the decoded text
         self.assertIn("(n)", reason)
-        self.assertIn("ATLAS | <glyph> <phase> | <one-line state>", reason)
+        self.assertRegex(reason, r"ATLAS(\*\*)? \| <glyph> <phase> \| <one-line state>")
         self.assertIn("research", reason)  # phase ids; glyphs come from SessionStart
         self.assertIn("blocked", reason)
         self.assertIn("re-send", reason.lower())
@@ -5017,7 +5051,7 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertLess(len(repeat), 260)
         self.assertNotIn("once per session", first)
         # The repeat still carries the one thing needed to fix the reply: the template.
-        self.assertIn("ATLAS | <glyph> <phase> | <one-line state>", repeat)
+        self.assertRegex(repeat, r"ATLAS(\*\*)? \| <glyph> <phase> \| <one-line state>")
         self.assertIn("(n)", repeat)
 
     def test_n_kill_switch_and_global_off(self):

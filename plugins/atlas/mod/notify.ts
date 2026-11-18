@@ -1,6 +1,7 @@
 // notify.ts - turn-boundary notifications: one toast per turn for workers spawning/finishing/failing/blocked,
 // notes addressed to the lead or the human, completed todos, and phase advances
 // (advance.wav when sound is on); the one prompt.suggest: reply to a blocked worker, else the in-progress todo.
+import { dataWord } from './data/datastate';
 import { atom, read } from 'claude-code';
 import type { On } from 'claude-code';
 import type { AtlasSnapshot, PhaseId } from './contract';
@@ -89,7 +90,7 @@ export function diffSnapshots(prev: AtlasSnapshot | null, next: AtlasSnapshot): 
 	for (const n of next.notes ?? []) {
 		if (!n || seenSeqs.has(n.seq)) continue;
 		if (!/human/i.test(n.to ?? '')) continue; // a note to the lead is the lead's to read; only the person needs a toast
-		events.push({ type: 'note', sender: n.owner ?? 'unknown', preview: (n.text ?? '').slice(0, 60) });
+		events.push({ type: 'note', sender: n.owner ?? dataWord({ kind: 'empty' }), preview: (n.text ?? '').slice(0, 60) });
 	}
 
 	// Todos newly completed.

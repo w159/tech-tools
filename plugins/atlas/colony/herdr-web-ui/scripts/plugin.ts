@@ -105,7 +105,10 @@ function apiToken(): string {
   if (configured !== "") return configured;
   try {
     return readFileSync(join(APP_STATE_DIR, "local-token"), "utf8").trim();
-  } catch {
+  } catch (error) {
+    // say why there is no token: the pairing and access calls that follow will be refused, and an empty string alone hides the cause
+    const reason = (error as NodeJS.ErrnoException).code === "ENOENT" ? "not written yet (the server creates it on first start)" : (error as Error).message;
+    process.stderr.write(`no API token: could not read ${join(APP_STATE_DIR, "local-token")}: ${reason}\n`);
     return "";
   }
 }

@@ -46,6 +46,7 @@ CALL_SITES = {
         ("hooks/edit_read_nudge.py", '"hook.edit_read_nudge.context.unread"'),
     ],
     "dispatch.{event}.ms.{ms}": [("hooks/event_dispatch.py", '"dispatch.%s.ms.%s"')],
+    "dispatch.deny.{denycode}": [("hooks/dispatch_tripwire_core.py", '"dispatch.deny." +')],
     "skill.{skill}": [("hooks/event_dispatch.py", '"skill." +')],
     "command.{skill}": [("hooks/event_dispatch.py", '"command." +')],
     "fault.{component}.{errclass}": [("scripts/atlas_faults.py", '"fault.')],

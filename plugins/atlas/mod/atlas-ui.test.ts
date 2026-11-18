@@ -364,3 +364,39 @@ describe('256-colour mode keeps each token its hue (Latte included)', () => {
     });
   }
 });
+
+describe('256-colour mapping: the exact xterm index of each token', () => {
+  // Pinned, not derived: a palette edit that moves a token to another index must fail here, not slip through the hue-class test above.
+  const WANT = {
+    mocha: { base: 235, panel: 234, text: 252, sub: 245, muted: 245, line: 240, ok: 114, run: 252, warn: 179, bad: 203, block: 203, info: 141, accent: 141, queued_fill: 245, ink: 234, white: 231, cyan: 74, blue: 68 },
+    latte: { base: 255, panel: 254, text: 240, sub: 60, muted: 60, line: 243, ok: 28, run: 27, warn: 172, bad: 125, block: 125, info: 24, accent: 93, queued_fill: 250, ink: 233, white: 231, cyan: 25, blue: 62 },
+  } as const;
+  for (const theme of ['mocha', 'latte'] as const) {
+    test(`${theme}: every token paints as its pinned index`, () => {
+      const got: Record<string, number> = {};
+      for (const tok of Object.keys(PALETTES[theme])) got[tok] = Number(sgrColor(surfaceHexW(tok as never, { theme, color: '256' }), 38, '256').split(';')[2]);
+      expect(got).toEqual(WANT[theme] as Record<string, number>);
+    });
+  }
+});
+
+import { surfaceHex as surfaceHexW, cells as cellsW } from './atlas-ui';
+import { PHASE_TABLE as PHASES_W } from './contract-pattern';
+import { leadRow as leadRowW } from './transcript/leadheader';
+
+
+describe('phase glyph width at 80 columns (audit UX item 9)', () => {
+  type N = { type?: string; props?: Record<string, unknown>; children?: (N | string)[] };
+  const textOfNode = (n: N | string): string => (typeof n === 'string' ? n : (n.children ?? []).map(textOfNode).join(''));
+  for (const p of PHASES_W) {
+    test(`${p.id}: the glyph is two cells in the mod's width function and the fixed part of the header row fits 80`, () => {
+      expect(cellsW(p.glyph)).toBe(2);
+      const row = leadRowW({ phase: p.id, count: '9/9', sentence: 'x', first: '', form: 'contract' } as never, { ui: { theme: 'mocha', ascii: false, color: 'truecolor' }, columns: 80 } as never) as unknown as N;
+      // the bar, `ATLAS <glyph> <label>` and the count never wrap (flexShrink 0); only the sentence wraps, so this part alone must fit
+      const fixed = (row.children ?? []).filter((c) => typeof c !== 'string' && (c.props?.flexShrink === 0 || c.props?.wrap !== 'wrap')).map(textOfNode).join('');
+      expect(fixed).toContain(p.glyph);
+      expect(cellsW(fixed)).toBeLessThanOrEqual(80);
+      expect(cellsW(fixed)).toBe(cellsW(`▌ ATLAS ${p.glyph} ${p.label} 9/9`));
+    });
+  }
+});

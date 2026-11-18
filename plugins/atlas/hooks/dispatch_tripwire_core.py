@@ -205,6 +205,17 @@ def _in_subagent(payload):
     return "/subagents/" in str(payload.get("transcript_path") or "").replace("\\", "/")
 
 
+def _record_analytics(key: str) -> None:
+    """Anonymous counter (validated by atlas_analytics): counts only, never prompt text, paths or names.
+    Same pattern as the completion gate's gate.<letter>.block; a broken client never changes a verdict."""
+    try:
+        import atlas_analytics
+
+        atlas_analytics.record(key)
+    except Exception as exc:
+        _record_fault(exc, hook="dispatch_tripwire.analytics")
+
+
 def _deny_nested_dispatch(tool):
     """A subagent that dispatches its own subagent forks the work out of the
     orchestrator's view: the nested agent's dispatch is never counted, its
@@ -212,6 +223,7 @@ def _deny_nested_dispatch(tool):
     session that owns the task. Subagents execute; only the orchestrator
     delegates. Unconditional -- not gated on the run being flagged
     orchestrating, because a subagent session never is."""
+    _record_analytics("dispatch.deny." + "nested")
     _deny(
         "DENY - a subagent must never dispatch another subagent. You are running "
         "inside a dispatched agent; nesting hides the work from the orchestrator "
@@ -491,8 +503,9 @@ def _scope_problem(tinput):
     return f"DENY - {detail}. {fix}:\n  {RESOLVE_CMD}{_scope_suggestion(agent)}"
 
 
-# A read-only role dispatched with an explicit haiku/sonnet-class `model` is cheap exploration: it may run in
-# parallel (never edits, so it cannot collide with a teammate). No `model` falls back to normal handling.
+# A read-only role whose own pinned model (`model:` in agents/<role>.md) is haiku/sonnet-class is cheap
+# exploration: it may run in parallel (never edits, so it cannot collide with a teammate). The dispatch's
+# `model` param is not read (the docs say never to pass one); an opus or unpinned role is handled normally.
 _CHEAP_MODEL = lre(r"(?i)(?<![a-z])(?:haiku|sonnet)(?![a-z])")
 
 
@@ -911,10 +924,37 @@ def _lean_ctx_reachable(root=None):
         if base is None:
             cwd = Path(_PAYLOAD_CWD[0] or os.getcwd())
             base = find_root(cwd) or cwd
-        return bool(_lean_ctx_server_key(base))
+        return bool(_lean_ctx_server_key(base)) and _lean_ctx_loadable(base)
     except Exception as exc:  # fail open (nothing demanded) but leave a trace
         _record_fault(exc, hook="dispatch_tripwire.lean_ctx_probe")
     return False
+
+
+def _lean_ctx_loadable(base) -> bool:
+    """True when a lean-ctx server is DEFINED (an mcpServers entry) and not disabled for this project.
+    `_lean_ctx_server_key` also accepts an enabledMcpjsonServers name, which only approves a server some
+    .mcp.json defines; a name with no definition, or one in a disabled list, can never load, so the
+    toolkit gate must not demand it. Raises on unreadable config: the caller records the fault."""
+    home = Path.home()
+    defined: list = []
+    disabled: set = set()
+    mcp = _read_json(base / ".mcp.json") or {}
+    defined += _lean_hits(mcp.get("mcpServers"))
+    settings = sorted((base / ".claude").glob("settings*.json")) + [home / ".claude" / "settings.json"]
+    for path in settings:
+        data = _read_json(path) or {}
+        defined += _lean_hits(data.get("mcpServers"))
+        if isinstance(data.get("disabledMcpjsonServers"), list):
+            disabled.update(str(n) for n in data["disabledMcpjsonServers"])
+    claude_json = _read_json(home / ".claude.json") or {}
+    defined += _lean_hits(claude_json.get("mcpServers"))
+    projects = claude_json.get("projects")
+    project = projects.get(str(base)) if isinstance(projects, dict) else None
+    if isinstance(project, dict):
+        defined += _lean_hits(project.get("mcpServers"))
+        if isinstance(project.get("disabledMcpServers"), list):
+            disabled.update(str(n) for n in project["disabledMcpServers"])
+    return any(key not in disabled for key in defined)
 
 
 def _plugin_enabled(fragment):
@@ -1830,7 +1870,10 @@ def _record_dispatch_deny(
     conn, atlas_db, session, tool, tinput, code, session_model=""
 ):
     """One friction row per dispatch deny (`dispatch_denied:<code>`) carrying the agent, sibling name
-    and model, so a deny rate can be broken down per worker and per tier. Fail-open with a fault row."""
+    and model, so a deny rate can be broken down per worker and per tier. Fail-open with a fault row.
+    The same deny is also one anonymous counter per code (dispatch.deny.<code>), so denial frequency is
+    measurable across installs."""
+    _record_analytics("dispatch.deny." + code)
     try:
         who = dict(_dispatch_attribution(tinput or {}, session_model), tool=tool)
         atlas_db.record_friction(

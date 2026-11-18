@@ -82,12 +82,10 @@ describe('layout28 item 3: the slot holds one height for the run', () => {
 });
 
 describe('layout28 item 3b: the idle band has one height at every width', () => {
-  test('bandRowCount with handlers wired is the same from 80 columns up; under 80 the band has no blank key row (M8)', () => {
+  test('bandRowCount with handlers wired is the same at 60, 79, 80 and 150 columns', () => {
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
-    const [r60, r79, r80, r150] = [60, 79, 80, 150].map((columns) => bandRowCount({ snapshot, live: [], gates: [], columns, tick: 0, maxRows: 12 }, true));
-    expect(r80).toBe(r150);
-    expect(r60).toBe(r79);
-    expect(r79).toBe(r80! - 1);
+    const rows = [60, 79, 80, 150].map((columns) => bandRowCount({ snapshot, live: [], gates: [], columns, tick: 0, maxRows: 12 }, true));
+    expect(new Set(rows).size).toBe(1);
   });
 });
 

@@ -19,10 +19,11 @@ _CLOSE_RE = re.compile(r"<\s*/\s*recalled-memory[^>]*>?", re.IGNORECASE)
 _OPEN_RE = re.compile(r"<\s*recalled-memory\b", re.IGNORECASE)
 
 
-def wrap_recalled_memory(text):
-    """Return text framed as untrusted recalled memory ('' stays '')."""
+def wrap_recalled_memory(text, preamble: str = PREAMBLE):
+    """Return text framed as untrusted recalled memory ('' stays ''). `preamble` lets a caller
+    name the true source (a team channel, not a prior session) without a second fence helper."""
     if not text or not str(text).strip():
         return ""
     body = _CLOSE_RE.sub("&lt;/recalled-memory&gt;", str(text))
     body = _OPEN_RE.sub("&lt;recalled-memory", body)
-    return f"{PREAMBLE}\n{OPEN_TAG}\n{body}\n{CLOSE_TAG}"
+    return f"{preamble}\n{OPEN_TAG}\n{body}\n{CLOSE_TAG}"

@@ -9,6 +9,7 @@
 //     footer and the key buttons sit under it as before.
 //   - Colour carries state only. States are the six-word vocabulary (glyph + word); state colours never colour text.
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
+import { phaseFigure, workerTally } from './data/tally';
 import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTE5, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui'; import { lookUi } from './look';
 import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
@@ -177,13 +178,13 @@ export const uiStateOf = (s: WorkerState): UiState => (s === 'thinking' ? 'runni
 /** Failed workers on the band: the listed workers, and on an idle band the last wave's failures too (idle never hides a failure). */
 /** The tally the HUD's title prints, when it lists any agent (queued are not agents there): the band's worker counts are these, never a second count of its own. */
 const tallied = (m: MissionModel): Readonly<Tally> | undefined => (m.tally && m.tally.running + m.tally.blocked + m.tally.failed + m.tally.waiting + m.tally.done > 0 ? m.tally : undefined);
-const failedCount = (m: MissionModel): number => { const t = tallied(m); return t ? t.failed : Math.max(m.workers.filter((w) => uiStateOf(w.state) === 'failed').length, isAlive(m) ? 0 : m.lastRun?.failed ?? 0); };
+const failedCount = (m: MissionModel): number => { const t = tallied(m); return t ? t.failed : Math.max(workerTally(m.workers).failed, isAlive(m) ? 0 : m.lastRun?.failed ?? 0); };
 /** Of those, the ones whose dispatch row was closed: no longer a failure to act on (round 3: `■ 1 failed` stayed red after the row closed). */
 const closedCount = (m: MissionModel): number => Math.min(Math.max(0, m.closed ?? 0), failedCount(m));
 
 /** Agent counts by state, in the order the band shows them; zero counts are left out. `words`: `◐ 1 running`; otherwise glyph and
  * number (`◐1`), where queued gives way. `noun`: the basis, `agents`, in front (the todo count is tasks; the two are never mixed). */
-const countOf = (m: MissionModel, s: UiState): number => { const t = tallied(m); return s === 'failed' ? failedCount(m) : t && s !== 'queued' ? t[s] : m.workers.filter((w) => uiStateOf(w.state) === s).length; };
+const countOf = (m: MissionModel, s: UiState): number => { const t = tallied(m); return s === 'failed' ? failedCount(m) : t && s !== 'queued' ? t[s] : workerTally(m.workers)[s]; };
 /** The finished workers: the tally's `done`; with no HUD list (omp, or the roster already cleared) the band's lingering ones or the last run's. */
 const doneCount = (m: MissionModel): number => { const t = tallied(m); return t ? t.done : Math.max(countOf(m, 'done'), m.lastRun?.workers ? Math.max(0, m.lastRun.workers - failedCount(m)) : 0); };
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
@@ -414,7 +415,7 @@ type Form = { runs: Run[]; min: number };
 function standardForms(m: MissionModel, ui: Ui): Form[] {
   const idx = phaseIndex(m);
   const n = m.phases.length;
-  const phaseNo = `${Math.min(idx + 1, n)}/${n}`;
+  const phaseNo = phaseFigure(n, idx);
   const st = runStateOf(m);
   const { reason } = st;
   const cap = ribbonOf(m, ui, st.kind);

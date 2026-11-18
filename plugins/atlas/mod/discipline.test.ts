@@ -220,3 +220,18 @@ function setupStop() {
   } as unknown as EngineInterface;
   return { hooks, $ };
 }
+
+describe('the header is read by the shared parser', () => {
+  test('a reply that opens with a blank line or spaces gets no missing-header toast', async () => {
+    const { rec, answer } = setup();
+    await answer(`\n${GOOD}`);
+    await answer(`\n\n  ${GOOD}\nmore`);
+    await answer(`\r\n${GOOD}`);
+    expect(rec.toasts).toEqual([]);
+  });
+  test('a reply with no header line anywhere still toasts', async () => {
+    const { rec, answer } = setup();
+    await answer('\n\nplain words');
+    expect(rec.toasts).toEqual([expect.stringContaining('missing the ATLAS')]);
+  });
+});

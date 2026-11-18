@@ -5,6 +5,8 @@
 // model-only context or a rate-limited toast; it never rewrites user text.
 // register.ts owns the single turn.complete / session.measure registrations and
 // calls afterAnswer / onMeasure from them (an event may register once per matcher).
+import { firstHeaderLine } from './contract-pattern';
+import { dataWord } from './data/datastate';
 import { atom, read, update } from 'claude-code';
 import type { On, EngineInterface } from 'claude-code';
 import type { AtlasSnapshot } from './contract';
@@ -59,14 +61,14 @@ export function isVague(text: string): boolean {
 }
 
 /** Repo, branch, phase and up to 3 open todo titles, as `key value` parts. */
-function factsParts(snapshot: AtlasSnapshot, branch: string): string[] {
+function factsParts(snapshot: AtlasSnapshot, branch: string | null): string[] {
   const open = snapshot.todos.filter((t) => t.status !== 'completed').slice(0, 3).map((t) => t.content.slice(0, 80));
-  const parts = [`repo ${snapshot.root}`, `branch ${branch || 'unknown'}`, `phase ${snapshot.phase}`];
+  const parts = [`repo ${snapshot.root}`, `branch ${branch || dataWord({ kind: branch === null ? 'error' : 'empty' })}`, `phase ${snapshot.phase}`];
   return open.length > 0 ? [...parts, `open todos: ${open.join(' | ')}`] : parts;
 }
 
 /** `atlas facts:` line (repo root, branch, open todo titles) or null with no board. */
-export function factsLine(snapshot: AtlasSnapshot | null, branch: string): string | null {
+export function factsLine(snapshot: AtlasSnapshot | null, branch: string | null): string | null {
   if (snapshot?.root == null) return null;
   return `atlas facts: ${factsParts(snapshot, branch).join('; ')}`;
 }
@@ -155,9 +157,9 @@ async function attempt<T>(fn: () => Promise<T>): Promise<T | null> {
 
 const isComposer = (e: { origin?: { kind: string } }): boolean => (e.origin?.kind ?? 'composer') === 'composer';
 
-async function branchOf($: EngineInterface, root: string): Promise<string> {
+async function branchOf($: EngineInterface, root: string): Promise<string | null> {
   const git = await $.process.run(['git', '-C', root, 'rev-parse', '--abbrev-ref', 'HEAD']);
-  return git.exitCode === 0 ? git.stdout.trim() : '';
+  return git.exitCode === 0 ? git.stdout.trim() : null; // null: the read failed, which is not an empty branch
 }
 
 const needsFacts = (e: { text: string; origin?: { kind: string } }): boolean => isComposer(e) && isVague(e.text);
@@ -196,7 +198,7 @@ const orZero = (n: number | undefined): number => n ?? 0;
 const grewTokens = (usage: TurnUsage): number => orZero(usage?.input_tokens) + orZero(usage?.cache_creation_input_tokens);
 
 function headerCheck(snapshot: AtlasSnapshot, pattern: string, answer: string): NonNullable<HeaderCheck> {
-  const firstLine = answer.split('\n', 1)[0] ?? '';
+  const firstLine = firstHeaderLine(answer).line; // the shared parser: a leading blank line or space is no missing header
   const matched = new RegExp(pattern).test(firstLine);
   return { matched, phase: matched ? headerPhaseOf(answer, snapshot) : null };
 }

@@ -2,6 +2,7 @@
 // Pure and host free: design rows in, tone-tagged Runs out. mod/hud.ts adapts board and squad data to these rows and
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
+import { workerTally } from './data/tally';
 import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion';
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
@@ -156,7 +157,7 @@ function barRow(runs: Run[], cols: number, ui: Ui): Run[] {
 
 /** `1 queued · 1 running · 2 done · 1 failed`: only states that occur, so the header always equals the row sums. */
 export function stateCounts(states: readonly UiState[]): string {
-  const tally = tallyOf(states); // the one tally (data/live.ts): the band's worker segment reads the same counts
+  const tally = workerTally(states.map((state) => ({ state }))); // the one tally (data/tally.ts): the band's worker segment reads the same counts
   return COUNT_ORDER.map((s) => [s, tally[s]] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
 }
 

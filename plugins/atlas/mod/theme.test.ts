@@ -2,7 +2,8 @@
 import { expect, test } from 'claude-code/testing';
 import { ATLAS_GLYPHS, capsule, gauge, rail, ribbon, runsString, sparkline, stateRun, UI_STATES } from './atlas-ui';
 import { DEJAVU_SANS_MONO_HAS } from './fixtures/dejavu-sans-mono-glyphs';
-import { bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, STATE_GLYPH } from './theme';
+import { PHASE_TABLE } from './contract-pattern';
+import { DONE_GLYPH, bar, barParts, blink, contractGlyph, dim, glyph, textWidth, lerp, STATE_GLYPH } from './theme';
 
 test('bar clamps and rounds', () => {
   expect(bar(0, 10)).toBe('▱▱▱▱▱▱▱▱▱▱');
@@ -139,4 +140,9 @@ test('M5: no hex colour literal outside the token file (atlas-ui.ts) and the fil
     for (const m of readFileSync(join(MOD_ROOT, f), 'utf8').matchAll(/#[0-9a-fA-F]{6}\b/g)) stray.push(`${f}: ${m[0]}`);
   }
   expect(stray).toEqual([]);
+});
+
+test('contractGlyph draws each phase with the phase table cell, and verify with the one done mark', () => {
+  for (const p of PHASE_TABLE) expect([p.id, contractGlyph(p.glyph)]).toEqual([p.id, p.cell]);
+  expect(contractGlyph('✅')).toBe(DONE_GLYPH);
 });

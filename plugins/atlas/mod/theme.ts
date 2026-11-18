@@ -1,6 +1,7 @@
 // Atlas mod theme: brand glyphs, colour arithmetic and the bar gauge.
 // Glyphs, width helpers and the bar gauge. Colours live in atlas-ui.ts (PALETTES, the round 3 palette): this module draws none.
 
+import { PHASE_TABLE } from './contract-pattern';
 import type { AgentState } from './contract';
 
 /** Single-cell glyphs used across the mod surfaces. Every value is ONE code point that
@@ -173,7 +174,8 @@ export const chartRoom = {
 
 /** The one done mark: every surface (band, HUD, board, side panel, omp) takes it from here. */
 export const DONE_GLYPH = '✓';
-const CONTRACT_GLYPH: Record<string, string> = { '🔍': '◎', '💡': '◇', '🧪': '⚗', '📋': '☰', '🔧': '⚒', '✅': DONE_GLYPH, '🏁': '⚑', '⛔': '■' };
+// Read from the one phase table (operating-contract.json phases, via contract-pattern.ts); theme.test.ts keeps the verify cell equal to DONE_GLYPH.
+const CONTRACT_GLYPH: Record<string, string> = Object.fromEntries(PHASE_TABLE.map((p) => [p.glyph, p.cell]));
 
 /** Map an operating-contract phase emoji to a single-cell glyph; other single-cell glyphs pass through, anything else becomes '·'. */
 export function contractGlyph(raw: string): string {

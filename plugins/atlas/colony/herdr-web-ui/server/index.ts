@@ -8,7 +8,7 @@ import type { AgentKind, AgentStatus, ClientMessage, ClientRole, HealthAuth, Her
 import { paneTitle } from "../shared/notify-policy.ts";
 import { DEFAULT_PORT } from "../shared/protocol.ts";
 import { DEVICE_COOKIE, handleAuthRequest, isAuthenticated, parseCookies, requiresAuth, unauthorizedJson } from "./auth.ts";
-import { cameThroughProxy, decideAccess, ensureLocalToken, isLoopbackAddress } from "./access.ts";
+import { cameThroughProxy, decideAccess, isLoopbackAddress, resolveToken } from "./access.ts";
 import { DeviceStore, handleDeviceRequest } from "./devices.ts";
 import { remoteAccess, tailscaleIdentity } from "./tailscale.ts";
 import { paneCommands } from "./commands.ts";
@@ -377,7 +377,7 @@ export function createServer(
   const trustLocal = options.trustLocal ?? process.env["HERDR_WEB_TRUST_LOCAL"] === "1";
   const configuredToken = options.token ?? process.env["HERDR_WEB_TOKEN"] ?? "";
   /** With no token configured and no opt-out, a per-install token lives in a 0600 file only the owner reads (scripts/plugin.ts reads it too). */
-  const token = configuredToken !== "" || trustLocal ? configuredToken : ensureLocalToken(options.stateDir ?? defaultStateDir());
+  const { token, configured: tokenConfigured } = resolveToken({ configured: configuredToken, trustLocal, stateDir: options.stateDir ?? defaultStateDir() });
   /** paired devices (server/devices.ts) and the PC's Tailscale login: the two ways in besides the token and this PC itself */
   const devices = new DeviceStore(options.stateDir ?? defaultStateDir());
   const usage = options.usage ?? new UsageService();
@@ -1026,7 +1026,8 @@ export function createServer(
         tokenMatched: token !== "" && isAuthenticated(request, token),
         device: devices.match(parseCookies(request.headers.get("cookie")).get(DEVICE_COOKIE)),
         ...identityOf(),
-        tokenConfigured: token !== "",
+        // only an operator token gates the Tailscale login: the generated local one must not close the owner-login path
+        tokenConfigured,
         trustLocal,
         gated: devices.gated,
       });

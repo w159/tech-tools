@@ -651,6 +651,16 @@ def test_schema_covers_hook_events_scope_matrix_and_gate_letters():
         assert A.valid_key(f"session.{h}")
 
 
+def test_every_dispatch_deny_code_is_a_valid_counter_and_nothing_else_is():
+    for code in (
+        "builtin_agent", "name", "model_override", "effort_override", "toolkit", "scope",
+        "spec", "multi_goal", "steps", "team", "mux", "nested",
+    ):
+        assert A.valid_key(f"dispatch.deny.{code}"), code
+    for bad in ("dispatch.deny.", "dispatch.deny.src/app.py", "dispatch.deny.my-agent", "dispatch.deny.toolkit.x"):
+        assert not A.valid_key(bad), bad
+
+
 def test_allowed_keys_expands_every_family():
     keys = A.allowed_keys()
     assert keys and keys == sorted(set(keys))

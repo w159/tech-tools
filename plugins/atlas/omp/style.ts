@@ -207,7 +207,7 @@ export function headerTemplate(path: string = nodePath.join(pluginRoot(), "contr
 	} catch {
 		/* fall through */
 	}
-	return "ATLAS | <glyph> <phase> | <state>";
+	return "**ATLAS** | <glyph> <phase> | <state>";
 }
 
 function renderHeaderFallback(path: string = nodePath.join(pluginRoot(), "contracts", "operating-contract.json")): string {

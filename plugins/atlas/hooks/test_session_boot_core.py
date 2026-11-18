@@ -184,13 +184,17 @@ class StatusContractLinesTest(unittest.TestCase):
             lines = session_boot.status_contract_lines(style)
             self.assertEqual(len(lines), 1, style)
             self.assertNotIn("STYLE OVERRIDE", lines[0])
-            self.assertIn(session_boot.header_template().replace("ATLAS", "**ATLAS**", 1), lines[0])
+            tpl = session_boot.header_template()
+            expected = tpl if tpl.startswith("**ATLAS**") else tpl.replace("ATLAS", "**ATLAS**", 1)
+            self.assertIn(expected, lines[0])
 
     def test_other_style_adds_the_override_hedge(self):
         lines = session_boot.status_contract_lines("concise")
         self.assertIn("STYLE OVERRIDE: outputStyle is 'concise'", "\n".join(lines))
         self.assertIn("LEDGER", "\n".join(lines))
-        self.assertIn(session_boot.header_template().replace("ATLAS", "**ATLAS**", 1), "\n".join(lines))
+        tpl = session_boot.header_template()
+        expected = tpl if tpl.startswith("**ATLAS**") else tpl.replace("ATLAS", "**ATLAS**", 1)
+        self.assertIn(expected, "\n".join(lines))
 
 
 def _git(root, *args):
@@ -443,6 +447,21 @@ class ModSurfaceStatusTest(unittest.TestCase):
         )
         self.assertTrue(ok)
 
+
+class ContractUnreadableTest(unittest.TestCase):
+    def test_unreadable_contract_logs_fault_and_still_names_the_template(self):
+        import session_boot_core as core
+
+        with tempfile.TemporaryDirectory() as home:
+            with mock.patch.dict(os.environ, {"ATLAS_HOME": home}), mock.patch.object(
+                core, "_CONTRACT_FILE", os.path.join(home, "missing.json")
+            ), mock.patch.object(core, "_CONTRACT_FAULT", ""):
+                text = " ".join(core.status_contract_lines(""))
+            with open(os.path.join(home, "colony-boot.log"), encoding="utf-8") as fh:
+                log = fh.read()
+        self.assertIn("| <glyph> <phase> | <state>", text)
+        self.assertIn("unreadable", text)
+        self.assertIn("operating-contract", log)
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,6 @@
 // The code copy of the contract stays equal to the contract file (the host cannot import the JSON itself), and the mod parser reads the shared header corpus the gate reads.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from 'claude-code/testing';
 import contract from '../contracts/operating-contract.json';
 import corpus from '../contracts/header-corpus.json';
@@ -11,7 +12,7 @@ test('HEADER_FIRST_LINE_PATTERN equals contracts/operating-contract.json headerF
   expect(HEADER_FIRST_LINE_PATTERN).not.toBe('');
 });
 
-test('PHASE_TABLE equals contracts/operating-contract.json phases (id, glyph, label, tone)', () => {
+test('PHASE_TABLE equals contracts/operating-contract.json phases (id, glyph, label, tone, cell)', () => {
   expect(PHASE_TABLE).toEqual((contract as { phases: unknown[] }).phases);
 });
 
@@ -20,14 +21,42 @@ test('every phase has a fixed-case label and its own tone', () => {
   for (const p of PHASE_TABLE) expect(p.label).toBe(p.label.toLowerCase());
 });
 
-test('no mod file other than contract-pattern.ts holds an inline phase glyph table', () => {
-  const src = readFileSync(new URL('./transcript/leadheader.ts', import.meta.url), 'utf8');
-  for (const p of PHASE_TABLE) expect([p.id, src.includes(p.glyph)]).toEqual([p.id, false]);
+// Every non-test source under mod/ and omp/ except the table's own file. A copy is a file whose code lines (comments skipped) carry two or more distinct phase glyphs: a table, however it is keyed.
+const sourcesUnder = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+    e.isDirectory() ? (e.name === 'node_modules' ? [] : sourcesUnder(join(dir, e.name))) : /\.tsx?$/.test(e.name) && !/\.test\.tsx?$/.test(e.name) ? [join(dir, e.name)] : [],
+  );
+const glyphsInCode = (src: string): string[] => {
+  const code = src.split('\n').filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l)).join('\n');
+  return PHASE_TABLE.map((p) => p.glyph).filter((g) => code.includes(g));
+};
+
+test('no mod or omp source file other than contract-pattern.ts holds a phase glyph table of its own', () => {
+  const offenders: string[] = [];
+  for (const root of ['.', '../omp']) {
+    for (const f of sourcesUnder(new URL(root, import.meta.url).pathname)) {
+      if (f.endsWith('/mod/contract-pattern.ts') || f.endsWith('/live_fixture.ts')) continue; // the table itself; a snapshot fixture (data, not a lookup)
+      if (glyphsInCode(readFileSync(f, 'utf8')).length >= 2) offenders.push(f);
+    }
+  }
+  expect(offenders).toEqual([]);
 });
 
-test('firstHeaderLine takes the first non-empty line, stripped', () => {
+test('the scan sees a table: a source with two phase glyphs on code lines is flagged, a comment is not', () => {
+  expect(glyphsInCode("const T = { a: '🔍', b: '🏁' }").length).toBe(2);
+  expect(glyphsInCode("// 🔍 🏁 in a comment\n * 🔧 ⛔").length).toBe(0);
+});
+
+test('firstHeaderLine takes the first non-empty line, stripped of ASCII whitespace', () => {
   expect(firstHeaderLine('\n  \n  a b  \nc')).toEqual({ line: 'a b', rest: 'c' });
   expect(firstHeaderLine('')).toEqual({ line: '', rest: '' });
+  expect(firstHeaderLine('\r\n\v\n\f \nx\r\ny')).toEqual({ line: 'x', rest: 'y' });
+});
+
+test('firstHeaderLine breaks on \\n only and strips no Unicode whitespace (the gate does the same)', () => {
+  expect(firstHeaderLine('a b\nc').line).toBe('a b');
+  expect(firstHeaderLine('a\vb\nc').line).toBe('a\vb');
+  for (const ch of ['\u00a0', '\u0085', '\ufeff', '\u2028', '\u001c']) expect([ch, firstHeaderLine(`${ch}x`).line]).toEqual([ch, `${ch}x`]);
 });
 
 type Case = { name: string; text: string; match: boolean; phase: string | null };

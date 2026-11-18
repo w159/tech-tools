@@ -7,6 +7,7 @@
 //
 // Overflow (2.8): HOOKS rows shrink first (one row stays), then RUNS goes, then gate child rows collapse to group rows. NOW and the denial line never shrink.
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
+import { dataCell } from './data/datastate';
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { bandLook, ctxLevel, latencyLevel } from './band-frame';
 import { WIRED_HOOKS } from './hook-log';
@@ -346,7 +347,7 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
   const u = kit.u;
   const cell = (t: string): string => t.padStart(GATE_COL);
   const nameW = Math.max(4, Math.min(12, u - INDENT - 2 - GATE_COL * 3 - 1));
-  const none = g('—', '-');
+  const none = g(dataCell({ kind: 'empty' }), dataCell({ kind: 'empty' }, true));
   const counts = h.gates.checks.map((c) => { const n = gateCounts(c); return { c, n, deny: n.total - n.pass, fired: n.total > 0 && (src.prompted || n.total - n.pass > 0) }; });
   // AA4: before any check ran, the table is one summary line; with the gate counts of an earlier session (history) it is that session's rows, dimmed and tagged `prev`
   if (counts.length && !counts.some((x) => x.fired)) {
@@ -402,7 +403,7 @@ export function hookTable(h: Health): HookRow[] {
 export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {
   const { on, dim, txt, red, amber, green, row, ribbon, metaText, g, k, ascii } = kit;
   const table = hookTable(h);
-  const none = g('—', '-');
+  const none = g(dataCell({ kind: 'empty' }), dataCell({ kind: 'empty' }, true));
   // AA4: nothing measured and nothing fired but the session's own start: one summary line instead of a table of zeros
   if (!table.some((e) => e.p50 !== undefined) && table.every((e) => e.name === 'session.start' || e.n === 0)) {
     const start = table.find((e) => e.name === 'session.start');

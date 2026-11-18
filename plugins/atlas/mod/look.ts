@@ -9,6 +9,9 @@ export type Look = { ui: Ui; rich: boolean };
 
 let cached: Look | null = null;
 
+/** THE read: a Look from an environment. lookOf (after it merges `$.env` over the process) and the lookUi/lookRich fallback both build from here, so NO_COLOR, ASCII and rich cannot differ between them. */
+export const readLook = (env: UiEnv): Look => ({ ui: uiFromEnv(env), rich: env.ATLAS_BAND_RICH === '1' });
+
 const safe = async (read: () => Promise<string | undefined>): Promise<string | undefined> => {
 	try { return await read(); } catch { return undefined; }
 };
@@ -31,14 +34,14 @@ export async function lookOf($: EngineInterface): Promise<Look> {
 	]);
 	const env: Record<string, string | undefined> = { ...hostEnv() };
 	for (const [k, v] of Object.entries({ ATLAS_THEME: theme, COLORFGBG: fgbg, ATLAS_ASCII: ascii, LC_ALL: lcAll, LC_CTYPE: lcCtype, LANG: lang, NO_COLOR: noColor, COLORTERM: colorterm, TERM: term, ATLAS_BAND_RICH: rich })) if (typeof v === 'string') env[k] = v;
-	cached = { ui: uiFromEnv(env), rich: env.ATLAS_BAND_RICH === '1' };
+	cached = readLook(env);
 	return cached;
 }
 
 
 /** The Ui for a surface whose caller passed none: the session look once read, else the process environment (bun, omp, a fixture). The one door, so NO_COLOR and ASCII agree on every surface. */
-export const lookUi = (): Ui => cached?.ui ?? uiFromEnv();
+export const lookUi = (): Ui => (cached ?? readLook(hostEnv())).ui;
 /** The rich switch for a surface whose caller passed none, from the same read as `lookUi`. */
-export const lookRich = (): boolean => cached?.rich ?? hostEnv().ATLAS_BAND_RICH === '1';
+export const lookRich = (): boolean => (cached ?? readLook(hostEnv())).rich;
 /** A Ui from an explicit environment (a fixture or a demo that must not follow the process). */
 export const uiFrom = (env: UiEnv): Ui => uiFromEnv(env);

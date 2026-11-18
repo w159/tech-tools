@@ -359,13 +359,20 @@ def _record_gate_fault(where: str, exc: BaseException, session_id: str = "") -> 
     print(f"completion_gate: fault, failing open: {msg}", file=sys.stderr)
     conn = None
     try:
-        with contextlib.suppress(Exception):
-            import atlas_db
+        import atlas_db
 
-            conn = atlas_db.connect()
-            atlas_db.record_friction(
-                conn, session_id, "gate_fault", weight=1.0, snippet=msg[:300]
-            )
+        conn = atlas_db.connect()
+        atlas_db.record_friction(
+            conn, session_id, "gate_fault", weight=1.0, snippet=msg[:300]
+        )
+    except Exception as rec_exc:  # the fault itself went unrecorded: say so in the gate's own output
+        note = (
+            f"gate fault not recorded in the friction log "
+            f"({type(rec_exc).__name__}: {rec_exc})"
+        )
+        if note not in _GATE_FAULTS:
+            _GATE_FAULTS.append(note)
+        print(f"completion_gate: {note}", file=sys.stderr)
     finally:
         if conn is not None:
             with contextlib.suppress(Exception):
@@ -401,7 +408,10 @@ def parse_status_header(text, contract: dict | None = None):
     line of the full reply, stripped, matched against `headerFirstLinePattern`. Match (group 1 = phase) or None."""
     if not isinstance(text, str):
         return None
-    first = next((ln for ln in text.splitlines() if ln.strip()), "").strip()
+    # Split on \n only and strip ASCII whitespace only, so U+2028, NEL, FS and NBSP never move the header line
+    # (the same rule as the mod parser).
+    ws = " \t\r\v\f"
+    first = next((ln for ln in text.split("\n") if ln.strip(ws)), "").strip(ws)
     if not first:
         return None
     doc = contract if contract is not None else _contract_doc()
@@ -685,6 +695,31 @@ def _run_started_at(session_id: str) -> float | None:
     finally:
         if conn is not None:
             conn.close()  # can't stat -> fail open
+
+
+def _docs_letters(root: Path, docs_check: bool) -> tuple[bool, bool, bool, list[str]]:
+    """(c)/(d)/(e) as (ok_c, ok_d, ok_e, advisory letters): the one G4 rule for the Stop gate, the gates
+    listing and the re-run path (all call evaluate). A file the project never had is advisory, not a block;
+    a file that exists but is empty blocks."""
+    if not docs_check:
+        return True, True, True, []
+    oks = {
+        "c": _check_changelog(root),
+        "d": _check_roadmap(root),
+        "e": _check_readme(root),
+    }
+    rels = {
+        "c": Path("docs") / "CHANGELOG.md",
+        "d": Path("docs") / "ROADMAP.md",
+        "e": Path("README.md"),
+    }
+    advisory = [k for k, ok in oks.items() if not ok and not (root / rels[k]).exists()]
+    return (
+        oks["c"] or "c" in advisory,
+        oks["d"] or "d" in advisory,
+        oks["e"] or "e" in advisory,
+        advisory,
+    )
 
 
 def _check_changelog(root: Path) -> bool:
@@ -1830,23 +1865,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
         else True
     )
     docs_check = code_changed and docs_exist
-    ok_c = _check_changelog(root) if docs_check else True
-    ok_d = _check_roadmap(root) if docs_check else True
-    ok_e = _check_readme(root) if docs_check else True
-    # A repo that never had CHANGELOG/ROADMAP/README is not blocked for lacking it: advisory only. A file
-    # that exists but is empty still blocks.
-    docs_advisory = [
-        letter
-        for letter, ok, rel in (
-            ("c", ok_c, Path("docs") / "CHANGELOG.md"),
-            ("d", ok_d, Path("docs") / "ROADMAP.md"),
-            ("e", ok_e, Path("README.md")),
-        )
-        if not ok and not (root / rel).exists()
-    ]
-    ok_c = ok_c or "c" in docs_advisory
-    ok_d = ok_d or "d" in docs_advisory
-    ok_e = ok_e or "e" in docs_advisory
+    ok_c, ok_d, ok_e, docs_advisory = _docs_letters(root, docs_check)
     ok_h = _check_roadmap_reconciled(root) if docs_check else True
     # (f) Docs drift BLOCKS: THIS RUN's own writes shipped code and
     # docs/CHANGELOG.md was not among them. The primary signal is

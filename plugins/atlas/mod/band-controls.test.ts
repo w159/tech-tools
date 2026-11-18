@@ -144,11 +144,3 @@ describe('mutation kills (round 2): idle means no worker is still going; a given
     expect(tree.props.backgroundColor).not.toBe(PALETTES.mocha.panel);
   });
 });
-
-describe('M8: no blank key row under 80 columns', () => {
-  test('an idle band at 79 columns ends in a row with content, not a blank key row', () => {
-    const rows = kids(band(79));
-    expect(rows.length).toBeGreaterThan(0);
-    expect(textOf(rows.at(-1)!).trim()).not.toBe('');
-  });
-});

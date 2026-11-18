@@ -233,7 +233,7 @@ def _is_ping(rec):
 
 
 _CTRL = lre(r"[\x00-\x09\x0b-\x1f\x7f-\x9f]")
-_CLOSE_TAG = lre(r"<(/?)(board-message)", re.IGNORECASE)
+_CLOSE_TAG = lre(r"<\s*(/?)\s*(board-message)", re.IGNORECASE)  # `</ board-message >` closes too
 _ATTR_BAD = lre(r"[^A-Za-z0-9_.@-]")
 
 

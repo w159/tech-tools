@@ -59,7 +59,7 @@ test("ATLAS_STYLE=off and a failed render still append the minimal header rule, 
 	const contract = JSON.parse(readFileSync(join(import.meta.dir, "..", "contracts", "operating-contract.json"), "utf8"));
 	const check = (systemPrompt?: string[]) => {
 		const rule = systemPrompt?.[1] ?? "";
-		expect(rule).toContain("ATLAS | <glyph> <phase> | <state>");
+		expect(rule).toContain("**ATLAS** | <glyph> <phase> | <state>"); // the contract template: the bold brand
 		for (const p of contract.phases) expect(rule).toContain(`${p.glyph} ${p.id}`);
 		expect(systemPrompt?.length).toBe(2); // no style, no addendum
 	};
@@ -388,7 +388,7 @@ test("translateToolNames prefers the longest key whichever order the contract li
 });
 
 test("headerTemplate falls back to the literal unless the contract carries a non-empty string template", () => {
-	const fallback = "ATLAS | <glyph> <phase> | <state>";
+	const fallback = "**ATLAS** | <glyph> <phase> | <state>";
 	const read = (body: unknown): string => {
 		const path = join(dir, `tpl-${Math.random().toString(16).slice(2)}.json`);
 		writeFileSync(path, JSON.stringify(body));

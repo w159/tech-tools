@@ -365,6 +365,92 @@ class RemoteTest(unittest.TestCase):
         self.assertEqual(self.run_cli("url")[0], R.EXIT_NO_TS)
 
 
+class TokenRecorder:
+    """Fake herdr-web-ui that records the Authorization header of each request by path."""
+
+    def __init__(self) -> None:
+        self.seen: list[tuple[str, str | None, bool]] = []
+        outer = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, format, *args):  # noqa: A002
+                pass
+
+            def do_GET(self):  # noqa: N802
+                outer.seen.append(
+                    (
+                        self.path.split("?")[0],
+                        self.headers.get("Authorization"),
+                        "X-Forwarded-For" in self.headers,
+                    )
+                )
+                body = {"ok": True, "auth": {"required": True, "reason": "token_required"}}
+                data = json.dumps(body).encode()
+                self.send_response(200)
+                self.send_header("content-type", "application/json")
+                self.end_headers()
+                self.wfile.write(data)
+
+        self.srv = HTTPServer(("127.0.0.1", 0), H)
+        self.url = f"http://127.0.0.1:{self.srv.server_port}"
+        threading.Thread(target=self.srv.serve_forever, daemon=True).start()
+
+    def close(self) -> None:
+        self.srv.shutdown()
+        self.srv.server_close()
+
+
+class WebTokenTest(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self._saved = {
+            k: os.environ.get(k)
+            for k in ("HERDR_WEB_TOKEN", "HERDR_WEB_STATE_DIR", "ATLAS_HOME", "XDG_CONFIG_HOME")
+        }
+        os.environ.pop("HERDR_WEB_TOKEN", None)
+        os.environ["HERDR_WEB_STATE_DIR"] = self.tmp.name
+        os.environ["ATLAS_HOME"] = self.tmp.name + "/atlas-home"
+        os.environ["XDG_CONFIG_HOME"] = self.tmp.name + "/xdg"
+
+    def tearDown(self) -> None:
+        for k, v in self._saved.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+        self.tmp.cleanup()
+
+    def test_env_token_wins_and_local_file_is_the_fallback(self) -> None:
+        Path(self.tmp.name, "local-token").write_text("filetok\n")
+        self.assertEqual(R.web_token(), ("filetok", str(Path(self.tmp.name, "local-token"))))
+        os.environ["HERDR_WEB_TOKEN"] = "envtok"
+        self.assertEqual(R.web_token(), ("envtok", "HERDR_WEB_TOKEN"))
+
+    def test_no_token_says_why(self) -> None:
+        token, note = R.web_token()
+        self.assertEqual(token, "")
+        self.assertIn("no token found", note)
+
+    def test_unreadable_token_file_is_reported_not_swallowed(self) -> None:
+        # a directory where the file should be: a read error that is not "missing"
+        Path(self.tmp.name, "local-token").mkdir()
+        token, note = R.web_token()
+        self.assertEqual(token, "")
+        self.assertIn("local-token", note)
+
+    def test_direct_calls_carry_the_token_and_the_tailnet_probe_never_does(self) -> None:
+        os.environ["HERDR_WEB_TOKEN"] = "envtok"
+        rec = TokenRecorder()
+        self.addCleanup(rec.close)
+        state = R.web_state(rec.url)
+        by_path = {p: (auth, fwd) for p, auth, fwd in rec.seen}
+        self.assertEqual(by_path["/api/access"], ("Bearer envtok", False))
+        direct = [s for s in rec.seen if s[0] == "/api/health" and not s[2]]
+        self.assertEqual([s[1] for s in direct], ["Bearer envtok"])
+        probe = [s for s in rec.seen if s[2]]
+        self.assertEqual(len(probe), 1)
+        self.assertIsNone(probe[0][1])
+        self.assertEqual(state["auth"]["token_source"], "HERDR_WEB_TOKEN")
+        self.assertNotIn("envtok", json.dumps(state))
+
+
 # These tests drive the herdr backend through the atlas_seats facade (their fakes patch atlas_herdr).
 _SEAT_ENV = __import__("unittest.mock").mock.patch.dict(
     __import__("os").environ, {"ATLAS_SEAT_BACKEND": "herdr"}

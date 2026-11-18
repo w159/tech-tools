@@ -5,3 +5,6 @@
 const env = (globalThis as unknown as { process: { env: Record<string, string | undefined> } }).process.env;
 delete env.NO_COLOR;
 delete env.FORCE_COLOR;
+// The suite pins colour depth too: a 256-colour ambient terminal makes every surface paint the xterm pre-image hex (a hex for accent 141) instead of the palette hex (a hex), which the literal
+// colour expectations (placed.test.tsx, omp/core-row.test.ts, omp/channel-view.test.ts) do not follow. Tests that want another depth pass their own env.
+env.COLORTERM = 'truecolor';
