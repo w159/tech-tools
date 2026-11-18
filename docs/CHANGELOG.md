@@ -14,6 +14,7 @@ Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries b
 - Docs: agent and component counts in `docs/AGENTS.md` match the tree; six undocumented `ATLAS_*` variables added to `docs/reference/atlas-reference.md`; `atlas-wiki` has a graphify-not-installed branch; two stale cites fixed.
 - Verified 2026-11-17: `atlas_test.py run --jobs 8` hooks PASS 80 files, scripts PASS 173 files; `tsc --noEmit` 0 errors; `bun test omp mod` 0 fail with and without `NO_COLOR=1`. The herdr `bun test server` suite fails two tests and stalls at the previous commit too, so it gives no verdict on the export changes beyond `tsc`.
 - Not done: the 456 broad `except Exception` handlers, the remaining unused exports fallow reports, a full `.env.example`, and executable bits on shebang scripts (137 files).
+- Release: armada 2.4.1 (armada-bundles CI fix, panos bundle rebuilt for fast-xml-parser 5.12.0, falcon_status re-authenticates on an expired OAuth token) and marketplace 5.35.0.
 
 ## atlas 17.28.0 (unreleased additions) - 2026-11-17
 
