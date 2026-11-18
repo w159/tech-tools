@@ -2,13 +2,13 @@
 // both turn spinFrameOf(spinClock(snapshot.now, tick), the agent's squad name). The HUD used the snapshot clock without the tick (so it froze
 // between polls) and the agent's display name (so its phase differed from the panel's).
 import { describe, expect, test } from 'claude-code/testing';
-import { worldSidebar, worldSnapshot } from '../contracts/world-live';
-import { liveWorkers } from './data/live';
-import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from './atlas-ui';
-import { hudAgents, hudLines } from './view/hud/hud';
-import { rowSpinnerGlyph } from './view/hud/hud-surface';
-import { panelModelOf } from './view/panel/pane/sidebar-model';
-import { bodyLines, lineText } from './view/panel/panel-layout';
+import { worldSidebar, worldSnapshot } from '../../contracts/world-live';
+import { liveWorkers } from '../data/live';
+import { SPINNER_MS, runsString, spinClock, spinFrameOf, leadSpinnerGlyph, type Ui } from '../atlas-ui';
+import { hudAgents, hudLines } from './hud/hud';
+import { rowSpinnerGlyph } from './hud/hud-surface';
+import { panelModelOf } from './panel/pane/sidebar-model';
+import { bodyLines, lineText } from './panel/panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const glyphOf = (rows: readonly string[], name: string): string | undefined => rows.find((l) => l.includes(name))?.trimStart().replace(/^▸\s*/, '')[0];

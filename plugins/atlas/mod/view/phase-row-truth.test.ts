@@ -1,17 +1,17 @@
 // Truth 39: the band, the side panel's phase row and the transcript cards print only what is true (critique of build 63934f09). One group per step.
 import { describe, expect, test } from 'claude-code/testing';
-import { newRunClock, runLive, stepRun } from './view/band/band-motion';
-import { readHostEntry } from './fixtures/source-tree';
-import { blockedText, runElapsed } from './data/runstate';
-import { noteWorkerFacts, resetWorkerFacts } from './data/live';
-import { busySnap } from './live_fixture';
-import type { AtlasSnapshot } from './contract';
-import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree, placeFinished } from './view/transcript/placed';
-import { bandLines, runsText, type MissionModel, type MissionWorker } from './view/band/mission-layout';
-import { panelWorld } from '../contracts/panel-world';
-import type { Ui } from './atlas-ui';
-import { bandFrame, forgetBandFrame, noteBandFrame } from './motion/motion';
-import { lineText, panelLines, type PanelModel } from './view/panel/panel-layout';
+import { newRunClock, runLive, stepRun } from './band/band-motion';
+import { readHostEntry } from '../fixtures/source-tree';
+import { blockedText, runElapsed } from '../data/runstate';
+import { noteWorkerFacts, resetWorkerFacts } from '../data/live';
+import { busySnap } from '../live_fixture';
+import type { AtlasSnapshot } from '../contract';
+import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree, placeFinished } from './transcript/placed';
+import { bandLines, runsText, type MissionModel, type MissionWorker } from './band/mission-layout';
+import { panelWorld } from '../../contracts/panel-world';
+import type { Ui } from '../atlas-ui';
+import { bandFrame, forgetBandFrame, noteBandFrame } from '../motion/motion';
+import { lineText, panelLines, type PanelModel } from './panel/panel-layout';
 
 describe('step 1: no `working` after done or idle without a new prompt, and the clock never passes the run total', () => {
   // live-150-2 f0105 `idle 0:39`, f0106 `working 3:11`: /atlas-cc ran as a host turn, no prompt armed a run, and runElapsed added the whole rest to the closed run.

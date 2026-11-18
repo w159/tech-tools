@@ -1,16 +1,16 @@
 // One derived TODO row state for every surface: the HUD TODO block and the side panel's route tab are built from the same snapshot and must say
 // the same state word row by row (critique 9: `T1 running` in the HUD against `queued` on the route tab; a returned owner fell back to `queued`).
 import { describe, expect, test } from 'claude-code/testing';
-import { worldSidebar, worldSnapshot } from '../contracts/world-live';
-import { todoState } from './data/todos';
-import { liveWorkers, queuedMembers } from './data/live';
-import { agentModel, hudAgents, hudLines } from './view/hud/hud';
-import { hudPhases } from './view/band/band';
-import { panelModelOf } from './view/panel/pane/sidebar-model';
-import { panelText } from './view/panel/panel-layout';
-import type { Ui } from './atlas-ui';
-import type { LiveSnapshot } from './orchestra-types';
-import type { TodoItem } from './contract';
+import { worldSidebar, worldSnapshot } from '../../contracts/world-live';
+import { todoState } from '../data/todos';
+import { liveWorkers, queuedMembers } from '../data/live';
+import { agentModel, hudAgents, hudLines } from './hud/hud';
+import { hudPhases } from './band/band';
+import { panelModelOf } from './panel/pane/sidebar-model';
+import { panelText } from './panel/panel-layout';
+import type { Ui } from '../atlas-ui';
+import type { LiveSnapshot } from '../orchestra-types';
+import type { TodoItem } from '../contract';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const WORDS = 'queued|running|done|failed|blocked|waiting|returned';

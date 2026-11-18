@@ -2,15 +2,15 @@
 // motion-61858003/todo-strip.ans. Expectations are literal text.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { coreFixture, coreMatrix } from '../contracts/core-fixture';
-import { panelWorld } from '../contracts/panel-world';
-import { bandTree } from './view/band/band';
-import type { Ui } from './atlas-ui';
-import { coreModel, type CoreModel } from './data/core';
-import { gateTally } from './data/runstate';
-import { busySnap } from './live_fixture';
-import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
-import { bodyLines, lineText, ribbonRow, type PanelModel } from './view/panel/panel-layout';
+import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
+import { panelWorld } from '../../contracts/panel-world';
+import { bandTree } from './band/band';
+import type { Ui } from '../atlas-ui';
+import { coreModel, type CoreModel } from '../data/core';
+import { gateTally } from '../data/runstate';
+import { busySnap } from '../live_fixture';
+import { bandLines, runsText, type MissionModel } from './band/mission-layout';
+import { bodyLines, lineText, ribbonRow, type PanelModel } from './panel/panel-layout';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

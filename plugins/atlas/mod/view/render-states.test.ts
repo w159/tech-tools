@@ -1,16 +1,16 @@
 // Critique 16, slice B: every state the store holds is drawn. Live shapes: stoprun-150-e4a8186a-1/truth.json (T2 set `blocked` after ghost-explorer was
 // stopped) and stoprun-150-e4a8186a-3/frames/f0085.ans (HUD: `■ T2 ... failed` while the lead says `T2 blocked`).
 import { describe, expect, test } from 'claude-code/testing';
-import { boardRowsOf, itemState } from './view/board/board-model';
-import { STATE_GLYPHS, cells } from './atlas-ui';
-import { todoState } from './data/todos';
-import { hudLines, type HudAgent, type HudInput } from './view/hud/hud';
-import type { SquadAgent, TodoItem } from './contract';
-import { busySnap } from './live_fixture';
-import type { LiveSnapshot } from './orchestra-types';
-import type { PanelModel } from './view/panel/panel-layout';
-import { panelModelOf } from './view/panel/pane/sidebar-model';
-import type { SidebarModel } from './view/panel/pane/sidebar-types';
+import { boardRowsOf, itemState } from './board/board-model';
+import { STATE_GLYPHS, cells } from '../atlas-ui';
+import { todoState } from '../data/todos';
+import { hudLines, type HudAgent, type HudInput } from './hud/hud';
+import type { SquadAgent, TodoItem } from '../contract';
+import { busySnap } from '../live_fixture';
+import type { LiveSnapshot } from '../orchestra-types';
+import type { PanelModel } from './panel/panel-layout';
+import { panelModelOf } from './panel/pane/sidebar-model';
+import type { SidebarModel } from './panel/pane/sidebar-types';
 
 const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;
 const NOW = 1_000_000;const text = (rows: readonly (readonly { t: string }[])[]): string[] => rows.map((r) => r.map((x) => x.t).join(''));

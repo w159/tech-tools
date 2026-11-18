@@ -2,14 +2,14 @@
 // Shapes: stoprun-150-a4fad2f9-2 (T2 ghost fades to done while ghost failed), stoprun-150-a4fad2f9-3 (band `todo 4/5 · ■1` with 13 blank columns, f0091 to f0097),
 // live-150-a4fad2f9-1 (tab-core.png, tab-gates.png).
 import { describe, expect, test } from 'claude-code/testing';
-import type { TodoItem } from './contract';
-import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
-import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './view/board/board-model';
-import { openRowName, ownPlan, todoState } from './data/todos';
-import { plannedText } from './data/core';
-import { hudLines, type HudAgent } from './view/hud/hud';
-import { CLOSED_KILLED } from './view/hud/hud-surface';
-import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
+import type { TodoItem } from '../contract';
+import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from '../atlas-ui';
+import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './board/board-model';
+import { openRowName, ownPlan, todoState } from '../data/todos';
+import { plannedText } from '../data/core';
+import { hudLines, type HudAgent } from './hud/hud';
+import { CLOSED_KILLED } from './hud/hud-surface';
+import { bandLines, runsText, type MissionModel } from './band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };

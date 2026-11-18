@@ -4,21 +4,21 @@
 // row is measured in terminal cells the way the host measures (Bun.stringWidth: East Asian Wide and emoji = 2, ambiguous = 1).
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { coreFixture, coreMatrix } from '../contracts/core-fixture';
-import { worldCard } from '../contracts/panel-world';
-import { paintHud } from '../omp/hud-paint';
-import { paintPanel } from '../omp/panel-view';
-import { runsString, type Ui } from './atlas-ui';
-import { bandSpareRows, bandTree } from './view/band/band';
-import type { TodoItem } from './contract';
-import { coreModel } from './data/core';
-import { ownTodos } from './data/todos';
-import { liveWorkers } from './data/live';
-import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './view/hud/hud';
-import { busySnap, NOW } from './live_fixture';
-import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './view/panel/panel-layout';
-import { panelWorld } from '../contracts/panel-world';
-import { textWidth } from './theme';
+import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
+import { worldCard } from '../../contracts/panel-world';
+import { paintHud } from '../../omp/hud-paint';
+import { paintPanel } from '../../omp/panel-view';
+import { runsString, type Ui } from '../atlas-ui';
+import { bandSpareRows, bandTree } from './band/band';
+import type { TodoItem } from '../contract';
+import { coreModel } from '../data/core';
+import { ownTodos } from '../data/todos';
+import { liveWorkers } from '../data/live';
+import { hudBudget, hudCompactRows, hudLines, reclaimBlanks, type HudAgent, type HudInput } from './hud/hud';
+import { busySnap, NOW } from '../live_fixture';
+import { cardLines, lineText, panelLines, STRIP_TABS, tabRows, type PanelModel, type PanelTab } from './panel/panel-layout';
+import { panelWorld } from '../../contracts/panel-world';
+import { textWidth } from '../theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const ANSI = /\x1b\[[0-9;?]*[a-zA-Z]/g;

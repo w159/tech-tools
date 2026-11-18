@@ -1,17 +1,17 @@
 // Wave 36: the SUBAGENTS table's CALLS column and the finish card's `· N calls` read the same figure (the live worker's call list), so a finished worker never shows two counts.
 import { describe, expect, test } from 'claude-code/testing';
-import { resetWorkerFacts } from './data/live';
-import type { Ui } from './atlas-ui';
-import { hudPhases } from './view/band/band';
-import type { SquadAgent } from './contract';
-import { liveWorkers, queuedMembers } from './data/live';
-import { ownTodos } from './data/todos';
-import { hudAgents, isRunning, type HudInput } from './view/hud/hud';
-import { busySnap, NOW } from './live_fixture';
-import type { LiveSnapshot } from './orchestra-types';
-import { composeSlot } from './view/band/slot';
-import { notificationTree } from './view/transcript/cards';
-import { finishedWorkers } from './view/transcript/placed';
+import { resetWorkerFacts } from '../data/live';
+import type { Ui } from '../atlas-ui';
+import { hudPhases } from './band/band';
+import type { SquadAgent } from '../contract';
+import { liveWorkers, queuedMembers } from '../data/live';
+import { ownTodos } from '../data/todos';
+import { hudAgents, isRunning, type HudInput } from './hud/hud';
+import { busySnap, NOW } from '../live_fixture';
+import type { LiveSnapshot } from '../orchestra-types';
+import { composeSlot } from './band/slot';
+import { notificationTree } from './transcript/cards';
+import { finishedWorkers } from './transcript/placed';
 
 /** The text of an element tree, run records included. */
 function flat(n: unknown): string {

@@ -2,13 +2,13 @@
 // Shapes: stoprun-150-e4a8186a-1 f0090 (band vs TODO header vs route), live-150-e4a8186a-1 gate flicker, live-110-e4a8186a-1 band words.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { panelWorld } from '../contracts/panel-world';
-import { bandTree } from './view/band/band';
-import { STATE_GLYPHS, STATE_TOKEN, warnMark, type Ui } from './atlas-ui';
-import { blockReasons, gateTally, withCoreTally } from './data/runstate';
-import { busySnap, NOW } from './live_fixture';
-import { bodyLines, lineText } from './view/panel/panel-layout';
-import { bandLines, runsText, type MissionModel } from './view/band/mission-layout';
+import { panelWorld } from '../../contracts/panel-world';
+import { bandTree } from './band/band';
+import { STATE_GLYPHS, STATE_TOKEN, warnMark, type Ui } from '../atlas-ui';
+import { blockReasons, gateTally, withCoreTally } from '../data/runstate';
+import { busySnap, NOW } from '../live_fixture';
+import { bodyLines, lineText } from './panel/panel-layout';
+import { bandLines, runsText, type MissionModel } from './band/mission-layout';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

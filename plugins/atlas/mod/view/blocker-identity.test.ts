@@ -1,18 +1,18 @@
 // Critique 6, slice B: one blocker and one identity everywhere. Each test was written to fail on 17.7.0 before the change.
 import { describe, expect, test } from 'claude-code/testing';
-import { coreFixture, coreMatrix } from '../contracts/core-fixture';
-import { panelWorld } from '../contracts/panel-world';
-import { cells, type Ui } from './atlas-ui';
-import { clipWords, lastText } from './data/lasttext';
-import { EMPTY_ORCH, onSpawn } from './data/orchestration';
-import { blockReasons, gateTally } from './data/runstate';
-import { agentRows, type AgentRow } from './view/hud/hud-surface';
-import { agentName } from './view/hud/hud';
-import { coreReport } from './view/band/core-row';
-import { coreModel } from './data/core';
-import { bodyLines, lineText, panelText, type PanelModel } from './view/panel/panel-layout';
-import { bandLines, missionLines, runsText, type MissionModel } from './view/band/mission-layout';
-import type { GateGroup } from './view/panel/pane/sidebar-types';
+import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
+import { panelWorld } from '../../contracts/panel-world';
+import { cells, type Ui } from '../atlas-ui';
+import { clipWords, lastText } from '../data/lasttext';
+import { EMPTY_ORCH, onSpawn } from '../data/orchestration';
+import { blockReasons, gateTally } from '../data/runstate';
+import { agentRows, type AgentRow } from './hud/hud-surface';
+import { agentName } from './hud/hud';
+import { coreReport } from './band/core-row';
+import { coreModel } from '../data/core';
+import { bodyLines, lineText, panelText, type PanelModel } from './panel/panel-layout';
+import { bandLines, missionLines, runsText, type MissionModel } from './band/mission-layout';
+import type { GateGroup } from './panel/pane/sidebar-types';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['plan', 'research', 'build', 'verify', 'ship'] as const;

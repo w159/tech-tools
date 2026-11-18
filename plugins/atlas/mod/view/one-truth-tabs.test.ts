@@ -2,12 +2,12 @@
 // Shapes: stoprun-110-562576ed-1 f0102 / f0113 (band reason), stoprun-150-562576ed-2 f0097 + tab-board.png (green count, `■2`), stoprun-150-562576ed-3 tab-route.ans:40
 // (missing `·`), live-150-562576ed-1 tab-core.png (core words).
 import { describe, expect, test } from 'claude-code/testing';
-import { panelWorld } from '../contracts/panel-world';
-import { cells, type Ui } from './atlas-ui';
-import type { CoreModel } from './data/core';
-import { asksUser, blockReasons, gateTally } from './data/runstate';
-import { bodyLines, lineText, panelText } from './view/panel/panel-layout';
-import { bandLines, missionLines, runsText, type MissionModel } from './view/band/mission-layout';
+import { panelWorld } from '../../contracts/panel-world';
+import { cells, type Ui } from '../atlas-ui';
+import type { CoreModel } from '../data/core';
+import { asksUser, blockReasons, gateTally } from '../data/runstate';
+import { bodyLines, lineText, panelText } from './panel/panel-layout';
+import { bandLines, missionLines, runsText, type MissionModel } from './band/mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const m = (cols: number, over: Partial<MissionModel> = {}): MissionModel => ({

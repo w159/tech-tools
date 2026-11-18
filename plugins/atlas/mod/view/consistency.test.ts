@@ -6,21 +6,21 @@
 // and the check reports that surface.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { world } from '../contracts/band-world';
-import { worldItems, worldOwnerStates } from '../contracts/board-golden';
-import { panelWorld } from '../contracts/panel-world';
-import { worldGates, worldOmp, worldSidebar, worldSnapshot, worldTodos } from '../contracts/world-live';
-import { coreFixture, coreMatrix } from '../contracts/core-fixture';
-import { stateRun, type Ui, type UiState } from './atlas-ui';
-import { bandTree, hudPhases } from './view/band/band';
-import { coreModel } from './data/core';
-import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from './data/live';
-import { hudAgents, hudLines } from './view/hud/hud';
-import { panelModelOf } from './view/panel/pane/sidebar-model';
-import { panelText, type PanelTab } from './view/panel/panel-layout';
-import { boardTree } from './view/board/todo-panel';
-import type { LiveSnapshot } from './orchestra-types';
-import { pluginRoot } from './fixtures/source-tree';
+import { world } from '../../contracts/band-world';
+import { worldItems, worldOwnerStates } from '../../contracts/board-golden';
+import { panelWorld } from '../../contracts/panel-world';
+import { worldGates, worldOmp, worldSidebar, worldSnapshot, worldTodos } from '../../contracts/world-live';
+import { coreFixture, coreMatrix } from '../../contracts/core-fixture';
+import { stateRun, type Ui, type UiState } from '../atlas-ui';
+import { bandTree, hudPhases } from './band/band';
+import { coreModel } from '../data/core';
+import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from '../data/live';
+import { hudAgents, hudLines } from './hud/hud';
+import { panelModelOf } from './panel/pane/sidebar-model';
+import { panelText, type PanelTab } from './panel/panel-layout';
+import { boardTree } from './board/todo-panel';
+import type { LiveSnapshot } from '../orchestra-types';
+import { pluginRoot } from '../fixtures/source-tree';
 
 // The omp painters are loaded at run time: omp/ is checked by Bun's own types, not by the mod type program, so a static import would pull it in.
 const ompAt = `${pluginRoot()}/omp/`;

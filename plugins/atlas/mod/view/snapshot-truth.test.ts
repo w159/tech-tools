@@ -1,16 +1,16 @@
 // Truth regressions of 46d4825c (critique 27, live and stop-run captures): every state or count a surface shows must be what the snapshot holds.
 // Each test fails on 46d4825c; the frame it comes from is quoted beside it.
 import { describe, expect, test } from 'claude-code/testing';
-import type { TodoItem } from './contract';
-import { currentPhase, dispatchOpen } from './data/todos';
-import { finalSecsOf, newRunClock, stepRun } from './view/band/band-motion';
-import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
-import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './view/hud/hud';
-import { RETURNED, markToken, rowWordTone, runsString, stateGlyph, type Ui } from './atlas-ui';
-import { DONE_HOLD_MS, MOTION_FRAME_MS, MOTION_STEP_MS, Motion, animateRow, trackBusy, windowOf, type MotionItem } from './motion/motion';
-import * as reg from './register';
-import { displayLine, leadOf, leadRow } from './view/transcript/leadheader';
-import { slotHold } from './register';
+import type { TodoItem } from '../contract';
+import { currentPhase, dispatchOpen } from '../data/todos';
+import { finalSecsOf, newRunClock, stepRun } from './band/band-motion';
+import { worldHudAgents, worldPhases, worldPlan } from '../../contracts/hud-world';
+import { hudHoldRows, hudLines, hudRunRows, type HudInput } from './hud/hud';
+import { RETURNED, markToken, rowWordTone, runsString, stateGlyph, type Ui } from '../atlas-ui';
+import { DONE_HOLD_MS, MOTION_FRAME_MS, MOTION_STEP_MS, Motion, animateRow, trackBusy, windowOf, type MotionItem } from '../motion/motion';
+import * as reg from '../register';
+import { displayLine, leadOf, leadRow } from './transcript/leadheader';
+import { slotHold } from '../register';
 
 const row = (over: Partial<TodoItem>): TodoItem => ({ id: 'x', content: 'T1 read alpha.py', status: 'completed', session_id: 's1', ...over });
 

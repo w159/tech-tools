@@ -6,20 +6,20 @@
 //   5  one spinner frame for every surface of a render, even when two renders overlap
 //   6  an idle band's `△` and its words are dim, amber only while working or blocked
 import { describe, expect, test } from 'claude-code/testing';
-import { bandTree } from './view/band/band';
-import { bandLines } from './view/band/mission-layout';
-import { hudAgents, hudRows } from './view/hud/hud';
-import { liveWorkers, queuedMembers } from './data/live';
-import { ownTodos } from './data/todos';
-import { busySnap, NOW } from './live_fixture';
-import { Motion } from './motion/motion';
-import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from './atlas-ui';
-import { sidebarTree } from './view/panel/pane/sidebar';
-import { boardTimeline } from './view/board/board-model';
-import { notificationTree } from './view/transcript/cards';
-import { outcomeText } from './view/transcript/outcome';
-import { worldGates, worldIdleSnapshot } from '../contracts/world-live';
-import { els, fadeSurfaces, indicesOf, on, PALETTE_INDICES, scene, sidebarModel, surfaces, textOf, UI256 } from './surface_indices';
+import { bandTree } from './band/band';
+import { bandLines } from './band/mission-layout';
+import { hudAgents, hudRows } from './hud/hud';
+import { liveWorkers, queuedMembers } from '../data/live';
+import { ownTodos } from '../data/todos';
+import { busySnap, NOW } from '../live_fixture';
+import { Motion } from '../motion/motion';
+import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from '../atlas-ui';
+import { sidebarTree } from './panel/pane/sidebar';
+import { boardTimeline } from './board/board-model';
+import { notificationTree } from './transcript/cards';
+import { outcomeText } from './transcript/outcome';
+import { worldGates, worldIdleSnapshot } from '../../contracts/world-live';
+import { els, fadeSurfaces, indicesOf, on, PALETTE_INDICES, scene, sidebarModel, surfaces, textOf, UI256 } from '../surface_indices';
 
 /** The text of any tree the surfaces return: element trees, Segment rows and Run records alike. */
 function flat(n: unknown): string {
