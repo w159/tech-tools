@@ -46,9 +46,12 @@ failing one blocks the Stop: (o), (p) and (s) once per session, every other one,
       normalized equality (whitespace collapsed, leading `cd X &&`, `env`
       and `K=V` prefixes dropped; never a substring). Unreadable records
       fail open with a stderr line saying why.
-  (c) `docs/CHANGELOG.md` exists and is non-empty (docs-current backstop).
-  (d) `docs/ROADMAP.md` exists and is non-empty.
-  (e) `README.md` at the project root exists and is non-empty.
+  (c) `docs/CHANGELOG.md` is not present-but-empty (docs-current backstop). A
+      missing file is only a stderr advisory since audit fix G4 (a project that
+      never had the file is not blocked); a present, empty file blocks.
+  (d) `docs/ROADMAP.md` is not present-but-empty (missing: advisory only).
+  (e) `README.md` at the project root is not present-but-empty (missing:
+      advisory only).
   (f) No docs drift: if THIS RUN's own activity (atlas_db events + tool_calls,
       not the whole working tree) wrote non-docs files, docs/CHANGELOG.md
       changed too (any other docs/ path does not clear it, matching
@@ -1521,9 +1524,9 @@ def _unmerged_reason_part(rows: list) -> str:
 _GISTS: dict[str, str] = {
     "a": "save proof that it works under .atlas/evidence/",
     "b": "write the verified findings.json entry (atlas_finding.py --status verified)",
-    "c": "CHANGELOG missing; append a dated entry under Recent in docs/CHANGELOG.md",
-    "d": "ROADMAP missing; update docs/ROADMAP.md",
-    "e": "README missing; write the root README.md",
+    "c": "CHANGELOG empty; append a dated entry under Recent in docs/CHANGELOG.md",
+    "d": "ROADMAP empty; update docs/ROADMAP.md",
+    "e": "README empty; write the root README.md",
     "f": "docs drift; add this run's change to docs/CHANGELOG.md",
     "g": "unverified implementer dispatch; record a verified finding or dispatch atlas:verifier",
     "h": "move done ROADMAP items to docs/CHANGELOG.md",
@@ -1610,7 +1613,7 @@ def _reason(
     if missing_c:
         emit(
             "c",
-            "  (c) docs/CHANGELOG.md is missing or empty. docs/ must be current -- "
+            "  (c) docs/CHANGELOG.md exists but is empty. docs/ must be current -- "
             "update CHANGELOG.md (and ROADMAP/affected subfolders) to reflect this run. "
             "-> Dispatch atlas:docs-curator to bring docs/ current (CHANGELOG, ROADMAP, "
             "affected subfolders) citing file:line evidence.\n"
@@ -1619,7 +1622,7 @@ def _reason(
     if missing_d:
         emit(
             "d",
-            "  (d) docs/ROADMAP.md is missing or empty. The roadmap is part of the "
+            "  (d) docs/ROADMAP.md exists but is empty. The roadmap is part of the "
             "docs/ single source of truth. -> Dispatch atlas:docs-curator to write or "
             "update ROADMAP.md reflecting shipped, in-flight, and planned work.\n"
             "     (d) try: update docs/ROADMAP.md status markers to match shipped work",
@@ -1627,7 +1630,7 @@ def _reason(
     if missing_e:
         emit(
             "e",
-            "  (e) README.md at the project root is missing or empty. "
+            "  (e) README.md at the project root exists but is empty. "
             "-> Dispatch atlas:docs-curator to write or refresh the root README so it "
             "matches the current state of the code.\n"
             "     (e) try: write a root README.md describing the project and how to run it",
@@ -2552,9 +2555,9 @@ def _run_has_telemetry(conn, run_id, session_id: str) -> bool:
 _CONDITION_NAMES: dict[str, str] = {
     "a": "no .atlas/evidence",
     "b": "no verified finding",
-    "c": "CHANGELOG missing",
-    "d": "ROADMAP missing",
-    "e": "README missing",
+    "c": "CHANGELOG empty",
+    "d": "ROADMAP empty",
+    "e": "README empty",
     "f": "docs drift",
     "g": "unverified implementer",
     "h": "ROADMAP not reconciled",

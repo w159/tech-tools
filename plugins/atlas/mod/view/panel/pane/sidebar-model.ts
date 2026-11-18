@@ -10,6 +10,7 @@ import { contractRail, railOf } from '../../../design/rail';
 import { agentModel, hudAgents, lastOf, ownerStatesOf } from '../../hud/hud';
 import { ownerOutcome } from '../../board/board-model';
 import { failureNotes, firstSeen, isoTs, noteRefusal, refusalNotes } from '../../../data/channels';
+import { readInfoOf } from '../../../data/readinfo';
 import { gateTally } from '../../../data/runstate';
 import { scrub } from './chrome';
 import { isLeadName, isStale, mates } from './sidebar-roster';
@@ -158,6 +159,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = lookUi(), cols: number = 
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),
     ...(m.health ? { health: m.health } : {}),
+    ...((rd) => (rd ? { read: rd } : {}))(readInfoOf(m.clock)), // M6: the readers' own result (failed read, snapshot age), never a figure built here
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
     ...(finishes.length ? { finishes } : {}),
     ...(starts.length ? { starts } : {}),

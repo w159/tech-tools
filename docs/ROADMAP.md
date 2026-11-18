@@ -187,6 +187,17 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas 17.29.0 follow-ups (added 2026-11-18)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (17.29.0); audit and per-finding status: `docs/audits/2026-11-18_atlas-contract-header-mod-audit.md`, section 7.
+
+- [planned] S3: whether the host skips atlas's `classic.Stop` handlers cannot be seen from repo code; only the session-start "not confirmed active" notice (H5) is possible. Needs a host-side signal.
+- [planned] Command Center iframe token prompt: the frame loads a bare herdr URL, so a browser with no herdr cookie shows the token prompt once. Check it in a live browser, then pick one: the dashboard mints the herdr cookie, or document the one-time prompt. Putting the token in the URL would leak it.
+- [planned] Live-host checks of the mod (need a live session): mod load, clicks, omp parity, `claude --bg` provider env, the render after `/clear`, the 256-colour mapping in a real 256-colour terminal, and the phase emoji width at 80 columns.
+- [planned] Pins for published benchmark numbers: crew benchmarks, hook latency and verifier catch rates have no pinning test (the router score is pinned in `hooks/test_prompt_optimizer.py`).
+- [planned] Split `mod/view/panel/panel-layout.ts` (still one file) per the optional stage S14 of `docs/plans/2026-11-18_atlas-mod-reorg-plan.md`; the plan notes no cycle analysis was done.
+- [planned] Rewrite `plugins/atlas/mod/TESTING.md` from measured numbers (it still describes atlas 17.1.0) and add a full CI typecheck; `.github/workflows/tests.yml` gates only unresolved relative imports because the host types are not in a checkout.
+
 ### Atlas 17.24.0 follow-ups (added 2026-11-15)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.24.0); audits: `docs/audits/2026-11-15_atlas-round4-expert-gaps.md`, `docs/audits/2026-11-15_atlas-round4-post-review.md`.

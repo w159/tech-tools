@@ -59,7 +59,7 @@ describe('step 1: the done clock never moves once the run closed (live-150-1 f00
     expect(closedTotal({ key: 1, max: 99 }, closed).secs).toBe(Math.floor(closed.ranMs! / 1000));
   });
   test('register.ts reads the run total only through readRun (no rest added to a closed clock)', () => {
-    expect(src).toContain('readRun(clockHeld, runClock');
+    expect(src).toContain('readRun(S.clockHeld, S.runClock');
     expect(src).not.toContain('runElapsed(');
   });
 });
@@ -214,7 +214,7 @@ describe('step 4: a refused stop or a failed worker reads blocked, never idle, a
     expect(frozen).toBeLessThanOrEqual(KIND_HOLD_MS);
   });
   test('register.ts redraws on beatDue and records the word the band drew', () => {
-    expect(src).toContain('beatDue({ working, shown: shownKind,');
+    expect(src).toContain('beatDue({ working, shown: S.shownKind,');
     expect(src).toContain('shownKind = kStep.shown;');
   });
 });

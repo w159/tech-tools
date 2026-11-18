@@ -953,6 +953,8 @@ CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routing_corpu
 # routing_corpus.jsonl: 45 of 86. Measured by loading `git show d8a7adce:plugins/atlas/hooks/prompt_optimizer_core.py`.
 HEAD_ROUTER_ACCURACY = 45 / 86
 MIN_ACCURACY = 0.85
+MEASURED_CORRECT = 84  # eval_routing on 86 rows, 2026-11-18
+MEASURED_ROWS = 86
 
 
 class RoutingCorpusTest(unittest.TestCase):
@@ -981,6 +983,12 @@ class RoutingCorpusTest(unittest.TestCase):
             print("  MISS want=%s got=%s | %s" % (want, got, prompt))
         self.assertGreaterEqual(acc, HEAD_ROUTER_ACCURACY)
         self.assertGreaterEqual(acc, MIN_ACCURACY)
+        # Ratchet: pin the measured score so a regression below it fails. To update when the
+        # corpus grows: run `python3 hooks/prompt_optimizer_core.py --eval-routing`, take the
+        # new "heuristic: N/M" and set MEASURED_CORRECT to N (and the row count to M); raise it
+        # only after a router improvement, never lower it to get green.
+        self.assertEqual(len(rows), MEASURED_ROWS, "corpus size changed: re-measure and update the pin")
+        self.assertGreaterEqual(len(rows) - len(misses), MEASURED_CORRECT)
 
     def test_eval_routing_cli_reports_model_unavailable_without_inventing_numbers(self):
         env = dict(os.environ, ATLAS_DECISION_URL="http://127.0.0.1:%d" % free_port(), ATLAS_DECISION="on")

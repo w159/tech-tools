@@ -7,7 +7,7 @@
 //
 // Overflow (2.8): HOOKS rows shrink first (one row stays), then RUNS goes, then gate child rows collapse to group rows. NOW and the denial line never shrink.
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
-import { dataCell, dataStateOf, type DataState } from '../../data/datastate';
+import { dataCell, dataStateOf, type DataState, type ReadInfo } from '../../data/datastate';
 import { elapsedClock, type Run, type Ui } from '../../design/atlas-ui';
 import { bandLook, ctxLevel, latencyLevel } from '../band/band-frame';
 import { WIRED_HOOKS } from '../../host/hook-log';
@@ -146,7 +146,9 @@ export function hookFeed(h: Health): FeedRow[] {
 
 const GUTTER = 3; // y gutter of the chart: a two-cell label and the `┤` tick
 /** M6: what the caller knows about how the gate and hook figures were read: the snapshot's age against its refresh interval (past it a figure is drawn `~` with its real age), and which read failed (drawn `err`, never the no-data dash). Absent: nothing is known, so nothing is marked. */
-export type ReadInfo = { ageSecs?: number; refreshSecs?: number; failed?: { gates?: boolean; hooks?: boolean; /** the core tab's recorded routes */ routes?: boolean } };
+export type { ReadInfo };
+/** The ReadInfo the hook rows get: the snapshot age is the gate reader's, the hook log is in memory with no refresh interval, so a hook figure is never aged by it (only a failed hook read is drawn). */
+export const hooksRead = (read: ReadInfo | undefined): ReadInfo | undefined => (read ? (({ ageSecs: _a, refreshSecs: _r, ...rest }) => rest)(read) : undefined);
 
 /** The `last` cell of a gates or hooks row through the shared data state: `err` for a failed read, the no-data dash for none, `~` and the figure's real age (its own age plus the snapshot's) once the snapshot is older than its refresh interval, else the plain age. */
 export function lastCellText(secs: number | undefined, none: string, read: ReadInfo | undefined, failed: boolean): string {
@@ -552,7 +554,7 @@ export function statusFrame(a: StatusIn): Run[][] {
   const dropped = (o: Plan): string[] => [...(o.activity ? [] : ['activity']), ...(o.ctx || !context.length ? [] : ['context']), ...(o.runs || !runsSec.length ? [] : ['runs']), ...(o.hooks ? [] : ['hooks'])];
   const sectionsOf = (o: Plan): Run[][][] => [
     now, ...(o.activity ? [statusActivityRows(kit, h, o.chart)] : []), ...(o.ctx && context.length ? [context] : []), ...(o.runs && runsSec.length ? [runsSec] : []),
-    statusGatesRows(kit, h, src, o.children), ...(o.hooks ? [statusHooksRows(kit, h, undefined, a.read)] : []), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
+    statusGatesRows(kit, h, src, o.children), ...(o.hooks ? [statusHooksRows(kit, h, undefined, hooksRead(a.read))] : []), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
   ];
   const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1 + (dropped(o).length ? 2 : 0); };
   const foot = footer.length ? 1 : 0;

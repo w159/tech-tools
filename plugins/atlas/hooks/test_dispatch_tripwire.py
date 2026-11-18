@@ -2741,6 +2741,12 @@ class ColonyDenyTest(unittest.TestCase):
         self.assertIn("SendMessage", r.stdout)
         self.assertIn("<role>-<slice>", r.stdout)
         self.assertNotIn("updatedInput", r.stdout)
+        # pin the actionable truth: the hook will not name it (off), the `name` field is
+        # tool_input.name, and unsetting ATLAS_AUTONAME restores the hook-side naming
+        out = json.loads(r.stdout)["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn("ATLAS_AUTONAME=off is set, so this hook will not name it for you", out)
+        self.assertIn("`name` field of the Agent tool input set (tool_input.name", out)
+        self.assertIn("or unset ATLAS_AUTONAME (default on) and the hook names an unnamed dispatch itself", out)
 
     def test_teams_env_does_not_inject_name(self):
         r = run_hook(

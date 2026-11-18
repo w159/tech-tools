@@ -13,7 +13,7 @@ import { dataWord } from '../../data/datastate';
 import { elapsedClock, type Run, type Ui, type UiState } from '../../design/atlas-ui';
 import type { CoreModel } from '../../data/core';
 import { teamOf, type Health } from '../../data/idle-health';
-import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, lastCellText, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type ReadInfo, type StatusGate, type StatusIn } from '../hud/status-frame';
+import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, hooksRead, lastCellText, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type ReadInfo, type StatusGate, type StatusIn } from '../hud/status-frame';
 import { fitText, textWidth } from '../../design/theme';
 import { checkOff, gateCounts } from '../../design/vocab';
 
@@ -381,7 +381,7 @@ export function tabFrame(a: TabIn): TabLine[] {
       case 'team': return statusActivityRows(kit, h, chartRows(a.room)).map(plain);
       case 'channel': return feed.length ? statusRecentRows(kit, h, feed, Math.min(feed.length, Math.max(2, 2 + extra))).map(plain) : [];
       case 'core': return routing();
-      default: return statusHooksRows(kit, h, undefined, a.read).map(plain);
+      default: return statusHooksRows(kit, h, undefined, hooksRead(a.read)).map(plain);
     }
   };
   const lead = a.lead ? 1 : 0;

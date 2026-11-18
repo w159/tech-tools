@@ -334,7 +334,7 @@ class GateOrchestrationTest(unittest.TestCase):
         open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("ROADMAP.md is missing", r.stdout)
+        self.assertIn("ROADMAP.md exists but is empty", r.stdout)
 
     def test_missing_readme_blocks_with_condition_e(self):
         self._log_run_write("src/app.py")  # code shipped: c/d/e/h apply
@@ -342,7 +342,7 @@ class GateOrchestrationTest(unittest.TestCase):
         open(os.path.join(self.tmp, "README.md"), "w").close()
         r = _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("README.md at the project root is missing", r.stdout)
+        self.assertIn("README.md at the project root exists but is empty", r.stdout)
 
     def test_docs_drift_blocks_with_condition_f(self):
         """(b) (f) DOES fire when the run itself wrote non-docs files (via the
@@ -610,9 +610,9 @@ class GateBlockSnippetTest(unittest.TestCase):
     def test_multiple_conditions_keep_the_letters_and_all_names(self):
         snip = completion_gate._gate_block_snippet(["c", "d", "e"])
         self.assertTrue(snip.startswith("conditions: c,d,e "))
-        self.assertIn("CHANGELOG missing", snip)
-        self.assertIn("ROADMAP missing", snip)
-        self.assertIn("README missing", snip)
+        self.assertIn("CHANGELOG empty", snip)
+        self.assertIn("ROADMAP empty", snip)
+        self.assertIn("README empty", snip)
         self.assertFalse(snip.endswith(" "))
 
     def test_unknown_letter_is_kept_not_dropped(self):
@@ -644,7 +644,7 @@ class GateBlockSnippetTest(unittest.TestCase):
         self.assertEqual(row[0], "gate_block")
         self.assertEqual(
             row[1],
-            "conditions: c,d,e (CHANGELOG missing, ROADMAP missing, README missing)",
+            "conditions: c,d,e (CHANGELOG empty, ROADMAP empty, README empty)",
         )
 
 
@@ -1535,7 +1535,7 @@ class InProcessMainTest(unittest.TestCase):
         open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
-        self.assertIn("CHANGELOG.md is missing", out)
+        self.assertIn("CHANGELOG.md exists but is empty", out)
 
     def test_missing_roadmap_condition_d(self):
         self._satisfy_all()
@@ -1543,7 +1543,7 @@ class InProcessMainTest(unittest.TestCase):
         open(os.path.join(self.tmp, "docs", "ROADMAP.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
-        self.assertIn("ROADMAP.md is missing", out)
+        self.assertIn("ROADMAP.md exists but is empty", out)
 
     def test_missing_readme_condition_e(self):
         self._satisfy_all()
@@ -1551,7 +1551,7 @@ class InProcessMainTest(unittest.TestCase):
         open(os.path.join(self.tmp, "README.md"), "w").close()
         _, out = self._invoke({"session_id": "sess-orch", "cwd": self.tmp})
         self.assertIn('"decision": "block"', out)
-        self.assertIn("README.md at the project root is missing", out)
+        self.assertIn("README.md at the project root exists but is empty", out)
 
     # -- the Stop verdict record the band reads (critique 8: BLOCKED only when Stop blocked) --
 
@@ -2511,9 +2511,9 @@ class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
 
     def _assert_cdeh_silent(self, out):
         for frag in (
-            "CHANGELOG.md is missing",
-            "ROADMAP.md is missing",
-            "README.md at the project root is missing",
+            "CHANGELOG.md exists but is empty",
+            "ROADMAP.md exists but is empty",
+            "README.md at the project root exists but is empty",
             "ROADMAP reconciliation",
         ):
             self.assertNotIn(frag, out)
@@ -2537,9 +2537,9 @@ class DocsConditionsScopedToCodeTest(GateOrchestrationTest):
             Path(self.tmp, rel).write_text("")
         r = self._gate()
         self.assertIn('"decision": "block"', r.stdout)
-        self.assertIn("CHANGELOG.md is missing", r.stdout)
-        self.assertIn("ROADMAP.md is missing", r.stdout)
-        self.assertIn("README.md at the project root is missing", r.stdout)
+        self.assertIn("CHANGELOG.md exists but is empty", r.stdout)
+        self.assertIn("ROADMAP.md exists but is empty", r.stdout)
+        self.assertIn("README.md at the project root exists but is empty", r.stdout)
 
     def test_code_shipped_never_had_the_files_is_not_blocked_on_them(self):
         self._log_run_write("src/app.py")
@@ -5759,6 +5759,22 @@ class DelegationReasonPathTest(unittest.TestCase):
         self.assertIn("(m) Delegation mandate", msg)
 
 
+class DocsEmptyWordingTest(unittest.TestCase):
+    """Audit fix G4: a missing CHANGELOG/ROADMAP/README is only an advisory; only a
+    present-but-empty file blocks, so the (c)(d)(e) texts must say "empty", not "missing"."""
+
+    def test_reason_texts_say_exists_but_empty(self):
+        msg = _reason(False, False, True, True, True)
+        self.assertIn("(c) docs/CHANGELOG.md exists but is empty.", msg)
+        self.assertIn("(d) docs/ROADMAP.md exists but is empty.", msg)
+        self.assertIn("(e) README.md at the project root exists but is empty.", msg)
+        self.assertNotIn("missing or empty", msg)
+
+    def test_module_docstring_states_missing_is_advisory(self):
+        self.assertIn("only a stderr advisory", cg.__doc__)
+        self.assertNotIn("exists and is non-empty", cg.__doc__)
+
+
 class BlockLoopFinalNoticeTest(unittest.TestCase):
     """F4: the last block before the loop cap says so, visibly; the exhausted
     Stop is stated, never a silent pass."""
@@ -5767,7 +5783,7 @@ class BlockLoopFinalNoticeTest(unittest.TestCase):
         self.assertIsNone(completion_gate._block_loop_notice(2, ["c"]))
         notice = completion_gate._block_loop_notice(3, ["c"]) or ""
         self.assertIn("FINAL block", notice)
-        self.assertIn("CHANGELOG missing", notice)
+        self.assertIn("CHANGELOG empty", notice)
 
 
 class ColonyRunScopeTest(unittest.TestCase):
@@ -5950,11 +5966,11 @@ class GateDeltaReblockTest(GateOrchestrationTest):
     def test_first_stop_full_clause_then_delta(self):
         r1 = self._run()
         self.assertIn('"decision": "block"', r1.stdout)
-        self.assertIn("(d) docs/ROADMAP.md is missing", r1.stdout)
+        self.assertIn("(d) docs/ROADMAP.md exists but is empty", r1.stdout)
         r2 = self._run()
         self.assertIn('"decision": "block"', r2.stdout)
         self.assertIn("(d) still open:", r2.stdout)
-        self.assertNotIn("docs/ROADMAP.md is missing", r2.stdout)
+        self.assertNotIn("docs/ROADMAP.md exists but is empty", r2.stdout)
         self.assertNotIn("Close the gap with the SMALLEST", r2.stdout)
 
     def test_recurring_letters_carry_a_try_hint(self):
@@ -6217,9 +6233,9 @@ class StopGateArmingTest(unittest.TestCase):
         out = self.gate()
         self.assertIn("(m) main-thread code writes with no dispatch", out)
         for frag in (
-            "CHANGELOG.md is missing",
-            "ROADMAP.md is missing",
-            "README.md at the project root is missing",
+            "CHANGELOG.md exists but is empty",
+            "ROADMAP.md exists but is empty",
+            "README.md at the project root exists but is empty",
             "ROADMAP reconciliation",
             "Docs drift",
         ):
@@ -6233,7 +6249,7 @@ class StopGateArmingTest(unittest.TestCase):
         self.sed_edit()
         atlas_db.log_event(self.conn, self.rid, "Task", "main", 0)
         out = self.gate()
-        self.assertIn("CHANGELOG.md is missing", out)
+        self.assertIn("CHANGELOG.md exists but is empty", out)
         self.assertNotIn("(m) Delegation mandate", out)
 
     def test_shell_docs_edit_does_not_demand_cde(self):
@@ -6244,7 +6260,7 @@ class StopGateArmingTest(unittest.TestCase):
         guide = self.root / "docs/guide.md"
         guide.write_text(guide.read_text().replace("guide", "guide2", 1))
         out = self.gate()
-        for frag in ("CHANGELOG.md is missing", "ROADMAP.md is missing"):
+        for frag in ("CHANGELOG.md exists but is empty", "ROADMAP.md exists but is empty"):
             self.assertNotIn(frag, out)
 
     @unittest.skipIf(

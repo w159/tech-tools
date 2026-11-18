@@ -904,7 +904,7 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 
 ### In-terminal mod
 
-`mod/register.ts`, wired by the `modules` entry in `hooks/hooks.json`, draws four
+`mod/register.ts` (the entry; it calls `register` in `mod/host/hooks.ts`), wired by the `modules` entry in `hooks/hooks.json`, draws four
 things in Claude Code: a band above the prompt, the TODO and SUBAGENTS HUD under
 it, a side panel with a tab strip, and cards in the transcript. `/atlas-cc` opens
 and focuses the panel. `ATLAS_MOD=off` disables the whole mod. Gate readings come
@@ -917,7 +917,7 @@ each segment, row and rule also carries a fill or a colour that plain text canno
 show.
 
 **One clock and one glyph key.** A single 100 ms frame loop (`FRAME_MS` in
-`mod/view/band/band-motion.ts`, armed in `mod/register.ts`) advances one spinner index: at
+`mod/view/band/band-motion.ts`, armed by `armFrameLoop` in `mod/host/frame.ts`) advances one spinner index: at
 most 10 redraws a second, the host's cap. The band, the HUD and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
 screen shows the same frame. One glyph set turns on it: the band, the TODO and
@@ -1368,12 +1368,12 @@ the same invariant in the contract suite.
 ### Terminal variables
 
 These are read by the mod (`mod/design/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/design/look.ts`,
-`mod/register.ts`) and by the omp extension (`omp/`). Unset means the default.
+`mod/host/hooks.ts`, `mod/host/poll.ts`) and by the omp extension (`omp/`). Unset means the default.
 
 | Variable | Default | Effect |
 | -------- | ------- | ------ |
-| `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/register.ts`) |
-| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/register.ts`) |
+| `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/host/hooks.ts`, `mod/view/transcript/restyle.tsx`) |
+| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/host/hooks.ts`) |
 | `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/design/look.ts`) |
 | `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/design/atlas-ui.ts`) |
 | `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/design/atlas-ui.ts`) |
@@ -1381,7 +1381,7 @@ These are read by the mod (`mod/design/atlas-ui.ts`, `mod/motion/motion.ts`, `mo
 | `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/design/atlas-ui.ts`) |
 | `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion/motion.ts`) |
 | `ATLAS_PROJECT_ROOT` | unset | A project root that contains `.atlas`; it wins over the search. Unset, the mod walks up from the working directory to the nearest `.git` or `.atlas` (`mod/data/root.ts`) |
-| `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/register.ts`) |
+| `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/host/poll.ts`) |
 | `ATLAS_STATUSLINE` | on | omp only: `off` skips the usage statusline (`omp/index.ts`) |
 | `ATLAS_ADVISOR_GATE` | on | omp only: `off` disables the advisor gate (`omp/advisor.ts`) |
 
@@ -1601,7 +1601,8 @@ atlas/
 |                                MCP server name lists
 |-- references/                  operating-contract.md and shared references
 |-- output-styles/               atlas-orchestrator.md (force-for-plugin)
-|-- mod/                         Claude Code in-terminal mod
+|-- mod/                         Claude Code in-terminal mod (register.ts entry; host/, data/,
+|                                design/, view/{band,hud,panel,board,transcript}/, motion/, input/)
 |-- omp/                         omp extension package
 |-- colony/                      herdr transport and its web UI
 `-- package.json                 omp extension entry for marketplace installs

@@ -1970,9 +1970,11 @@ def _pre_tool_use(
                     f"DENY - this {tool} dispatch to {unnamed} carries no `name`. Named dispatches "
                     "are the colony: only a named sibling appears on the sibling roster "
                     "and can SendMessage the others, its report stays attributable, and "
-                    "board notes can be addressed to it. Re-issue the same call with the "
-                    "Agent tool's `name` argument set (a tool argument, not prompt text): "
-                    f"name: <role>-<slice> (e.g. auth-explorer). Ready-to-paste call:\n{_role_block(unnamed, root)}",
+                    "board notes can be addressed to it. ATLAS_AUTONAME=off is set, so this hook will "
+                    "not name it for you. Either re-issue the same call with the `name` field of "
+                    "the Agent tool input set (tool_input.name, which this hook reads; not prompt text): "
+                    "name: <role>-<slice> (e.g. auth-explorer), or unset ATLAS_AUTONAME (default on) "
+                    f"and the hook names an unnamed dispatch itself. Ready-to-paste call:\n{_role_block(unnamed, root)}",
                 )
                 return
         # (c1) A per-call model override drifts the colony's cost/runtime tier.

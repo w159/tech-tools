@@ -74,10 +74,12 @@ jobs:
 
   # Atlas Bun suites: the omp extension and the Claude Code mods (mod/ runs through mod/test-shim.ts, see
   # mod/TESTING.md). Run from plugins/atlas so bunfig.toml loads the preloads.
-  # No tsc step, and no ratchet: tsconfig.json extends .claude-plugin/types/tsconfig.json, which the Claude Code host
-  # generates locally and .gitignore excludes (plugins/atlas/.claude-plugin/types), so a checkout here has no host
-  # types and tsc stops on the missing base config; there is no stable error count to ratchet against in CI.
-  # Typecheck locally with `bun run typecheck`.
+  # Typecheck: tsconfig.json extends .claude-plugin/types/tsconfig.json, which the Claude Code host generates locally and
+  # .gitignore excludes (plugins/atlas/.claude-plugin/types), so a checkout has no host types and tsc reports TS5083 plus
+  # hundreds of host-type errors. Measured on 2026-11-18 (two identical runs): 890 `error TS` lines, 369 TS2307 (all on
+  # the bare specifiers claude-code and claude-code/testing), 0 TS2307 on relative specifiers. The 890 is not a stable
+  # ratchet (it moves with the host types and the typescript version), but the relative-specifier TS2307 count is
+  # stable at 0 and catches a broken file move, so the step below fails on any unresolved relative import.
   atlas-bun:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -89,6 +91,15 @@ jobs:
           bun-version: 1.4.4
       - run: bun test omp mod
         working-directory: plugins/atlas
+      - name: relative imports resolve (tsc TS2307 on ./ and ../ specifiers must be 0)
+        working-directory: plugins/atlas
+        run: |
+          rc=0
+          out=$(bunx --package typescript@5 tsc --noEmit -p tsconfig.json) || rc=$?
+          # tsc exits 0 or 2; anything else means it did not run, which must not pass as "no broken imports"
+          if [ "$rc" -gt 2 ]; then echo "tsc did not run (exit $rc)"; printf '%s\n' "$out"; exit 1; fi
+          bad=$(printf '%s\n' "$out" | grep 'TS2307' | grep -E "module '\.\.?/" || true)
+          if [ -n "$bad" ]; then printf '%s\n' "$bad"; echo "unresolved relative import(s)"; exit 1; fi
 
   # herdr web UI: bunfig.toml at plugins/atlas ignores colony/herdr-web-ui (its contract tests need a herdr server of
   # their own), so this job runs them from that directory. The herdr binary is the checksum-pinned release the

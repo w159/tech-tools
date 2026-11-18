@@ -111,7 +111,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
 - One tab list. `STRIP_TABS` (`mod/view/panel/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
   the list the Claude Code side panel strip (`mod/view/panel/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
   footer buttons (`BAND_BUTTONS` in `mod/view/band/band.tsx`) all draw.
-- Board key. `o` runs `openBoard` (`mod/register.ts`). When the Atlas pane is shown, the board is drawn inside that pane
+- Board key. `o` runs `openBoard` (`mod/host/handlers.ts`). When the Atlas pane is shown, the board is drawn inside that pane
   (view `board`) and a second `o` returns to the route; otherwise it opens the `atlas-board` pane.
 - Compact board. At 60 to 99 cells the state column is set from the widest label, not fixed at 26, so a label is not cut
   (`stateCol` in `mod/view/board/board-model.ts`, shared with omp).

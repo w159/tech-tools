@@ -140,6 +140,9 @@ def byte_payloads(cwd, tag="t"):
          dict(base, hook_event_name="SubagentStop", agent_id="a1", agent_type="atlas:explorer",
               last_assistant_message="ok", stop_hook_active=False)),
         ("dispatch explorer", "PreToolUse", "Agent", first),
+        # a 2nd explorer in the same burst window: G1 exempts cheap read-only roles, so its advisory is 0
+        ("dispatch explorer #2", "PreToolUse", "Agent",
+         agent("explorer", "bench-explorer-2", "audit/low", sid_e)),
         ("dispatch implementer", "PreToolUse", "Agent", impl),
         # the implementer returns, then a second dispatch inside the burst window: the advisory case.
         # An implementer, not the explorer: cheap read-only explorers are exempt from the burst note (G1),

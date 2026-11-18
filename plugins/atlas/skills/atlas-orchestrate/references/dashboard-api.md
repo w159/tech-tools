@@ -42,6 +42,8 @@ python3 plugins/atlas/scripts/atlas_dashboard.py stop
 python3 plugins/atlas/scripts/atlas_dashboard.py serve [--port N] [--host H] [--foreground] [--allow-remote]
 ```
 
+`ensure`, `url` and `launch` print the owner token (it is the `?launch=` value of the launch URL), so run them in the owner's terminal and do not paste their output into a chat or a log.
+
 `serve` refuses a non-loopback `--host` unless `--allow-remote` is passed. PID/log: `~/.atlas/dashboard.pid`, `~/.atlas/dashboard.log`. Token file: `~/.atlas/dashboard-<port>.token`, mode 0600 (under `ATLAS_HOME` when set), removed when the daemon exits. If `serve` cannot write it, it exits 1 before listening (fail closed: no daemon serves a token nobody can read).
 
 ## Request guard

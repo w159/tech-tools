@@ -8,6 +8,7 @@
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { phaseFigure, workerTally } from '../../data/tally';
 import { chipRun, tileOf } from '../../input/clickable';
+import type { ReadInfo } from '../../data/datastate';
 import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from '../../data/idle-health';
 import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from '../../design/vocab';
 import { chevron } from '../../input/clickable';
@@ -136,6 +137,8 @@ export type PanelModel = {
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
   /** Wave 42: the idle health (register.ts builds it from the band's own inputs): an idle status view with no agent draws these rows, each a pressable row that opens 1-3 detail lines, instead of `no agents yet` and `no events yet`. Absent: the view as before. */
   health?: Health;
+  /** M6: how the gate and routing figures were read (data/readinfo.ts); absent: nothing is marked err or stale. */
+  read?: ReadInfo;
   /** The board view (the Claude pane's `board` tab; `tab` stays `route` for the shared chrome): the frame path draws the board in its place. */
   board?: boolean;
   /** Rows the user flipped from their default open or closed state (gate groups, workers, board items; mod/view/panel/tabs-frame.ts), kept for the session. */
@@ -731,7 +734,7 @@ function statusLines(m: PanelModel, h: Health): PanelLine[] {
   const rows = statusFrame({
     cols: m.cols, room: m.rows > 0 ? m.rows - headerRows(m).length : 0, ui: m.ui, kind: m.run?.kind ?? 'idle', phases: m.phases, phase: m.phase,
     spin: phaseGlyph('working', spinIdx(m), m.ui.ascii), ...(m.now !== undefined ? { now: m.now } : {}),
-    todos: { done: m.todos.filter((t) => t.state === 'done').length, total: m.todos.length }, gates: m.gates, health: h, lead: m.cols < 100,
+    todos: { done: m.todos.filter((t) => t.state === 'done').length, total: m.todos.length }, gates: m.gates, health: h, lead: m.cols < 100, ...(m.read ? { read: m.read } : {}), ...(m.read ? { read: m.read } : {}),
     ...(m.entered ? { entered: m.entered } : {}),
   });
   return rows.map((x) => { const to = x.find((y) => y.press?.startsWith(GOTO_PREFIX))?.press; return line(fitRuns(x, m.cols), to ? { kind: 'goto', key: to.slice(GOTO_PREFIX.length) } : undefined); }); // the `+N more ›` chip of a short pane opens the view that holds what it dropped
@@ -1538,7 +1541,7 @@ function tabLines(m: PanelModel, tab: TabId, h: Health): PanelLine[] {
     ...(m.lead?.secs !== undefined || m.run?.secs !== undefined ? { leadSecs: m.lead?.secs ?? m.run?.secs } : {}),
     todos: m.todos.map((t) => ({ id: t.id, label: t.label, state: t.state, ...(t.owner ? { owner: t.owner } : {}), ...(t.detail ? { detail: t.detail } : {}), evidence: t.evidence ?? null })),
     notes: m.notes.map((n) => ({ at: n.at, from: n.from, ...(n.kind ? { kind: n.kind } : {}), text: n.text })),
-    channel: m.channel ?? 'channel', people: m.people, recipient: m.recipient, core: m.core ?? null, flips: m.flips ?? [],
+    channel: m.channel ?? 'channel', people: m.people, recipient: m.recipient, core: m.core ?? null, flips: m.flips ?? [], ...(m.read ? { read: m.read } : {}), ...(m.read ? { read: m.read } : {}),
   });
   return rows.map((x) => ({ runs: fitRuns(x.runs, m.cols), ...(x.press ? { press: x.press } : {}) }));
 }

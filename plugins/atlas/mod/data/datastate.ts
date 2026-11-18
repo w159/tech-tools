@@ -33,3 +33,6 @@ export function dataWord(s: DataState): string {
 export function dataCell(s: DataState, ascii = false): string {
   return s.kind === 'empty' ? (ascii ? '-' : '—') : s.kind === 'error' ? 'err' : s.kind === 'stale' ? `~${ageShort(s.ageSecs)}` : '';
 }
+
+/** M6: what a caller knows about how the gate and hook figures were read: the gate snapshot's age against its refresh interval (past it a figure is drawn `~` with its real age), and which read failed (drawn `err`, never the no-data dash). Absent: nothing is known, so nothing is marked. */
+export type ReadInfo = { ageSecs?: number; refreshSecs?: number; failed?: { gates?: boolean; hooks?: boolean; /** the core tab's recorded routes */ routes?: boolean } };
