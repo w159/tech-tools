@@ -1,0 +1,51 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-18",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "",
+    "elapsed": "1m10s",
+    "id": 90101800,
+    "msg": "Update changelog",
+    "name": "checks",
+    "status": "queued"
+   },
+   {
+    "age": "2d",
+    "conclusion": "success",
+    "elapsed": "2m17s",
+    "id": 90101801,
+    "msg": "Fix typo",
+    "name": "checks",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90101802,
+    "msg": "Bump deps",
+    "name": "checks",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90101803,
+    "msg": "Add docs",
+    "name": "checks",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "dynamo_wrap helper"
+ }
+}

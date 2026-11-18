@@ -1,0 +1,69 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-17",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "success",
+    "elapsed": "1m10s",
+    "id": 90101700,
+    "msg": "Update changelog",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "2d",
+    "conclusion": "failure",
+    "elapsed": "2m17s",
+    "id": 90101701,
+    "msg": "Update changelog",
+    "name": "build-tests",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90101702,
+    "msg": "Fix typo",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90101703,
+    "msg": "Fix typo",
+    "name": "build-tests",
+    "status": "completed"
+   },
+   {
+    "age": "6d",
+    "conclusion": "success",
+    "elapsed": "1m38s",
+    "id": 90101704,
+    "msg": "Bump deps",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "8d",
+    "conclusion": "success",
+    "elapsed": "2m45s",
+    "id": 90101705,
+    "msg": "Bump deps",
+    "name": "build-tests",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "cobalt_pad helper"
+ }
+}

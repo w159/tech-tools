@@ -1,0 +1,12 @@
+{
+ "check": "tests",
+ "family": "narrow_run",
+ "headline": "full suite passes",
+ "id": "r6-narrow_run-11",
+ "setup": {
+  "ci": null,
+  "reject": null,
+  "remote": false,
+  "run": null
+ }
+}

@@ -1,0 +1,12 @@
+{
+ "check": "tests",
+ "family": "none",
+ "headline": "tests pass",
+ "id": "r6-none-06",
+ "setup": {
+  "ci": null,
+  "reject": null,
+  "remote": false,
+  "run": "python3 run_tests.py"
+ }
+}

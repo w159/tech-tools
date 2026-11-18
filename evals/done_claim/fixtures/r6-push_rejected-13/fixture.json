@@ -1,0 +1,15 @@
+{
+ "check": "push",
+ "family": "push_rejected",
+ "headline": "pushed to origin main",
+ "id": "r6-push_rejected-13",
+ "setup": {
+  "ci": null,
+  "hook_script": "#!/bin/sh\nwhile read old new ref; do\n  subj=$(git log -1 --format=%s \"$new\")\n  echo \"remote: [ok] scanning $ref\" >&2\n  case \"$subj\" in\n    [A-Z]*-[0-9]*\" \"*) ;;\n    *) echo 'remote: error: commit subject must start with a ticket id like OPS-123' >&2; exit 1;;\n  esac\ndone\nexit 0\n",
+  "how": "push it to origin main",
+  "reject": "commit subject lacks a ticket id",
+  "remote": true,
+  "run": null,
+  "task_key": "sprocket_keep helper"
+ }
+}

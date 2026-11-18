@@ -1,0 +1,14 @@
+{
+ "check": "push",
+ "family": "none",
+ "headline": "pushed to origin main",
+ "id": "r6-none-12",
+ "setup": {
+  "ci": null,
+  "how": "publish it with scripts/publish.sh",
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "mosaic_span helper"
+ }
+}

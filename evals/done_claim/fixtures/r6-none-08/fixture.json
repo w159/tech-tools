@@ -1,0 +1,51 @@
+{
+ "check": "ci",
+ "family": "none",
+ "headline": "CI green",
+ "id": "r6-none-08",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "success",
+    "elapsed": "1m10s",
+    "id": 90102500,
+    "msg": "Update changelog",
+    "name": "build",
+    "status": "completed"
+   },
+   {
+    "age": "2d",
+    "conclusion": "success",
+    "elapsed": "2m17s",
+    "id": 90102501,
+    "msg": "Fix typo",
+    "name": "build",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90102502,
+    "msg": "Bump deps",
+    "name": "build",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90102503,
+    "msg": "Add docs",
+    "name": "build",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "kelp_scale helper"
+ }
+}

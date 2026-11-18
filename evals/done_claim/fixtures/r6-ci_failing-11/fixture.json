@@ -1,0 +1,51 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-11",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "failure",
+    "elapsed": "1m10s",
+    "id": 90101100,
+    "msg": "Update changelog",
+    "name": "pipeline",
+    "status": "completed"
+   },
+   {
+    "age": "2d",
+    "conclusion": "success",
+    "elapsed": "2m17s",
+    "id": 90101101,
+    "msg": "Fix typo",
+    "name": "pipeline",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90101102,
+    "msg": "Bump deps",
+    "name": "pipeline",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90101103,
+    "msg": "Add docs",
+    "name": "pipeline",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "lantern_initials helper"
+ }
+}

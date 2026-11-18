@@ -1,0 +1,51 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-23",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "",
+    "elapsed": "1m10s",
+    "id": 90102300,
+    "msg": "Update changelog",
+    "name": "pipeline",
+    "status": "queued"
+   },
+   {
+    "age": "2d",
+    "conclusion": "success",
+    "elapsed": "2m17s",
+    "id": 90102301,
+    "msg": "Fix typo",
+    "name": "pipeline",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90102302,
+    "msg": "Bump deps",
+    "name": "pipeline",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90102303,
+    "msg": "Add docs",
+    "name": "pipeline",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "ingot_initials helper"
+ }
+}

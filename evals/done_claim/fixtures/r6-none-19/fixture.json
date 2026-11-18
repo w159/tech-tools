@@ -1,0 +1,13 @@
+{
+ "check": "count",
+ "family": "none",
+ "headline": "all 26 tests passed",
+ "id": "r6-none-19",
+ "setup": {
+  "ci": null,
+  "planned": 26,
+  "reject": null,
+  "remote": false,
+  "run": null
+ }
+}

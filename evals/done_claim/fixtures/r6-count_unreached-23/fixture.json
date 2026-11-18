@@ -1,0 +1,13 @@
+{
+ "check": "count",
+ "family": "count_unreached",
+ "headline": "all 23 tests passed",
+ "id": "r6-count_unreached-23",
+ "setup": {
+  "ci": null,
+  "planned": 23,
+  "reject": null,
+  "remote": false,
+  "run": null
+ }
+}

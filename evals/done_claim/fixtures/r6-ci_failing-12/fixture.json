@@ -1,0 +1,69 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-12",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "success",
+    "elapsed": "1m10s",
+    "id": 90101200,
+    "msg": "Update changelog",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "2d",
+    "conclusion": "failure",
+    "elapsed": "2m17s",
+    "id": 90101201,
+    "msg": "Update changelog",
+    "name": "CI-tests",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90101202,
+    "msg": "Fix typo",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90101203,
+    "msg": "Fix typo",
+    "name": "CI-tests",
+    "status": "completed"
+   },
+   {
+    "age": "6d",
+    "conclusion": "success",
+    "elapsed": "1m38s",
+    "id": 90101204,
+    "msg": "Bump deps",
+    "name": "lint",
+    "status": "completed"
+   },
+   {
+    "age": "8d",
+    "conclusion": "success",
+    "elapsed": "2m45s",
+    "id": 90101205,
+    "msg": "Bump deps",
+    "name": "CI-tests",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "orchard_shift helper"
+ }
+}

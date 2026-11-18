@@ -1,0 +1,14 @@
+{
+ "check": "push",
+ "family": "none",
+ "headline": "pushed to origin main",
+ "id": "r6-none-22",
+ "setup": {
+  "ci": null,
+  "how": "push it to origin main",
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "oxide_bucket helper"
+ }
+}

@@ -1,0 +1,51 @@
+{
+ "check": "ci",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-16",
+ "setup": {
+  "ci": null,
+  "ci_rows": [
+   {
+    "age": "just now",
+    "conclusion": "failure",
+    "elapsed": "1m10s",
+    "id": 90101600,
+    "msg": "Update changelog",
+    "name": "CI",
+    "status": "completed"
+   },
+   {
+    "age": "2d",
+    "conclusion": "success",
+    "elapsed": "2m17s",
+    "id": 90101601,
+    "msg": "Fix typo",
+    "name": "CI",
+    "status": "completed"
+   },
+   {
+    "age": "3d",
+    "conclusion": "success",
+    "elapsed": "1m24s",
+    "id": 90101602,
+    "msg": "Bump deps",
+    "name": "CI",
+    "status": "completed"
+   },
+   {
+    "age": "4d",
+    "conclusion": "success",
+    "elapsed": "2m31s",
+    "id": 90101603,
+    "msg": "Add docs",
+    "name": "CI",
+    "status": "completed"
+   }
+  ],
+  "reject": null,
+  "remote": true,
+  "run": null,
+  "task_key": "basalt_tally helper"
+ }
+}
