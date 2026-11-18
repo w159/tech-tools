@@ -1,6 +1,6 @@
 # Evidence: 2026-11-18 atlas audit remediation (atlas 17.29.0)
 
-Branch `claude/amazing-wozniak-1hrfkm`, tree at `6b9d922` plus the docs-status commit.
+Branch `claude/amazing-wozniak-1hrfkm`, suites run at `6b9d922`; the panel-layout split landed after, in `eade1e5` (bun mod 4,302 pass, omp 839 pass, 0 fail at that commit).
 All commands run from `plugins/atlas` in this source tree on 2026-11-18.
 
 | Check | Command | Result |
