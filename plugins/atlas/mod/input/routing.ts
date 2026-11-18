@@ -7,8 +7,8 @@
 // (AgentSpawnInput, TurnStepInput, TurnCompleteInput, PromptSubmitInput).
 import { atom, read, update } from 'claude-code';
 import type { EngineInterface, On } from 'claude-code';
-import { descriptionName, EMPTY_ORCH, LEAD, onComplete, onSpawn, onStep } from './data/orchestration';
-import type { AtlasSnapshot, Persona, SquadAgent } from './contract';
+import { descriptionName, EMPTY_ORCH, LEAD, onComplete, onSpawn, onStep } from '../data/orchestration';
+import type { AtlasSnapshot, Persona, SquadAgent } from '../contract';
 
 const ATLAS_PREFIX = 'atlas:';
 const EFFORTS = ['low', 'medium', 'high'] as const;

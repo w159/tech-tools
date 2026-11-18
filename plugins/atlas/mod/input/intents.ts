@@ -3,7 +3,7 @@
 // argv always begins with 'python3' + a real script path — never a shell string.
 // Read plugins/atlas/scripts/atlas_todo.py, atlas_herdr.py, atlas_mux.py for EXACT flags.
 
-import type { PhaseId } from './contract';
+import type { PhaseId } from '../contract';
 
 export const PHASES: readonly PhaseId[] = ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'];
 

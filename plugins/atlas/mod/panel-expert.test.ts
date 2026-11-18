@@ -10,7 +10,7 @@ import type { Pulse } from './pulse';
 import type { ClientElements } from 'claude-code';
 import { busySnap } from './live_fixture';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
-import { activeChipStyle, chipStyle } from './clickable';
+import { activeChipStyle, chipStyle } from './input/clickable';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const check = (id: string, over: Record<string, unknown> = {}) => ({ id, ok: true, title: id, lines: 3, pass: 3, ...over });

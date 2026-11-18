@@ -9,7 +9,7 @@
 // The chip itself is drawn from either form: no fill, a 1-cell bar in the phase colour, the phase word bold in body text, the state in the secondary grey.
 
 import type { RenderElement, RenderNode } from 'claude-code'
-import { PHASES } from '../intents'
+import { PHASES } from '../input/intents'
 import { blockedText } from '../data/runstate'
 import type { PhaseId } from '../contract'
 import { runHex, stateRun, type Tone, type Ui } from '../atlas-ui'

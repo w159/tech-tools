@@ -1,6 +1,6 @@
 // clickable.ts (S1): the one chip idiom. Active chip = accent fill + the readable ink, bold; inactive chip = raised tile; hover = accent-tinted fill + underline; chevrons unchanged.
 import { describe, expect, test } from 'claude-code/testing';
-import { PALETTES, inkFor, type Ui } from './atlas-ui';
+import { PALETTES, inkFor, type Ui } from '../atlas-ui';
 import { activeChipStyle, chevron, chipStyle, hoverStyle } from './clickable';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

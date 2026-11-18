@@ -982,7 +982,7 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/intents.ts": {
+    "plugins/atlas/mod/input/intents.ts": {
       "complexity_critical": {
         "count": 1
       },
@@ -1071,7 +1071,7 @@
         "count": 2
       }
     },
-    "plugins/atlas/mod/routing.ts": {
+    "plugins/atlas/mod/input/routing.ts": {
       "crap_critical": {
         "count": 1
       },
@@ -1883,7 +1883,7 @@
     "plugins/atlas/omp/agent-guard.ts:untested risk",
     "plugins/atlas/omp/advisor.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/api.js:high impact",
-    "plugins/atlas/mod/routing.ts:high impact",
+    "plugins/atlas/mod/input/routing.ts:high impact",
     "plugins/atlas/omp/mandates.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/fetch-fail.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/dom.js:high impact",
@@ -1931,7 +1931,7 @@
     "mcp_servers/knowbe4-mcp/src/domains/training.ts:complexity",
     "plugins/atlas/scripts/dashboard_ui/js/pages/work.js:high impact",
     "mcp_servers/knowbe4-mcp/src/domains/reporting.ts:complexity",
-    "plugins/atlas/mod/intents.ts:complexity",
+    "plugins/atlas/mod/input/intents.ts:complexity",
     "mcp_servers/auvik-mcp/src/client-factory.ts:complexity",
     "mcp_servers/knowbe4-mcp/src/domains/users.ts:complexity",
     "mcp_servers/sonicwall-mcp/src/domains/generic.ts:untested risk",

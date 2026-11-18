@@ -1,15 +1,15 @@
-// Wave 43: the mod prints no keyboard key hint (the host's hotkeys do not work for the owner) and every Button wears the one clickable look (mod/clickable.ts):
+// Wave 43: the mod prints no keyboard key hint (the host's hotkeys do not work for the owner) and every Button wears the one clickable look (mod/input/clickable.ts):
 // a leading chevron in the accent with a hover style, or, for a tab, an accent chip (the lit tab filled) with a hover style.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { bandTree, type BandHandlers, type BandModel } from './band';
-import { liveWorkers } from './data/live';
-import { busySnap, NOW } from './live_fixture';
-import { uiFromEnv } from './atlas-ui';
-import { fillRows, headerRows, lineText, panelLines } from './panel-layout';
-import * as panelLayout from './panel-layout';
-import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
-import { panelWorld } from '../contracts/panel-world';
+import { bandTree, type BandHandlers, type BandModel } from '../band';
+import { liveWorkers } from '../data/live';
+import { busySnap, NOW } from '../live_fixture';
+import { uiFromEnv } from '../atlas-ui';
+import { fillRows, headerRows, lineText, panelLines } from '../panel-layout';
+import * as panelLayout from '../panel-layout';
+import { sidebarTree, type GateGroup, type SidebarHandlers } from '../pane/sidebar';
+import { panelWorld } from '../../contracts/panel-world';
 import { activeChipStyle } from './clickable';
 
 type Node = { kind: string; props: Record<string, any> };

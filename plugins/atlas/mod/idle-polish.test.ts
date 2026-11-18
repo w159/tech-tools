@@ -14,7 +14,7 @@ import * as ih from './idle-health';
 import type { Health } from './idle-health';
 import { hookStats, noteHook, resetHookLog } from './hook-log';
 import { sidebarTree, type SidebarHandlers } from './pane/sidebar';
-import { activeChipStyle } from './clickable';
+import { activeChipStyle } from './input/clickable';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

@@ -1,6 +1,6 @@
 // clickable.ts: the one look of a clickable control (wave 42). Accent text, a leading chevron (`▸` closed, `▾` open) and a hover style: plain text never wears the
 // accent + chevron pair, so a person can tell what answers a click. The band's and the panel's painters read a run's `press` key and draw it as a Button with `hoverStyle`.
-import { PALETTES, type Run, type Ui, hexIn, inkFor, xtermHex } from './atlas-ui';
+import { PALETTES, type Run, type Ui, hexIn, inkFor, xtermHex } from '../atlas-ui';
 
 /** The chevron of a control: `▸` closed, `▾` open (ASCII `>` and `v`). */
 export const chevron = (open: boolean, ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? (open ? 'v' : '>') : open ? '▾' : '▸');

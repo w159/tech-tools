@@ -8,7 +8,7 @@ import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
 import { activitySection, contextSection, gatesSection, runsSection, sessionRow, type Health } from './idle-health';
-import { chevron, chipRun } from './clickable';
+import { chevron, chipRun } from './input/clickable';
 import { cardFrame } from './card-frame'; import { roleLabel, roleOf } from './theme'; import { roleHex } from './atlas-ui';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
 

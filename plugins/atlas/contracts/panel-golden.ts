@@ -8,7 +8,7 @@
 // DEVIATIONS FROM THE MOCKS (critique-5 panel finish: `n of m` replaces the bare `2/4` and `2/3` of the phase and gates rows; the route tab
 // lists agents before the todo section; tabGolden was rewritten from the layout's rows for the new design: core headings, indent, whole tab words; critique-3 changes 9 and 10, round 3 panel polish; the mocks were not regenerated): the side panel strip is
 // ` status   team   channel   gates   core   board` as click chips on both hosts (the mock strip has no board; wave 43: no key letters anywhere);
-// WAVE 43: every pressable row leads with the accent chevron `▸` (open `▾`) in its first cell, where the mock has a blank (mod/clickable.ts); the card title leads
+// WAVE 43: every pressable row leads with the accent chevron `▸` (open `▾`) in its first cell, where the mock has a blank (mod/input/clickable.ts); the card title leads
 // with the ATLAS mark `◆`, the two gauges are one width and a blank row separates them; the toast leads with the left bar and `◆ ATLAS`.
 // Those lines of sidepanelDesign, cardDesign and toastDesign are written by hand from that decision, everything else in them is the mock's.
 //

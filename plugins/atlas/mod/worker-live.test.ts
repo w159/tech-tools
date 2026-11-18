@@ -6,7 +6,7 @@ import { liveWorkers } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
 import { channelRows } from './pane/sidebar-channel';
 import type { SidebarHandlers } from './pane/sidebar-types';
-import { promptName } from './routing';
+import { promptName } from './input/routing';
 import { register } from './register';
 import { memState } from './test_helpers';
 

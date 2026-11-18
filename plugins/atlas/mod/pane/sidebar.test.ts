@@ -6,7 +6,7 @@ import { busySnap, NOW } from '../live_fixture';
 import { PALETTES, uiFromEnv } from '../atlas-ui';
 import { stripRows } from './sidebar';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
-import { activeChipStyle } from '../clickable';
+import { activeChipStyle } from '../input/clickable';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

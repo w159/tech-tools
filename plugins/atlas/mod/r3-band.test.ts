@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { bandRuns, bandTree, type BandModel } from './band';
 import type { ClientElements } from 'claude-code';
 import { PALETTES, uiFromEnv, type Run, type Ui } from './atlas-ui';
-import { tileOf } from './clickable';
+import { tileOf } from './input/clickable';
 import { healthStripBg } from './mission-layout';
 import { busySnap } from './live_fixture';
 import { textWidth } from './theme';

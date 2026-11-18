@@ -6,7 +6,7 @@
 import { atom, read, update } from 'claude-code'
 import type { AgentInfo, EngineInterface, On, PlacedProps, RenderElement, RenderNode } from 'claude-code'
 import { HEADER_FIRST_LINE_PATTERN } from './contract-pattern'
-import { PHASES } from './intents'
+import { PHASES } from './input/intents'
 import type { AgentState, AtlasSnapshot, Persona, PhaseId } from './contract'
 import { glyph } from './theme'
 import { shortTool } from './band'

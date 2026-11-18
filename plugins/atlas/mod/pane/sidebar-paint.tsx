@@ -2,7 +2,7 @@
 // run is painted in the live theme's tone on the rev 4 panel token, so the pane meets the band without a seam.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { fillHex, surfaceHex, type Run, type Ui, runHex } from '../atlas-ui'; import { lookUi } from '../look';
-import { hoverStyle } from '../clickable';
+import { hoverStyle } from '../input/clickable';
 import { bodyLines, fillRows, frameTabOf, type PanelLine, type PanelModel, type PanelTab } from '../panel-layout';
 import { panelModelOf } from './sidebar-model';
 import type { SidebarHandlers, SidebarModel, SidebarView } from './sidebar-types';

@@ -4,7 +4,7 @@
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, type Ui, type UiState } from '../atlas-ui'; import { lookUi } from '../look';
-import { activeChipStyle, chipStyle, hoverStyle } from '../clickable';
+import { activeChipStyle, chipStyle, hoverStyle } from '../input/clickable';
 import { backWord, bodyLines, boardEmptyRows, centred, chipText, frameTabOf, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';

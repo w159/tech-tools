@@ -4,7 +4,7 @@
 import type { ClientElements, RenderElement } from 'claude-code';
 import { fitText, textWidth } from './theme';
 
-export type Segment = { t: string; color?: string; bg?: string; bold?: boolean; inverse?: boolean; strike?: boolean; /** A clickable run (mod/clickable.ts): drawn as a Button with this key when the row is given a press handler (rowOf). */ press?: string; hover?: true };
+export type Segment = { t: string; color?: string; bg?: string; bold?: boolean; inverse?: boolean; strike?: boolean; /** A clickable run (mod/input/clickable.ts): drawn as a Button with this key when the row is given a press handler (rowOf). */ press?: string; hover?: true };
 
 /** Lay runs inside `cols` cells; the run that overflows is cut with an ellipsis. */
 export function fitRuns(els: ClientElements, parts: Segment[], cols: number): RenderElement[] {

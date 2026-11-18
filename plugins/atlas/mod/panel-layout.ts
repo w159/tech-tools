@@ -7,10 +7,10 @@
 // literal check mark, bullet or ellipsis); every number carries its word; colour carries state only; truncation is
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { phaseFigure, workerTally } from './data/tally';
-import { chipRun, tileOf } from './clickable';
+import { chipRun, tileOf } from './input/clickable';
 import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from './idle-health';
 import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
-import { chevron } from './clickable';
+import { chevron } from './input/clickable';
 import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
@@ -1496,7 +1496,7 @@ function airy(m: PanelModel, lines: PanelLine[]): PanelLine[] {
   if (m.rows < 48 || !AIRY.has(m.tab) || !gaps || lines.length + gaps > m.rows - headerRows(m).length - 1) return lines;
   return lines.flatMap((l, i) => (starts(l, i) ? [BLANK, l] : [l]));
 }
-/** Wave 43: a pressable row wears the one clickable look (mod/clickable.ts): its leading blank (the grid's focus cell, or the first of its lead spaces) is the accent chevron (`▸` closed, `▾` open) and every run
+/** Wave 43: a pressable row wears the one clickable look (mod/input/clickable.ts): its leading blank (the grid's focus cell, or the first of its lead spaces) is the accent chevron (`▸` closed, `▾` open) and every run
  * of the row takes the hover style. A row that already carries a clickRun (the health rows) is left as it is. */
 function clickable(lines: PanelLine[], m: PanelModel): PanelLine[] {
   return lines.map((l) => {

@@ -5,7 +5,7 @@ import { CARD_MORE_KEY, GOTO_PREFIX, ROUND_BUCKETS, bucketLabel, ctxLevel, round
 import { tabFrame, tabText, type TabId, type TabIn } from './tabs-frame';
 import { hexTo256, uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { bandLook } from './band-frame';
-import { chipStyle, tileOf } from './clickable';
+import { chipStyle, tileOf } from './input/clickable';
 import type { Health, HealthCheck } from './idle-health';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
