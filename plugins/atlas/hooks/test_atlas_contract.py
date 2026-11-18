@@ -1914,7 +1914,7 @@ class HeaderSsotTests(unittest.TestCase):
         "hooks/completion_gate_core.py",
         "omp/style.ts",
         # Prose only (toast text, doc comment); neither builds or checks the header.
-        "mod/discipline.ts",
+        "mod/host/discipline.ts",
         "mod/register.ts",
     }
 
@@ -1927,7 +1927,7 @@ class HeaderSsotTests(unittest.TestCase):
 
     def test_contract_has_header_fields(self):
         doc = self._doc()
-        self.assertEqual(doc["headerTemplate"], "ATLAS | <glyph> <phase> | <state>")
+        self.assertEqual(doc["headerTemplate"], "**ATLAS** | <glyph> <phase> | <state>")
         self.assertEqual(len(doc["phases"]), 8)
         rx = re.compile(doc["headerFirstLinePattern"])
         self.assertTrue(rx.match("ATLAS | \U0001f50d research 2/5 | hello"))
@@ -2173,3 +2173,58 @@ class DocsTellTheTruthContract(unittest.TestCase):
         when = _frontmatter(PLUGIN_ROOT / "skills" / "atlas-doctor" / "SKILL.md").get("when_to_use", "").lower()
         for phrase in ("atlas doctor", "atlas health check"):
             self.assertIn(phrase, when)
+
+
+
+class HeaderCorpusContract(unittest.TestCase):
+    """contracts/header-corpus.json is read by the gate's parser here and by the mod's parser in mod/contract-pattern.test.ts."""
+
+    def _corpus(self) -> list:
+        return json.loads((PLUGIN_ROOT / "contracts" / "header-corpus.json").read_text(encoding="utf-8"))["cases"]
+
+    def test_gate_parser_agrees_with_every_corpus_case(self) -> None:
+        sys.path.insert(0, str(HOOKS_DIR))
+        import completion_gate_core as cg
+
+        for case in self._corpus():
+            with self.subTest(case=case["name"]):
+                m = cg.parse_status_header(case["text"])
+                self.assertEqual(m is not None, case["match"])
+                self.assertEqual(m.group(1) if m else None, case["phase"])
+
+    def test_corpus_covers_the_audited_cases(self) -> None:
+        names = " | ".join(c["name"] for c in self._corpus())
+        for want in ("leading blank line", "leading spaces", "bold brand", "missing glyph", "n/m counter", "wrong case", "not on the first non-empty line", "crlf", "vertical tab", "form feed", "line separator", "byte order mark"):
+            self.assertIn(want, names)
+
+    def test_phase_table_has_fixed_case_label_and_distinct_known_tone(self) -> None:
+        phases = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))["phases"]
+        ui = (PLUGIN_ROOT / "mod" / "design" / "atlas-ui.ts").read_text(encoding="utf-8")
+        tokens = set(re.findall(r"'(\w+)'", re.search(r"export type Token = ([^;]+);", ui).group(1)))
+        for p in phases:
+            with self.subTest(phase=p["id"]):
+                self.assertEqual(p["label"], p["label"].lower())
+                self.assertIn(p["tone"], tokens)
+        self.assertEqual(len({p["tone"] for p in phases}), len(phases))
+
+    def test_phase_table_has_one_single_cell_glyph_per_phase(self) -> None:
+        phases = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))["phases"]
+        for p in phases:
+            with self.subTest(phase=p["id"]):
+                self.assertEqual(len(p["cell"]), 1)
+        self.assertEqual(len({p["cell"] for p in phases}), len(phases))
+
+    def test_header_template_is_the_bold_brand_and_the_plain_form_still_matches(self) -> None:
+        doc = json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))
+        self.assertTrue(doc["headerTemplate"].startswith("**ATLAS** | "))
+        pattern = re.compile(doc["headerFirstLinePattern"])
+        self.assertTrue(pattern.match("ATLAS | \U0001f527 implement | x"))
+        self.assertTrue(pattern.match("**ATLAS** | \U0001f527 implement | x"))
+
+    def test_output_style_asks_for_bold_brand_and_gate_accepts_both_brands(self) -> None:
+        style = (PLUGIN_ROOT / "output-styles" / "atlas-orchestrator.md").read_text(encoding="utf-8")
+        self.assertIn("`**ATLAS** | <glyph> <phase> | <state>`", style)
+        pattern = re.compile(json.loads((PLUGIN_ROOT / "contracts" / "operating-contract.json").read_text(encoding="utf-8"))["headerFirstLinePattern"])
+        self.assertTrue(pattern.match("**ATLAS** | 🔧 implement | x"))
+        self.assertTrue(pattern.match("ATLAS | 🔧 implement | x"))
+        self.assertFalse(pattern.match("**ATLAS** | implement | x"))

@@ -387,3 +387,73 @@ class ReapTest(Project):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class ReportHandbackTest(unittest.TestCase):
+    """Audit T1 (sanctioned report command), T2 (truncation keeps the start), T3 (STATUS required), X7 (0600)."""
+
+    def setUp(self):
+        self.root = tempfile.mkdtemp()
+        env = mock.patch.dict(os.environ, {"ATLAS_NOTE_MAX_BYTES": "", "ATLAS_WORKER_NAME": ""})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def run_cli(self, *args: str, stdin: str = ""):
+        import contextlib
+        import io
+
+        buf = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO(stdin)), contextlib.redirect_stdout(buf):
+            rc = T._cli(list(args))
+        return rc, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_t2_truncation_keeps_the_start_and_names_the_full_report(self):
+        import re
+
+        body = "STATUS: DONE\nFINDINGS first\n" + "x" * 20000 + "\nexit 0"
+        rec = T.note(self.root, "w", body, kind="report")
+        text = rec["text"]
+        self.assertTrue(text.startswith("STATUS: DONE\nFINDINGS first"))
+        self.assertTrue(text.endswith("exit 0"))
+        self.assertLessEqual(len(text.encode()), 8192)
+        m = re.search(r"\[truncated \d+ bytes; full report: ([^\]]+)\]", text)
+        self.assertIsNotNone(m, text[-200:])
+        full = Path(m.group(1))
+        self.assertEqual(full.read_text(encoding="utf-8"), body)
+        self.assertEqual(full.stat().st_mode & 0o777, 0o600)
+
+    def test_t1_report_posts_a_stdin_body_as_a_report_note(self):
+        rc, out = self.run_cli("report", "--root", self.root, "--owner", "w", "--to", "lead", "--file", "-",
+                               stdin="STATUS: DONE\nlong body\n")
+        self.assertEqual(rc, 0, out)
+        rec = T.notes(self.root)[-1]
+        self.assertEqual((rec["owner"], rec["to"], rec["kind"]), ("w", "lead", "report"))
+        self.assertTrue(rec["text"].endswith("exit 0"))
+
+    def test_t1_report_reads_a_file_and_marks_failure(self):
+        src = Path(self.root) / "r.txt"
+        src.write_text("STATUS: FAILED\nwhy\n", encoding="utf-8")
+        rc, out = self.run_cli("report", "--root", self.root, "--owner", "w", "--file", str(src))
+        self.assertEqual(rc, 0, out)
+        self.assertIn("exit 1", T.notes(self.root)[-1]["text"])
+
+    def test_t3_report_without_status_is_rejected_with_what_to_add(self):
+        rc, out = self.run_cli("report", "--root", self.root, "--owner", "w", stdin="Waiting on the monitor event")
+        self.assertEqual(rc, 1)
+        self.assertEqual(out["error"], "report_missing_status")
+        self.assertIn("STATUS: DONE", out["message"])
+        self.assertEqual(T.notes(self.root), [])
+
+    def test_t3_note_kind_report_needs_status_too(self):
+        rc, out = self.run_cli("note", "--root", self.root, "--owner", "w", "--kind", "report", "still running")
+        self.assertEqual((rc, out["error"]), (1, "report_missing_status"))
+        rc, _ = self.run_cli("note", "--root", self.root, "--owner", "w", "--kind", "report", "STATUS: DONE\nexit 0")
+        self.assertEqual(rc, 0)
+
+    def test_x7_note_files_are_owner_only(self):
+        T.note(self.root, "w", "hello")
+        files = list(T.notes_dir(self.root).glob("*.jsonl"))
+        self.assertTrue(files)
+        for f in files:
+            self.assertEqual(f.stat().st_mode & 0o777, 0o600, f)

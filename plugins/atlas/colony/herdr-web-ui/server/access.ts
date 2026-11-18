@@ -2,12 +2,17 @@
  * Who a request is and whether it gets in. There is no user database: a request is trusted
  * for where it comes from (this PC, with no proxy in front), for who Tailscale says it is
  * (the PC's own login, which `tailscale serve` states in a header it strips from what it
- * receives), or for what it holds (a paired device's cookie, or the shared token). A token,
- * when one is configured, is required of everything but a paired device, this PC and its own
- * Tailscale login included: a plain local connection, since the remote-PC bridge runs on a
- * loopback port of a PC other people may use, and the login, since any other proxy on this PC
- * (nginx, Caddy, a tunnel) passes a visitor's copy of that header on unless told to drop it.
- * Without a token, and until the first device is paired, anything that reaches the server is
+ * receives), or for what it holds (a paired device's cookie, or the shared token). A token an
+ * operator configured (HERDR_WEB_TOKEN) is required of everything but a paired device, this PC
+ * and its own Tailscale login included: a plain local connection, since the remote-PC bridge
+ * runs on a loopback port of a PC other people may use, and the login, since any other proxy on
+ * this PC (nginx, Caddy, a tunnel) passes a visitor's copy of that header on unless told to drop it.
+ * A plain local connection is not trusted by default either: another user of this PC can open a
+ * loopback port, so index.ts gives the server a 0600 token file only its owner reads, unless
+ * HERDR_WEB_TRUST_LOCAL=1 (`trustLocal`) opts a single-user host out. That generated token
+ * stands in for "this PC" only: it does not count as a configured token, or the owner's own
+ * Tailscale login (the documented owner-login path) would be refused for lacking it.
+ * With the opt-out, and until the first device is paired, anything that reaches the server is
  * let in as it always was, except through a proxy
  * on a PC whose Tailscale login is known: there, a request with no login header is a tagged
  * node (tailscale serve states no person for it), and a tailnet can hold many of those.
@@ -19,6 +24,9 @@
  * that sends neither (nginx's bare `proxy_pass` rewrites Host to the upstream address and adds
  * nothing) cannot be told from a local client: only a token closes that setup.
  */
+import { randomBytes } from "node:crypto";
+import { chmodSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { AccessRefusal, AccessVia, DeviceRole } from "../shared/protocol.ts";
 import type { DeviceMatch } from "./devices.ts";
 
@@ -39,7 +47,17 @@ export interface AccessInput {
   owner: string | null;
   /** this PC's Tailscale node is tagged: Tailscale runs here, and names no person as its owner */
   tagged: boolean;
+  /**
+   * An operator chose a token (HERDR_WEB_TOKEN): it gates the Tailscale login too. The generated
+   * per-install token (`resolveToken`) is NOT this: it only stands in for "this PC", so a bare
+   * local request needs it while the owner's own Tailscale login still gets in without it.
+   */
   tokenConfigured: boolean;
+  /**
+   * Explicit opt-out (HERDR_WEB_TRUST_LOCAL=1) for a single-user host: a bare loopback request
+   * then needs no token. Off unless a caller sets it, so a forgotten field fails closed.
+   */
+  trustLocal?: boolean;
   /** a device has been paired at some point: the gate is closed to strangers (server/devices.ts) */
   gated: boolean;
 }
@@ -83,16 +101,48 @@ export function cameThroughProxy(headers: Headers): boolean {
 export function decideAccess(input: AccessInput): Access {
   if (input.tokenMatched) return { level: "full", via: "token", role: "drive" };
   if (input.device !== null) return { level: "full", via: "device", role: input.device.role, device: input.device };
-  // before the login header: a token must hold against a header a visitor can send through another proxy
+  // before the login header: an operator's token must hold against a header a visitor can send through another proxy
   if (input.tokenConfigured) return { level: "none", reason: "token_required" };
   // the identity header is only worth something from the local tailscaled, never from a LAN client
   if (input.loopback && input.tailscaleLogin !== null && input.owner !== null) {
     if (input.tailscaleLogin.toLowerCase() === input.owner.toLowerCase()) return { level: "full", via: "tailscale", role: "drive", login: input.tailscaleLogin };
     return { level: "none", reason: "other_user" };
   }
-  if (input.loopback && !input.forwarded) return { level: "full", via: "local", role: "drive" };
+  // any other local user can connect to a loopback port, so "from this PC" is not an identity: the token is (X3)
+  if (input.loopback && !input.forwarded) return input.trustLocal === true ? { level: "full", via: "local", role: "drive" } : { level: "none", reason: "token_required" };
   if (input.loopback && input.forwarded && (input.owner !== null || input.tagged)) return { level: "none", reason: "pairing_required" };
   // the public internet is never "open", whatever is paired
   if (!input.gated && !input.funnel) return { level: "full", via: "open", role: "drive" };
   return { level: "none", reason: "pairing_required" };
+}
+
+/**
+ * The token the server checks requests against, and whether an operator set it. With none set
+ * and no opt-out the server makes its own, so tokenMatched can be true for the local client; but
+ * `configured` stays false for it: feeding the generated token into `tokenConfigured` made
+ * decideAccess refuse every login-header request with token_required, owner included.
+ */
+export function resolveToken(input: { configured: string; trustLocal: boolean; stateDir: string }): { token: string; configured: boolean } {
+  if (input.configured !== "") return { token: input.configured, configured: true };
+  return { token: input.trustLocal ? "" : ensureLocalToken(input.stateDir), configured: false };
+}
+
+/** The per-install token file name; scripts/plugin.ts reads the same path. */
+export const LOCAL_TOKEN_FILE = "local-token";
+
+/** Reads or creates the owner-only (0600) token that stands in for "this PC" now that loopback is not trusted. */
+export function ensureLocalToken(stateDir: string): string {
+  const path = join(stateDir, LOCAL_TOKEN_FILE);
+  try {
+    const existing = readFileSync(path, "utf8").trim();
+    if (existing !== "") return existing;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  mkdirSync(stateDir, { recursive: true, mode: 0o700 });
+  const fresh = randomBytes(32).toString("hex");
+  writeFileSync(path, `${fresh}\n`, { mode: 0o600 });
+  // writeFileSync leaves the mode of a file that already existed (empty) alone
+  chmodSync(path, 0o600);
+  return fresh;
 }

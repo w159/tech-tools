@@ -22,13 +22,13 @@ stops the next. Each hook runs under a bounded SIGALRM slice (SLICES) inside an 
 (stop_tail's approach); platforms without SIGALRM run unbounded.
 
 Not folded in, on purpose (each stays its own hooks.json process):
-  fallow_gate        runs `fallow audit` subprocesses for up to ~95 s (300 s timeout) on commit/push
+  fallow_gate        runs `fallow audit` subprocesses for up to 78 s (90 s timeout) on commit/push
   format_after_edit  async by design: the formatter must not block the edit
 Under ATLAS_HARNESS=omp, recall_gate and todo_capture are skipped: omp implements both natively
 (contracts/hook-bridge.json notBridged).
 
 Telemetry (scripts/atlas_analytics.py; counters only, nothing recorded when the user has opted out):
-  dispatch.<event>.ms.<bucket>   once per dispatch: wall time of the whole hook pass
+  dispatch.<event>.ms.<bucket>   once per dispatch that ran a hook: wall time of the whole hook pass
   hook.<name>.slow               one hook took longer than SLOW_HOOK_MS (1000 ms)
   hook.<name>.fault              one hook raised, exited with a code other than 0 or 2, or ran out of time
   hook.<name>.deny|ask|context   what a hook decided (exit 2 counts as deny)
@@ -467,6 +467,17 @@ def _add_system_message(merged, skipped):
     return code, json.dumps(doc) + "\n", err
 
 
+def _has_work(event, variant, vraw, harness):
+    """True when some hook would actually run for this payload: its matcher selects it and any
+    payload prefilter lets it through."""
+    tool = variant.get("tool_name")
+    for name in select(event, tool if isinstance(tool, str) else "", harness):
+        gate = _PREFILTER.get(name)
+        if gate is None or gate.search(vraw):
+            return True
+    return False
+
+
 def run_event(event, raw, harness=None):
     """Run every applicable hook for one event payload; returns (exit code, stdout, stderr).
     Codex apply_patch / spawn_agent / update_plan payloads are rewritten to the Claude shape first
@@ -478,6 +489,13 @@ def run_event(event, raw, harness=None):
     payload = payload if isinstance(payload, dict) else {}
     variants = atlas_harness.expand_tool_payloads(payload)
     translated = any(atlas_harness.was_translated(v) for v in variants)
+    # A tool no binding handles (or an mcp__ call without auth markers) costs only the interpreter:
+    # no hook module, merge or telemetry writer is imported for it.
+    if not any(
+        _has_work(event, v, json.dumps(v) if atlas_harness.was_translated(v) else raw, harness)
+        for v in variants
+    ):
+        return 0, "", ""
     started = time.monotonic()
     budget = BUDGET_S.get(event, 30.0)
     results = []

@@ -74,6 +74,7 @@ class HelperTests(unittest.TestCase):
         labels = [lab for lab, *_ in bh.byte_payloads("/w")]
         for needed in ("dispatch explorer", "dispatch implementer", "Stop headerless #1", "Stop headerless #2"):
             self.assertIn(needed, labels)
+        self.assertIn("dispatch implementer #2", labels)
         self.assertIn("dispatch explorer #2", labels)
 
     def test_byte_payload_sessions_are_unique_per_tag(self):
@@ -234,7 +235,10 @@ class BytesModeIsDeterministicTests(unittest.TestCase):
         self.assertGreater(parts["dispatch explorer"][0], 0)  # the brief is always appended
         self.assertEqual(parts["dispatch explorer"][2], 0)
         self.assertEqual(parts["dispatch implementer"][2], 0)
-        self.assertGreater(parts["dispatch explorer #2"][2], 0)
+        # a 2nd explorer is exempt from the burst note (G1, cheap read-only); the 2nd implementer still draws it
+        self.assertIn("dispatch explorer #2", parts)  # the row must exist, or the next line pins nothing
+        self.assertEqual(parts["dispatch explorer #2"][2], 0)
+        self.assertGreater(parts["dispatch implementer #2"][2], 0)
         self.assertLess(parts["dispatch explorer"][0], parts["dispatch implementer"][0] / 2)
 
 

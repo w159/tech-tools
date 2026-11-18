@@ -3,7 +3,6 @@ synthetic DB. Measures every /api/v2 GET route, 8-client concurrency, auth guard
 tick cost and herd endpoint latency. Only the dashboard we start is ever stopped."""
 
 import http.client
-import re
 import subprocess
 import threading
 import time
@@ -74,11 +73,15 @@ class Dash:
             time.sleep(0.15)
         else:
             raise RuntimeError("dashboard did not become healthy in 15s")
-        st, body, _ = self.get("/", token=False)
-        m = re.search(rb'name="atlas-token" content="([^"]+)"', body)
-        if not m:
-            raise RuntimeError(f"no token in index (status {st})")
-        self.token = m.group(1).decode()
+        # GET / answers 401 to a caller without the credential (X2); the owner-only 0600 token file
+        # the daemon wrote before it served is the supported channel.
+        tok_file = self.atlas / f"dashboard-{self.port}.token"
+        try:
+            self.token = tok_file.read_text(encoding="utf-8").strip()
+        except OSError as e:
+            raise RuntimeError(f"no token file {tok_file.name}: {e}") from e
+        if not self.token:
+            raise RuntimeError(f"no token file {tok_file.name}: empty")
 
     def stop(self):
         if self.proc and self.proc.poll() is None:

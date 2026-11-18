@@ -21,14 +21,14 @@ import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
 import { type GatesCache,type IdleWave, type LaneTool, type PanelModel, type PanelNote, type PanelWorker, createGatesCache, panelMotionOf, renderPanel, spawnText } from "./mission-panel";
-import { Motion, reducedMotion } from "../mod/motion";
-import { SPINNER_MS } from "../mod/atlas-ui";
+import { Motion, reducedMotion } from "../mod/motion/motion";
+import { SPINNER_MS } from "../mod/design/atlas-ui";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
 import { pluginRoot } from "./plugin-path";
 import { atlasKnob } from "./knobs";
 import { createCoreSource } from "./core-source";
-import { openGateCount } from "../mod/gates";
+import { openGateCount } from "../mod/host/gates";
 import type { CoreModel } from "../mod/data/core";
 import { asksUser, ranWorkers } from "../mod/data/runstate";
 import { ownTodos, planCounts, planPhase, settleDispatch, type Outcome } from "../mod/data/todos";
@@ -73,7 +73,7 @@ export interface ViewDeps {
 	setInterval?: (fn: () => void, ms: number) => unknown;
 	clearInterval?: (h: unknown) => void;
 	setTimeout?: (fn: () => void, ms: number) => unknown;
-	/** The transition frame timer (mod/motion.ts), apart from the poll timer; defaults to setInterval. */
+	/** The transition frame timer (mod/motion/motion.ts), apart from the poll timer; defaults to setInterval. */
 	setFrame?: (fn: () => void, ms: number) => unknown;
 	clearFrame?: (h: unknown) => void;
 	clearTimeout?: (h: unknown) => void;
@@ -95,7 +95,7 @@ export function formatNote(n: Note, max = MAX_LINE): string {
 	return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 
-// Mirror of SPIN in mod/theme.ts (module-private there); channel-view.test.ts asserts equality via spin(). One set for every phase: the circle quarters.
+// Mirror of SPIN in mod/design/theme.ts (module-private there); channel-view.test.ts asserts equality via spin(). One set for every phase: the circle quarters.
 const SPIN = ["◐", "◓", "◑", "◒"];
 
 export function spinFrame(n: number, _phase?: string): string {

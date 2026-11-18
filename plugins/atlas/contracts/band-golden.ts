@@ -1,8 +1,8 @@
 // Golden rows for the shared world (contracts/band-world.ts, through contracts/world-live.ts) at 120 columns, tick 0 (plain text, trailing
 // spaces trimmed). HAND-REVIEWED LITERAL: round2/design/evidence/gen4.py does not cover the worker table, the idle last-run row or the
 // agents noun, so these rows were rendered from the code and read against the design line by line (round2/after/truth.md).
-// The Claude band (mod/band-golden.test.ts) and the omp mission panel (omp/mission-panel-golden.test.ts) both assert these exact rows,
-// blank spacer rows included: the text comes from mod/mission-layout.ts, so the two harnesses print the same.
+// The Claude band (mod/view/band/band-golden.test.ts) and the omp mission panel (omp/mission-panel-golden.test.ts) both assert these exact rows,
+// blank spacer rows included: the text comes from mod/view/band/mission-layout.ts, so the two harnesses print the same.
 // A .ts module because the mod test host cannot read files.
 //
 // The band itself (rev 4 tiers and the rich variant) is asserted against contracts/band-world-golden.ts, rows taken

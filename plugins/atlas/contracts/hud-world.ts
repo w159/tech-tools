@@ -1,7 +1,7 @@
 // The fixture world (contracts/band-world.ts) as the board and squad data the HUD adapters take: one plan row per world
 // todo (its detail as evidence, as a lead writes it) and one agent per world worker. Shared by the Claude Code and omp HUD tests.
 import { world } from "./band-world";
-import type { HudAgent, HudInput } from "../mod/hud";
+import type { HudAgent, HudInput } from "../mod/view/hud/hud";
 
 const TODO_STATUS = { done: "completed", running: "in_progress", queued: "pending", failed: "abandoned", blocked: "blocked" } as const;
 const AGENT_STATE = { running: "working", failed: "failed", queued: "queued", done: "done" } as const;

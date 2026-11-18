@@ -64,6 +64,7 @@ import time
 from pathlib import Path
 
 import prompt_decision
+from prompt_decision import _is_loopback  # one loopback definition, shared
 
 urllib = prompt_decision.urllib  # lazy: see prompt_decision._LazyUrllib
 
@@ -249,6 +250,40 @@ def ollama_base_url() -> str:
     return url.rstrip("/")
 
 
+def _remote_refused(url: str) -> bool:
+    """True when `url` is not loopback and prompt_decision's opt-in (ATLAS_DECISION_ALLOW_REMOTE=1) is
+    unset. The prompt is user text: it stays on this machine unless the user said otherwise."""
+    return (
+        not _is_loopback(url)
+        and os.environ.get("ATLAS_DECISION_ALLOW_REMOTE", "").strip() != "1"
+    )
+
+
+def _refuse_notice(url: str) -> None:
+    """Say why nothing was sent (stderr + fault row); the host only, a URL may carry credentials."""
+    try:
+        host = urllib.parse.urlsplit(url).hostname or "?"
+    except ValueError:
+        host = "?"
+    msg = (
+        "prompt_optimizer: refusing to send the prompt to non-loopback ollama host %s "
+        "(set ATLAS_DECISION_ALLOW_REMOTE=1 to allow)" % host
+    )
+    sys.stderr.write("[atlas] " + msg + "\n")
+    try:
+        atlas_hook_guard.fault("prompt_optimizer", RuntimeError(msg), None)
+    except Exception:  # noqa: BLE001 -- the notice above already went out
+        pass
+
+
+def _cli_host_url() -> str:
+    """Where `ollama run` will connect: the CLI reads OLLAMA_HOST itself, never ATLAS_OLLAMA_URL."""
+    host = os.environ.get("OLLAMA_HOST", "").strip()
+    if not host:
+        return "http://127.0.0.1:11434"
+    return host if host.startswith(("http://", "https://")) else "http://" + host
+
+
 # Set by run_via_api: True when its last call died on a timeout, so run_optimizer
 # can skip the CLI fallback (a hung server will not answer the CLI either).
 _api_timed_out = False
@@ -258,6 +293,10 @@ def run_via_api(prompt: str, model: str, timeout: float) -> str | None:
     """Hit the ollama HTTP API (clean text, no terminal renderer). None on any failure."""
     global _api_timed_out
     _api_timed_out = False
+    url = ollama_base_url()
+    if _remote_refused(url):
+        _refuse_notice(url)
+        return None
     body = json.dumps({"model": model, "prompt": prompt, "stream": False}).encode(
         "utf-8"
     )
@@ -300,6 +339,9 @@ def run_optimizer(prompt: str) -> str | None:
     if _api_timed_out or remaining <= 0:
         return None
     if shutil.which("ollama"):
+        if _remote_refused(_cli_host_url()):
+            _refuse_notice(_cli_host_url())
+            return None
         return _run_argv(["ollama", "run", model, prompt], remaining)
     return None
 

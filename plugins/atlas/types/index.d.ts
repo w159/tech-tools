@@ -158,7 +158,7 @@ export type PaneTab = 'colony' | 'channel' | 'board' | 'squad' | 'collab';
 /** null = not measured yet (rendered `--`); 0 is a legitimate measured value. */
 export type Usage = { tokens: number | null; costUsd?: number | null; contextPct: number | null }; // costUsd: no mod code measures it yet
 
-/** Spinner animation frame counter (written and read by mod/restyle.tsx). */
+/** Spinner animation frame counter (written and read by mod/view/transcript/restyle.tsx). */
 export type SpinnerTick = number;
 
 declare module 'claude-code' {

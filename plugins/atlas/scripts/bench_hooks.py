@@ -129,6 +129,7 @@ def byte_payloads(cwd, tag="t"):
     stop = dict(base, hook_event_name="Stop", stop_hook_active=False, last_assistant_message="All done.")
     sid_e, sid_i = f"bench-{tag}-explorer", f"bench-{tag}-implementer"
     first = agent("explorer", "bench-explorer", "audit/low", sid_e)
+    impl = agent("implementer", "bench-implementer", "implement/medium", sid_i)
     big = "Refactor the auth module across the whole repo, add tests and update the docs"
     return [
         ("prompt orchestrate", "UserPromptSubmit", None, dict(base, hook_event_name="UserPromptSubmit", prompt=big)),
@@ -139,11 +140,16 @@ def byte_payloads(cwd, tag="t"):
          dict(base, hook_event_name="SubagentStop", agent_id="a1", agent_type="atlas:explorer",
               last_assistant_message="ok", stop_hook_active=False)),
         ("dispatch explorer", "PreToolUse", "Agent", first),
-        ("dispatch implementer", "PreToolUse", "Agent",
-         agent("implementer", "bench-implementer", "implement/medium", sid_i)),
-        # the explorer returns, then a second dispatch inside the burst window: the advisory case
-        ("explorer returns", "PostToolUse", "Agent", dict(first, hook_event_name="PostToolUse", tool_response={"success": True})),
-        ("dispatch explorer #2", "PreToolUse", "Agent", dict(agent("explorer", "bench-explorer-2", "audit/low", sid_e))),
+        # a 2nd explorer in the same burst window: G1 exempts cheap read-only roles, so its advisory is 0
+        ("dispatch explorer #2", "PreToolUse", "Agent",
+         agent("explorer", "bench-explorer-2", "audit/low", sid_e)),
+        ("dispatch implementer", "PreToolUse", "Agent", impl),
+        # the implementer returns, then a second dispatch inside the burst window: the advisory case.
+        # An implementer, not the explorer: cheap read-only explorers are exempt from the burst note (G1),
+        # so only an edit-capable role still costs the 2nd-dispatch advisory this row measures.
+        ("implementer returns", "PostToolUse", "Agent", dict(impl, hook_event_name="PostToolUse", tool_response={"success": True})),
+        ("dispatch implementer #2", "PreToolUse", "Agent",
+         agent("implementer", "bench-implementer-2", "implement/medium", sid_i)),
         ("Stop headerless #1", "Stop", None, stop),
         ("Stop headerless #2", "Stop", None, stop),
     ]

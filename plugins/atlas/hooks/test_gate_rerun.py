@@ -791,8 +791,14 @@ class GateWiringTest(GateOrchestrationTest):
         for letter in ("(a)", "(b)", "(g)", "(k)", "(m)"):
             self.assertNotIn(f"\\n  {letter}", r.stdout, r.stdout)
         self.assertTrue(os.path.isfile(os.path.join(self.tmp, ".atlas", ".run", "gate-proof.json")))
-        # docs letters (c)(d)(e) are not paperwork: a missing CHANGELOG still blocks
-        self.assertIn("\\n  (c)", r.stdout)
+        # docs letters (c)(d)(e) are not paperwork. G4: a CHANGELOG the project never had is an advisory
+        self.assertNotIn("\\n  (c)", r.stdout)
+        self.assertIn("no docs/CHANGELOG.md", r.stderr)
+        # a CHANGELOG that exists but is empty still blocks
+        os.makedirs(os.path.join(self.tmp, "docs"), exist_ok=True)
+        open(os.path.join(self.tmp, "docs", "CHANGELOG.md"), "w").close()
+        r2 = self._run(self._transcript())
+        self.assertIn("\\n  (c)", r2.stdout)
 
     def test_red_rerun_blocks_with_gate_output(self):
         self._shared_setup(FAILING)

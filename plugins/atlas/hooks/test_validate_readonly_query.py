@@ -350,5 +350,82 @@ class ValidateReadonlyBypassTest(unittest.TestCase):
         self.assertIn("perl", p.stderr)
 
 
+class StateChangingStatementsTest(unittest.TestCase):
+    """X6: statements that change server or data state without matching the DML/DDL structure list."""
+
+    BLOCKED = (
+        "psql -c \"ALTER SYSTEM SET work_mem='1GB'\"",
+        "psql -c 'alter   system reset all'",
+        "psql -c \"DO \\$\\$ BEGIN PERFORM 1; END \\$\\$\"",
+        "psql -c 'DO $$ BEGIN PERFORM 1; END $$'",
+        "psql -c \"do language plpgsql 'begin null; end'\"",
+        "psql -c \"DO 'BEGIN PERFORM 1; END'\"",
+        "psql -c 'SELECT pg_terminate_backend(123)'",
+        "psql -c 'SELECT pg_cancel_backend(pid) FROM pg_stat_activity'",
+        "psql -c \"SELECT dblink_exec('dbname=x','drop table t')\"",
+        "psql -c \"SELECT * FROM dblink('dbname=x','insert into t values (1) returning 1') AS r(a int)\"",
+        "psql -c 'SELECT pg_reload_conf()'",
+        "psql -c 'SELECT pg_switch_wal()'",
+        "psql -c 'SELECT pg_promote()'",
+        "psql -c \"SELECT pg_drop_replication_slot('s')\"",
+        "psql -c \"SELECT set_config('default_transaction_read_only','off',false)\"",
+        "psql -c \"SELECT lo_import('/etc/passwd')\"",
+        "psql -c 'SELECT lo_unlink(1234)'",
+        "psql -c \"SELECT nextval('s')\"",
+        "psql -c \"SELECT setval('s', 1)\"",
+        "psql -c 'SELECT * INTO newt FROM t'",
+        "psql -c 'SET ROLE postgres'",
+        "psql -c 'SET SESSION AUTHORIZATION postgres'",
+        "psql -c 'SET default_transaction_read_only = off'",
+        "psql -c 'BEGIN READ WRITE'",
+        "psql -c 'LOCK TABLE t'",
+        "psql -c \"COMMENT ON TABLE t IS 'x'\"",
+        "psql -c 'REFRESH MATERIALIZED VIEW v'",
+        "psql -c 'IMPORT FOREIGN SCHEMA s FROM SERVER x INTO y'",
+        "psql -c \"CREATE SUBSCRIPTION s CONNECTION 'x' PUBLICATION p\"",
+        "psql -c 'ALTER TYPE t ADD VALUE x'",
+        "psql -c 'CREATE TYPE ty AS ENUM (x)'",
+        "psql -c 'CREATE SERVER s FOREIGN DATA WRAPPER w'",
+        "psql -c 'CREATE EVENT TRIGGER e'",
+        "psql -c 'ALTER DEFAULT PRIVILEGES GRANT ALL ON TABLES TO x'",
+        "mysql -e 'SET GLOBAL read_only=0'",
+        "mysql -e 'LOAD DATA INFILE \"/tmp/x\" INTO TABLE t'",
+        "mysql -e 'SELECT 1 INTO OUTFILE \"/tmp/x\"'",
+        "sqlite3 db 'ATTACH DATABASE \"x\" AS y'",
+        "sqlite3 db 'PRAGMA writable_schema=1'",
+        "sqlite3 db 'VACUUM INTO \"/tmp/x\"'",
+        # hidden in a comment-stripped or multi-line form
+        "psql -c 'ALTER/**/SYSTEM SET x=1'",
+        "psql <<SQL\nALTER\nSYSTEM SET x=1;\nSQL",
+    )
+    PASSES = (
+        "psql -c 'SELECT state, count(*) FROM pg_stat_activity GROUP BY state'",
+        "psql -c 'SELECT pg_is_in_recovery()'",
+        "psql -c \"SELECT current_setting('work_mem')\"",
+        "psql -c 'SELECT nextval_count, set_config_name FROM audit_log'",
+        "psql -c \"SELECT 'do it' AS verb, 1 AS do_flag\"",
+        "psql -c 'SELECT pg_size_pretty(pg_database_size(current_database()))'",
+        "for f in a b; do psql -c 'SELECT 1'; done",
+        "while read l; do echo $l; done < ids.txt",
+        "psql -c 'EXPLAIN SELECT * FROM t'",
+        "psql -c 'SHOW work_mem'",
+        "psql -c 'SELECT * FROM pg_locks'",
+        "systemd-notify --ready",
+        "docker attach web",
+    )
+
+    def test_state_changing_statements_blocked(self):
+        for cmd in self.BLOCKED:
+            with self.subTest(cmd=cmd):
+                p = run_hook(payload(cmd))
+                self.assertEqual(p.returncode, 2, p.stderr)
+                self.assertIn("Blocked", p.stderr)
+
+    def test_read_only_lookalikes_pass(self):
+        for cmd in self.PASSES:
+            with self.subTest(cmd=cmd):
+                self.assertEqual(run_hook(payload(cmd)).returncode, 0)
+
+
 if __name__ == "__main__":
     unittest.main()

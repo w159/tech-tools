@@ -3,8 +3,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { DATA_INK, PALETTE5, PALETTES } from './atlas-ui';
-import { leadTone } from './transcript/leadheader';
+import { DATA_INK, PALETTE5, PALETTES } from './design/atlas-ui';
+import { leadTone } from './view/transcript/leadheader';
 
 const ROOT = resolve(import.meta.dir, '..'); // plugins/atlas
 const hexes = (o: Record<string, string>): string[] => Object.values(o).map((h) => h.toLowerCase());
@@ -18,7 +18,7 @@ const EXEMPT: Record<string, string> = {
   'mod/data/personas.ts': 'persona identity colours of the roster data, never painted by the band, HUD, board, panel or cards',
 };
 const EXEMPT_DIRS = ['mod/sprites/']; // the pixel-art sprite sheets are art assets with their own palettes
-const SPRITE_TILE = '#1b1f27'; // mod/theme.ts spriteTile: the dark tile behind a sprite, not a surface colour
+const SPRITE_TILE = '#1b1f27'; // mod/design/theme.ts spriteTile: the dark tile behind a sprite, not a surface colour
 
 const files = (dir: string): string[] =>
   readdirSync(join(ROOT, dir)).flatMap((n) => {
@@ -35,7 +35,7 @@ describe('critique 25: one palette', () => {
   });
   test('the scan finds the surface files (a moved folder cannot turn this test into a no-op)', () => {
     expect(surfaceFiles.length).toBeGreaterThan(40);
-    for (const f of ['mod/atlas-ui.ts', 'mod/mission-layout.ts', 'mod/panel-layout.ts', 'mod/board-model.ts', 'mod/transcript/cards.tsx', 'mod/restyle.tsx', 'omp/panel-paint.ts', 'omp/mission-panel.ts']) expect(surfaceFiles).toContain(f);
+    for (const f of ['mod/design/atlas-ui.ts', 'mod/view/band/mission-layout.ts', 'mod/view/panel/panel-layout.ts', 'mod/view/board/board-model.ts', 'mod/view/transcript/cards.tsx', 'mod/view/transcript/restyle.tsx', 'omp/panel-paint.ts', 'omp/mission-panel.ts']) expect(surfaceFiles).toContain(f);
   });
   test('no non-test mod or omp file spells a colour outside the palette', () => {
     const stray: string[] = [];
@@ -44,7 +44,7 @@ describe('critique 25: one palette', () => {
       for (const m of src.matchAll(/#[0-9a-fA-F]{6}\b/g)) {
         const hex = m[0].toLowerCase();
         if (ALLOWED.has(hex)) continue;
-        if (f === 'mod/theme.ts' && hex === SPRITE_TILE) continue;
+        if (f === 'mod/design/atlas-ui.ts' && hex === SPRITE_TILE) continue;
         stray.push(`${f}: ${hex}`);
       }
     }
@@ -58,12 +58,13 @@ describe('critique 25: one palette', () => {
     }
     expect(raw).toEqual([]);
   });
-  test('the lead-line bar takes four values: accent for an active phase, ok for done, error for blocked (quiet and note bars use the secondary grey)', () => {
-    const tones = new Set((['research', 'plan', 'build', 'verify', 'done', 'blocked'] as const).map((p) => leadTone(p as never)));
-    expect([...tones].sort()).toEqual(['accent', 'bad', 'ok']);
-    expect(leadTone('done' as never)).toBe('ok');
-    expect(leadTone('blocked' as never)).toBe('bad');
+  test('the lead-line bar takes one tone per phase, read from the contract phase table; an unknown phase falls back to accent (quiet and note bars use the secondary grey)', () => {
+    const phases = ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'] as const;
+    expect(new Set(phases.map((p) => leadTone(p))).size).toBe(8);
+    expect(leadTone('done')).toBe('ok');
+    expect(leadTone('blocked')).toBe('bad');
     expect(leadTone('build' as never)).toBe('accent');
+    for (const p of phases) expect(Object.keys(PALETTES.mocha)).toContain(leadTone(p));
   });
   test('the retired off-palette greys and pastels are gone from the Mocha tokens', () => {
     const mocha = new Set(hexes(PALETTES.mocha));

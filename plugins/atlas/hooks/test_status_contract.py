@@ -27,16 +27,20 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 import session_boot  # noqa: E402
 
 
+# The whole rule line the boot hook prints, glyph table included (a substring check let a half-bold or glyph-less rule pass).
+HEADER_RULE = "`**ATLAS** | <glyph> <phase> | <state>` (🔍 research | 💡 theory | 🧪 test | 📋 validate | 🔧 implement | ✅ verify | 🏁 done | ⛔ blocked)"
+
+
 class StatusContractLinesTest(unittest.TestCase):
     def test_header_rule_always_emitted(self):
         for style in ("", "Atlas Orchestrator"):
             blob = "\n".join(session_boot.status_contract_lines(style))
-            self.assertIn("ATLAS | <glyph>", blob)
+            self.assertIn(f"Every user-visible reply opens {HEADER_RULE}.", blob)
             self.assertNotIn("STYLE OVERRIDE", blob)
 
     def test_override_warns_on_concise(self):
         blob = "\n".join(session_boot.status_contract_lines("concise"))
-        self.assertIn("ATLAS |", blob)
+        self.assertIn(f"Every user-visible reply opens {HEADER_RULE};", blob)
         self.assertIn("concise", blob)
         self.assertIn("Atlas Orchestrator", blob)
 
@@ -118,7 +122,7 @@ class BootMainStyleTest(unittest.TestCase):
                 self.assertEqual(e.code, 0)
         data = json.loads(stdout.getvalue())
         ctx = data["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("ATLAS |", ctx)
+        self.assertIn(f"Every user-visible reply opens {HEADER_RULE};", ctx)
         self.assertIn("LOOP", ctx)
         self.assertIn("STYLE OVERRIDE", ctx)
         self.assertIn("concise", data["systemMessage"])

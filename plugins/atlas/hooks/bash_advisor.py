@@ -425,6 +425,14 @@ def _git_subcommands(command: str, _depth: int = 0):
     `git commit --amend` does. The quoted script of `sh|bash|zsh -c` is parsed the
     same way (two levels deep), so wrapping is no bypass. `$(...)` and backtick
     bodies are segmented like any other command.
+
+    Indirection closed conservatively (see _indirect_invocations): `g=git; $g commit`,
+    `echo git commit | sh`, `sh <<< 'git commit'`, `find -exec[dir] git commit`, and
+    `python -c` code that starts a process (os.system, subprocess ...) with git in a string
+    literal or argv list. Residual limit of static matching: a command assembled at run time
+    (substitution output, `eval "$x"`, a script written then run, perl/node/ruby -e, shell
+    functions and aliases) is invisible here; only a real git pre-commit/pre-push hook
+    enforces those.
     """
     for argv, _chdir in _git_invocations(command, _depth):
         yield argv[0]
@@ -442,27 +450,162 @@ def _git_invocations(command: str, _depth: int = 0):
             yield from _git_invocations(m.group(2), _depth + 1)
         for m in _EVAL_Q.finditer(command):
             yield from _git_invocations(m.group(2), _depth + 1)
-    for tokens in _command_segments(command):
+    segments = list(_command_segments(command))
+    aliases = _git_aliases(segments)
+    if _depth < 2:
+        yield from _indirect_invocations(command, segments, _depth)
+    for tokens in segments:
         tokens = _strip_wrappers(tokens)
-        if not tokens or not (tokens[0] == "git" or tokens[0].endswith("/git")):
+        if tokens and tokens[0] in aliases:
+            tokens = ["git"] + tokens[1:]
+        yield from _git_argv(tokens)
+        for sub in _find_exec(tokens):
+            sub = _strip_wrappers(sub)
+            if sub and sub[0] in aliases:
+                sub = ["git"] + sub[1:]
+            yield from _git_argv(sub)
+
+
+def _git_argv(tokens: list[str]):
+    """Yield (argv, chdir) when `tokens` (wrappers already stripped) is a git command line."""
+    if not tokens or not (tokens[0] == "git" or tokens[0].endswith("/git")):
+        return
+    i, chdir = 1, None
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok in _GIT_VALUE_OPTS:
+            if tok == "-C" and i + 1 < len(tokens):
+                chdir = (
+                    tokens[i + 1]
+                    if chdir is None or os.path.isabs(tokens[i + 1])
+                    else os.path.join(chdir, tokens[i + 1])
+                )
+            i += 2
+        elif tok.startswith("-"):
+            i += 1
+        else:
+            break
+    if i < len(tokens):
+        yield tokens[i:], chdir
+
+
+# `g=git` / `export g=/usr/bin/git`: a later `$g commit` is a git commit. Only a segment made of
+# assignments counts (`g=git $g x` expands $g before the assignment exists, so it runs nothing).
+_GIT_ALIAS = lre(r"^([A-Za-z_][A-Za-z0-9_]*)=(?:\S*/)?git$")
+_DECLARERS = frozenset({"export", "declare", "local", "readonly", "typeset"})
+
+
+def _git_aliases(segments: list) -> frozenset:
+    """Spellings (`$g`, `${g}`) of variables the command assigns to git. A reassignment to something
+    else removes the name again, so `g=git; g=ls; $g commit` is not flagged."""
+    found: dict = {}
+    for tokens in segments:
+        rest = tokens[1:] if tokens and tokens[0] in _DECLARERS else tokens
+        if not rest or not all(_ENV_ASSIGN.match(t) for t in rest):
             continue
-        i, chdir = 1, None
-        while i < len(tokens):
-            tok = tokens[i]
-            if tok in _GIT_VALUE_OPTS:
-                if tok == "-C" and i + 1 < len(tokens):
-                    chdir = (
-                        tokens[i + 1]
-                        if chdir is None or os.path.isabs(tokens[i + 1])
-                        else os.path.join(chdir, tokens[i + 1])
-                    )
-                i += 2
-            elif tok.startswith("-"):
-                i += 1
-            else:
-                break
-        if i < len(tokens):
-            yield tokens[i:], chdir
+        for tok in rest:
+            name = tok.split("=", 1)[0]
+            found[name] = bool(_GIT_ALIAS.match(tok))
+    out = set()
+    for name, is_git in found.items():
+        if is_git:
+            out.update(("$" + name, "${" + name + "}"))
+    return frozenset(out)
+
+
+_FIND_EXEC = frozenset({"-exec", "-execdir", "-ok", "-okdir"})
+
+
+def _find_exec(tokens: list[str]):
+    """Yield the command line each `find -exec|-execdir|-ok|-okdir ... ;|+` runs."""
+    if not tokens or tokens[0].rsplit("/", 1)[-1] != "find":
+        return
+    i = 1
+    while i < len(tokens):
+        if tokens[i] in _FIND_EXEC:
+            j, sub = i + 1, []
+            while j < len(tokens) and tokens[j] not in (";", "+"):
+                sub.append(tokens[j])
+                j += 1
+            if sub:
+                yield sub
+            i = j
+        i += 1
+
+
+# `echo 'git commit' | sh`, `printf ... | bash -s`: the producer's text is the script.
+_PIPE_SH = lre(r"\|[ \t]*(?:\S*/)?(?:ba|z|da|k)?sh(?:[ \t]+-[A-Za-z-]+)*[ \t]*(?:$|[;&|)\n<])", re.M)
+# `sh <<< "git commit"`
+_HERESTRING_SH = lre(r"""(?:^|[\s;&|(])(?:\S*/)?(?:ba|z|da|k)?sh\b[^\n;|&]*<<<[ \t]*(['"])(.*?)\1""", re.S)
+_SHELLS = frozenset({"sh", "bash", "zsh", "dash", "ksh"})
+_PY_NAME = lre(r"^python[0-9.]*$")
+# Only code that can start a process is searched for git: `print('git commit')` runs nothing.
+_PY_EXEC = lre(r"os\.(?:system|popen|exec[a-z]*|spawn[a-z]*)|subprocess|pty\.spawn|\bPopen\b|check_(?:call|output)")
+_PY_STR = lre(r"""(['"])((?:\\.|(?!\1).)*)\1""", re.S)
+_PY_LIST = lre(r"\[([^\]]*)\]")
+
+
+def _dash_c(tokens: list[str]) -> str | None:
+    """The script argument of `prog [-flags] -c <script>` (any flag cluster containing c)."""
+    for k, tok in enumerate(tokens[1:-1], 1):
+        if re.fullmatch(r"-[A-Za-z]*c[A-Za-z]*", tok):
+            return tokens[k + 1]
+        if not tok.startswith("-"):
+            return None
+    return None
+
+
+def _python_commands(code: str):
+    """Command lines a `python -c` script can run: its string literals, and list literals that start
+    with 'git' (subprocess argv form)."""
+    import shlex
+
+    if not _PY_EXEC.search(code):
+        return
+    for m in _PY_STR.finditer(code):
+        if "git" in m.group(2):
+            yield m.group(2)
+    for m in _PY_LIST.finditer(code):
+        items = [s.group(2) for s in _PY_STR.finditer(m.group(1))]
+        if items and items[0].rsplit("/", 1)[-1] == "git":
+            yield " ".join(shlex.quote(s) for s in items)
+
+
+def _indirect_invocations(command: str, segments: list, depth: int):
+    """git invocations hidden one level down: piped to a shell, here-string, inside
+    `find -exec sh -c`, or inside `python -c`. Same contract as _git_invocations, so every caller
+    (git_guard's commit/push checks, the commit nudge) sees them. Anything built at run time
+    (command substitution output, `eval "$x"`, a script written then run, other interpreters) is
+    beyond static matching and stays unflagged."""
+    if _PIPE_SH.search(command):
+        for tokens in segments:
+            if not tokens or tokens[0] not in ("echo", "printf"):
+                continue
+            args = tokens[1:]
+            while args and args[0].startswith("-"):
+                args = args[1:]
+            body = " ".join(args)
+            if tokens[0] == "printf":
+                body = body.replace("\\n", "\n")
+            yield from _git_invocations(body, depth + 1)
+    for m in _HERESTRING_SH.finditer(command):
+        yield from _git_invocations(m.group(2), depth + 1)
+    for tokens in segments:
+        tokens = _strip_wrappers(tokens)
+        if not tokens:
+            continue
+        for argv, nested_shell in [(tokens, False)] + [(s, True) for s in _find_exec(tokens)]:
+            argv = _strip_wrappers(argv)
+            prog = argv[0].rsplit("/", 1)[-1] if argv else ""
+            if nested_shell and prog in _SHELLS:
+                code = _dash_c(argv)
+                if code:
+                    yield from _git_invocations(code, depth + 1)
+            elif _PY_NAME.match(prog):
+                code = _dash_c(argv)
+                if code:
+                    for line in _python_commands(code):
+                        yield from _git_invocations(line, depth + 1)
 
 
 def _program_invocations(command: str, programs: tuple, _depth: int = 0):

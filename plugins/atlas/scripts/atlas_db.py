@@ -554,7 +554,7 @@ def resolve_agent_type(tinput, default=DEFAULT_AGENT_TYPE):
 
 _MODEL_FAMILIES = ("opus", "sonnet", "haiku")
 WAVE_GAP_S = (
-    10.0  # spawns further apart than this start a new wave (mod/band.tsx WAVE_GAP_MS)
+    10.0  # spawns further apart than this start a new wave (mod/view/band/band.tsx WAVE_GAP_MS)
 )
 
 

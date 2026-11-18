@@ -109,7 +109,7 @@
     "mcp_servers/connectwise-manage-mcp/src/index.ts:404-415|mcp_servers/mcp-gateway/src/http.ts:90-98",
     "mcp_servers/knowbe4-mcp/src/domains/phishing.ts:324-329|mcp_servers/knowbe4-mcp/src/domains/phishing.ts:355-360",
     "mcp_node/node-ninjaone/vitest.config.ts:3-25|mcp_node/node-spanning/vitest.config.ts:3-25",
-    "plugins/atlas/mod/theme.ts:142-159|plugins/atlas/omp/channel-view.ts:83-96",
+    "plugins/atlas/mod/design/theme.ts:142-159|plugins/atlas/omp/channel-view.ts:83-96",
     "mcp_node/node-paylocity/tests/mocks/handlers.ts:31-44|mcp_node/node-vanta/tests/mocks/handlers.ts:30-42",
     "mcp_node/node-threatlocker/src/http.ts:119-125|mcp_node/node-vanta/src/http.ts:109-115",
     "mcp_servers/panos-mcp/src/domains/logs.ts:87-125|mcp_servers/panos-mcp/src/domains/reports.ts:86-119",

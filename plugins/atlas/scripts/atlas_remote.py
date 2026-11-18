@@ -19,6 +19,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlsplit
 
 DEFAULT_WEB_URL = "http://127.0.0.1:7317"
@@ -26,7 +27,8 @@ DEFAULT_PORT = 8443
 HTTP_TIMEOUT = 3
 TS_TIMEOUT = 15
 # Present on every request tailscale serve proxies; makes herdr-web-ui evaluate the
-# proxied (tailnet) path instead of its "direct loopback is local" shortcut.
+# proxied (tailnet) path. Sent WITHOUT a token on purpose: it asks what an anonymous tailnet
+# peer would get, and a token would turn that answer into "authenticated".
 PROXY_PROBE_HEADERS = {"X-Forwarded-For": "100.64.0.1"}
 
 EXIT_OK, EXIT_FAIL, EXIT_REFUSED, EXIT_NO_TS = 0, 1, 2, 3
@@ -211,16 +213,56 @@ def _get(url: str, headers: dict | None = None) -> dict:
         return {"_error": str(getattr(exc, "reason", exc))}
 
 
-def web_state(base: str) -> dict:
-    """Direct /api/health + /api/access, plus an anonymous *proxied* probe.
+def _token_dirs() -> list[Path]:
+    """Where herdr-web-ui keeps its per-install `local-token`: the state dir the server was given,
+    the vendored colony's own, then the default one (server/index.ts defaultStateDir)."""
+    dirs: list[Path] = []
+    if os.environ.get("HERDR_WEB_STATE_DIR"):
+        dirs.append(Path(os.environ["HERDR_WEB_STATE_DIR"]))
+    home = Path(os.environ.get("ATLAS_HOME") or Path.home() / ".atlas")
+    dirs.append(home / "colony" / "state" / "app")
+    dirs.append(
+        Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+        / "herdr-web-ui"
+    )
+    return dirs
 
-    A direct loopback request is always "local" (auth.required=false) in herdr-web-ui, so it
-    says nothing about the tailnet. The proxied probe sends X-Forwarded-For with no
-    Tailscale-User-Login: required=true means strangers are refused (owner login / pairing /
-    token needed); required=false means the tailnet path is open.
+
+def web_token() -> tuple[str, str]:
+    """(token, note) for the local colony. The note says where it came from, or why there is none
+    (never the token itself). HERDR_WEB_TOKEN wins, else the owner-only local-token file."""
+    configured = os.environ.get("HERDR_WEB_TOKEN", "").strip()
+    if configured:
+        return configured, "HERDR_WEB_TOKEN"
+    problems: list[str] = []
+    for d in _token_dirs():
+        path = d / "local-token"
+        try:
+            value = path.read_text().strip()
+        except FileNotFoundError:
+            continue
+        except OSError as exc:
+            problems.append(f"{path}: {exc.strerror or exc}")
+            continue
+        if value:
+            return value, str(path)
+    return "", "no token found" + (f" ({'; '.join(problems)})" if problems else "")
+
+
+def web_state(base: str) -> dict:
+    """Direct /api/health + /api/access with the local token, plus an anonymous *proxied* probe.
+
+    herdr-web-ui does not trust a bare loopback request, so the direct calls carry the token
+    (HERDR_WEB_TOKEN or the local-token file); without it /api/access is refused and the direct
+    health only says the gate is up. The proxied probe sends X-Forwarded-For with no token and
+    no Tailscale-User-Login: required=true means strangers are refused (token / owner login /
+    pairing needed); required=false means the tailnet path is open. The token is never sent on
+    the probe, so it reports what an anonymous peer would get.
     """
-    health = _get(f"{base}/api/health")
-    access = _get(f"{base}/api/access")
+    token, token_note = web_token()
+    mine = {"Authorization": f"Bearer {token}"} if token else None
+    health = _get(f"{base}/api/health", mine)
+    access = _get(f"{base}/api/access", mine)
     probe = _get(f"{base}/api/health?scope=bridge", PROXY_PROBE_HEADERS)
     up = "_error" not in health
     direct = health.get("auth") or {}
@@ -235,6 +277,8 @@ def web_state(base: str) -> dict:
             "required": direct.get("required"),
             "via": direct.get("via"),
             "role": direct.get("role"),
+            # where the direct calls got their token, so a refused call is explainable
+            "token_source": token_note,
         },
         "access": None if "_error" in access else access,
         "tailnet_probe": {

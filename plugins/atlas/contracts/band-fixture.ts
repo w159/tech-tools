@@ -1,9 +1,9 @@
-// Shared helper of mod/band-golden.test.ts (Claude band, mod/band.tsx) and omp/mission-panel-golden.test.ts (omp mission panel): both render
+// Shared helper of mod/view/band/band-golden.test.ts (Claude band, mod/view/band/band.tsx) and omp/mission-panel-golden.test.ts (omp mission panel): both render
 // the ONE world (contracts/band-world.ts, through contracts/world-live.ts) at 120 columns, tick 0, strip colour, trim trailing spaces, and must
 // produce `golden` / `idleGolden` from band-golden.ts exactly. A .ts module because the mod test host loads only code files (no fs).
 //
 // There is no second fixture: the legacy `fx` world (explorer-1, impl-auth, phase 4/6) is gone, so no surface can count from it.
-// Rows (mod/mission-layout.ts): the band line, a blank row, one row per worker (failed and waiting first), the newest message, the
+// Rows (mod/view/band/mission-layout.ts): the band line, a blank row, one row per worker (failed and waiting first), the newest message, the
 // `checks` footer. Idle: the band reads `idle`, a `last run` row (failures kept), the core row (contracts/core-golden.ts), the footer.
 //
 // Excluded from the compared rows (shown in one harness only, see each test):

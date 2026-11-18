@@ -47,7 +47,7 @@
           {
             "type": "command",
             "command": "python3 -S \"${CLAUDE_PLUGIN_ROOT}/hooks/fallow_gate.py\"",
-            "timeout": 300
+            "timeout": 90
           }
         ]
       }

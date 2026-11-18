@@ -1,16 +1,16 @@
 // Painter parity for the ATLAS side panel, worker card and toast. NOT surface evidence: `paintPanel`, `paintCard` and `paintToast`
 // are unmounted in omp (omp/panel-view.ts says why), and both sides of every comparison here are one layout function
-// (mod/panel-layout.ts), so the text is equal by construction. The design-sourced check is mod/panel-layout.test.ts.
+// (mod/view/panel/panel-layout.ts), so the text is equal by construction. The design-sourced check is mod/view/panel/panel-layout.test.ts.
 import { expect, test } from "bun:test";
 import { coreFixture, coreMatrix } from "../contracts/core-fixture";
 import { cardDesign, tabGolden, toastDesign } from "../contracts/panel-golden";
 import { padStrip } from "../mod/golden-pad";
 import { panelWorld, worldCard } from "../contracts/panel-world";
-import { type Ui } from "../mod/atlas-ui";
+import { type Ui } from "../mod/design/atlas-ui";
 import { coreModel } from "../mod/data/core";
-import { headerRows, PANEL_TABS } from "../mod/panel-layout";
-import { goldenModel, goldenText } from "../mod/pane/sidebar.golden-cases";
-import { panelModelOf } from "../mod/pane/sidebar-model";
+import { headerRows, PANEL_TABS } from "../mod/view/panel/panel-layout";
+import { goldenModel, goldenText } from "../mod/view/panel/pane/sidebar.golden-cases";
+import { panelModelOf } from "../mod/view/panel/pane/sidebar-model";
 import { paintCard, paintPanel, paintToast } from "./panel-view";
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };

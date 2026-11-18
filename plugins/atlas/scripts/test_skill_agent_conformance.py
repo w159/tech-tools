@@ -630,6 +630,28 @@ class TestToolNameHygiene(unittest.TestCase):
             "read-only agents missing Write/Edit denies: " + ", ".join(missing),
         )
 
+    def test_per_agent_denied_tool_table(self):
+        """Pin each agent's disallowedTools: read-only agents deny every mutating tool
+        (incl. the lean-ctx patch tool), and EVERY agent denies Agent/Task (subagents may not dispatch)."""
+        read_only = {
+            "explorer", "db-prober", "verifier", "completeness-critic",
+            "docs-auditor", "planner", "ui-runtime-tester",
+        }
+        mutating = ("Write", "Edit", "MultiEdit", "NotebookEdit", "mcp__lean-ctx__ctx_patch")
+        dispatching = ("Agent", "Task")
+        found = []
+        seen = set()
+        for path in sorted((PLUGIN_ROOT / "agents").glob("*.md")):
+            fm = _frontmatter_fields(path.read_text(encoding="utf-8"))
+            name = fm.get("name", path.stem).strip().strip("'\"")
+            seen.add(name)
+            raw = fm.get("disallowedTools", "").strip().strip("[]")
+            denied = {n.strip() for n in raw.split(",") if n.strip()}
+            need = dispatching + (mutating if name in read_only else ())
+            found += [f"{name}->{t}" for t in need if t not in denied]
+        self.assertTrue(read_only <= seen, f"read-only agents without a file: {sorted(read_only - seen)}")
+        self.assertEqual([], found, "agents missing required tool denies: " + ", ".join(found))
+
     def test_claude_plugin_manifest_exists(self):
         import json
 

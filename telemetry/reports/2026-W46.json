@@ -9,7 +9,8 @@
     "17.24.0": 8,
     "17.24.1": 16,
     "17.24.2": 8,
-    "17.25.0": 8
+    "17.25.0": 8,
+    "other": 4
   },
   "counts": {
     "active.day.sat": {
@@ -20,6 +21,18 @@
       "installs": 37,
       "total": 37
     },
+    "agent.docs-curator": {
+      "installs": 3,
+      "total": 12
+    },
+    "agent.explorer": {
+      "installs": 3,
+      "total": 17
+    },
+    "agent.implementer": {
+      "installs": 3,
+      "total": 53
+    },
     "command.atlas-plan": {
       "installs": 12,
       "total": 12
@@ -28,13 +41,81 @@
       "installs": 18,
       "total": 18
     },
+    "dispatch.PostToolUse.ms.50to200": {
+      "installs": 3,
+      "total": 1793
+    },
+    "dispatch.PostToolUse.ms.lt50": {
+      "installs": 3,
+      "total": 9655
+    },
+    "dispatch.PreToolUse.ms.50to200": {
+      "installs": 3,
+      "total": 199
+    },
+    "dispatch.PreToolUse.ms.lt50": {
+      "installs": 3,
+      "total": 12548
+    },
+    "gate.a.block": {
+      "installs": 3,
+      "total": 21
+    },
+    "gate.b.block": {
+      "installs": 4,
+      "total": 30
+    },
+    "gate.f.block": {
+      "installs": 4,
+      "total": 26
+    },
+    "gate.g.block": {
+      "installs": 4,
+      "total": 44
+    },
+    "gate.h.block": {
+      "installs": 3,
+      "total": 37
+    },
+    "gate.i.block": {
+      "installs": 4,
+      "total": 55
+    },
+    "gate.m.block": {
+      "installs": 3,
+      "total": 12
+    },
+    "gate.n.block": {
+      "installs": 3,
+      "total": 526
+    },
+    "gate.o.block": {
+      "installs": 3,
+      "total": 19
+    },
     "gate.pass": {
-      "installs": 26,
-      "total": 361
+      "installs": 28,
+      "total": 393
+    },
+    "gate.r.block": {
+      "installs": 3,
+      "total": 9
+    },
+    "hook.delegation_prewarn.context": {
+      "installs": 3,
+      "total": 43
+    },
+    "hook.dispatch_tripwire.context": {
+      "installs": 3,
+      "total": 989
+    },
+    "hook.dispatch_tripwire.deny": {
+      "installs": 3,
+      "total": 128
     },
     "session.claude": {
-      "installs": 29,
-      "total": 287
+      "installs": 30,
+      "total": 803
     },
     "session.codex": {
       "installs": 22,
@@ -46,11 +127,13 @@
     }
   },
   "os": {
-    "linux": 108
+    "darwin": 3,
+    "linux": 109
   },
   "python": {
-    "3.14": 108
+    "3.14": 108,
+    "other": 4
   },
-  "submissions": 110,
+  "submissions": 112,
   "week": "2026-W46"
 }

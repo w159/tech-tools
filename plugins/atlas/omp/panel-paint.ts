@@ -1,8 +1,8 @@
 /** Palette and paint primitives shared by mission-panel.ts and todo-panel.ts (kept apart so the two panels do not import each other). */
-import { PALETTE5, PALETTES } from "../mod/atlas-ui";
+import { PALETTE5, PALETTES } from "../mod/design/atlas-ui";
 export type Rgb = readonly [number, number, number];
 export const hx = (s: string): Rgb => [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16)];
-// One restrained palette (critique 25): the same tokens the Claude mod draws with (mod/atlas-ui.ts PALETTES.mocha and PALETTE5), not a second pastel set. The names stay for the callers;
+// One restrained palette (critique 25): the same tokens the Claude mod draws with (mod/design/atlas-ui.ts PALETTES.mocha and PALETTE5), not a second pastel set. The names stay for the callers;
 // the hues collapse to the five roles: accent 141, ok 114, warn 179, error 203 and the neutrals 240 / 245 / 252.
 export const PANEL = hx(PALETTES.mocha.panel);
 export const PANEL2 = hx(PALETTES.mocha.panel);

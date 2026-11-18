@@ -1,5 +1,5 @@
 // Characterization cases: sprite rows, badges, speech bubbles and code point widths serialized for sprites.golden.test.ts.
-import { textWidth } from '../theme';
+import { textWidth } from '../design/theme';
 import { badge, frameCount, MOODS, PERSONA_KEYS, speechBubble, spriteRows, type Run } from './api';
 
 const ser = (rows: Run[][]): string => rows.map((r) => r.map((x) => `${x.text}|${x.fg ?? ''}|${x.bg ?? ''}|${x.bold ? 1 : 0}`).join(';')).join('\n');

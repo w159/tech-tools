@@ -3,7 +3,7 @@
 Read `MASTER.md` first (tokens, components, shell, navigation). This file gives, for each page: purpose, wireframe (1280 wide, comfortable), data contract (endpoints that exist today, read from `atlas_dashboard.py`, `atlas_dash_insights.py`, `atlas_dash_work.py`, `atlas_dash_irc.py`, `atlas_dash_herd.py`, `atlas_herdr.py`), states, and interactions.
 
 Conventions
-- All `GET /api/v2/*` accept `?project=<root|all>`; mutations need header `X-Atlas-Token` (the `<meta name="atlas-token">` value) and return the `{ok:false,error,why,do}` envelope on failure.
+- All `GET /api/v2/*` accept `?project=<root|all>`; mutations need header `X-Atlas-Token` (the `<meta name="atlas-token">` value the page receives after the owner opens the launch URL; scripts read `dashboard-<port>.token`) and return the `{ok:false,error,why,do}` envelope on failure.
 - "[GAP Gn]" marks a data need that today's endpoints do not satisfy. Each page works without its gaps (the fallback is stated); gaps are listed once in section 12 for the backend owner.
 - Page ids and aliases are in MASTER section 8. Every page reads `project`, `window`, `agent` from the hash query and writes them back, so every view is a shareable deep link.
 - Header of every page: `h1` (`--fs-xl`), then page filters on the right (window tabs, search), then actions. Sticky, 56px.

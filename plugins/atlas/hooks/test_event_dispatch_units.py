@@ -732,6 +732,64 @@ class MainEntryTest(unittest.TestCase):
         self.assertEqual(run.call_args.args[0], "PostToolUse")
 
 
+class LazyImportTest(unittest.TestCase):
+    """P1: a call no binding handles must not pay for the gate cores or the telemetry writer."""
+
+    HEAVY = (
+        "dispatch_tripwire_core",
+        "completion_gate_core",
+        "git_guard",
+        "bash_advisor",
+        "sqlite3",
+        "atlas_analytics_hot",
+        "atlas_analytics",
+    )
+
+    def _imported(self, event: str, tool: str) -> list:
+        import subprocess
+        import tempfile
+
+        payload = {"hook_event_name": event, "tool_name": tool, "tool_input": {}, "session_id": "lazy", "cwd": "/tmp"}
+        code = (
+            "import sys, json\n"
+            "sys.path.insert(0, %r)\n"
+            "import event_dispatch as ed\n"
+            "ed.run_event(sys.argv[1], sys.argv[2])\n"
+            "print(json.dumps([m for m in %r if m in sys.modules]))\n"
+        ) % (os.path.dirname(os.path.abspath(__file__)), self.HEAVY)
+        with tempfile.TemporaryDirectory() as home:
+            env = dict(os.environ, ATLAS_HOME=home, ATLAS_HARNESS="")
+            proc = subprocess.run(
+                [sys.executable, "-c", code, event, json.dumps(payload)],
+                capture_output=True,
+                text=True,
+                env=env,
+                timeout=60,
+            )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        return json.loads(proc.stdout.strip().splitlines()[-1])
+
+    def test_unhandled_post_tool_imports_no_heavy_core(self):
+        self.assertEqual(self._imported("PostToolUse", "WebFetch"), [])
+
+    def test_unhandled_pre_tool_imports_no_heavy_core(self):
+        # recall_gate legitimately runs for every tool, so only the gate cores are pinned here.
+        cores = [m for m in self._imported("PreToolUse", "WebFetch") if m.endswith("_core") or m in ("git_guard", "bash_advisor")]
+        self.assertEqual(cores, [])
+
+    def test_mcp_call_without_auth_markers_imports_no_heavy_core(self):
+        self.assertEqual(self._imported("PostToolUse", "mcp__srv__list"), [])
+
+    def test_unhandled_call_is_a_clean_no_op(self):
+        self.assertEqual(ed.run_event("PostToolUse", '{"tool_name": "WebFetch"}'), (0, "", ""))
+
+    def test_handled_call_still_runs_its_hook(self):
+        seen = []
+        with mock.patch.object(ed, "_resolve", side_effect=lambda n: (seen.append(n), (lambda: 0))[1]):
+            ed.run_event("PreToolUse", '{"tool_name": "Read", "tool_input": {}}')
+        self.assertIn("dispatch_tripwire", seen)
+
+
 if __name__ == "__main__":
     unittest.main()
 

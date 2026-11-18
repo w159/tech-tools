@@ -1,8 +1,8 @@
-// D9: one done glyph. Every surface (mod and omp) takes the mark from mod/theme.ts (DONE_GLYPH), so no renderer carries its own copy.
+// D9: one done glyph. Every surface (mod and omp) takes the mark from mod/design/theme.ts (DONE_GLYPH), so no renderer carries its own copy.
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { DONE_GLYPH, contractGlyph } from '../mod/theme';
+import { DONE_GLYPH, contractGlyph } from '../mod/design/theme';
 
 const walk = (dir: string): string[] => readdirSync(dir).flatMap((n) => {
   const p = join(dir, n);

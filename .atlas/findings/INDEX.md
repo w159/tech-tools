@@ -64,6 +64,24 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-18 | wave2-hooks-dash-secret | rejected | dash: ensure launch URL (token) is injected into SessionStart additionalContext | [2026-11-18_wave2-hooks-dash-secret.md](2026-11-18_wave2-hooks-dash-secret.md) |
+| 2026-11-18 | w2bc-9 | verified | worker brief under 800 bytes with report command and STATUS rule | [2026-11-18_w2bc-9.md](2026-11-18_w2bc-9.md) |
+| 2026-11-18 | w2bc-7 | rejected | no exact router-score pin and no per-agent tool-list table test added; model table and write/edit deny tests pre-exist | [2026-11-18_w2bc-7.md](2026-11-18_w2bc-7.md) |
+| 2026-11-18 | w2bc-6 | rejected | mod/TESTING.md not touched by 5915e79; still 596 pass/9 skip/49 files | [2026-11-18_w2bc-6.md](2026-11-18_w2bc-6.md) |
+| 2026-11-18 | w2bc-5 | verified | CI tiers partition, workflow parses, PRs run all atlas suites; tiers themselves not run | [2026-11-18_w2bc-5.md](2026-11-18_w2bc-5.md) |
+| 2026-11-18 | w2bc-4 | verified | tripwire counters, table test, shared loadable check, real agent pins | [2026-11-18_w2bc-4.md](2026-11-18_w2bc-4.md) |
+| 2026-11-18 | w2bc-2 | verified | completion gate header assertions exact again | [2026-11-18_w2bc-2.md](2026-11-18_w2bc-2.md) |
+| 2026-11-18 | w2bc-11 | verified | bench measures implementer #2 advisory, assertion intact; explorer #2 assertion vacuous; AGENTS.md block current | [2026-11-18_w2bc-11.md](2026-11-18_w2bc-11.md) |
+| 2026-11-18 | w2bc-10 | verified | dashboard url and control test failures were stale tests (X2 401); product unchanged | [2026-11-18_w2bc-10.md](2026-11-18_w2bc-10.md) |
+| 2026-11-18 | w2bc-1 | verified | bare dashboard URL at session start, token pinned absent | [2026-11-18_w2bc-1.md](2026-11-18_w2bc-1.md) |
+| 2026-11-18 | w2-mod-m6-m7 | rejected | M6 only 2 of 4 sites pinned; M7 panel thinking-count change claimed but PanelWorker.state has no thinking | [2026-11-18_w2-mod-m6-m7.md](2026-11-18_w2-mod-m6-m7.md) |
+| 2026-11-18 | w2-mod-h1-h4-m8 | verified | mod H1, H4 TS side, discipline parser, restored assertions, M8 revert, 256 index fixed | [2026-11-18_w2-mod-h1-h4-m8.md](2026-11-18_w2-mod-h1-h4-m8.md) |
+| 2026-11-18 | w2-herdr-x3 | verified | herdr resolveToken, owner login, anonymous loopback refused, atlas_remote probe fixed | [2026-11-18_w2-herdr-x3.md](2026-11-18_w2-herdr-x3.md) |
+| 2026-11-18 | w2-dash-x2 | verified | dash X2 follow-ups (url, ensure, token readers, fail-closed serve, pty not-a-bug) fixed | [2026-11-18_w2-dash-x2.md](2026-11-18_w2-dash-x2.md) |
+| 2026-11-18 | w2-ci | rejected | ci worker changed no CI file: no tiers, no typecheck, TESTING.md stale, no per-agent or router pin | [2026-11-18_w2-ci.md](2026-11-18_w2-ci.md) |
+| 2026-11-18 | tdf12a538 | verified | mod reorg S0-S11 + register split: layout only, no test lost (stale paths in 11-18 audit doc noted) | [2026-11-18_tdf12a538.md](2026-11-18_tdf12a538.md) |
+| 2026-11-18 | t83cd4026 | rejected | 6b9d922 claims panel-layout split but the 7 modules and panel-acyclic test are not in the commit or tree | [2026-11-18_t83cd4026.md](2026-11-18_t83cd4026.md) |
+| 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
 | 2026-11-18 | audit-C7 | rejected | eager import true but 7-14 ms not 40; event_dispatch 38-44 ms | [2026-11-18_audit-c7.md](2026-11-18_audit-c7.md) |

@@ -3,12 +3,12 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import type { FsLike } from '../contract';
 import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs } from '../test_helpers';
-import { SnapshotBuilder } from '../snapshot';
+import { SnapshotBuilder } from './snapshot';
 import { liveWorkers } from './live';
 import { crewSig, readCrew } from './crew';
-import { channelRows } from '../pane/sidebar-channel';
-import { teamRows } from '../pane/sidebar-team';
-import type { SidebarHandlers, SidebarModel } from '../pane/sidebar-types';
+import { channelRows } from '../view/panel/pane/sidebar-channel';
+import { teamRows } from '../view/panel/pane/sidebar-team';
+import type { SidebarHandlers, SidebarModel } from '../view/panel/pane/sidebar-types';
 
 const ROOT = '/r';
 const PLUGIN = '/plugin';

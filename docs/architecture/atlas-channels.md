@@ -79,6 +79,7 @@ Delivery is `worker_inbox.drain`, called from the PostToolUse path of the dispat
 - Fail open: a hook error is recorded in the hook fault log and the tool call proceeds.
 - Bounded registry lock: `open_lead_channel` and `atlas_todo.register_member` wait at most `CHANNEL_LOCK_TIMEOUT_S` (2 s) for the registry lock (`atlas_memory._file_lock(path, timeout)` raises `LockTimeout`; the default stays blocking). A timeout is recorded as `atlas_todo.register_worker.lock_timeout` (launch/mux registration) or `dispatch_tripwire.channel_lock_timeout` (Claude Code dispatch), never printed to stderr, and the note or dispatch proceeds.
 - A Claude Code dispatch opens a channel only when it was allowed: `dispatch_tripwire._is_deny(out)` parses the emitted hook JSON (`hookSpecificOutput.permissionDecision`) rather than matching text.
+- **Worker hand-back.** A worker that posts its own final report uses `atlas_todo.py report --owner <name> [--file F]` (body from stdin by default; the `claude-bg` brief uses `note ... --kind report`). The body needs a `STATUS: DONE|FAILED|BLOCKED` line or the call fails with `report_missing_status`; `report` adds the closing `exit` line when absent. A report over `ATLAS_NOTE_MAX_BYTES` (8192) keeps its start and the `exit` line, names the full copy in a `[truncated ...; full report: <path>]` marker, and saves it 0600 under `.atlas/.run/board/reports/`. `atlas_mux.py wait` prints per-member progress to stderr every 60 s (`--progress 0` is off) and returns when all members have reported.
 - **Worker posting.** A mux or launch worker is registered by the lead side before it starts (`atlas_launch.launch`, `atlas_mux spawn`, which take the lead name from the channel registry entry). A headless mux worker posts exactly one `kind=report` note for its run: the `STATUS`..end block of its report, else its last 20 non-noise lines, then `exit N` (`[failed: <reason>]` on failure). Its full stdout and stderr go to `<project>/.atlas/.run/logs/<worker>.log` (and the pane), not to the board. It then calls `mark_finished` and leaves the channel. `atlas_mux kill` waits up to 2 s for the worker's own exit note, else posts the same-shaped report itself (`exit 137`) and marks it finished. Selffix workers (`fix-N`) run on their own `<main>/selffix` channel (`atlas_selffix.py`), never the lead's.
 
 ## Dashboard
@@ -131,7 +132,7 @@ Commands (`plugins/atlas/scripts/atlas_mux.py`):
 
 ```
 atlas_mux.py spawn-team --class C --effort E [--paths a,b] (--task "..." | --task-file F) [--team-id T] [--harness claude|omp] [--dry-run] [--poll S] [--json]
-atlas_mux.py wait --team T [--timeout 600] [--poll 1] [--json]
+atlas_mux.py wait --team T [--timeout 600] [--poll 1] [--progress 60] [--kill-on-timeout] [--json]
 atlas_mux.py reap --team T [--json]
 ```
 
@@ -156,7 +157,7 @@ atlas_mux.py reap --team T [--json]
 ## omp parity notes (12.1.0)
 
 - Bridged hooks: `delegation_prewarn.py` and `edit_read_nudge.py` are in `contracts/hook-bridge.json`.
-- Header fallback: with `ATLAS_STYLE=off` or a failed style render, `omp/style.ts` injects a minimal `ATLAS | <glyph> <phase> | <state>` rule, because `session_boot.py` skips its own header rule under `ATLAS_HARNESS=omp`.
+- Header fallback: with `ATLAS_STYLE=off` or a failed style render, `omp/style.ts` injects a minimal `**ATLAS** | <glyph> <phase> | <state>` rule (the plain `ATLAS |` form still passes the gate), because `session_boot.py` skips its own header rule under `ATLAS_HARNESS=omp`.
 - Stale install: `omp/channels.ts` checks that `scripts/atlas_todo.py` exists next to the plugin; if not it records one fault ("atlas omp install is stale ... reinstall atlas in omp") per cwd instead of one per dispatch.
 - Widget header: the `atlas-channel` widget (`omp/channel-view.ts`) leads with `ATLAS <phase> n/m <bar> . N live . M gates` and one row per live worker (4 shown, then `+N more`). Since 12.2.0 the widget renders the Mission Control panel (`omp/mission-panel.ts`): framed, phase rail, up to 4 worker lanes with 10-cell elapsed bars, channel ticker, and real gate status from `scripts/atlas_gates.py` (async, cached 10 s, armed projects only) instead of the old todo-based proxy. omp lanes do not yet show role or tool (see ROADMAP).
 

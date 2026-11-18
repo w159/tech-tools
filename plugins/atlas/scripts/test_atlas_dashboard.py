@@ -46,7 +46,10 @@ class TestAtlasDashboard(unittest.TestCase):
         self.addCleanup(srv.shutdown)
         base = f"http://127.0.0.1:{srv.server_address[1]}"
         for path in ("/", "/ui/js/app.js", "/ui/js/pages/terminal.js"):
-            with urllib.request.urlopen(base + path, timeout=10) as resp:
+            req = urllib.request.Request(
+                base + path, headers={"X-Atlas-Token": self.mod.DASH_TOKEN}
+            )
+            with urllib.request.urlopen(req, timeout=10) as resp:
                 self.assertEqual(resp.headers["Cache-Control"], "no-store", path)
 
     def test_editable_projects_not_hidden_by_recency(self):
@@ -1005,17 +1008,79 @@ class SecurityGuardTest(unittest.TestCase):
             **extra,
         }
 
+    def _cookie(self):
+        return {"Cookie": f"atlas_dash={self.mod.DASH_TOKEN}"}
+
+    def _req_full(self, method, path, headers=None):
+        import http.client
+
+        conn = http.client.HTTPConnection(self.mod.LOOPBACK, self.port, timeout=10)
+        hdrs = {"Host": "%s:%d" % (self.mod.LOOPBACK, self.port)}
+        hdrs.update(headers or {})
+        conn.request(method, path, headers=hdrs)
+        resp = conn.getresponse()
+        raw = resp.read()
+        out = (resp.status, resp.getheaders(), raw)
+        conn.close()
+        return out
+
     def test_index_injects_token(self):
-        status, raw = self._req("GET", "/")
+        status, raw = self._req("GET", "/", headers=self._cookie())
         self.assertEqual(status, 200)
         self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
         self.assertNotIn(b"__ATLAS_TOKEN__", raw)
 
     def test_index_without_placeholder_still_gets_token(self):
         (Path(self.static.name) / "index.html").write_text("<html><head></head></html>")
-        status, raw = self._req("GET", "/")
+        status, raw = self._req("GET", "/", headers=self._cookie())
         self.assertEqual(status, 200)
         self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
+
+    def test_anonymous_loopback_get_gets_no_token_and_cannot_open_pty(self):
+        # X2: another local user can reach 127.0.0.1 with a valid Host; the index used to hand
+        # them the token, and the token mints a pty shell ticket.
+        status, raw = self._req("GET", "/")
+        self.assertEqual(status, 401)
+        self.assertNotIn(self.mod.DASH_TOKEN.encode(), raw)
+        self.assertNotIn(b"atlas-token", raw)
+        body = {"kind": "shell", "cwd": "/"}
+        self.assertEqual(
+            self._req("POST", "/api/v2/term/ticket", body, {"Content-Type": "application/json"})[0],
+            401,
+        )
+        # a wrong cookie or a wrong launch secret is no better than none
+        self.assertEqual(self._req("GET", "/", headers={"Cookie": "atlas_dash=nope"})[0], 401)
+        self.assertEqual(self._req("GET", "/?launch=nope")[0], 401)
+        _, _, head_body = self._req_full("HEAD", "/")
+        self.assertEqual(head_body, b"")
+
+    def test_launch_url_is_exchanged_for_httponly_strict_cookie(self):
+        status, headers, _ = self._req_full("GET", "/?launch=" + self.mod.DASH_TOKEN)
+        self.assertEqual(status, 302)
+        h = {k.lower(): v for k, v in headers}
+        self.assertEqual(h["location"], "/")  # the secret does not stay in the address bar
+        cookie = h["set-cookie"]
+        self.assertIn("atlas_dash=" + self.mod.DASH_TOKEN, cookie)
+        self.assertIn("HttpOnly", cookie)
+        self.assertIn("SameSite=Strict", cookie)
+        status, _, raw = self._req_full("GET", "/", {"Cookie": cookie.split(";")[0]})
+        self.assertEqual(status, 200)
+        self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
+
+    def test_index_accepts_header_token_for_programmatic_clients(self):
+        status, raw = self._req("GET", "/", headers={"X-Atlas-Token": self.mod.DASH_TOKEN})
+        self.assertEqual(status, 200)
+        self.assertIn(self.mod.DASH_TOKEN.encode(), raw)
+
+    def test_token_file_is_owner_only_and_removed_with_the_pidfile(self):
+        home = Path(self.static.name) / "home"
+        with mock.patch.object(self.mod, "STATE_DIR", home):
+            path = self.mod._write_token_file(7999)
+            self.assertEqual(path.read_text(), self.mod.DASH_TOKEN)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(self.mod._read_token_file(7999), self.mod.DASH_TOKEN)
+            self.mod._clear_pidfile(port=7999)
+            self.assertFalse(path.exists())
 
     def test_static_asset_and_traversal(self):
         self.assertEqual(self._req("GET", "/ui/css/a.css"), (200, b"body{}"))
@@ -1447,6 +1512,85 @@ class SettingsDataTest(unittest.TestCase):
             "ATLAS_WORKER_MAX_TOKENS_DEFAULT", keys
         )  # a TS constant, not env
         self.assertIn("roles", state["omp"])
+
+
+class OwnerUrlAndTokenFileTest(unittest.TestCase):
+    """X2 follow-ups: every command that hands out a URL hands one that opens; no unreadable token."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.mod = _load()
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name)
+        p = mock.patch.object(self.mod, "STATE_DIR", self.home)
+        p.start()
+        self.addCleanup(p.stop)
+
+    def test_url_command_prints_the_launch_url_not_the_bare_one(self):
+        import contextlib
+        import io
+
+        (self.home / f"dashboard-{self.mod.DEFAULT_PORT}.token").write_text("tok-abc")
+        out = io.StringIO()
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            contextlib.redirect_stdout(out),
+        ):
+            rc = self.mod.main(["url"])
+        self.assertEqual(rc, 0)
+        self.assertEqual(
+            out.getvalue().strip(), self.mod.dashboard_url() + "?launch=tok-abc"
+        )
+
+    def test_url_command_without_token_file_fails_instead_of_printing_a_dead_url(self):
+        import contextlib
+        import io
+
+        out = io.StringIO()
+        with (
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            contextlib.redirect_stdout(out),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            rc = self.mod.main(["url"])
+        self.assertEqual(rc, 1)
+        self.assertEqual(out.getvalue(), "")
+
+    def test_ensure_reports_the_launch_url(self):
+        ver = json.loads(
+            (Path(self.mod.__file__).resolve().parent.parent / ".claude-plugin" / "plugin.json").read_text()
+        )["version"]
+        (self.home / "dashboard-17499.token").write_text("tok-xyz")
+        with (
+            mock.patch.object(self.mod, "_guard_shared_port", return_value=None),
+            mock.patch.object(self.mod, "_port_open", return_value=True),
+            mock.patch.object(self.mod, "_patient_health", return_value={"pid": 1, "version": ver}),
+            mock.patch.object(self.mod, "_daemon_db_ok", return_value=True),
+        ):
+            res = self.mod.ensure_daemon(17499)
+        self.assertTrue(res["ok"])
+        self.assertEqual(res["url"], self.mod.dashboard_url(17499) + "?launch=tok-xyz")
+
+    def test_serve_fails_closed_when_the_token_file_cannot_be_written(self):
+        httpd = mock.MagicMock()
+        with (
+            mock.patch.dict(os.environ, {}),
+            mock.patch.object(self.mod, "_guard_shared_port", return_value=None),
+            mock.patch.object(self.mod, "dashboard_db_path", return_value=str(self.home / "a.db")),
+            mock.patch.object(self.mod, "_Server", return_value=httpd),
+            mock.patch.object(self.mod, "_write_pidfile") as pidfile,
+            mock.patch.object(self.mod, "_write_token_file", side_effect=PermissionError("ro")),
+            mock.patch.object(self.mod.sys, "stderr", new=__import__("io").StringIO()),
+        ):
+            with self.assertRaises(SystemExit) as cm:
+                self.mod.serve(self.mod.LOOPBACK, 17498)
+        self.assertEqual(cm.exception.code, 1)
+        httpd.serve_forever.assert_not_called()
+        httpd.server_close.assert_called_once()
+        pidfile.assert_not_called()  # no record of a daemon nobody can open
 
 
 if __name__ == "__main__":

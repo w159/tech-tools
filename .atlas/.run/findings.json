@@ -13240,5 +13240,401 @@
     "verified_at": "2026-11-18T04:18:53+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "w2-dash-x2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dash X2 follow-ups (url, ensure, token readers, fail-closed serve, pty not-a-bug) fixed",
+    "evidence": [
+      "atlas_dashboard.py:1741,3423,3478; test_atlas_dashboard.py OwnerUrlAndTokenFileTest"
+    ],
+    "doc_refs": [],
+    "reproduction": "pytest plugins/atlas/scripts/test_atlas_dashboard.py -k OwnerUrlAndTokenFile; test_atlas_dash_term.py -k Anonymous; test_probe_dashboard.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T05:44:26+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "w2-herdr-x3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "herdr resolveToken, owner login, anonymous loopback refused, atlas_remote probe fixed",
+    "evidence": [
+      "server/access.ts:120; index.ts:380,1030; access.test.ts; test_atlas_remote.py WebTokenTest"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test --cwd plugins/atlas/colony/herdr-web-ui server/access.test.ts server/atlas-gateway.test.ts; pytest test_atlas_remote.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T05:44:27+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "w2-herdr-iframe",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Command Center iframe shows token prompt; unfixed and unexercised in a browser",
+    "evidence": [
+      "scripts/dashboard_ui/js/fleet.js:346"
+    ],
+    "doc_refs": [],
+    "reproduction": "read fleet.js:335-350; no browser available",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T05:44:28+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "w2-mod-h1-h4-m8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod H1, H4 TS side, discipline parser, restored assertions, M8 revert, 256 index fixed",
+    "evidence": [
+      "mod/contract-pattern.ts; theme.ts:177; git diff HEAD~1 band.tsx/layout28/placed empty for M8"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod (4265 pass 0 fail)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T05:44:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "w2-mod-m6-m7",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "M6 only 2 of 4 sites pinned; M7 panel thinking-count change claimed but PanelWorker.state has no thinking",
+    "evidence": [
+      "mod/panel-layout.ts:94; mod/data/datastate.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test mod/data/datastate.test.ts mod/data/tally.test.ts",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T05:44:31+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "w2-ci",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "ci worker changed no CI file: no tiers, no typecheck, TESTING.md stale, no per-agent or router pin",
+    "evidence": [
+      ".github/workflows/tests.yml unchanged; plugins/atlas/mod/TESTING.md:21-24 says 596 pass vs bun test mod 4265 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff HEAD --stat -- .github plugins/atlas/mod/TESTING.md; bun test mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T05:44:32+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-4102"
+  },
+  {
+    "id": "wave2-hooks-dash-secret",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dash: ensure launch URL (token) is injected into SessionStart additionalContext",
+    "evidence": [
+      "plugins/atlas/hooks/session_boot_core.py:95-99,1672-1674,1697; plugins/atlas/scripts/atlas_dashboard.py:1741,1429"
+    ],
+    "doc_refs": [],
+    "reproduction": "read session_boot_core.py ensure_dashboard; grep launch=/token in test_session_boot_core.py (no match)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T05:45:17+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-5b3e"
+  },
+  {
+    "id": "w2bc-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "bare dashboard URL at session start, token pinned absent",
+    "evidence": [
+      "plugins/atlas/hooks/session_boot_core.py:25-31,112-117; hooks/test_session_boot_core.py DashboardLaunchTokenTest"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_session_boot_core (44 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion gate header assertions exact again",
+    "evidence": [
+      "plugins/atlas/hooks/test_completion_gate.py:4746,5055"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_completion_gate.ContractVisibilityTest (82 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "fence: site counts and real snapshot pinned; gate block reasons only argued unquoted, driven with todo text only",
+    "evidence": [
+      "plugins/atlas/hooks/test_untrusted_fence.py EmitSiteCountTest, CompletionGateQuotesNoOutsideTextTest"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_untrusted_fence (10 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "tripwire counters, table test, shared loadable check, real agent pins",
+    "evidence": [
+      "plugins/atlas/hooks/dispatch_tripwire_core.py:2078-2083,931-970; test_dispatch_tripwire.py DispatchDenyCounterTest"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_dispatch_tripwire.DispatchDenyCounterTest ...ToolReachabilityTest ...NativeToolPolicyTest ...ParallelReadOnlyExemptionTest (39 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CI tiers partition, workflow parses, PRs run all atlas suites; tiers themselves not run",
+    "evidence": [
+      ".github/workflows/tests.yml; plugins/atlas/ci-slow-tests.txt; scripts/test_ci_tiers.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_ci_tiers (9 OK); yaml.safe_load of committed tests.yml",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod/TESTING.md not touched by 5915e79; still 596 pass/9 skip/49 files",
+    "evidence": [
+      "git show 5915e79:plugins/atlas/mod/TESTING.md lines 21-24"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff --stat 5915e79~1 5915e79 -- plugins/atlas/mod/TESTING.md (empty)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-7",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "no exact router-score pin and no per-agent tool-list table test added; model table and write/edit deny tests pre-exist",
+    "evidence": [
+      "plugins/atlas/hooks/test_prompt_optimizer.py:974-983 (floor 0.85); hooks/test_atlas_contract.py:1032 TierTableContract"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_contract.TierTableContract (7 OK); test_prompt_optimizer (159 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "typecheck: documented reason only, no count, tsc not run",
+    "evidence": [
+      ".github/workflows/tests.yml atlas-bun comment"
+    ],
+    "doc_refs": [],
+    "reproduction": "git check-ignore -v plugins/atlas/.claude-plugin/types/tsconfig.json",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-9",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worker brief under 800 bytes with report command and STATUS rule",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py:2257-2268"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_colony_notes (8 OK); test_atlas_mux_more (58 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-10",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "dashboard url and control test failures were stale tests (X2 401); product unchanged",
+    "evidence": [
+      "plugins/atlas/scripts/test_atlas_control.py:662-690; test_atlas_dashboard_more.py:656-677"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_dashboard_more (56 OK); test_atlas_control (63 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-11",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "bench measures implementer #2 advisory, assertion intact; explorer #2 assertion vacuous; AGENTS.md block current",
+    "evidence": [
+      "plugins/atlas/scripts/test_bench_hooks.py:237-239"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_bench_hooks test_atlas_codex_contract (45 OK)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "w2bc-12",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "M6 frames distinguish err/dash/stale-age and are pinned, but no production caller sets read",
+    "evidence": [
+      "git show 5915e79:plugins/atlas/mod/status-frame.ts:148-157; tabs-frame.ts:48; mod/data/datastate.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "git grep over 5915e79 mod for ReadInfo/read: callers (none)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T06:46:43+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "tdf12a538",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod reorg S0-S11 + register split: layout only, no test lost (stale paths in 11-18 audit doc noted)",
+    "evidence": [
+      "bun test mod 4311 pass-or-skip at 5915e79 vs 4329 at d03ac81, 0 fail; omp 839 pass; pytest 485 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": "git worktree add --detach <dir> HEAD; cd plugins/atlas; bun test mod; bun test omp; pytest subset",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T08:03:09+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "t83cd4026",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "6b9d922 claims panel-layout split but the 7 modules and panel-acyclic test are not in the commit or tree",
+    "evidence": [
+      "git show 6b9d922 --stat (7 files, none under mod/view/panel except none); panel-layout.ts still 1656 lines; ls plugins/atlas/mod/view/panel has no panel-shared.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "git show 6b9d922 --stat; wc -l plugins/atlas/mod/view/panel/panel-layout.ts; bun test mod (4298 pass/31 skip) ; bun test omp (839/4)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T08:23:19+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "panel-split-reverify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0",
+    "evidence": [
+      "/tmp/claude-0/-home-user-tech-tools/bbfaed12-29e6-53ab-90ed-6bdf3a88b336/scratchpad/decl.js; HEAD eade1e5 plugins/atlas/mod/view/panel/*"
+    ],
+    "doc_refs": [],
+    "reproduction": "node decl.js old.ts; bun test mod; bun test omp; atlas_mod_gate.py --live --require-live; tsc TS2307 relative filter",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T08:33:56+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

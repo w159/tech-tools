@@ -98,6 +98,20 @@ const PATH_KEY = platform() === "win32" ? Object.keys(env).sort().find(key => ke
 const APP_STATE_DIR = env["HERDR_WEB_STATE_DIR"] || join(env["XDG_CONFIG_HOME"] || join(homedir(), ".config"), "herdr-web-ui");
 /** the port a start took because the default could not be opened; absent while the default serves */
 const PORT_FILE = join(APP_STATE_DIR, "plugin-port");
+
+/** The configured token, else the owner-only per-install one the server writes (server/index.ts ensureLocalToken): loopback is not trusted without one. */
+function apiToken(): string {
+  const configured = env["HERDR_WEB_TOKEN"] ?? "";
+  if (configured !== "") return configured;
+  try {
+    return readFileSync(join(APP_STATE_DIR, "local-token"), "utf8").trim();
+  } catch (error) {
+    // say why there is no token: the pairing and access calls that follow will be refused, and an empty string alone hides the cause
+    const reason = (error as NodeJS.ErrnoException).code === "ENOENT" ? "not written yet (the server creates it on first start)" : (error as Error).message;
+    process.stderr.write(`no API token: could not read ${join(APP_STATE_DIR, "local-token")}: ${reason}\n`);
+    return "";
+  }
+}
 /** a PORT the user set is theirs: it is never swapped for another */
 const portSet = (env["PORT"] ?? "") !== "";
 let port = portSet ? Number(env["PORT"]) : savedPort(PORT_FILE) ?? DEFAULT_PORT;
@@ -264,7 +278,7 @@ async function start(): Promise<number> {
     if (await health()) {
       process.stdout.write(`herdr web ui listening at ${origin}\n`);
       if ((env["HERDR_WEB_TOKEN"] ?? "") === "") {
-        process.stdout.write(`no token set: your own Tailscale devices get in as you; pair any other device in Settings → Devices, or put HERDR_WEB_TOKEN=<token> in ${join(CONFIG_DIR, "env")}\n`);
+        process.stdout.write(`no token set: this PC's own clients use the owner-only token file in the app state dir (local-token); your own Tailscale devices get in as you; pair any other device in Settings → Devices, or put HERDR_WEB_TOKEN=<token> in ${join(CONFIG_DIR, "env")}\n`);
       }
       return 0;
     }
@@ -402,7 +416,8 @@ async function pair(): Promise<number> {
     return 1;
   }
   const headers: Record<string, string> = { "content-type": "application/json", "x-herdr-machine": "1" };
-  if ((env["HERDR_WEB_TOKEN"] ?? "") !== "") headers["authorization"] = `Bearer ${env["HERDR_WEB_TOKEN"]}`;
+  const bearer = apiToken();
+  if (bearer !== "") headers["authorization"] = `Bearer ${bearer}`;
   const started = await fetch(`${origin}/api/devices/pair/start`, { method: "POST", headers, body: "{}" });
   if (!started.ok) {
     process.stderr.write(`could not start a pairing (${started.status}): ${await started.text()}\n`);
@@ -505,7 +520,8 @@ async function phoneSetup(): Promise<number> {
     code = 1;
   } else {
     const headers: Record<string, string> = {};
-    if (env["HERDR_WEB_TOKEN"]) headers["authorization"] = `Bearer ${env["HERDR_WEB_TOKEN"]}`;
+    const bearer = apiToken();
+    if (bearer !== "") headers["authorization"] = `Bearer ${bearer}`;
     try {
       const response = await fetch(`${origin}/api/access`, { headers, signal: AbortSignal.timeout(5000) });
       if (!response.ok) throw new Error(`access request failed (${response.status})`);

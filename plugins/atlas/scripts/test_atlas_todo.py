@@ -1352,12 +1352,13 @@ class NoteLimits(unittest.TestCase):
         self.assertEqual(atlas_todo.notes(self.root), [])
         atlas_todo.note(self.root, "a", "y" * 8192)  # exactly at the cap is fine
 
-    def test_cap_counts_bytes_and_report_notes_keep_their_tail(self):
+    def test_cap_counts_bytes_and_report_notes_keep_their_start_and_exit_line(self):
         with self.assertRaises(atlas_todo.NoteTooLarge):
             atlas_todo.note(self.root, "a", "\u00e9" * 5000)  # 5000 chars, 10000 bytes
         rec = atlas_todo.note(self.root, "w", "log\n" * 5000 + "exit 0", kind="report")
         self.assertLessEqual(len(rec["text"].encode()), 8192)
-        self.assertTrue(rec["text"].startswith("[truncated"))
+        self.assertTrue(rec["text"].startswith("log"))
+        self.assertIn("[truncated", rec["text"])
         self.assertTrue(rec["text"].endswith("exit 0"))
 
     def test_cap_is_env_overridable(self):

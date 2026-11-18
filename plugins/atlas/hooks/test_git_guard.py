@@ -666,5 +666,53 @@ class HookProcessTests(GuardBase):
             )
 
 
+class EvasionFormTests(GuardBase):
+    """X1: the four indirection forms from the audit must be judged like the plain command.
+
+    Static matching cannot see runtime-built commands (`$(cmd)` output, `eval "$x"`, files written
+    then run, other interpreters); those stay in the git_guard module docstring as the residual limit.
+    """
+
+    FORMS = {
+        "var": "g=git; $g SUB",
+        "var_braced": "g=/usr/bin/git\n${g} SUB",
+        "pipe_sh": "echo git SUB | sh",
+        "pipe_bash_printf": "printf 'git SUB' | bash",
+        "find_exec": "find . -name a.txt -exec git SUB \\;",
+        "find_execdir": "find . -maxdepth 1 -execdir git SUB +",
+        "python_system": "python3 -c \"import os; os.system('git SUB')\"",
+    }
+
+    def _check(self, sub_line):
+        repo = make_repo()
+        plain = self.kind(bash("git " + sub_line, repo))
+        self.assertIn(plain, ("deny", "ask"))
+        for name, tmpl in self.FORMS.items():
+            with self.subTest(form=name):
+                cmd = tmpl.replace("SUB", sub_line)
+                self.assertEqual(self.kind(bash(cmd, repo)), plain, cmd)
+
+    def test_commit_evasions_on_protected_branch(self):
+        self._check("commit -m x")
+
+    def test_push_evasions_on_protected_branch(self):
+        self._check("push origin main")
+
+    def test_harmless_lookalikes_stay_silent(self):
+        repo = make_repo()
+        for cmd in (
+            "echo git commit -m x",
+            "echo git commit -m x | cat",
+            "g=git; $g status",
+            "g=ls; $g commit",
+            "find . -name a.txt -exec ls {} \\;",
+            "python3 -c \"print('git commit')\"",
+            "python3 -c \"import os; os.system('ls')\"",
+            "printf 'git commit' > note.txt",
+        ):
+            with self.subTest(cmd=cmd):
+                self.assertIsNone(self.kind(bash(cmd, repo)), cmd)
+
+
 if __name__ == "__main__":
     unittest.main()

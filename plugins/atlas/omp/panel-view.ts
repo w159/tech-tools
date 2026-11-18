@@ -2,12 +2,12 @@
  * omp painter for the ATLAS side panel, worker card and toast (design system rev 4). UNMOUNTED: nothing in omp imports
  * `paintPanel`, `paintCard` or `paintToast` (omp/index.ts, channel-view.ts and todo-fallback.ts draw through their own
  * painters), and omp has no host surface for them: it has no docked pane for a tabbed panel, draws no transcript cards, and its
- * only toast-like surface (`ctx.ui.notify`) takes plain text, which is what `toastText` in mod/panel-layout.ts gives. They are
- * kept as the omp half of the shared layout (mod/panel-layout.ts) so a future mount paints the same rows; until then
+ * only toast-like surface (`ctx.ui.notify`) takes plain text, which is what `toastText` in mod/view/panel/panel-layout.ts gives. They are
+ * kept as the omp half of the shared layout (mod/view/panel/panel-layout.ts) so a future mount paints the same rows; until then
  * omp/panel-view.test.ts is a painter parity test, NOT evidence that any omp surface shows a side panel, card or toast.
  */
-import { cells, paintAnsi, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
-import { cardLines, panelLines, toastRuns, type CardModel, type PanelModel } from "../mod/panel-layout";
+import { cells, paintAnsi, uiFromEnv, type Run, type Ui } from "../mod/design/atlas-ui";
+import { cardLines, panelLines, toastRuns, type CardModel, type PanelModel } from "../mod/view/panel/panel-layout";
 
 
 /** One run in ANSI: bold/strike, the tone foreground on the run's fill or the panel; NO_COLOR keeps bold and strike only. */

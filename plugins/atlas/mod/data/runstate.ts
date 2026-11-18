@@ -2,10 +2,10 @@
 //   gates  = every gate group that holds data (lines or an error), the header contract included.
 //   checks = those same groups, one entry each (a group is ok when no line fails and it has no error).
 // So `3/4 green` on the gates tab and `checks ... 3 ok` on the band are the same figure.
-import { groupOpenCount } from '../gates';
-import { textWidth } from '../theme';
-import type { GateGroup } from '../pane/sidebar-types';
-import { elapsedClock, type UiState } from '../atlas-ui';
+import { groupOpenCount } from '../host/gates';
+import { textWidth } from '../design/theme';
+import type { GateGroup } from '../view/panel/pane/sidebar-types';
+import { elapsedClock, type UiState } from '../design/atlas-ui';
 import { todoState } from './todos';
 import { plannedText, type Route } from './core';
 

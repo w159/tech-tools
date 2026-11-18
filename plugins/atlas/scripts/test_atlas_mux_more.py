@@ -533,3 +533,68 @@ class KillNotesSinceTests(TmpCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+
+class WorkerHandbackAndWait(unittest.TestCase):
+    """Audit T1 (worker may run the report command), T3 (wait progress), T4 (no epoch duration)."""
+
+    def test_t1_the_sanctioned_report_command_matches_a_read_worker_allow_rule(self):
+        import fnmatch
+
+        todo = mux._todo_script()
+        cmd = f"python3 {todo} report --root /r --channel c --owner me --to lead --file -"
+        rules = [r[5:-1] for r in mux.worker_allow("read") if r.startswith("Bash(")]
+        self.assertTrue(any(fnmatch.fnmatchcase(cmd, r) for r in rules), rules)
+        rec = mux.build_team("audit", "medium", None, "t", "tr1")
+        brief = mux.team_brief(rec, rec["members"][0], "/r", "c", "lead")
+        self.assertIn(f"python3 {todo} report --root /r --channel c --owner {rec['members'][0]['name']} --to lead --file -", brief)
+        self.assertIn("STATUS: DONE|FAILED|BLOCKED", brief)
+
+    def _wait(self, rec, notes, *extra, exited=True):
+        buf, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(mux, "_load_team", return_value=rec), \
+                mock.patch.object(mux, "_team_panes", return_value=[]), \
+                mock.patch.object(mux, "_exited", side_effect=exited if callable(exited) else (lambda *a: exited)), \
+                mock.patch.object(mux.atlas_todo, "notes", return_value=notes), \
+                contextlib.redirect_stdout(buf), contextlib.redirect_stderr(err):
+            code = mux.main(["wait", "--json", "--team", "kw", "--root", tempfile.mkdtemp(), "--poll", "0.01", *extra])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1]), err.getvalue()
+
+    def test_t4_a_missing_or_zero_start_time_yields_no_duration(self):
+        import time
+
+        notes = [{"owner": "a", "ts": time.time(), "text": "STATUS: DONE\nexit 0"}]
+        for created in (0, 0.0, None, "x"):
+            rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux", "created": created}
+            _, out, _ = self._wait(rec, notes, "--timeout", "1")
+            self.assertIsNone(out["members"][0]["duration_s"], created)
+            self.assertIsNone(out["elapsed_s"], created)
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux"}
+        _, out, _ = self._wait(rec, notes, "--timeout", "1")  # no key at all: used to be a KeyError
+        self.assertIsNone(out["members"][0]["duration_s"])
+
+    def test_t4_a_real_start_time_still_yields_a_duration(self):
+        import time
+
+        now = time.time()
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux", "created": now - 5}
+        _, out, _ = self._wait(rec, [{"owner": "a", "ts": now, "text": "STATUS: DONE\nexit 0"}], "--timeout", "1")
+        self.assertAlmostEqual(out["members"][0]["duration_s"], 5.0, delta=0.2)
+
+    def test_t3_wait_prints_member_state_on_an_interval_and_returns_when_all_reported(self):
+        import time
+
+        start = time.time()
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}],
+               "transport": "tmux", "created": start}
+        notes = [{"owner": n, "ts": start + 1, "text": "STATUS: DONE\nexit 0"} for n in ("a", "b")]
+
+        def exited(root, name, since=None):
+            return name == "a" or time.time() - start > 0.4
+
+        t0 = time.time()
+        code, out, err = self._wait(rec, notes, "--timeout", "30", "--progress", "0.05", exited=exited)
+        self.assertLess(time.time() - t0, 5)
+        self.assertEqual(code, 0)
+        self.assertRegex(err, r"1/2 reported: a reported, b running")

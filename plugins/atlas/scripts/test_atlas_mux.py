@@ -2302,7 +2302,7 @@ class ClaudeBgTests(Base):
         allow = self._bg_allow()
         for rule in base + ["mcp__lean-ctx__*"]:
             self.assertIn(rule, allow)
-        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base + [note_rule, notes_rule]], allow)
+        self.assertFalse([r for r in allow if r.startswith("Bash(") and r not in base + [note_rule, notes_rule, f"Bash(python3 {atlas_mux._todo_script()} report *)"]], allow)
         self.assertNotIn("Read", allow)
         # the navigation list names only installed servers: no symbol-tool rules for an uninstalled MCP server
         self.assertFalse([r for r in allow if "symbol" in r.lower()], allow)
@@ -4023,7 +4023,7 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
 
         # the only Bash rule a read worker gets is the board-note command (D2)
         todo = atlas_mux._todo_script()
-        self.assertEqual([f"Bash(python3 {todo} note *)", f"Bash(python3 {todo} notes --to *)"], [t for t in allow if t.startswith("Bash")], allow)
+        self.assertEqual([f"Bash(python3 {todo} note *)", f"Bash(python3 {todo} notes --to *)", f"Bash(python3 {todo} report *)"], [t for t in allow if t.startswith("Bash")], allow)
         for tool in ("Edit", "Write", "MultiEdit"):
             self.assertNotIn(tool, allow)
 
@@ -4072,7 +4072,7 @@ class WorkerToolsProfileAllowTests(unittest.TestCase):
         import atlas_mux
 
         self.assertEqual(
-            [*atlas_mux.WORKER_MCP_ALLOW, f"Bash(python3 {atlas_mux._todo_script()} note *)", f"Bash(python3 {atlas_mux._todo_script()} notes --to *)"],
+            [*atlas_mux.WORKER_MCP_ALLOW, f"Bash(python3 {atlas_mux._todo_script()} note *)", f"Bash(python3 {atlas_mux._todo_script()} notes --to *)", f"Bash(python3 {atlas_mux._todo_script()} report *)"],
             self.allow(None),
         )
 
@@ -4444,8 +4444,8 @@ class BriefOutputTests(unittest.TestCase):
     def run_wait(self, *extra):
         import atlas_mux
 
-        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}], "created": 0.0, "transport": "tmux"}
-        notes = [{"owner": "a", "text": "STATUS: DONE\nexit 0", "ts": 12.5}]
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}], "created": 1.0, "transport": "tmux"}
+        notes = [{"owner": "a", "text": "STATUS: DONE\nexit 0", "ts": 13.5}]
         buf = io.StringIO()
         with mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
                 mock.patch.object(atlas_mux, "_team_panes", return_value=[]), \
@@ -4559,7 +4559,8 @@ class ReliabilityBaselineTests(unittest.TestCase):
             self.assertIn(rule, atlas_mux.worker_allow(profile), profile)
         read = atlas_mux.worker_allow("read")
         read_rule = f"Bash(python3 {atlas_mux._todo_script()} notes --to *)"
-        self.assertFalse([r for r in read if r.startswith("Bash(") and r not in (rule, read_rule)], read)
+        report_rule = f"Bash(python3 {atlas_mux._todo_script()} report *)"
+        self.assertFalse([r for r in read if r.startswith("Bash(") and r not in (rule, read_rule, report_rule)], read)
 
     def _wait(self, notes):
         import atlas_mux
@@ -4641,7 +4642,7 @@ class ReliabilityBaselineTests(unittest.TestCase):
         todo = str(atlas_mux._todo_script())
         cmds = [ln.split(": ", 1)[1] if ": " in ln else ln for ln in brief.splitlines() if f"python3 {todo} " in ln]
         cmds = [c[c.index("python3 "):].replace("<who>", "lead").replace("'<text>'", "'x'") for c in cmds]
-        self.assertEqual({"note", "notes"}, {c.split(todo + " ", 1)[1].split()[0] for c in cmds}, cmds)
+        self.assertEqual({"note", "notes", "report"}, {c.split(todo + " ", 1)[1].split()[0] for c in cmds}, cmds)
         for profile in (None, "read", "edit", "exec"):
             rules = [r[5:-1] for r in atlas_mux.worker_allow(profile) if r.startswith("Bash(python3 ")]
             for c in cmds:

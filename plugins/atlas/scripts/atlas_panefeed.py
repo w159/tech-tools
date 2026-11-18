@@ -418,7 +418,7 @@ def role_gradient(role: str) -> tuple:
     return next(((a, b) for key, a, b in _ROLE_GRADIENT if key in str(role).lower()), (GREEN, TEAL))
 
 
-# Role characters: the same table as mod/roles.ts (roles.test.ts keeps the two equal). Eyes carry the role, the
+# Role characters: the same table as mod/design/roles.ts (roles.test.ts keeps the two equal). Eyes carry the role, the
 # mouth carries the state, so the pane header shows `◔_◔ explorer-a324` and the feed's redraw animates it.
 ROLE_EYES = {
     "explorer": ("◔", "◔"), "implementer": ("•", "•"), "verifier": ("◉", "◉"), "runner": ("▸", "◂"),

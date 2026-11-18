@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "bun:test";
 import { todoItems } from "./channel-view";
-import { boardRowsOf } from "../mod/board-model";
+import { boardRowsOf } from "../mod/view/board/board-model";
 import { endedOf, settleDispatch } from "../mod/data/todos";
 
 const row = (over: Record<string, unknown>) => ({ id: "x", content: "t", status: "pending", owner: null, origin: "session", session_id: "s1", archived: false, claimed_at: null, completed_at: null, ...over });

@@ -662,9 +662,22 @@ class TestSettingsSurviveDaemonRestart(unittest.TestCase):
         )
         self.addCleanup(lambda: proc.poll() is None and proc.kill())
         base = f"http://127.0.0.1:{self.PORT}"
+        # Since X2 an anonymous GET / is 401 and never carries the token: the owner reads the
+        # 0600 token file the daemon writes, and readiness is "that token opens the index".
+        token_file = Path(env["ATLAS_HOME"]) / f"dashboard-{self.PORT}.token"
         for _ in range(100):
             try:
-                html = urllib.request.urlopen(base + "/", timeout=1).read().decode()
+                tok = token_file.read_text().strip()
+                html = (
+                    urllib.request.urlopen(
+                        urllib.request.Request(
+                            base + "/", headers={"X-Atlas-Token": tok}
+                        ),
+                        timeout=1,
+                    )
+                    .read()
+                    .decode()
+                )
                 return (
                     proc,
                     base,

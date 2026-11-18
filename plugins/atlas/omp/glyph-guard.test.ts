@@ -1,5 +1,5 @@
 // Guard (design system rev 4, R5): no source hardcodes a check mark, a bullet or an ellipsis; state marks come from the
-// glyph map in mod/atlas-ui.ts (an omp test: it reads the source tree, which the mod test host cannot) (stateGlyph / UI_STATES) so ASCII and NO_COLOR modes can swap them. The surfaces this
+// glyph map in mod/design/atlas-ui.ts (an omp test: it reads the source tree, which the mod test host cannot) (stateGlyph / UI_STATES) so ASCII and NO_COLOR modes can swap them. The surfaces this
 // redesign owns must be at zero. Every other file may only shrink its count: DEBT is the ratchet (lower it, never raise it).
 import { describe, expect, test } from 'bun:test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -22,16 +22,17 @@ const hits = (f: string): number => (code(readFileSync(f, 'utf8')).match(BAD) ??
 
 /** Files that own the rev 4 surfaces: zero hardcoded marks. */
 const OWNED = [
-  'mod/panel-layout.ts', 'mod/core-row.ts', 'mod/notify.ts',
-  'mod/pane/sidebar.tsx', 'mod/pane/sidebar-model.ts', 'mod/pane/sidebar-paint.tsx', 'mod/pane/sidebar-route.tsx', 'mod/pane/sidebar-team.tsx',
-  'mod/pane/sidebar-channel.tsx', 'mod/pane/sidebar-gates.tsx', 'mod/pane/sidebar-core.tsx', 'mod/pane/sidebar-types.ts',
-  'mod/transcript/cards.tsx', 'omp/panel-view.ts',
+  'mod/view/panel/panel-layout.ts', 'mod/view/panel/panel-shared.ts', 'mod/view/panel/panel-tabs.ts', 'mod/view/panel/panel-cards.ts', 'mod/view/panel/panel-rows-route.ts',
+  'mod/view/panel/panel-rows-team.ts', 'mod/view/panel/panel-rows-gates.ts', 'mod/view/panel/panel-body.ts', 'mod/view/band/core-row.ts', 'mod/host/notify.ts',
+  'mod/view/panel/pane/sidebar.tsx', 'mod/view/panel/pane/sidebar-model.ts', 'mod/view/panel/pane/sidebar-paint.tsx', 'mod/view/panel/pane/sidebar-route.tsx', 'mod/view/panel/pane/sidebar-team.tsx',
+  'mod/view/panel/pane/sidebar-channel.tsx', 'mod/view/panel/pane/sidebar-gates.tsx', 'mod/view/panel/pane/sidebar-core.tsx', 'mod/view/panel/pane/sidebar-types.ts',
+  'mod/view/transcript/cards.tsx', 'omp/panel-view.ts',
 ];
 
 /** Known debt in files this work does not own: the count of non-comment marks today. Tighten when a file is cleaned. */
 const DEBT: Record<string, number> = {
-  'mod/theme.ts': 2, // DONE_GLYPH and fitText's ellipsis: omp/done-glyph.test.ts pins DONE_GLYPH to the check mark
-  'mod/roles.ts': 2,
+  'mod/design/theme.ts': 2, // DONE_GLYPH and fitText's ellipsis: omp/done-glyph.test.ts pins DONE_GLYPH to the check mark
+  'mod/design/roles.ts': 2,
   'mod/data/channels.ts': 1,
   'mod/data/todos.ts': 1,
   'mod/data/orchestration.ts': 5,

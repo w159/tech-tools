@@ -209,7 +209,7 @@ class RowTests(unittest.TestCase):
         self.assertIn("◉‿◉ w-1", plain(feed._header(80)))
 
     def test_character_table_matches_mod_roles_ts(self):
-        src = (Path(__file__).parent.parent / "mod" / "roles.ts").read_text()
+        src = (Path(__file__).parent.parent / "mod" / "design" / "roles.ts").read_text()
         block = src.split("export const ROLE_EYES")[1].split("};")[0]
         eyes = {
             k: (left, right)
