@@ -13928,5 +13928,95 @@
     "verified_at": "2026-11-18T15:15:52+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r5-ci-gcleak",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "unclosed-handle test isolated from earlier-test garbage",
+    "evidence": [
+      "repro fail->pass on 3.13; pytest test_atlas_decision_eval.py 27 passed; CI tests run 43829108941 success on c81b6f81"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:03:41+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-before",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round6 BEFORE numbers and ten defect repros recorded on untouched tree",
+    "evidence": [
+      "done_claim.py --eval: all rows blocking path TP=0 FP=0 FN=44; in-sample all-kinds TP=41 FP=0 FN=3; shipped blocking kinds (none); latency analyze p50=0.90 p95=3.62; D1-D5 repro by python snippet, D6-D10 by code read"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/hooks/done_claim.py --eval; --latency; inline python on done_claim._ci_verdict/_ls_remote_backs/crosscheck_kinds",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:07:16+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-8a5d"
+  },
+  {
+    "id": "r6-isolation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Isolation bench: lost 0 of 40 edits for worktree and auto",
+    "evidence": [
+      "TOTAL worktree 20 cases merged 34 conflicted 6 lost 0; auto same"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_isolation_bench.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:07:16+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-8a5d"
+  },
+  {
+    "id": "r6move-c1-c2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "done_claim fresh+gtrain sha1 match round5 freeze after move",
+    "evidence": [
+      "docs/audits/2026-11-16_atlas-round5-freeze.json:1"
+    ],
+    "doc_refs": [],
+    "reproduction": "sha1sum evals/done_claim/done_claim_fresh.jsonl evals/done_claim/done_claim_gtrain.jsonl",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:16:03+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6move-c3-c5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "renames R, hooks dir clean, audit files unmodified, new.jsonl not ignored",
+    "evidence": [
+      "git status --short; git diff HEAD --stat (empty); git check-ignore exit 1"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --short; git diff HEAD --stat -- docs/audits/*round5-fr* ; git check-ignore evals/done_claim/new.jsonl",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:16:03+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

@@ -86,6 +86,10 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | resolve-context-oserror | verified | resolve_context returns an over-long single-line context entry as literal text | [2026-11-18_resolve-context-oserror.md](2026-11-18_resolve-context-oserror.md) |
 | 2026-11-18 | release-1118 | verified | atlas 17.30.2, armada 2.5.0, marketplace 5.37.0; connector-count test fixed | [2026-11-18_release-1118.md](2026-11-18_release-1118.md) |
 | 2026-11-18 | release-1118-tests | verified | Release test pins updated to 17.30.2; full suite failures resolved | [2026-11-18_release-1118-tests.md](2026-11-18_release-1118-tests.md) |
+| 2026-11-18 | r6move-c3-c5 | verified | renames R, hooks dir clean, audit files unmodified, new.jsonl not ignored | [2026-11-18_r6move-c3-c5.md](2026-11-18_r6move-c3-c5.md) |
+| 2026-11-18 | r6move-c1-c2 | verified | done_claim fresh+gtrain sha1 match round5 freeze after move | [2026-11-18_r6move-c1-c2.md](2026-11-18_r6move-c1-c2.md) |
+| 2026-11-18 | r6-isolation | verified | Isolation bench: lost 0 of 40 edits for worktree and auto | [2026-11-18_r6-isolation.md](2026-11-18_r6-isolation.md) |
+| 2026-11-18 | r6-before | verified | Round6 BEFORE numbers and ten defect repros recorded on untouched tree | [2026-11-18_r6-before.md](2026-11-18_r6-before.md) |
 | 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | gateway-creds-1118 | verified | Gateway-mode blumira/connectwise-manage/threatlocker scope header credentials per request (ALS); fixes CodeQL 61/62 | [2026-11-18_gateway-creds-1118.md](2026-11-18_gateway-creds-1118.md) |
 | 2026-11-18 | fallow-resetclient-1118 | verified | Removed unused threatlocker resetClient; gateway-creds suites still green | [2026-11-18_fallow-resetclient-1118.md](2026-11-18_fallow-resetclient-1118.md) |
@@ -133,6 +137,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-17 | atlas-doctor-regression-check-2026-11-17 | verified | Regression check settled: HEAD archive tree vs working tree, same runner and interpreter, identical failing-test ids - 0 regressions; the 4 failures (2x test_codex_parity AskBehaviour, 1x test_telemetry_wiring, 1x test_atlas_analytics session.codex!=session.omp) are ambient PI_*/OMP_*/CLAUDE_* env artifacts that fail at HEAD too and pass under a clean env | [2026-11-17_atlas-doctor-regression-check-2026-11-17.md](2026-11-17_atlas-doctor-regression-check-2026-11-17.md) |
 | 2026-11-16 | t808b87de-critics2 | verified | round 5 second critic round: 4/10 and 4/10, open defects listed in round-5 audit | [2026-11-16_t808b87de-critics2.md](2026-11-16_t808b87de-critics2.md) |
 | 2026-11-16 | t558873b1 | verified | round-5 critics (sonnet 4/10, opus 3/10) run; findings checked against code | [2026-11-16_t558873b1.md](2026-11-16_t558873b1.md) |
+| 2026-11-16 | r5-ci-gcleak | verified | unclosed-handle test isolated from earlier-test garbage | [2026-11-16_r5-ci-gcleak.md](2026-11-16_r5-ci-gcleak.md) |
 | 2026-11-15 | tc0aee6c7 | verified | atlas 17.24.0 HEAD release-ready; doc figures match code output | [2026-11-15_tc0aee6c7.md](2026-11-15_tc0aee6c7.md) |
 | 2026-11-14 | tele-6 | verified | worker sessions record no session/active.day keys | [2026-11-14_tele-6.md](2026-11-14_tele-6.md) |
 | 2026-11-14 | tele-5 | verified | _notice_shown True with ATLAS_ANALYTICS=on; send --auto exits 2 w/o notice | [2026-11-14_tele-5.md](2026-11-14_tele-5.md) |

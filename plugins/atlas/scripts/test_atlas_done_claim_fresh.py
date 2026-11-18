@@ -476,6 +476,78 @@ class ScoreTests(unittest.TestCase):
         self.assertFalse(os.path.exists(self.out))
 
 
+class ScoreR6Tests(ScoreTests):
+    """Round-6 target: the scorer file itself is frozen, data lives in evals/done_claim."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.d = self._tmp.name
+        rows = [
+            {"id": "dcf-001", "stratum": "G", "label": "supported_done", "session": "s2", "text": "BLOCK wrongly", "tools": []},
+            {"id": "dcf-002", "stratum": "G", "label": "unsupported_done", "session": "s3", "text": "BLOCK", "tools": []},
+        ]
+        self.names = F.TARGETS["r6"]["names"]
+        self.fresh_name = F.TARGETS["r6"]["fresh"]
+        self.paths = {}
+        for name in self.names:
+            p = os.path.join(self.d, name)
+            if name == self.fresh_name:
+                F.write_fresh(rows, {"h": 1}, p)
+                self.fresh = p
+            else:
+                with open(p, "w") as fh:
+                    fh.write("content of " + name)
+            self.paths[name] = p
+        self.freeze = os.path.join(self.d, "freeze.json")
+        self.write_freeze()
+        self.out = os.path.join(self.d, "score.json")
+
+    def run_score(self):
+        return F.score(self.fresh, self.freeze, self.out, FakeDC, self.paths, self.fresh_name)
+
+    def test_target_freezes_scorer_rubric_detector_and_data(self):
+        for n in ("done_claim.py", "atlas_done_claim_fresh.py", "done_claim_rubric.md", "done_claim_corpus.jsonl", self.fresh_name):
+            self.assertIn(n, self.names)
+        self.assertTrue(F.TARGETS["r6"]["score_out"].endswith("2026-11-18_atlas-round6-fresh-score.json"))
+        self.assertTrue(F.TARGETS["r6"]["freeze"].endswith("2026-11-18_atlas-round6-freeze.json"))
+
+    def test_scorer_edit_after_freeze_refuses(self):
+        with open(self.paths["atlas_done_claim_fresh.py"], "a") as fh:
+            fh.write("# tweak")
+        with self.assertRaises(F.FreezeMismatch):
+            self.run_score()
+        self.assertFalse(os.path.exists(self.out))
+
+    def test_freeze_missing_scorer_hash_refuses(self):
+        rec = {"sha1": {n: F.sha1_file(p) for n, p in self.paths.items() if n != "atlas_done_claim_fresh.py"},
+               "blocking_kinds": ["count_not_in_results"]}
+        with open(self.freeze, "w") as fh:
+            json.dump(rec, fh)
+        with self.assertRaises(F.FreezeMismatch):
+            self.run_score()
+
+    def test_write_freeze_records_all_hashes_and_never_overwrites(self):
+        out = os.path.join(self.d, "new_freeze.json")
+        rec = F.write_freeze(out, self.paths, FakeDC.BLOCKING_KINDS)
+        self.assertEqual(set(rec["sha1"]), set(self.names))
+        self.assertEqual(rec["sha1"]["atlas_done_claim_fresh.py"], F.sha1_file(self.paths["atlas_done_claim_fresh.py"]))
+        with self.assertRaises(FileExistsError):
+            F.write_freeze(out, self.paths, FakeDC.BLOCKING_KINDS)
+        self.freeze = out
+        self.assertIn("pooled_N_plus_G", self.run_score())
+
+    def test_cli_target_defaults(self):
+        import argparse
+        ns = argparse.Namespace(target="r6", out=None, freeze=None, score_out=None)
+        self.assertEqual(F.resolve_target(ns)["fresh_path"], F.TARGETS["r6"]["fresh_path"])
+
+    # inherited r5-shaped tests do not apply to this fixture
+    test_metrics_on_hand_built_set = None
+    test_hash_mismatch_refuses_and_writes_nothing = None
+    test_cli_exit_code_on_refusal = None
+
+
 class RedactionTests(unittest.TestCase):
     def test_home_paths(self):
         self.assertEqual(

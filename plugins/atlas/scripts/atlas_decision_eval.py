@@ -101,6 +101,19 @@ def mcnemar_exact(b: int, c: int) -> float:
     return min(1.0, 2.0 * sum(math.comb(n, i) for i in range(k + 1)) / 2.0**n)
 
 
+def holm_adjust(pvals: list[float]) -> list[float]:
+    """Holm-Bonferroni adjusted p-values, returned in input order: sort ascending, scale p_(i) by (m - i + 1),
+    enforce monotone non-decrease, cap at 1."""
+    m = len(pvals)
+    order = sorted(range(m), key=lambda i: pvals[i])
+    out = [0.0] * m
+    run = 0.0
+    for rank, i in enumerate(order):
+        run = max(run, min(1.0, (m - rank) * pvals[i]))
+        out[i] = run
+    return out
+
+
 def paired(rows: list, labels: dict, a: dict, b: dict) -> dict:
     """Discordant pairs of predictions a vs b: a_only = a right and b wrong, b_only the reverse."""
     a_only = sum(1 for r in rows if a.get(r["id"]) == labels[r["id"]] and b.get(r["id"]) != labels[r["id"]])
@@ -456,6 +469,20 @@ def _mc(d: dict) -> str:
     return "model-only correct %d, keyword-only correct %d, exact p=%.4f" % (d["model_only"], d["keyword_only"], d["p"])
 
 
+MC_KEYS = (("mcnemar_vs_keyword", "%s vs keyword"),
+           ("combined_mcnemar_vs_keyword", "hook-combined %s vs keyword"),
+           ("combined_timeout_mcnemar_vs_keyword", "timeout-aware hook-combined %s vs keyword"))
+
+
+def mcnemar_family(res: dict) -> list[dict]:
+    """Every McNemar test in the report as one family, with Holm-Bonferroni adjusted p-values."""
+    fam = [{"name": fmt % name, "model_only": m[key]["model_only"], "keyword_only": m[key]["keyword_only"], "p": m[key]["p"]}
+           for name, m in res["backends"].items() if "combined_correct" in m for key, fmt in MC_KEYS]
+    for row, adj in zip(fam, holm_adjust([r["p"] for r in fam])):
+        row["p_holm"] = adj
+    return fam
+
+
 def label_agreement(dset: dict) -> dict:
     rows = dset.get("rows", [])
     two = [r for r in rows if len(r.get("votes") or {}) == 2]
@@ -509,6 +536,13 @@ def format_report(res: dict, dset: dict, cache: dict) -> str:
         out.append("  confusion (rows = label, cols = predicted):")
         for want in sorted(m["confusion"]):
             out.append("    %-10s " % want + " ".join("%s:%d" % kv for kv in sorted(m["confusion"][want].items())))
+    fam = mcnemar_family(res)
+    if fam:
+        out.append("")
+        out.append("McNemar family of %d tests, Holm-Bonferroni adjusted (raw p kept):" % len(fam))
+        for r in fam:
+            out.append("  %-45s model-only %d, keyword-only %d  raw p=%.4f  Holm p=%.4f"
+                       % (r["name"], r["model_only"], r["keyword_only"], r["p"], r["p_holm"]))
     return "\n".join(out)
 
 

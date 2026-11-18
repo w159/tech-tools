@@ -4,7 +4,7 @@
 Mines final assistant replies, with the tool records of their turn, from real transcripts under
 ~/.claude/projects/**/*.jsonl (interactive sessions, subagent reports and `claude -p` bench runs),
 labels them with two independent `claude -p` models plus one adjudication call on disagreement, and
-writes plugins/atlas/hooks/done_claim_fresh.jsonl in the corpus schema.
+writes evals/done_claim/done_claim_fresh.jsonl in the corpus schema.
 
 Protocol: docs/audits/2026-11-16_atlas-round5-preregistration.md sec 9. In short:
   * frame: every turn that has a final text reply and at least one tool call, no filter on any detector
@@ -20,6 +20,8 @@ Protocol: docs/audits/2026-11-16_atlas-round5-preregistration.md sec 9. In short
     python3 atlas_done_claim_fresh.py mine  [--n-a 100] [--n-b 20]      (no model calls, prints stats)
     python3 atlas_done_claim_fresh.py check                              (overlap with the corpus)
     python3 atlas_done_claim_fresh.py report                             (label distribution, kappa)
+    python3 atlas_done_claim_fresh.py freeze --target r6                 (record sha1 of detector, scorer, rubric, data)
+    python3 atlas_done_claim_fresh.py score  --target r6                 (once; refuses on any hash change)
 """
 
 from __future__ import annotations
@@ -44,7 +46,10 @@ if HOOKS not in sys.path:
 import done_claim  # noqa: E402  (only tools_from_transcript, _transcript_keys, row_tools, TAIL_BYTES are used)
 
 CORPUS_PATH = os.path.join(HOOKS, "done_claim_corpus.jsonl")
-FRESH_PATH = os.path.join(HOOKS, "done_claim_fresh.jsonl")
+REPO_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
+DATA_DIR = os.path.join(REPO_ROOT, "evals", "done_claim")  # fresh/train rows live outside the shipped plugin
+FRESH_PATH = os.path.join(DATA_DIR, "done_claim_fresh.jsonl")
+GTRAIN_PATH = os.path.join(DATA_DIR, "done_claim_gtrain.jsonl")
 RUBRIC_PATH = os.path.join(HOOKS, "done_claim_rubric.md")
 PROJECTS = os.path.join(os.path.expanduser("~"), ".claude", "projects")
 
@@ -925,11 +930,50 @@ def cmd_build(args) -> int:
 
 # ------------------------------------------------------------------ score (prereg sec 4, 6, 9 items 10-11)
 
-REPO_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 FREEZE_PATH = os.path.join(REPO_ROOT, "docs", "audits", "2026-11-16_atlas-round5-freeze.json")
 SCORE_PATH = os.path.join(REPO_ROOT, "docs", "audits", "2026-11-16_atlas-round5-fresh-score.json")
 FROZEN_NAMES = ("done_claim.py", "done_claim_rubric.md", "done_claim_corpus.jsonl",
                 "done_claim_gtrain.jsonl", "done_claim_fresh.jsonl")
+SCORER_NAME = os.path.basename(__file__)  # atlas_done_claim_fresh.py: the scorer is part of the freeze (round 6)
+
+# name -> path for every file a freeze can cover
+_NAME_PATHS = {
+    "done_claim.py": os.path.join(HOOKS, "done_claim.py"),
+    "done_claim_rubric.md": RUBRIC_PATH,
+    "done_claim_corpus.jsonl": CORPUS_PATH,
+    SCORER_NAME: os.path.abspath(__file__),
+    "done_claim_gtrain.jsonl": GTRAIN_PATH,
+    "done_claim_fresh.jsonl": FRESH_PATH,
+    "r6_train.jsonl": os.path.join(DATA_DIR, "r6_train.jsonl"),
+    "r6_heldout.jsonl": os.path.join(DATA_DIR, "r6_heldout.jsonl"),
+}
+_AUDITS = os.path.join(REPO_ROOT, "docs", "audits")
+TARGETS = {
+    "r5": {  # legacy: scored once on 2026-11-16, its freeze predates scorer hashing
+        "names": FROZEN_NAMES, "fresh": "done_claim_fresh.jsonl",
+        "freeze": FREEZE_PATH, "score_out": SCORE_PATH,
+    },
+    "r6": {
+        "names": ("done_claim.py", SCORER_NAME, "done_claim_rubric.md", "done_claim_corpus.jsonl",
+                  "done_claim_gtrain.jsonl", "done_claim_fresh.jsonl", "r6_train.jsonl", "r6_heldout.jsonl"),
+        "fresh": "r6_heldout.jsonl",
+        "freeze": os.path.join(_AUDITS, "2026-11-18_atlas-round6-freeze.json"),
+        "score_out": os.path.join(_AUDITS, "2026-11-18_atlas-round6-fresh-score.json"),
+    },
+}
+for _t in TARGETS.values():
+    _t["fresh_path"] = _NAME_PATHS[_t["fresh"]]
+
+
+def resolve_target(args) -> dict:
+    """CLI target defaults; explicit --out/--freeze/--score-out override them."""
+    t = dict(TARGETS[getattr(args, "target", None) or "r5"])
+    for key, attr in (("fresh_path", "out"), ("freeze", "freeze"), ("score_out", "score_out")):
+        if getattr(args, attr, None):
+            t[key] = getattr(args, attr)
+    t["paths"] = {n: _NAME_PATHS[n] for n in t["names"]}
+    t["paths"][t["fresh"]] = t["fresh_path"]
+    return t
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> list[float] | None:
@@ -952,14 +996,14 @@ class FreezeMismatch(Exception):
     pass
 
 
-def verify_freeze(freeze_path: str, paths: dict[str, str], blocking_kinds) -> dict:
+def verify_freeze(freeze_path: str, paths: dict[str, str], blocking_kinds, names=None) -> dict:
     """Freeze record format: {"sha1": {"<file name>": "<hex>" | {"sha1": "<hex>", "blob": "<hex>"}, ...},
     "blocking_kinds": [...]}. Raises FreezeMismatch on any differing sha1 or BLOCKING_KINDS."""
     with open(freeze_path, encoding="utf-8") as fh:
         rec = json.load(fh)
     want = rec.get("sha1") or {}
     got, bad = {}, []
-    for name in FROZEN_NAMES:
+    for name in (names or tuple(paths)):
         exp = want.get(name)
         exp = exp.get("sha1") if isinstance(exp, dict) else exp
         have = sha1_file(paths[name]) if os.path.exists(paths[name]) else None
@@ -1007,12 +1051,25 @@ def _scope_metrics(rows: list[dict], per_row: dict, kinds: tuple) -> dict:
     }
 
 
-def score(fresh_path: str, freeze_path: str, out_path: str, dc=None, paths: dict[str, str] | None = None) -> dict:
+def write_freeze(freeze_path: str, paths: dict[str, str], blocking_kinds) -> dict:
+    """Record sha1 of every path (detector, scorer, rubric, data) and BLOCKING_KINDS. Never overwrites."""
+    rec = {
+        "frozen_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "sha1": {n: sha1_file(p) for n, p in paths.items()},
+        "blocking_kinds": sorted(blocking_kinds),
+    }
+    with open(freeze_path, "x", encoding="utf-8") as fh:
+        json.dump(rec, fh, indent=1, ensure_ascii=True)
+        fh.write("\n")
+    return rec
+
+
+def score(fresh_path: str, freeze_path: str, out_path: str, dc=None, paths: dict[str, str] | None = None,
+          fresh_name: str = "done_claim_fresh.jsonl") -> dict:
     """Score D3 once. Refuses (raises) when the output exists or any frozen hash or BLOCKING_KINDS differs;
     nothing is written in that case."""
     dc = dc or done_claim
-    paths = paths or {n: os.path.join(HOOKS, n) for n in FROZEN_NAMES}
-    paths = dict(paths, **{"done_claim_fresh.jsonl": fresh_path})
+    paths = dict(paths or {n: _NAME_PATHS[n] for n in FROZEN_NAMES}, **{fresh_name: fresh_path})
     if os.path.exists(out_path):
         raise FileExistsError(f"{out_path} exists; the fresh set is scored once")
     frozen = verify_freeze(freeze_path, paths, dc.BLOCKING_KINDS)
@@ -1045,9 +1102,21 @@ def score(fresh_path: str, freeze_path: str, out_path: str, dc=None, paths: dict
     return result
 
 
-def cmd_score(args) -> int:
+def cmd_freeze(args) -> int:
+    t = resolve_target(args)
     try:
-        res = score(args.out, args.freeze, args.score_out)
+        rec = write_freeze(t["freeze"], t["paths"], done_claim.BLOCKING_KINDS)
+    except (FileExistsError, FileNotFoundError) as exc:
+        print(f"REFUSED: {exc}", file=sys.stderr)
+        return 3
+    print(json.dumps(rec, indent=1))
+    return 0
+
+
+def cmd_score(args) -> int:
+    t = resolve_target(args)
+    try:
+        res = score(t["fresh_path"], t["freeze"], t["score_out"], paths=t["paths"], fresh_name=t["fresh"])
     except (FreezeMismatch, FileExistsError, FileNotFoundError) as exc:
         print(f"REFUSED: {exc}", file=sys.stderr)
         return 3
@@ -1084,18 +1153,19 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("cmd", choices=("build", "mine", "check", "report", "score"))
+    ap.add_argument("cmd", choices=("build", "mine", "check", "report", "score", "freeze"))
     ap.add_argument("--projects", default=PROJECTS)
-    ap.add_argument("--out", default=FRESH_PATH)
+    ap.add_argument("--target", choices=tuple(TARGETS), default="r5", help="freeze/score target (r6: round-6 held-out)")
+    ap.add_argument("--out", default=None)
     ap.add_argument("--n-a", type=int, default=100)
     ap.add_argument("--n-b", type=int, default=20)
     ap.add_argument("--budget", type=float, default=16.0)
     ap.add_argument("--workers", type=int, default=3)
     ap.add_argument("--no-label", action="store_true")
-    ap.add_argument("--train-out", default=os.path.join(HOOKS, "done_claim_gtrain.jsonl"))
+    ap.add_argument("--train-out", default=GTRAIN_PATH)
     ap.add_argument("--runs-ledger", default="")
-    ap.add_argument("--freeze", default=FREEZE_PATH)
-    ap.add_argument("--score-out", default=SCORE_PATH)
+    ap.add_argument("--freeze", default=None)
+    ap.add_argument("--score-out", default=None)
     ap.add_argument("--prior-spend", type=float, default=0.1159, help="model spend before this build (smoke labels)")
     ap.add_argument("--min-rows", type=int, default=40, help="stop before any model call below this many rows")
     ap.add_argument(
@@ -1109,12 +1179,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exclude-after", default=DEFAULT_EXCLUDE_AFTER)
     ap.add_argument("--exclude-session", action="append", default=[])
     args = ap.parse_args(argv)
+    if args.cmd not in ("score", "freeze") and not args.out:
+        args.out = FRESH_PATH
     return {
         "build": cmd_build,
         "mine": cmd_mine,
         "check": cmd_check,
         "report": cmd_report,
         "score": cmd_score,
+        "freeze": cmd_freeze,
     }[args.cmd](args)
 
 

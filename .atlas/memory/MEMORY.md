@@ -55,3 +55,11 @@ Assumption to avoid (tech-tools): Member count is never checked, and `members` m
 Assumption to avoid (tech-tools): The stored command text is never checked against `_TEST_RUNNER_RE`.
 §
 Assumption to avoid (tech-tools): So the first dispatch in a session that was not flagged is never checked by `_scope_gate`.
+§
+User correction (tech-tools): The one failure is `DocsTellTheTruthContract::test_reference_counts_and_tables_match_disk`, the docs script count you said you would update.
+§
+Assumption to avoid (tech-tools): - **Live check can't pass by skipping:** with `--require-live`, a live check that didn't run now fails with exit code 1.
+§
+Assumption to avoid (tech-tools): - A `--require-live` flag so a live check that didn't run fails instead of skipping.
+§
+Assumption to avoid (tech-tools): because I need the name of the fixture field that `r6_train.jsonl` rows carry. I assumed `fixture`, and the existing gtrain rows have no such field, so they would keep the masked-text grouping. [noted 2026-11-18]

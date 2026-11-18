@@ -195,6 +195,30 @@ class McNemarTest(unittest.TestCase):
         self.assertAlmostEqual(ev.mcnemar_exact(2, 8), 0.109375)
         self.assertAlmostEqual(ev.mcnemar_exact(8, 2), 0.109375)
 
+    def test_holm_adjust_reference_values(self):
+        # sorted 0.01, 0.02, 0.04 with m=3 -> 0.03, 0.04, 0.04 (monotone); input order preserved
+        got = ev.holm_adjust([0.04, 0.01, 0.02])
+        for g, w in zip(got, [0.04, 0.03, 0.04]):
+            self.assertAlmostEqual(g, w)
+        self.assertEqual(ev.holm_adjust([]), [])
+        self.assertEqual(ev.holm_adjust([0.9, 0.6]), [0.9, 0.9])  # capped at 1 and monotone
+        self.assertEqual(ev.holm_adjust([0.5, 0.6, 0.7])[0], 1.0)
+        self.assertAlmostEqual(ev.holm_adjust([0.0156])[0], 0.0156)
+
+    def test_holm_never_below_raw_and_report_shows_both(self):
+        res, dset, cache = self._scored() if hasattr(self, "_scored") else (None, None, None)
+        if res is None:
+            dset = ev.load_set() if hasattr(ev, "load_set") else None
+        fam = ev.mcnemar_family({"backends": {"m": {"combined_correct": 1,
+            "mcnemar_vs_keyword": {"model_only": 5, "keyword_only": 0, "p": 0.0625},
+            "combined_mcnemar_vs_keyword": {"model_only": 2, "keyword_only": 0, "p": 0.5},
+            "combined_timeout_mcnemar_vs_keyword": {"model_only": 2, "keyword_only": 0, "p": 0.5}}}})
+        self.assertEqual(len(fam), 3)
+        self.assertAlmostEqual(fam[0]["p_holm"], 0.1875)
+        self.assertAlmostEqual(fam[1]["p_holm"], 1.0)
+        for r in fam:
+            self.assertGreaterEqual(r["p_holm"], r["p"])
+
     def test_report_prints_mcnemar_for_each_backend(self):
         dset, cache = ev._load(ev.SET_PATH, None), ev._load(ev.CACHE_PATH, None)
         res = ev.score(dset, cache)
