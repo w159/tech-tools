@@ -2,7 +2,7 @@
 // Live shapes: stoprun-150-562576ed-2/frames/f0086.ans:24-33 (T1 gone under `1/5 · 1 done`), f0097.ans:26-27 (blocked and failed both 217, T3 failed over a pending store row),
 // stoprun-150-562576ed-1/frames/f0103.ans:26 (`done` for a killed worker), live-110-562576ed-2/tab-board.png (owner wraps, pane empty under 5 rows).
 import { describe, expect, test } from 'claude-code/testing';
-import { boardLines, boardRowsOf, boardText, type BoardSource } from './board-model';
+import { boardLines, boardRowsOf, boardText, type BoardSource } from './view/board/board-model';
 import { PALETTES, STATE_TOKEN, cells, contrast, rowWordTone, runsString, stateRun, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, type HudAgent, type HudInput } from './hud';

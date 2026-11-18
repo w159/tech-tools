@@ -1,5 +1,5 @@
 // board-model.ts: the Atlas Board (design rev 4, section 5 and mock-board-*.png) as pure data and runs, shared by the Claude
-// Code pane (mod/todo-panel.tsx) and the omp widget (omp/todo-panel.ts) so both hosts draw the same strings. Host free:
+// Code pane (mod/view/board/todo-panel.tsx) and the omp widget (omp/todo-panel.ts) so both hosts draw the same strings. Host free:
 // todo rows in, tone-tagged Run lines out; each host paints a Run.
 //
 // Columns ITEM / STATE / OWNER / DETAIL at 100+ cells (header row; state at 30, owner at 42 and 18 wide, detail at 62);
@@ -10,9 +10,9 @@
 // Ribbon width: `ribbon()` fills exactly `cols` cells (its last cell is a blank). The design's golden files are the same
 // rows with trailing blanks trimmed, which is why board-120.txt is 118 characters wide (120 less the two blanks after
 // "7 items"). The code keeps the exact-fill ribbon and the goldens are compared trimmed (see BOARD_GOLDEN in tests).
-import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from './atlas-ui';
-import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion/motion';
-import { KILLED, wordOf } from './pane/activity';
+import { cells, chip, PALETTE5, DONE_DOUBT, elapsedClock, GLYPH5, GLYPH5_ASCII, TODO_METER_W, markOf, markToken, meter, motionState, RETURNED, ribbon, rowWordTone, runsCells, spinFrameOf, stateChip, stateRun, type MarkState, type Run, type Ui, type UiState } from '../../atlas-ui';
+import { animateRow, keysOf, paneSpinFrame, sharedSpinFrame, type MotionCtx, type MotionItem } from '../../motion/motion';
+import { KILLED, wordOf } from '../../pane/activity';
 
 /** One board row. `elapsed` is the running item's time; `of` is its estimate and is present only when the item carries one, so
  * the `of mm:ss` and the gauge are drawn from data, never from a default. `ownerState`: the owner's failed, waiting or blocked word, shown beside the item. */

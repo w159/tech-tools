@@ -6,7 +6,7 @@ import { workerTally } from './data/tally';
 import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion/motion';
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
-import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
+import { DONE_RETRIED, planFigure, WORKER_DOWN } from './view/board/board-model';
 import { activitySection, contextSection, gatesSection, runsSection, sessionRow, type Health } from './data/idle-health';
 import { chevron, chipRun } from './input/clickable';
 import { cardFrame } from './card-frame'; import { roleLabel, roleOf } from './theme'; import { roleHex } from './atlas-ui';

@@ -1,9 +1,9 @@
 // Golden plain-text rows of the Board for contracts/band-world.ts (round2/design/evidence/golden/board-*.txt, trailing blanks trimmed).
 // Mocha and Latte render the same text; only colours differ. The ribbon fills its width exactly, so the design files are 118/119 wide
-// once its trailing blanks are trimmed; compare trimmed rows. Asserted on both hosts (mod/board.test.ts, omp/todo-panel.test.ts).
+// once its trailing blanks are trimmed; compare trimmed rows. Asserted on both hosts (mod/view/board/board.test.ts, omp/todo-panel.test.ts).
 
 import type { UiState } from "../mod/atlas-ui";
-import type { BoardRow } from "../mod/board-model";
+import type { BoardRow } from "../mod/view/board/board-model";
 import { world } from "./band-world";
 
 /** The state word of each world worker, by name: what a todo's owner is doing (the board shows a failed or waiting owner beside the item). */

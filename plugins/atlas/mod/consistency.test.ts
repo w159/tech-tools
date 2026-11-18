@@ -18,7 +18,7 @@ import { liveWorkers, queuedMembers, workerStates, withOwnerStates } from './dat
 import { hudAgents, hudLines } from './hud';
 import { panelModelOf } from './pane/sidebar-model';
 import { panelText, type PanelTab } from './panel-layout';
-import { boardTree } from './todo-panel';
+import { boardTree } from './view/board/todo-panel';
 import type { LiveSnapshot } from './orchestra-types';
 import { pluginRoot } from './fixtures/source-tree';
 

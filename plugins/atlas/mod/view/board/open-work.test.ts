@@ -1,11 +1,11 @@
 // Critique 9, slice A: one open-work truth. The Board fold never hides an open dispatch row (A2), and the core tab's counts, the band's
 // plan count and Stop's open-item count are stated from one store (A3; the python half is hooks/test_atlas_gates.py on the same fixture).
 import { describe, expect, test } from 'claude-code/testing';
-import store_fx from '../contracts/open-work-store.json';
-import { runsString, type Ui } from './atlas-ui';
+import store_fx from '../../../contracts/open-work-store.json';
+import { runsString, type Ui } from '../../atlas-ui';
 import { boardFolded, boardLines, boardOpenFolded, boardRowsOf, boardText } from './board-model';
-import { coreModel, openWork } from './data/core';
-import { ownTodos, planCounts, settleDispatch } from './data/todos';
+import { coreModel, openWork } from '../../data/core';
+import { ownTodos, planCounts, settleDispatch } from '../../data/todos';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const SESSION = 'adc00375';

@@ -10,7 +10,7 @@ import { endedAt, queuedMembers, workerStates, withOwnerStates, type LiveWorker 
 import { isPlanItem, openRowName, ownPlan, ownTodos, planBasis, todoCounts } from './data/todos';
 import { agentTally, hudAgents, planProgress } from './hud';
 import { openItems, openWork } from './data/core';
-import { blockedCount } from './board-model';
+import { blockedCount } from './view/board/board-model';
 import { deniedCalls } from './vocab';
 import { gateTally, leadBusy, planBusy, ranWorkers, STOP_LINE, withCoreTally } from './data/runstate';
 import { fillHex, LINGER_MS, preImage, spinClock, surfaceHex, xtermHex, type Ui, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
@@ -19,7 +19,7 @@ import type { UiState } from './atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
 import type { GateGroup, SidebarView } from './pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from './runs';
-import { todoRows } from './todo-panel';
+import { todoRows } from './view/board/todo-panel';
 import { contractRail, railOf, type Rail } from './rail';
 import { chipText, STRIP_TABS } from './panel-layout';
 import { fitText, textWidth } from './theme';

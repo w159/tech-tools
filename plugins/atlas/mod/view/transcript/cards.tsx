@@ -8,7 +8,7 @@ import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surf
 import { lookUi } from '../../look'
 import { CARD_W, cardBarTone, toastRuns } from '../../panel-layout'
 import { cells } from '../../atlas-ui'
-import { clipE as clip, ELLIPSIS } from '../../board-model'
+import { clipE as clip, ELLIPSIS } from '../board/board-model'
 import { displayName } from '../../hud'
 import { workerFacts, type WorkerFacts } from '../../data/live'
 import { fitText } from '../../theme'

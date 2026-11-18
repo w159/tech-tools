@@ -1,5 +1,5 @@
 {
-  "_about": "One todos.json store, the shape of live run 150-74d8931b-1: five plan rows all completed (no evidence, session ''), two dispatch rows completed with evidence, the gamma dispatch row still pending. Stop counts 1 open item. hooks/test_atlas_gates.py and mod/open-work.test.ts both load it; the gates rows, Stop, the core tab and the band must agree on it. SESSION is replaced by each test's session id.",
+  "_about": "One todos.json store, the shape of live run 150-74d8931b-1: five plan rows all completed (no evidence, session ''), two dispatch rows completed with evidence, the gamma dispatch row still pending. Stop counts 1 open item. hooks/test_atlas_gates.py and mod/view/board/open-work.test.ts both load it; the gates rows, Stop, the core tab and the band must agree on it. SESSION is replaced by each test's session id.",
   "version": 1,
   "expect": { "open": 1, "evidence": { "ok": 0, "total": 5 }, "plan": { "done": 5, "total": 5 } },
   "items": [

@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../contracts/core-fixture';
 import { panelWorld } from '../contracts/panel-world';
 import { cells, type Ui } from './atlas-ui';
-import { boardBody, boardText, type BoardRow } from './board-model';
+import { boardBody, boardText, type BoardRow } from './view/board/board-model';
 import { coreModel, type CoreModel } from './data/core';
 import { busySnap, NOW } from './live_fixture';
 import type { LiveSnapshot } from './orchestra-types';

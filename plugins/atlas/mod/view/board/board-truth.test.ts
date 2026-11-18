@@ -1,10 +1,10 @@
 // Critique 8, slice B: the Board equals the board store (B1), owners drop before titles are cut (B2), a row whose owner runs reads running (B3),
 // and no cursor on a queued row (B4).
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, runsString, type Ui } from './atlas-ui';
+import { cells, runsString, type Ui } from '../../atlas-ui';
 import { boardBody, boardFolded, boardLines, boardRowsOf, boardText, itemState, planFigure } from './board-model';
-import { ownTodos, todoState } from './data/todos';
-import { todoRows, type TodoRow } from './hud-surface';
+import { ownTodos, todoState } from '../../data/todos';
+import { todoRows, type TodoRow } from '../../hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const plan = [

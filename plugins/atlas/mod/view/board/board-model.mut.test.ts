@@ -5,7 +5,7 @@
 // `w` (the `cells(l) <= w` return above), and cells() is the sum of per-code-point widths (theme.ts textWidth), so when the scan reaches at = 1 the
 // check `used + cells(cs[0]) <= w - 3` is the whole label's width <= w - 3, which is false: the loop stops there under either bound.
 import { describe, expect, test } from 'claude-code/testing';
-import type { Ui } from './atlas-ui';
+import type { Ui } from '../../atlas-ui';
 import { blockedCount, boardBody, boardRow, toBoardRow, type BoardRow } from './board-model';
 
 const ui: Ui = { theme: 'mocha', ascii: true, color: 'truecolor' };

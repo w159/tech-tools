@@ -7,7 +7,7 @@ import { worldBoardRows } from '../../contracts/board-golden';
 import { panelWorld } from '../../contracts/panel-world';
 import { worldHudAgents, worldPhases, worldPlan } from '../../contracts/hud-world';
 import { runsCells, runsString, type Run, type Ui, type UiState } from '../atlas-ui';
-import { boardBody, boardMotionItems, type BoardRow } from '../board-model';
+import { boardBody, boardMotionItems, type BoardRow } from '../view/board/board-model';
 import { hudLines, hudMotionItems, type HudInput } from '../hud';
 import { bandLines, bandMotionItems } from '../mission-layout';
 import { Motion, sinceChange, windowOf, type MotionCtx, type MotionItem } from './motion';

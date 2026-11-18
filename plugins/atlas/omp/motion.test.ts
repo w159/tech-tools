@@ -7,7 +7,7 @@ import { expect, test } from "bun:test";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
 import { worldBoardRows } from "../contracts/board-golden";
 import { runHex, sgrColor, type Ui } from "../mod/atlas-ui";
-import { boardBody, boardMotionItems, boardRowsOf } from "../mod/board-model";
+import { boardBody, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { hudLines, hudMotionItems, hudRows, type HudInput } from "../mod/hud";
 import { Motion, MOTION_MS, sinceChange, windowOf } from "../mod/motion/motion";
 import { boardLines } from "./todo-panel";

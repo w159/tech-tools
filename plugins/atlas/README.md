@@ -1249,7 +1249,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
   (`verifiedFigure`), or `no verdicts, workers or gates yet`.
 - **board** (key `o`): see below.
 
-**The board.** The board tab (`mod/board-model.ts`, drawn by `mod/pane/sidebar.tsx`)
+**The board.** The board tab (`mod/view/board/board-model.ts`, drawn by `mod/pane/sidebar.tsx`)
 lists one row per plan item with state and owner, under a title row that counts
 the items and carries the same `▰▱` meter, then a Gantt timeline: one lane per
 agent, the lead's lane first, a bar (`▇`, ended exactly to the clock) in the

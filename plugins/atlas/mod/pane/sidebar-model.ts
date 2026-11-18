@@ -8,7 +8,7 @@ import { forgetStamps, type PanelGate, type PanelModel, type PanelNote, type Pan
 import type { LiveSnapshot, Mood } from '../orchestra-types';
 import { contractRail, railOf } from '../rail';
 import { agentModel, hudAgents, lastOf, ownerStatesOf } from '../hud';
-import { ownerOutcome } from '../board-model';
+import { ownerOutcome } from '../view/board/board-model';
 import { failureNotes, firstSeen, isoTs, noteRefusal, refusalNotes } from '../data/channels';
 import { gateTally } from '../data/runstate';
 import { scrub } from './chrome';

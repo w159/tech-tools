@@ -9,7 +9,7 @@ import { cells, type Ui } from './atlas-ui';
 import { bodyLines, lineText } from './panel-layout';
 import { forgetPhases, panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
-import { boardTimeline } from './board-model';
+import { boardTimeline } from './view/board/board-model';
 import { notificationTree } from './view/transcript/cards';
 import { cleanRun, forgetPlaced, placedTree, placeFinished } from './view/transcript/placed';
 import { durationTree } from './view/transcript/restyle';

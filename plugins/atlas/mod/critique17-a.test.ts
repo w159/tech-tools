@@ -4,7 +4,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from './contract';
 import { DONE_DOUBT, markOf, motionState, rowWordTone, stateGlyph, stateRun, STATE_ASCII, STATE_GLYPHS, STATE_TOKEN, WORKER_FAILED, cells, type Ui } from './atlas-ui';
-import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './board-model';
+import { boardBody, boardLines, boardMotionItems, boardOpenFolded, boardRowsOf, boardText, toBoardRow, type BoardSource } from './view/board/board-model';
 import { openRowName, ownPlan, todoState } from './data/todos';
 import { plannedText } from './data/core';
 import { hudLines, type HudAgent } from './hud';

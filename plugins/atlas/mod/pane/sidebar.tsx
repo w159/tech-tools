@@ -8,7 +8,7 @@ import { activeChipStyle, chipStyle, hoverStyle } from '../input/clickable';
 import { backWord, bodyLines, boardEmptyRows, centred, chipText, frameTabOf, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../board-model';
+import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../view/board/board-model';
 import { gateTally } from '../data/runstate';
 import { noteStopVerdict } from '../view/transcript/superseded';
 import { noteRunSecs } from '../view/transcript/placed';
@@ -46,7 +46,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inn
   return rows; // no rule under the lit chip: it is the filled one
 }
 
-/** The `o` tab: the board (mod/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
+/** The `o` tab: the board (mod/view/board/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
 function boardItems(m: SidebarModel) {
   const s = m.snapshot;
   const workers = liveWorkers(s, s.now);

@@ -1,11 +1,11 @@
 /**
- * The Atlas Board for the omp widget (design rev 4), twin of mod/todo-panel.tsx: both draw the lines of mod/board-model.ts,
+ * The Atlas Board for the omp widget (design rev 4), twin of mod/view/board/todo-panel.tsx: both draw the lines of mod/view/board/board-model.ts,
  * so the two hosts print the same strings. `todoLines` is the board slot of the mission panel (header and one row per item,
  * capped by the line budget with `+N more`); `boardLines` is the whole surface with its ribbon. Each Run is painted in ANSI
  * from the shared tokens and every line is filled with the panel background to exactly `width` cells. Pure.
  */
 import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
-import { boardBody, boardFolded, boardOpenFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
+import { boardBody, boardFolded, boardOpenFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/view/board/board-model";
 import type { MotionCtx } from "../mod/motion/motion";
 import { RST } from "./panel-paint";
 

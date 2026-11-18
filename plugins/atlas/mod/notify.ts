@@ -9,7 +9,7 @@ import { endedAt, liveWorkers } from './data/live';
 import type { LiveWorker } from './data/live';
 import type { LiveSnapshot } from './orchestra-types';
 import { cells, msClock, type Ui } from './atlas-ui';
-import { clipE as clip } from './board-model';
+import { clipE as clip } from './view/board/board-model';
 import { lookOf } from './look';
 import { noteToastText, toastText } from './panel-layout';
 

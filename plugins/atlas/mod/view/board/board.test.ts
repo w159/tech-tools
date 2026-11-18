@@ -1,15 +1,15 @@
 // The Board (design rev 4): goldens at 120 plain, 120 rich and 80 in both themes, WCAG on every run, one chip per row, the
 // board's counts equal the band's on the same world, the data mapping, and S1 (a dispatch row follows its worker).
 import { describe, expect, test } from 'claude-code/testing';
-import { world, worldModel } from '../contracts/band-world';
-import { board_120, board_120_rich, board_80, worldBoardRows } from '../contracts/board-golden';
-import { band_120 } from '../contracts/band-world-golden';
-import { cells, chipCount, contrast, DECOR_TONES, NEED, PALETTES, runKind, toneHex, type Ui } from './atlas-ui';
-import { bandLines, runsWidth } from './mission-layout';
-import type { UiState } from './atlas-ui';
+import { world, worldModel } from '../../../contracts/band-world';
+import { board_120, board_120_rich, board_80, worldBoardRows } from '../../../contracts/board-golden';
+import { band_120 } from '../../../contracts/band-world-golden';
+import { cells, chipCount, contrast, DECOR_TONES, NEED, PALETTES, runKind, toneHex, type Ui } from '../../atlas-ui';
+import { bandLines, runsWidth } from '../../mission-layout';
+import type { UiState } from '../../atlas-ui';
 import { blockedCount, boardBody, boardCounts, boardLines, boardRowsOf, boardText, mmss, stateOfStatus, toBoardRow } from './board-model';
-import { endedOf, settleDispatch } from './data/todos';
-import type { SquadAgent } from './contract';
+import { endedOf, settleDispatch } from '../../data/todos';
+import type { SquadAgent } from '../../contract';
 
 const ui = (theme: 'mocha' | 'latte'): Ui => ({ theme, ascii: false, color: 'truecolor' });
 const tiers = [

@@ -35,7 +35,7 @@ describe('critique 25: one palette', () => {
   });
   test('the scan finds the surface files (a moved folder cannot turn this test into a no-op)', () => {
     expect(surfaceFiles.length).toBeGreaterThan(40);
-    for (const f of ['mod/atlas-ui.ts', 'mod/mission-layout.ts', 'mod/panel-layout.ts', 'mod/board-model.ts', 'mod/view/transcript/cards.tsx', 'mod/view/transcript/restyle.tsx', 'omp/panel-paint.ts', 'omp/mission-panel.ts']) expect(surfaceFiles).toContain(f);
+    for (const f of ['mod/atlas-ui.ts', 'mod/mission-layout.ts', 'mod/panel-layout.ts', 'mod/view/board/board-model.ts', 'mod/view/transcript/cards.tsx', 'mod/view/transcript/restyle.tsx', 'omp/panel-paint.ts', 'omp/mission-panel.ts']) expect(surfaceFiles).toContain(f);
   });
   test('no non-test mod or omp file spells a colour outside the palette', () => {
     const stray: string[] = [];

@@ -1,17 +1,17 @@
 // Wave 38 (critique 37, build 851e5b41): the board tab and the side panel, truthful and dense. Each test names the 851e5b41 defect it comes from.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { busySnap, NOW } from './live_fixture';
-import { forgetRefusals } from './data/channels';
-import { DONE_DOUBT, type Ui } from './atlas-ui';
-import { agentModel, hudAgents, resetAgentSeq } from './hud';
-import { meterRuns } from './hud-surface';
-import { liveWorkers, queuedMembers } from './data/live';
-import { forgetPhases } from './pane/sidebar-model';
-import { leadBarState, sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
+import { busySnap, NOW } from '../../live_fixture';
+import { forgetRefusals } from '../../data/channels';
+import { DONE_DOUBT, type Ui } from '../../atlas-ui';
+import { agentModel, hudAgents, resetAgentSeq } from '../../hud';
+import { meterRuns } from '../../hud-surface';
+import { liveWorkers, queuedMembers } from '../../data/live';
+import { forgetPhases } from '../../pane/sidebar-model';
+import { leadBarState, sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from '../../pane/sidebar';
 import { boardLines, boardText, boardTimeline, type BoardRow } from './board-model';
-import { workersByTask } from './panel-layout';
-import { panelModelOf } from './pane/sidebar-model';
+import { workersByTask } from '../../panel-layout';
+import { panelModelOf } from '../../pane/sidebar-model';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

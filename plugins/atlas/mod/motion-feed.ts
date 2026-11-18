@@ -4,7 +4,7 @@
 // `Motion.observe`; the omp hosts call it the same way.
 import type { BandModel } from './band';
 import { bandCountItems, hudPhases } from './band';
-import { boardMotionItems, boardRowsOf } from './board-model';
+import { boardMotionItems, boardRowsOf } from './view/board/board-model';
 import { hudAgents, hudMotionItems } from './hud';
 import { liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { ownTodos } from './data/todos';

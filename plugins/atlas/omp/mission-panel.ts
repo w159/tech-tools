@@ -14,7 +14,7 @@ import { gateTally, planBusy, withCoreTally } from "../mod/data/runstate";
 import { hostEnv, paintAnsi, sgrColor, spinClock, surfaceHex, type Ui, type UiState, uiFromEnv } from "../mod/atlas-ui";
 import { bandLines, bandMotionItems, isMessageKind, type Line, type MissionModel, type MissionWorker, type Run, missionLines, runsText, type WorkerState, uiStateOf } from "../mod/mission-layout";
 import type { GateGroup } from "../mod/pane/sidebar";
-import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/board-model";
+import { blockedCount, boardMotionItems, boardRowsOf } from "../mod/view/board/board-model";
 import { withOwnerStates } from "../mod/data/live";
 import { openRowName, ownPlan } from "../mod/data/todos";
 import { railIds, railOf } from "../mod/rail";

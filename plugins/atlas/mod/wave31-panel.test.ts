@@ -5,7 +5,7 @@ import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from './live_fixture';
 import { forgetRefusals } from './data/channels';
 import type { Ui } from './atlas-ui';
-import { boardText, boardTimeline } from './board-model';
+import { boardText, boardTimeline } from './view/board/board-model';
 import { bodyLines, lineText } from './panel-layout';
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';

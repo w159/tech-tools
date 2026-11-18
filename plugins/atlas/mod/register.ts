@@ -28,7 +28,7 @@ import { rowOf, type Segment } from './runs';
 import { activeCount, liveWorkers, noteEnded, notifiedEnds, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { sidebarTree, type GateGroup, type SidebarHandlers } from './pane/sidebar';
 import type { GateLine } from './pane/sidebar-types';
-import { boardTree } from './todo-panel';
+import { boardTree } from './view/board/todo-panel';
 import { leadChannelName } from './data/root';
 import { crewSig } from './data/crew';
 import { ownTodos, planBasis } from './data/todos';

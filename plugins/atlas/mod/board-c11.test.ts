@@ -1,7 +1,7 @@
 // Critique 11 C5: the Board inside the side panel (live-150-5d6a53ef-1 / live-110-5d6a53ef-1 tab-board.png): a nested `ATLAS > BOARD` ribbon under the
 // panel's own `ATLAS > SIDEPANEL`, `5 items` said twice, and the state word glued to the title (110) or to the owner (150).
 import { describe, expect, test } from 'claude-code/testing';
-import { boardBody, boardLines, boardText, type BoardRow } from './board-model';
+import { boardBody, boardLines, boardText, type BoardRow } from './view/board/board-model';
 import { textWidth } from './theme';
 import type { Ui } from './atlas-ui';
 

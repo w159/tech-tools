@@ -13,7 +13,7 @@ import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
 import { chevron } from './input/clickable';
 import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
 import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion/motion';
-import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
+import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './view/board/board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
 import { blockReasons, gateTally, STOP_LINE, withCoreTally } from './data/runstate';

@@ -106,7 +106,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
   (`mod/pane/sidebar-model.ts`), the panel layout (`mod/panel-layout.ts`) and the omp mission panel
   (`omp/mission-panel.ts`) all ask it, so a phase reads the same number (`4/5` for `implement`) everywhere.
 - Gauges need an estimate. The Board and the HUD TODO draw `of mm:ss` and the elapsed gauge only for an item that carries
-  `estimate_s` (`mod/board-model.ts` line 78 and `mod/hud.ts` line 73). Any other running item reads
+  `estimate_s` (`mod/view/board/board-model.ts` line 78 and `mod/hud.ts` line 73). Any other running item reads
   `elapsed 00:42` with no gauge; there is no default budget.
 - One tab list. `STRIP_TABS` (`mod/panel-layout.ts`: route, team, channel, gates, core, board; keys `r t c g k o`) is
   the list the Claude Code side panel strip (`mod/pane/sidebar.tsx`), the omp painter (`omp/panel-view.ts`) and the band
@@ -114,7 +114,7 @@ Every statement below is backed by the file named beside it (paths under `plugin
 - Board key. `o` runs `openBoard` (`mod/register.ts`). When the Atlas pane is shown, the board is drawn inside that pane
   (view `board`) and a second `o` returns to the route; otherwise it opens the `atlas-board` pane.
 - Compact board. At 60 to 99 cells the state column is set from the widest label, not fixed at 26, so a label is not cut
-  (`stateCol` in `mod/board-model.ts`, shared with omp).
+  (`stateCol` in `mod/view/board/board-model.ts`, shared with omp).
 - HUD Subagents block. It is back on Claude Code (the older note above that it is dropped no longer holds). With nothing
   running, a done agent stays for `LINGER_MS` (15 s, exported from `mod/atlas-ui.ts`, the band's own window) and a failed
   agent stays until it is cleared (`mod/hud.ts` lines 113 to 115).

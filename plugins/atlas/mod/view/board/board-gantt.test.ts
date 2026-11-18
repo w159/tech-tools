@@ -2,11 +2,11 @@
 // Each test names the 63934f09 defect it comes from (stoprun-150-3 and stoprun-110-1 tab-board.png).
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { busySnap, NOW } from './live_fixture';
-import { forgetRefusals } from './data/channels';
-import { cells, type Ui } from './atlas-ui';
-import { forgetPhases } from './pane/sidebar-model';
-import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
+import { busySnap, NOW } from '../../live_fixture';
+import { forgetRefusals } from '../../data/channels';
+import { cells, type Ui } from '../../atlas-ui';
+import { forgetPhases } from '../../pane/sidebar-model';
+import { sidebarTree, type SidebarHandlers, type SidebarModel } from '../../pane/sidebar';
 import { boardRowsOf, boardText, boardTimeline, toBoardRow } from './board-model';
 
 type Node = { kind: string; props: Record<string, any> };

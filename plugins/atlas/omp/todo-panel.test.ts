@@ -1,9 +1,9 @@
-// The Board on omp: the same lines as Claude Code (both draw mod/board-model.ts), painted as ANSI. Parity with the golden and with
+// The Board on omp: the same lines as Claude Code (both draw mod/view/board/board-model.ts), painted as ANSI. Parity with the golden and with
 // the Claude Code rows, the exact width of every line, the colours, and the board inside the mission panel.
 import { expect, test } from "bun:test";
 import { board_120, board_120_rich, board_80, WORLD_NOW, worldItems } from "../contracts/board-golden";
 import { PALETTES, sgrColor, toneHex, type Ui } from "../mod/atlas-ui";
-import { todoRows } from "../mod/todo-panel";
+import { todoRows } from "../mod/view/board/todo-panel";
 import { renderPanel, visibleWidth, type PanelModel } from "./mission-panel";
 import { boardLines, todoLines } from "./todo-panel";
 

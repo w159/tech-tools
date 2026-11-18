@@ -6,7 +6,7 @@ import { descriptionName } from './data/orchestration';
 import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from './data/live';
 import { FN_TAIL, isPlanItem } from './data/todos';
 import { todoState } from './data/todos';
-import { ownerOutcome } from './board-model';
+import { ownerOutcome } from './view/board/board-model';
 import { DONE_DOUBT, RETURNED, cells, elapsedClock, motionState, fillHex, type Run, type Ui, type UiState, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
 import { fitStack, isFailedRow, padRows, sortAgents, stack, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 import { keysOf, type MotionCtx, type MotionItem } from './motion/motion';

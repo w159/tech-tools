@@ -2,7 +2,7 @@
 // Live shapes: stoprun-150-232567af-3/frames/f0104.ans:24-34 (T1 gone under `1/5 · 1 done`, T3 `queued` while beta-explorer #2 runs, no blank before SUBAGENTS),
 // stoprun-150-232567af-1/frames/f0093.ans:24-34 (T2 `queued` beside a failed worker, no blank), stoprun-150-232567af-3/tab-board.png (`done · worker killed` after #2 finished T3).
 import { describe, expect, test } from 'claude-code/testing';
-import { boardLines, boardRowsOf, boardText, ownerOutcome, type BoardSource } from './board-model';
+import { boardLines, boardRowsOf, boardText, ownerOutcome, type BoardSource } from './view/board/board-model';
 import { runsString, type Ui, type UiState } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { withOwnerStates } from './data/live';

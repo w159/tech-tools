@@ -2,7 +2,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { forgetRefusals, noteRefusal, refusalNotes } from './data/channels';
 import { TODO_METER_W, todoMeter, type Ui } from './atlas-ui';
-import { boardText, boardTimeline } from './board-model';
+import { boardText, boardTimeline } from './view/board/board-model';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 

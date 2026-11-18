@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { PALETTES, runHex, sgrColor, spinClock, spinFrameOf, spinnerGlyph, type Ui } from './atlas-ui';
 import { bandTree } from './band';
-import { boardBody } from './board-model';
+import { boardBody } from './view/board/board-model';
 import { hudLines, segmentOf } from './hud';
 import { rowSpinnerGlyph } from './hud-surface';
 import { liveWorkers } from './data/live';

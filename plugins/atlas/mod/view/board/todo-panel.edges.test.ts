@@ -1,11 +1,11 @@
-// Edge pins for mod/todo-panel.tsx (surviving mutants of the 553a9bce run): a one-row budget is only `+N more`, a pane of zero
+// Edge pins for mod/view/board/todo-panel.tsx (surviving mutants of the 553a9bce run): a one-row budget is only `+N more`, a pane of zero
 // rows still keeps one, and the pane box does not shrink.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
-import { WORLD_NOW, worldItems } from '../contracts/board-golden';
-import type { Ui } from './atlas-ui';
+import { WORLD_NOW, worldItems } from '../../../contracts/board-golden';
+import type { Ui } from '../../atlas-ui';
 import { boardTree, todoRows } from './todo-panel';
-import type { Segment } from './runs';
+import type { Segment } from '../../runs';
 
 const mocha: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const text = (row: Segment[]): string => row.map((s) => s.t).join('');

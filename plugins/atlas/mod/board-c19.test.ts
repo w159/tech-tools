@@ -2,7 +2,7 @@
 // `alpha-exp...` with ~15 blank cells before it; at 110 (36 cells) the owners were a detached list under all rows. An owner is drawn whole beside its row
 // or on a sub-line directly under that row, together with the row's reason and age.
 import { describe, expect, test } from 'claude-code/testing';
-import { boardFolded, boardLines, boardRowsOf, boardText, type BoardSource } from './board-model';
+import { boardFolded, boardLines, boardRowsOf, boardText, type BoardSource } from './view/board/board-model';
 import { cells } from './atlas-ui';
 import type { Ui } from './atlas-ui';
 

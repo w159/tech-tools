@@ -1,7 +1,7 @@
 // Critique 16, slice B: every state the store holds is drawn. Live shapes: stoprun-150-e4a8186a-1/truth.json (T2 set `blocked` after ghost-explorer was
 // stopped) and stoprun-150-e4a8186a-3/frames/f0085.ans (HUD: `■ T2 ... failed` while the lead says `T2 blocked`).
 import { describe, expect, test } from 'claude-code/testing';
-import { boardRowsOf, itemState } from './board-model';
+import { boardRowsOf, itemState } from './view/board/board-model';
 import { STATE_GLYPHS, cells } from './atlas-ui';
 import { todoState } from './data/todos';
 import { hudLines, type HudAgent, type HudInput } from './hud';

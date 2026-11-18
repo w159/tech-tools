@@ -2,11 +2,11 @@
 // file paints them as Segment rows. `boardTree` is the board pane (ribbon, header, one row per item); `todoRows` is the same
 // rows without the ribbon, for the band's inline slot, capped by the row budget with a `+N more` row. Pure: rows in, Segments out.
 import type { ClientElements, RenderElement } from 'claude-code';
-import { surfaceHex, type Run, type Ui, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
-import type { MotionCtx } from './motion/motion';
+import { surfaceHex, type Run, type Ui, runHex } from '../../atlas-ui'; import { lookUi, lookRich } from '../../look';
+import type { MotionCtx } from '../../motion/motion';
 import { boardBody, boardFolded, boardOpenFolded, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
-import { rowOf, type Segment } from './runs';
-import { textWidth } from './theme';
+import { rowOf, type Segment } from '../../runs';
+import { textWidth } from '../../theme';
 
 /** `tick` is the spinner frame of the running row; `now` (epoch seconds) times the running item; `ui` defaults to the environment. */
 export type TodoPanelOpts = { cols: number; tick: number; expanded: boolean; maxRows: number; now?: number; /** The snapshot clock in epoch ms (`now` is whole seconds): the spinner then turns the shared frame; absent: `tick`. */ nowMs?: number; ui?: Ui; rich?: boolean; motion?: MotionCtx | undefined };
