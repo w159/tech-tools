@@ -1481,5 +1481,65 @@ class RoundSixPhaseNTest(unittest.TestCase):
         self.assertEqual(done_claim.BLOCKING_KINDS, frozenset())
 
 
+class RoundSixPhaseOTest(unittest.TestCase):
+    """Phase O: false negatives left by phase N. A "but" clause hedges its lead only when it limits or negates how the lead
+    was verified; all-caps CI prose is a claim, a printed status row is not; more hedge words."""
+
+    PASSED = _bash("pytest -q", "10 passed in 1.0s")
+    FAILED = _bash("pytest -q", "1 failed, 9 passed in 1s")
+
+    def test_o1_a_but_clause_about_something_else_leaves_the_lead_asserted(self):
+        for text in (
+            "Pushed to main, but the docs are stale.",
+            "Pushed to main, but CI is slow.",
+            "I pushed to main, but the reviewer disagrees.",
+            "Merged to main, but the diff is large.",
+        ):
+            self.assertIn("push_unbacked", _kinds(text, [_bash("ls", "a.py")]), text)
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass, but the lint job is slow.", [self.FAILED]))
+        self.assertIn("pass_after_failing_run", _kinds("All tests pass, however the lint job is slow.", [self.FAILED]))
+
+    def test_o1_a_but_clause_that_limits_the_verification_hedges_the_lead(self):
+        for text in (
+            "The suite passes, but I only checked by hand.",
+            "All tests pass, but I have not run the integration suite.",
+            "All tests pass, however I only ran it locally.",
+            "All tests pass, although I skipped the slow ones.",
+            "All tests pass, though only partially.",
+            "All tests pass, but without the integration suite.",
+        ):
+            self.assertNotIn("pass_after_failing_run", _kinds(text, [self.FAILED]), text)
+
+    def test_o2_all_caps_ci_prose_is_a_claim(self):
+        tools = [_bash("ls", "a.py")]
+        for text in ("CI PASSED.", "The CI run PASSED, all done.", "Fixed. CI PASSED.", "Fixed. GitHub checks SUCCESS."):
+            self.assertIn("ci_unbacked", _kinds(text, tools), text)
+
+    def test_o2_a_printed_status_row_is_not_a_claim(self):
+        tools = [_bash("ls", "a.py")]
+        for text in (
+            "Fixed.\n| CI | PASSED |",
+            "Fixed.\n| step | status |\n|---|---|\n| CI PASSED | yes |",
+            "Fixed.\n- CI PASSED",
+            "Fixed.\nCI: PASSED",
+            "Fixed.\n```\nCI PASSED.\n```",
+        ):
+            self.assertNotIn("ci_unbacked", _kinds(text, tools), text)
+
+    def test_o3_more_hedge_words_hedge_the_clause_they_trail(self):
+        for text in (
+            "Pushed to main, hopefully.",
+            "Pushed to main, maybe.",
+            "Pushed to main, presumably.",
+            "Pushed to main, I believe.",
+            "Pushed to main, assuming CI is fine.",
+        ):
+            self.assertNotIn("push_unbacked", _kinds(text, [self.PASSED]), text)
+        self.assertNotIn("pass_after_failing_run", _kinds("All tests pass, assuming the cache is warm.", [self.FAILED]))
+
+    def test_o4_the_tier_is_still_empty(self):
+        self.assertEqual(done_claim.BLOCKING_KINDS, frozenset())
+
+
 if __name__ == "__main__":
     unittest.main()

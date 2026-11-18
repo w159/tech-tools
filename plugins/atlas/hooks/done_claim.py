@@ -93,7 +93,7 @@ _HEDGE = re.compile(
     r"\buntil\b|\bunless\b|\bif\b|\bshould\b|\bwould\b|\bcould\b|\bmight\b|\bmay\b|\bprobably\b|"
     r"\blikely\b|\bhope\b|\bexpect|\bwill\b|\bplan|\bnext step\b|\bto ?do\b|\bwaiting\b|\bblocked\b|"
     r"\bfailed\b|\bfailing\b|\bfailure|\bbefore\b|\bneeds?\b|\bremain|\bstill (?:red|failing|running)|"
-    r"\bwhether\b|\bto be\b|\bbut\b|\?",
+    r"\bwhether\b|\bto be\b|\bbut\b|\bhopefully\b|\bmaybe\b|\bpresumably\b|\bperhaps\b|\bi believe\b|\bassuming\b|\?",
     re.I,
 )
 # "0 failed", "no failures", "zero errors" report success; they are neither hedges nor a failure mention.
@@ -197,10 +197,18 @@ _LEAD_HEDGE = re.compile(r"^\s*(?:then\s+|so\s+)?(?:if|once|until|unless|whether
 
 
 _PUNCT_JOIN = re.compile(r"[,;:]")
-_BUT_JOIN = re.compile(r"\bbut\b", re.I)
+_BUT_JOIN = re.compile(r"\b(?:but|however|although|though)\b", re.I)
+# What a "but" clause says to limit or negate how its lead was verified ("but I only checked by hand", "but I have not run X").
+# A "but" clause about something else ("but the docs are stale", "but CI is slow") leaves its lead asserted.
+_LIMITER = re.compile(
+    r"(?:\bnot|n't|\bnever)\W+(?:\w+\W+){0,2}?(?:run|ran|re-?run|tests?|tested|check(?:ed)?|verif\w*|execut\w*|cover\w*|exercis\w*|"
+    r"confirm\w*|validat\w*)\b|\bonly\b|\bpartial(?:ly)?\b|\bwithout\b|\bexcept\b|\bby hand\b|\bmanual(?:ly)?\b|\blocal(?:ly)?\b|"
+    r"\bskipp?(?:ed|ing)?\b|\bunverified\b|\buntested\b|\bunchecked\b",
+    re.I,
+)
 # A clause that hangs on the one before it: it opens with its own hedge ("unless the hook rejects it", "probably", "I hope",
 # "nothing run") or with a linker ("so there is nothing to act on", "which I plan to do") and holds a hedge word.
-_DEPENDENT = re.compile(r"^\W*(?:(?:so|which|then|hence|thus|therefore)\b|(?:i|we)\s+(?=hope|expect|plan))", re.I)
+_DEPENDENT = re.compile(r"^\W*(?:(?:so|which|then|hence|thus|therefore)\b|(?:i|we)\s+(?=hope|expect|plan|believe))", re.I)
 
 
 def _clauses(sent: str) -> list[tuple[str, str]]:
@@ -241,7 +249,8 @@ def _assertions(sent: str) -> tuple[str, ...]:
     to a verb clause that was about something else."""
     if _LEAD_HEDGE.match(sent):
         return ()
-    if not _HEDGE.search(_ZERO_FAIL.sub(" ", sent)):
+    plain = _ZERO_FAIL.sub(" ", sent)
+    if not _HEDGE.search(plain) and not (_BUT_JOIN.search(plain) and _LIMITER.search(plain)):
         return (sent,)
     clauses = _clauses(sent)
     seg: list[int] = []  # comma segment of each clause: a ",", ";" or ":" starts a new one
@@ -253,7 +262,7 @@ def _assertions(sent: str) -> tuple[str, ...]:
         if not i:
             continue
         trailing = own[i] and seg[i] != seg[i - 1] and _opens_hedged(clause)
-        qualifier = not own[i] and _BUT_JOIN.search(lead)
+        qualifier = _BUT_JOIN.search(lead) and _LIMITER.search(_ZERO_FAIL.sub(" ", clause))
         if trailing or qualifier:
             for j in range(i):
                 if seg[j] == seg[i - 1]:
@@ -500,9 +509,23 @@ _PUSH_CLAIM = re.compile(
 _CI_CLAIM = re.compile(
     r"\b(?:(?P<strict>CI|GitHub(?: Actions)? checks?|every GitHub check)\b[^.\n]{0,20}|"
     r"(?P<loose>checks?|workflows?|pipelines?|e2e|end-to-end)\b[^.\n]{0,40})"
-    r"\b(?-i:[Gg]reen|[Pp]ass(?:es|ed|ing)?|[Ss]ucce\w+)\b",  # an all-caps token (PASSED, SUCCESS) is a printed status label, not the reply's assertion
+    r"\b(?P<tok>green|pass(?:es|ed|ing)?|succe\w+)\b",
     re.I,
 )
+
+
+def _ci_label_match(sent: str, m: re.Match) -> bool:
+    """The _CI_CLAIM match is a printed status row, not prose: the sentence is a table row ("|"), or its token is all caps and
+    either follows a separator ("CI: PASSED", "CI = PASSED") or ends the sentence unpunctuated ("GitHub checks SUCCESS").
+    All caps in running prose ("CI PASSED.", "The CI run PASSED, all done.") is still a claim."""
+    if "|" in sent:
+        return True
+    tok = m.group("tok")
+    if not (tok.isupper() and len(tok) > 1):
+        return False
+    if re.search(r"[:=\-]", sent[m.start() : m.start("tok")]):
+        return True
+    return not sent[m.end() :].strip() and not sent.rstrip().endswith((".", "!", "?"))
 _PUSH_OUT = re.compile(
     r"^\s*(?:[0-9a-f]{7,40}|<redacted>)\.\.\.?(?:[0-9a-f]{7,40}|<redacted>)\s+\S+\s+->\s+\S+"
     r"|^\s*\*\s*\[new (?:branch|tag)\]"
@@ -953,6 +976,9 @@ def _ci_claim_kind(sent: str, blob: str = "") -> str | None:
     named = bool(blob) and any(w in blob for w in words)
     kind, pos = None, 0
     while (m := _CI_CLAIM.search(sent, pos)) is not None:
+        if _ci_label_match(sent, m):
+            pos = m.start() + 1
+            continue
         if m.group("strict"):
             return "strict"
         if named:
