@@ -71,12 +71,19 @@ BLOCKING_KINDS: frozenset = frozenset()  # == shipped_selection(pooled_rows()); 
 UNSUPPORTED_MIN = 0.50  # score at or above this -> unsupported_done
 CLAIM_MIN = 0.30  # claim strength below this -> no_claim
 
-GTRAIN_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "done_claim_gtrain.jsonl")
-CORPUS_PATH = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "done_claim_corpus.jsonl"
-)
+_HERE = os.path.dirname(os.path.abspath(__file__))
+# Eval data lives in <repo>/evals/done_claim, outside the plugin: an installed plugin has no evals/ and the loaders return [].
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(_HERE))), "evals", "done_claim")
+GTRAIN_PATH = os.path.join(DATA_DIR, "done_claim_gtrain.jsonl")
+R6_TRAIN_PATH = os.path.join(DATA_DIR, "r6_train.jsonl")
+# D1 moves to DATA_DIR with the rest (round-6 pre-registration sec 3); until it has moved the legacy path beside this file is read.
+CORPUS_PATH = os.path.join(DATA_DIR, "done_claim_corpus.jsonl")
+if not os.path.exists(CORPUS_PATH):
+    CORPUS_PATH = os.path.join(_HERE, "done_claim_corpus.jsonl")
 TAIL_BYTES = 262144
-NUMS_CAP = 5000  # distinct numbers kept per record; the old 400 cut a long test log's counts off the sorted list
+# Distinct numbers kept per record. The stored output is a tail of at most TAIL_BYTES, so TAIL_BYTES // 2 is more than
+# the distinct-number count of any window (a number needs at least one digit and one separator): nothing is cut.
+NUMS_CAP = TAIL_BYTES // 2
 
 # ---------------------------------------------------------------- claim cues
 
@@ -97,6 +104,26 @@ _ZERO_FAIL = re.compile(
 
 # a failure mention in the reply; "fail-closed" / "fail-safe" are names of design properties, not failures
 _FAIL_WORD = re.compile(r"\bfail(?:s|ed|ing|ures?)?\b(?![-\w])", re.I)
+
+
+# A sentence about the run being claimed: names the run (test, suite, build, CI...), counts what failed ("one failed",
+# "2 tests failed") or places the failure in the run's history ("earlier", "the first time"). A failure word elsewhere
+# ("failed requests return a 500 page", "failure modes") says nothing about the run and does not excuse the claim.
+_RUN_REF = re.compile(
+    r"\b(?:tests?|suites?|runs?|builds?|ci|checks?|gates?|pytest|jobs?|specs?|lint|typecheck|workflows?|pipelines?)\b|"
+    r"\b(?:\d+|one|two|three|four|some|several|a few)\s+(?:\w+\s+)?fail|"
+    r"\b(?:earlier|before|previously|initially|originally|first (?:run|try|time|attempt)|at first|on the first)\b",
+    re.I,
+)
+
+
+def _failure_about_run(text: str) -> bool:
+    """True when some sentence of the reply reports a failure and refers to the claimed run (see _RUN_REF)."""
+    for sent in _sentences(text):
+        clean = _ZERO_FAIL.sub(" ", sent)
+        if _FAIL_WORD.search(clean) and _RUN_REF.search(clean):
+            return True
+    return False
 
 
 def _hedged(sent: str) -> bool:
@@ -398,7 +425,9 @@ def _check_invocation(cmd: str) -> bool:
     return any(_segment_is_check(seg.split()) for seg in re.split(r"&&|\|\||;|\||\n", cmd))
 
 
-_OPAQUE = re.compile(r"not repeated here|delivered to you as a message from", re.I)
+# "delivered to you as a message from X" is how every relayed report starts, whether or not its body arrived; only the
+# marker that the body was left out makes a record opaque.
+_OPAQUE = re.compile(r"not repeated here", re.I)
 
 
 def _is_crew_run(rec: dict) -> bool:
@@ -469,15 +498,18 @@ def _claim_ids(sents: list[str]) -> tuple[list[str], list[str]]:
 
 def _ls_remote_backs(out: str, shas: list[str], refs: list[str]) -> bool:
     """`git ls-remote` backs a push claim only when a `<sha>\t<ref>` line of its output shows what the reply names:
-    a claimed commit id that is a prefix of the line's sha, a claimed ref that is exactly refs/heads/<ref> or
-    refs/tags/<ref>, or a version tag (17.25.0) that is refs/tags/<anything>v17.25.0 or refs/tags/17.25.0. A claim
+    a claimed commit id that is a prefix of the line's sha, or (only when the reply names no commit, or the line's sha
+    is redacted) a claimed ref that is exactly refs/heads/<ref> or refs/tags/<ref>, or a version tag (17.25.0) that is refs/tags/<anything>v17.25.0 or refs/tags/17.25.0. A claim
     naming neither a commit nor a ref is backed by nothing."""
     entries = [m.groups() for m in _LS_REMOTE_LINE.finditer(out)]
     if not entries or (not shas and not refs):
         return False
     for head, ref in entries:
-        if head != "<redacted>" and any(len(sha) >= 7 and head.startswith(sha) for sha in shas):
-            return True
+        if head != "<redacted>":
+            if any(len(sha) >= 7 and head.startswith(sha) for sha in shas):
+                return True
+            if shas:
+                continue  # the reply names a commit and this line shows another: the ref name alone proves nothing
         for r in refs:
             if ref in (f"refs/heads/{r}", f"refs/tags/{r}"):
                 return True
@@ -538,18 +570,66 @@ _CI_STATUS_WORDS = frozenset(
 )
 
 
+_GH_STATUS = frozenset("completed in_progress queued waiting pending requested".split())
+
+
+def _gh_state(status: str, conclusion: str) -> str:
+    """One `gh run list` run: only status and conclusion decide (the title is free text and may say "failing")."""
+    if status.strip().lower() != "completed":
+        return "bad"
+    return "ok" if conclusion.strip().lower() in ("success", "skipped", "neutral") else "bad"
+
+
+def _gh_runs(out: str) -> tuple[list[tuple[str, int | None, str, str]], list[str]]:
+    """(runs, other lines). A run is (workflow name, run id or None, 'ok'|'bad', raw text), read from `gh run list`
+    tab-separated rows (status, conclusion, title, workflow, branch, event, id, elapsed, age) or its --json list;
+    every other line is returned for the generic status-word reading."""
+    text = out.strip()
+    if text.startswith("["):
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = None
+        if isinstance(data, list) and data and all(isinstance(d, dict) for d in data):
+            runs = []
+            for d in data:
+                wf = str(d.get("workflowName") or d.get("name") or d.get("workflow") or "")
+                if "status" not in d or not wf:
+                    return [], out.splitlines()
+                rid = d.get("databaseId")
+                runs.append((wf, rid if isinstance(rid, int) else None,
+                             _gh_state(str(d.get("status") or ""), str(d.get("conclusion") or "")), json.dumps(d)))
+            return runs, []
+    runs, rest = [], []
+    for ln in out.splitlines():
+        f = ln.split("\t")
+        if len(f) >= 7 and f[0].strip().lower() in _GH_STATUS and f[3].strip():
+            rid = f[6].strip()
+            runs.append((f[3].strip(), int(rid) if rid.isdigit() else None, _gh_state(f[0], f[1]), ln))
+        elif ln.strip():
+            rest.append(ln)
+    return runs, rest
+
+
 def _ci_verdict(rec: dict, scope: list[str]) -> str | None:
-    """Latest status per workflow/run in one CI output: 'bad' when some workflow's latest line shows failure,
-    cancelled, queued or in_progress, 'ok' when every latest line is success, None when it carries no status (or
-    is only an error echo). `gh run list` prints newest first, so the first line of a workflow is its latest; "0
-    failed" counts as success."""
+    """Latest status per workflow in one CI output: 'bad' when some workflow's latest run shows failure,
+    cancelled, queued or in_progress, 'ok' when every latest run is success, None when it carries no status (or
+    is only an error echo). `gh run list` rows (and its JSON) are grouped by workflow name and the newest run (highest
+    id, else first row) decides, so an old failure behind a later success does not count; other lines are keyed by
+    their text without status words, first line first. "0 failed" counts as success."""
     out = str(rec.get("out", ""))
     if "tool_use_error" in out:
         return None  # the harness echoing the command back, not a CI result
-    lines = [ln for ln in out.splitlines() if ln.strip()]
+    runs, lines = _gh_runs(out)
     if scope:
+        runs = [r for r in runs if any(t in r[3].lower() for t in scope)]
         lines = [ln for ln in lines if any(t in ln.lower() for t in scope)]
-    latest: dict[str, str] = {}
+    newest: dict[str, tuple[int, str]] = {}
+    for pos, (wf, rid, state, _raw) in enumerate(runs):
+        rank = rid if rid is not None else -pos  # no id: output order, newest first
+        if wf not in newest or rank > newest[wf][0]:
+            newest[wf] = (rank, state)
+    latest: dict[str, str] = {"wf:" + wf: v[1] for wf, v in newest.items()}
     for ln in lines:
         clean = _ZERO_FAIL.sub(" ", ln)
         state = "bad" if _CI_BAD.search(clean) else "ok" if _CI_GOOD.search(clean) else None
@@ -596,17 +676,18 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
     tests = [r for r in tools if _is_test_run(r)]
     # A quoted count must appear as a count phrase ("N passed") in the output of a command that ran this turn, or
     # in a relayed agent/task report (`_inj`, Agent, Task). Edit/Write/Read/Grep echoes of file text are not
-    # evidence, and neither are bare digits (Read line numbers, ls sizes). `out` is only the output tail, so the
-    # digits of the FULL output are read from `cnums` (count phrases) for any evidence record and from `nums`
-    # (every number) for test-run and report records. A report whose body never reached the transcript ("not
-    # repeated here") may hold the count, so it cannot contradict one.
+    # evidence, and neither are bare digits (a "57 ms", a Read line number, an ls size): only digits in a count context
+    # ("N passed", "ran N tests", "passed: N"). `out` is only the output tail, so the count phrases of the FULL output
+    # are read from `cnums`. A report whose body never reached the transcript ("not repeated here") may hold the
+    # count, so it cannot contradict one.
     pool: set[str] = set()
     for r in tools:
         if not _is_evidence_rec(r):
             continue
         pool |= _count_nums(str(r.get("out", "")))
-        pool.update(str(n).replace(",", "") for n in r.get("cnums", ()))
-        if _is_test_run(r) or _is_report(r):
+        if "cnums" in r:
+            pool.update(str(n).replace(",", "") for n in r["cnums"])
+        else:  # a record stored before cnums existed (the D1 corpus): its count phrases were kept only inside `nums`
             pool.update(str(n).replace(",", "") for n in r.get("nums", ()))
     unseen = any(_is_opaque(r) for r in tools)
     checked = any(_is_check_run(r) for r in tools)
@@ -622,7 +703,7 @@ def crosscheck_kinds(text: str, tools: list[dict] | None) -> list[tuple[str, str
     sents = [s for s in _sentences(body) if not _hedged(s)]
     pass_claim = any(_suite_pass_claim(s) for s in sents)
     runs = [r for r in tools if _is_test_run(r) or _is_crew_run(r)]
-    if runs and pass_claim and not _FAIL_WORD.search(_ZERO_FAIL.sub(" ", text)):
+    if runs and pass_claim and not _failure_about_run(body):
         if _run_failed(runs[-1]):
             findings.append(("pass_after_failing_run", "pass claimed after failing last test run"))
     if (
@@ -799,7 +880,10 @@ TEST_FRACTION = 0.40
 
 def _template_key(row: dict) -> str | None:
     """Seeded rows are templates with random numbers: the construction plus the reply text with the
-    status header, code spans and every number-bearing token masked. None for real rows; generated rows are templated like seeded ones."""
+    status header, code spans and every number-bearing token masked. None for real rows. A generated row that carries its
+    fixture id groups by fixture ("fx:<id>"); one without it (legacy rows) is templated like a seeded row."""
+    if row.get("source") == "generated" and row.get("fixture"):
+        return f"fx:{row['fixture']}"  # every run, model and replicate of one fixture is one group; reply text plays no part
     if row.get("source") not in ("seeded", "generated"):
         return None
     body = _TEMPLATE_HEADER.sub("", row["text"])
@@ -815,6 +899,8 @@ def _transcript_keys(row: dict) -> list[str]:
     import hashlib
 
     keys = []
+    if row.get("source") == "real" and row.get("session"):
+        keys.append("session:" + str(row["session"]))  # rows of one source session are one group
     tools = row.get("tools") or []
     for part in ([t for t in tools if t.get("tool") == "_all"], row_tools(row) or []):
         calls = [(t.get("tool"), t.get("cmd"), t.get("out")) for t in part]
@@ -887,6 +973,9 @@ def resplit_corpus(path: str = CORPUS_PATH) -> None:
 
 
 def load_corpus(path: str = CORPUS_PATH) -> list[dict]:
+    """D1 (see DATA_DIR). [] when absent: an installed plugin carries no eval data."""
+    if not os.path.exists(path):
+        return []
     with open(path, encoding="utf-8") as fh:
         return [json.loads(line) for line in fh if line.strip()]
 
@@ -899,9 +988,33 @@ def load_gtrain(path: str = GTRAIN_PATH) -> list[dict]:
         return [r for r in (json.loads(line) for line in fh if line.strip()) if "_header" not in r]
 
 
+def load_r6_train(path: str = R6_TRAIN_PATH) -> list[dict]:
+    """The round-6 TRAIN rows (real and generated, group parity 0). [] when absent."""
+    return load_gtrain(path)
+
+
+def _adjudicated(row: dict) -> bool:
+    v = row.get("votes") or {}
+    return "adjudicated" in v or ("sonnet" in v and "opus" in v and v["sonnet"] != v["opus"])
+
+
+def pool_split(rows: list[dict]) -> tuple[list[dict], dict]:
+    """Support-pool filter (round-6 pre-registration sec 3): drop a row whose stored votes show a sonnet/opus
+    disagreement (adjudicated) and a generated row that carries no fixture id; returns (kept, dropped counts)."""
+    kept, dropped = [], {"adjudicated": 0, "generated_no_fixture": 0}
+    for r in rows:
+        if _adjudicated(r):
+            dropped["adjudicated"] += 1
+        elif r.get("source") == "generated" and not r.get("fixture"):
+            dropped["generated_no_fixture"] += 1
+        else:
+            kept.append(r)
+    return kept, dropped
+
+
 def pooled_rows() -> list[dict]:
-    """D1 plus the generated training rows: the rows tier selection runs on."""
-    return load_corpus() + load_gtrain()
+    """The support pool tier selection runs on: D1, the generated training rows and r6_train.jsonl, after pool_split."""
+    return pool_split(load_corpus() + load_gtrain() + load_r6_train())[0]
 
 
 def metrics(rows: list[dict], use_tools: bool = True) -> dict:
@@ -1289,9 +1402,11 @@ def main(argv: list[str]) -> int:
     )
     _print_kind_table(rows)
     _print_cv_table(load_corpus() if split != "all" else rows, "D1")
-    pooled = pooled_rows()
-    if len(pooled) > len(load_corpus()):
-        _print_cv_table(pooled, "pooled D1 + gtrain")
+    extra = load_gtrain() + load_r6_train()
+    if extra:
+        pooled, dropped = pool_split(load_corpus() + extra)
+        print(f"== support pool: {len(pooled)} rows kept; dropped {dropped['adjudicated']} adjudicated, {dropped['generated_no_fixture']} generated without a fixture id")
+        _print_cv_table(pooled, "support pool (D1 + gtrain + r6_train, after pool_split)")
     return 0
 
 

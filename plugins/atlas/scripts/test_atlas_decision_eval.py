@@ -201,7 +201,7 @@ class McNemarTest(unittest.TestCase):
         for g, w in zip(got, [0.04, 0.03, 0.04]):
             self.assertAlmostEqual(g, w)
         self.assertEqual(ev.holm_adjust([]), [])
-        self.assertEqual(ev.holm_adjust([0.9, 0.6]), [0.9, 0.9])  # capped at 1 and monotone
+        self.assertEqual(ev.holm_adjust([0.9, 0.6]), [1.0, 1.0])  # capped at 1 and monotone
         self.assertEqual(ev.holm_adjust([0.5, 0.6, 0.7])[0], 1.0)
         self.assertAlmostEqual(ev.holm_adjust([0.0156])[0], 0.0156)
 

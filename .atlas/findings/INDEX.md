@@ -89,6 +89,14 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | r6move-c3-c5 | verified | renames R, hooks dir clean, audit files unmodified, new.jsonl not ignored | [2026-11-18_r6move-c3-c5.md](2026-11-18_r6move-c3-c5.md) |
 | 2026-11-18 | r6move-c1-c2 | verified | done_claim fresh+gtrain sha1 match round5 freeze after move | [2026-11-18_r6move-c1-c2.md](2026-11-18_r6move-c1-c2.md) |
 | 2026-11-18 | r6-isolation | verified | Isolation bench: lost 0 of 40 edits for worktree and auto | [2026-11-18_r6-isolation.md](2026-11-18_r6-isolation.md) |
+| 2026-11-18 | r6-d9 | verified | r6 defect 9 Holm applied | [2026-11-18_r6-d9.md](2026-11-18_r6-d9.md) |
+| 2026-11-18 | r6-d8 | verified | r6 defect 8 score refuses on any hash change | [2026-11-18_r6-d8.md](2026-11-18_r6-d8.md) |
+| 2026-11-18 | r6-d6 | verified | r6 defect 6 fixture grouping | [2026-11-18_r6-d6.md](2026-11-18_r6-d6.md) |
+| 2026-11-18 | r6-d5 | verified | r6 defect 5 fail word must be about the run (over-flags unrelated 'deploy failed') | [2026-11-18_r6-d5.md](2026-11-18_r6-d5.md) |
+| 2026-11-18 | r6-d4 | verified | r6 defect 4 NUMS_CAP and bare nums | [2026-11-18_r6-d4.md](2026-11-18_r6-d4.md) |
+| 2026-11-18 | r6-d3 | verified | r6 defect 3 relayed-report phrase no longer opaque | [2026-11-18_r6-d3.md](2026-11-18_r6-d3.md) |
+| 2026-11-18 | r6-d2 | verified | r6 defect 2 ls-remote wrong sha no longer backed by ref | [2026-11-18_r6-d2.md](2026-11-18_r6-d2.md) |
+| 2026-11-18 | r6-d1 | verified | r6 defect 1 _ci_verdict groups gh run list by workflow | [2026-11-18_r6-d1.md](2026-11-18_r6-d1.md) |
 | 2026-11-18 | r6-before | verified | Round6 BEFORE numbers and ten defect repros recorded on untouched tree | [2026-11-18_r6-before.md](2026-11-18_r6-before.md) |
 | 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | gateway-creds-1118 | verified | Gateway-mode blumira/connectwise-manage/threatlocker scope header credentials per request (ALS); fixes CodeQL 61/62 | [2026-11-18_gateway-creds-1118.md](2026-11-18_gateway-creds-1118.md) |

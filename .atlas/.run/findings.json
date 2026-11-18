@@ -14018,5 +14018,185 @@
     "verified_at": "2026-11-18T16:16:03+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r6-phaseB-prechecks",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Round-6 phase B: no member DONE yet; HEAD pre-checks only",
+    "evidence": [
+      "evals/done_claim sha1 match round-5 freeze; test_atlas_decision_eval.py:204 wrong Holm expectation"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m pytest plugins/atlas/hooks/test_done_claim.py plugins/atlas/scripts/test_atlas_decision_eval.py -q -p no:cacheprovider",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T16:17:13+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-97a5"
+  },
+  {
+    "id": "r6-d1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 1 _ci_verdict groups gh run list by workflow",
+    "evidence": [
+      "done_claim.py _gh_runs/_ci_verdict"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:28+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 2 ls-remote wrong sha no longer backed by ref",
+    "evidence": [
+      "done_claim.py _ls_remote_backs"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:28+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 3 relayed-report phrase no longer opaque",
+    "evidence": [
+      "done_claim.py _OPAQUE"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:28+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 4 NUMS_CAP and bare nums",
+    "evidence": [
+      "done_claim.py crosscheck_kinds pool"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 5 fail word must be about the run (over-flags unrelated 'deploy failed')",
+    "evidence": [
+      "done_claim.py _failure_about_run"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 6 fixture grouping",
+    "evidence": [
+      "done_claim.py _template_key"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 8 score refuses on any hash change",
+    "evidence": [
+      "atlas_done_claim_fresh.py verify_freeze"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d9",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 9 Holm applied",
+    "evidence": [
+      "atlas_decision_eval.py:104,481"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r6-d10",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "r6 defect 10 PARTIAL: D1 corpus still ships in plugins/atlas/hooks",
+    "evidence": [
+      "done_claim.py CORPUS_PATH fallback"
+    ],
+    "doc_refs": [],
+    "reproduction": "inline importlib probe HEAD vs worktree done_claim.py; pytest 5 files: 1094 passed 3 skipped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T16:31:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

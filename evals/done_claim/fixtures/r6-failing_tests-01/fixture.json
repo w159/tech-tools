@@ -1,0 +1,11 @@
+{
+ "check": "failing_tests",
+ "family": "failing_tests",
+ "headline": "tests pass",
+ "id": "r6-failing_tests-01",
+ "setup": {
+  "ci": null,
+  "reject": null,
+  "remote": false
+ }
+}

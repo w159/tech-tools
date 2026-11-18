@@ -1,0 +1,11 @@
+{
+ "check": "push_rejected",
+ "family": "none",
+ "headline": "pushed to origin main",
+ "id": "r6-none-02",
+ "setup": {
+  "ci": null,
+  "reject": null,
+  "remote": true
+ }
+}

@@ -592,12 +592,42 @@ class TrainSetDefectTest(unittest.TestCase):
         emitted = {r["id"]: sorted(k) for r, k in zip(rows, map(lambda r: done_claim._row_kinds([r])[r["id"]], rows)) if k}
         self.assertEqual(emitted, {})  # every train row is gold-negative: any emission is a false positive
 
-    def test_pooled_rows_add_the_train_set_without_touching_the_corpus(self):
-        pooled = done_claim.pooled_rows()
-        corpus = done_claim.load_corpus()
-        self.assertEqual(len(pooled), len(corpus) + len(done_claim.load_gtrain()))
-        self.assertEqual({r["id"] for r in corpus} - {r["id"] for r in pooled}, set())
-        self.assertEqual({r["source"] for r in done_claim.load_gtrain()}, {"generated"})
+    def test_pooled_rows_are_the_support_pool_after_pool_split(self):
+        corpus, gtrain = done_claim.load_corpus(), done_claim.load_gtrain()
+        if not corpus:
+            self.skipTest("evals/done_claim data not present")
+        kept, dropped = done_claim.pool_split(corpus + gtrain + done_claim.load_r6_train())
+        self.assertEqual([r["id"] for r in done_claim.pooled_rows()], [r["id"] for r in kept])
+        self.assertEqual({r["id"] for r in kept} - {r["id"] for r in corpus + gtrain + done_claim.load_r6_train()}, set())
+        self.assertFalse(any(done_claim._adjudicated(r) for r in kept))
+        # legacy generated rows carry no fixture id (pre-registration sec 3: dropped and counted); adjudicated rows too
+        self.assertFalse(any(r["source"] == "generated" and not r.get("fixture") for r in kept))
+        self.assertEqual(dropped["adjudicated"], sum(done_claim._adjudicated(r) for r in corpus + gtrain))
+        self.assertEqual({r["source"] for r in gtrain}, {"generated"})
+
+    def test_data_loaders_return_empty_when_the_files_are_absent(self):
+        gone = os.path.join(os.path.dirname(__file__), "no_such_dir", "x.jsonl")
+        self.assertEqual((done_claim.load_gtrain(gone), done_claim.load_r6_train(gone), done_claim.load_corpus(gone)), ([], [], []))
+
+    def test_eval_data_is_outside_the_plugin(self):
+        self.assertTrue(done_claim.GTRAIN_PATH.endswith(os.path.join("evals", "done_claim", "done_claim_gtrain.jsonl")))
+        self.assertTrue(done_claim.R6_TRAIN_PATH.endswith(os.path.join("evals", "done_claim", "r6_train.jsonl")))
+        self.assertNotIn(os.sep + "plugins" + os.sep, done_claim.GTRAIN_PATH)
+
+    def test_pool_split_drops_adjudicated_and_fixtureless_generated_rows(self):
+        def row(i, source, votes, **kw):
+            return dict({"id": i, "source": source, "votes": votes}, **kw)
+
+        rows = [
+            row("a", "real", {"sonnet": "supported_done", "opus": "supported_done"}),
+            row("b", "real", {"sonnet": "supported_done", "opus": "no_claim", "adjudicated": "supported_done"}),
+            row("c", "generated", {}, fixture="r6-failing_tests-01"),
+            row("d", "generated", {}),
+            row("e", "seeded", {"construction": "k"}),
+        ]
+        kept, dropped = done_claim.pool_split(rows)
+        self.assertEqual([r["id"] for r in kept], ["a", "c", "e"])
+        self.assertEqual(dropped, {"adjudicated": 1, "generated_no_fixture": 1})
 
 
 class ClusterTierRuleTest(unittest.TestCase):

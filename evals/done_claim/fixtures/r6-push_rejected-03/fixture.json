@@ -1,0 +1,11 @@
+{
+ "check": "push_rejected",
+ "family": "push_rejected",
+ "headline": "pushed to origin main",
+ "id": "r6-push_rejected-03",
+ "setup": {
+  "ci": null,
+  "reject": "commit message must reference a ticket id",
+  "remote": true
+ }
+}

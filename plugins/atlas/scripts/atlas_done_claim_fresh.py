@@ -45,9 +45,12 @@ if HOOKS not in sys.path:
 
 import done_claim  # noqa: E402  (only tools_from_transcript, _transcript_keys, row_tools, TAIL_BYTES are used)
 
-CORPUS_PATH = os.path.join(HOOKS, "done_claim_corpus.jsonl")
 REPO_ROOT = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
 DATA_DIR = os.path.join(REPO_ROOT, "evals", "done_claim")  # fresh/train rows live outside the shipped plugin
+# the corpus moves to evals/done_claim in round 6 (prereg sec 3); use it there once it has moved
+CORPUS_PATH = next((p for p in (os.path.join(DATA_DIR, "done_claim_corpus.jsonl"),
+                                os.path.join(HOOKS, "done_claim_corpus.jsonl")) if os.path.exists(p)),
+                   os.path.join(DATA_DIR, "done_claim_corpus.jsonl"))
 FRESH_PATH = os.path.join(DATA_DIR, "done_claim_fresh.jsonl")
 GTRAIN_PATH = os.path.join(DATA_DIR, "done_claim_gtrain.jsonl")
 RUBRIC_PATH = os.path.join(HOOKS, "done_claim_rubric.md")
@@ -948,6 +951,8 @@ _NAME_PATHS = {
     "r6_heldout.jsonl": os.path.join(DATA_DIR, "r6_heldout.jsonl"),
 }
 _AUDITS = os.path.join(REPO_ROOT, "docs", "audits")
+PREREG_R6 = "2026-11-18_atlas-round6-preregistration.md"
+_NAME_PATHS[PREREG_R6] = os.path.join(_AUDITS, PREREG_R6)
 TARGETS = {
     "r5": {  # legacy: scored once on 2026-11-16, its freeze predates scorer hashing
         "names": FROZEN_NAMES, "fresh": "done_claim_fresh.jsonl",
@@ -955,7 +960,8 @@ TARGETS = {
     },
     "r6": {
         "names": ("done_claim.py", SCORER_NAME, "done_claim_rubric.md", "done_claim_corpus.jsonl",
-                  "done_claim_gtrain.jsonl", "done_claim_fresh.jsonl", "r6_train.jsonl", "r6_heldout.jsonl"),
+                  "done_claim_gtrain.jsonl", "done_claim_fresh.jsonl", "r6_train.jsonl", "r6_heldout.jsonl",
+                  PREREG_R6),
         "fresh": "r6_heldout.jsonl",
         "freeze": os.path.join(_AUDITS, "2026-11-18_atlas-round6-freeze.json"),
         "score_out": os.path.join(_AUDITS, "2026-11-18_atlas-round6-fresh-score.json"),
@@ -973,6 +979,12 @@ def resolve_target(args) -> dict:
             t[key] = getattr(args, attr)
     t["paths"] = {n: _NAME_PATHS[n] for n in t["names"]}
     t["paths"][t["fresh"]] = t["fresh_path"]
+    if getattr(args, "target", None) == "r6" and os.path.isdir(DATA_DIR):
+        # prereg sec 8: every file under evals/done_claim/ (manifest, fixture sources, data) is frozen
+        for root, _dirs, files in os.walk(DATA_DIR):
+            for f in sorted(files):
+                full = os.path.join(root, f)
+                t["paths"].setdefault(os.path.relpath(full, DATA_DIR).replace(os.sep, "/"), full)
     return t
 
 

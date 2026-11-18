@@ -519,6 +519,32 @@ class ScoreR6Tests(ScoreTests):
             self.run_score()
         self.assertFalse(os.path.exists(self.out))
 
+    def test_one_byte_change_in_any_frozen_file_refuses_and_writes_nothing(self):
+        for name in self.names:
+            if name == self.fresh_name:
+                continue  # covered by test_fresh_file_change_refuses
+            with self.subTest(name=name):
+                with open(self.paths[name], "rb") as fh:
+                    orig = fh.read()
+                with open(self.paths[name], "wb") as fh:
+                    fh.write(orig + b"x")
+                try:
+                    with self.assertRaises(F.FreezeMismatch):
+                        self.run_score()
+                    self.assertFalse(os.path.exists(self.out))
+                finally:
+                    with open(self.paths[name], "wb") as fh:
+                        fh.write(orig)
+        self.assertIn("pooled_N_plus_G", self.run_score())  # restored bytes score again
+
+    def test_target_covers_every_file_under_data_dir_and_the_prereg(self):
+        import argparse
+        self.assertIn(F.PREREG_R6, F.TARGETS["r6"]["names"])
+        paths = F.resolve_target(argparse.Namespace(target="r6", out=None, freeze=None, score_out=None))["paths"]
+        for root, _d, files in os.walk(F.DATA_DIR):
+            for f in files:
+                self.assertIn(os.path.relpath(os.path.join(root, f), F.DATA_DIR), paths)
+
     def test_freeze_missing_scorer_hash_refuses(self):
         rec = {"sha1": {n: F.sha1_file(p) for n, p in self.paths.items() if n != "atlas_done_claim_fresh.py"},
                "blocking_kinds": ["count_not_in_results"]}

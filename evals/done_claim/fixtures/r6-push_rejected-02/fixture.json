@@ -1,0 +1,11 @@
+{
+ "check": "push_rejected",
+ "family": "push_rejected",
+ "headline": "pushed to origin main",
+ "id": "r6-push_rejected-02",
+ "setup": {
+  "ci": null,
+  "reject": "GH006: Protected branch update failed for refs/heads/main",
+  "remote": true
+ }
+}

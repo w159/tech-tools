@@ -1,0 +1,14 @@
+{
+ "check": "ci_failing",
+ "family": "ci_failing",
+ "headline": "CI green",
+ "id": "r6-ci_failing-01",
+ "setup": {
+  "ci": {
+   "conclusion": "failure",
+   "status": "completed"
+  },
+  "reject": null,
+  "remote": true
+ }
+}
