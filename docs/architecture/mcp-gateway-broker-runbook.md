@@ -437,6 +437,91 @@ Two things the instance's discovery metadata does not get right, for any client 
 Dynamic client registration works without any client id or secret: `POST /api/PublicMcpRegister`
 answers 201 with `token_endpoint_auth_method: none`.
 
+## 7. Validation and hardening (2026-11-17)
+
+Everything here was applied to `gwh-mcp-gateway-rg` on 2026-11-17 and read
+back afterwards. The gateway image did not change (digest `sha256:35cef729...`).
+
+### What was applied
+
+| Change | Resource | How to confirm |
+|---|---|---|
+| Diagnostic setting `audit-to-law` (`AuditEvent`, `AzurePolicyEvaluationDetails`, `AllMetrics`) | `gwh-mcp-gateway-kv` | `az monitor diagnostic-settings list --resource <vault id>` |
+| Diagnostic setting `audit-to-law` (repository and login events) | `gwhmcpgateway` | same command with the registry id |
+| Startup, readiness and liveness probes, `GET /health` on 8080 | `gwh-mcp-gateway`, revision `gwh-mcp-gateway--probes1117` | `az containerapp show ... --query "properties.template.containers[0].probes"` |
+| Lock `do-not-delete` (CanNotDelete) | the vault and `gwh-mcp-gateway-law` | `az lock list -g gwh-mcp-gateway-rg` |
+| Tags `purpose`, `owner`, `compliance=glba` | all 8 resources | `az resource list -g gwh-mcp-gateway-rg --query "[].tags"` |
+| Log alert rules `gw-auth-failures`, `gw-access-denials`, `gw-backend-errors`, `gw-membership-check-unavailable`, `kv-secret-read-by-non-workload` | scope: the log workspace | `az monitor scheduled-query list -g gwh-mcp-gateway-rg` |
+| Metric alert rules `<app>-no-replicas`, `<app>-restarts` for both container apps | the two container apps | `az monitor metrics alert list -g gwh-mcp-gateway-rg` |
+
+The alert rules have no action group. They fire into Azure Monitor only until a
+recipient is attached with `--action-groups`.
+
+`kv-secret-read-by-non-workload` excludes the two managed identities by
+**principal (object) id**, read from `identity_claim_oid_g`. Two traps hit
+while writing it: `az role assignment list` prints a managed identity's
+client id in `principalName`, which is not the object id; and Key Vault logs
+put a managed identity's object id in `identity_claim_oid_g`, while a signed-in
+user's lands in
+`identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g`.
+The first vault audit rows reached the workspace about 20 minutes after the
+diagnostic setting was created.
+
+The delete locks block deleting the vault and the workspace themselves. They do
+not block secret rotation or log queries. Remove a lock deliberately with
+`az lock delete --name do-not-delete --resource <id>` before a planned teardown.
+
+The probes were added with a PATCH of `properties.template` (full container
+list, `revisionSuffix`), not `az containerapp update`, because the CLI has no
+probe flags. A revision roll still drops dynamic client registrations (see
+section 6), so every client reconnects once afterwards.
+
+### Checks that passed against the live gateway
+
+- Unauthenticated, garbage-token, forged `alg=none`, forged HS256,
+  query-string token and spoofed identity header requests to `/mcp` all
+  return 401. `GET /mcp` returns 405 (the endpoint is POST only).
+- Plain http redirects (301), TLS 1.1 is refused, `/jwks` serves one RS256
+  public key with no private fields.
+- The rejected requests appear as `auth_failed` audit lines within a minute.
+- A signed-in call to a tool on a connector the role is not granted is
+  refused with `Access denied: <tool> (no_grant)`.
+- `npm test` in `mcp_servers/mcp-gateway`: 223 of 223.
+
+### The role source file
+
+The organization's `answers.yaml` was not on disk anywhere. It was rebuilt
+from the live app roles, the group assignments and the published policy, and
+`plan` on the rebuilt file regenerates the published `policy.yaml` (same
+content, 1604 bytes against 1605 with the trailing newline `az` adds). It is
+kept at `~/.config/atlas/mcp-gateway/answers.yaml`, outside the repo. Role and
+grant changes start there, as in section 1.
+
+### Connector credential findings
+
+- `falcon`: the stored credential is valid (the vendor token endpoint answers
+  201 for it). `falcon_status` reported `AUTH_FAILED` because it read the
+  token state without refreshing, and the token expires after 30 minutes.
+  Fixed in `plugins/armada/mcp/falcon/falcon_mcp/server.py`; the fix reaches
+  the gateway with the next image build.
+- `knowbe4`: the stored token is a Compliance Manager token (JWT claim
+  `scopes: ["kcm"]`, expiry 2027-06-16). The connector calls the reporting
+  API, which answers 401 `Invalid Token` for it in every region. It needs the
+  reporting API token from the KnowBe4 console.
+- `vanta`: the stored client id has no `vci_` prefix and
+  `POST https://api.vanta.com/oauth/token` answers 401 for every scope. It
+  needs an API application credential created in Vanta.
+- `blumira`, `cipp`, `sonicwall`: still no credential stored.
+
+### Left open
+
+- The vault accepts connections from all networks. The Container Apps
+  environment has no virtual network, so a vault firewall or private endpoint
+  needs the environment rebuilt on a VNet first.
+- 38 of 40 secrets have no expiry date. None was set, because an expired
+  secret stops its connector.
+- One replica, and client registrations held in memory.
+
 ## Not covered by this runbook
 
 - Binding the `mcp.henssler.com` custom domain and its certificate - still
