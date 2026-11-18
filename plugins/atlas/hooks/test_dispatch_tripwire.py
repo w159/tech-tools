@@ -130,7 +130,7 @@ def _fake_lean_ctx(env, cwd):
     exe = os.path.join(bindir, "lean-ctx")
     with open(exe, "w") as fh:
         fh.write("#!/bin/sh\nexit 0\n")
-    os.chmod(exe, 0o755)
+    os.chmod(exe, 0o700)
     env["PATH"] = bindir + os.pathsep + env.get("PATH", "")
     with open(os.path.join(cwd, ".mcp.json"), "w") as fh:
         json.dump({"mcpServers": {"lean-ctx": {"command": "lean-ctx"}}}, fh)
@@ -987,7 +987,7 @@ class TripwireTest(unittest.TestCase):
         bin_dir.mkdir(exist_ok=True)
         fake = bin_dir / "lean-ctx"
         fake.write_text("#!/bin/sh\nexit 0\n")
-        fake.chmod(0o755)
+        fake.chmod(0o700)
         env["PATH"] = str(bin_dir) + os.pathsep + env.get("PATH", "")
         return env
 
@@ -4964,7 +4964,7 @@ class TeamGateTest(unittest.TestCase):
             fake = os.path.join(d, "tmux")
             with open(fake, "w") as fh:
                 fh.write("#!/bin/sh\nexit 0\n")
-            os.chmod(fake, 0o755)
+            os.chmod(fake, 0o700)
         return d
 
     def _env(self, with_tmux=True, **extra):

@@ -119,7 +119,7 @@ function parseHash() {
   const raw = location.hash.replace(/^#\/?/, "");
   const [pathPart, queryPart] = raw.split("?");
   const [pageId, anchor] = (pathPart || "").split("#");
-  const params = {};
+  const params = Object.create(null); // null prototype: a `__proto__` key from the hash is plain data
   new URLSearchParams(queryPart || "").forEach((v, k) => {
     params[k] = v;
   });
@@ -136,7 +136,7 @@ function hashFor(id, params, anchor) {
 function navigate(target, params) {
   let id = String(target);
   let anchor = "";
-  let inline = {};
+  let inline = Object.create(null);
   if (id.includes("?")) {
     const [a, q] = id.split("?");
     id = a;

@@ -22,9 +22,6 @@ on:
       - "plugins/armada/mcp/**"
       - "scripts/rebuild_armada_bundles.mjs"
       - ".github/workflows/armada-bundles.yml"
-  schedule:
-    # weekly: catches registry-side drift (a lockfile-pinned tarball changing is not expected, but cheap to watch)
-    - cron: "43 6 * * 1"
   workflow_dispatch:
 
 permissions:

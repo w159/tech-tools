@@ -22,7 +22,7 @@ export function recordFault(hook: string, error: string, type: string, cwd: stri
 	try {
 		const file = nodePath.join(process.env.ATLAS_HOME || nodePath.join(os.homedir(), ".atlas"), "hook-faults.jsonl");
 		fs.mkdirSync(nodePath.dirname(file), { recursive: true });
-		if (fs.existsSync(file) && fs.statSync(file).size > FAULT_LOG_MAX_BYTES) return;
+		if ((fs.statSync(file, { throwIfNoEntry: false })?.size ?? 0) > FAULT_LOG_MAX_BYTES) return;
 		fs.appendFileSync(file, `${JSON.stringify({ ts: Date.now() / 1000, hook, error: error.slice(0, 500), type, cwd: cwd ?? process.cwd() })}\n`);
 	} catch {
 		// the fault log must never be the thing that fails

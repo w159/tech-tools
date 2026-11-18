@@ -70,7 +70,7 @@ class DispatchArmingTest(unittest.TestCase):
             fake = os.path.join(d, "tmux")
             with open(fake, "w") as fh:
                 fh.write("#!/bin/sh\nexit 0\n")
-            os.chmod(fake, 0o755)
+            os.chmod(fake, 0o700)
         return d
 
     def _env(self, with_tmux=True, **extra):

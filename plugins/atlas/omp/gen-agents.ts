@@ -17,7 +17,7 @@
  *
  * The parent re-runs this after the Claude-dialect agent bodies change.
  */
-import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import * as path from "node:path";
 import { YAML } from "bun";
 import { ATLAS_THINKING_LEVELS, modelPatternsFor } from "./atlas-agents";
@@ -143,11 +143,14 @@ export function generateAgents({ agentsDir, outDir }: GenerateOptions): { writte
 	for (const sourceFile of sources) {
 		const rendered = renderGeneratedAgent(sourceFile, readFileSync(path.join(agentsDir, sourceFile), "utf8"));
 		if (rendered === null) continue;
-		if (!statSync(outDir, { throwIfNoEntry: false })) mkdirSync(outDir, { recursive: true });
+		mkdirSync(outDir, { recursive: true });
 		const outPath = path.join(outDir, sourceFile);
-		const existing = statSync(outPath, { throwIfNoEntry: false })
-			? readFileSync(outPath, "utf8")
-			: undefined;
+		let existing: string | undefined;
+		try {
+			existing = readFileSync(outPath, "utf8");
+		} catch {
+			existing = undefined; // missing file: write it below
+		}
 		if (existing !== rendered) {
 			writeFileSync(outPath, rendered);
 			written.push(path.basename(sourceFile));

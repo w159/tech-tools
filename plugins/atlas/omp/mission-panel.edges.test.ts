@@ -7,7 +7,7 @@ import { bandText, paintMission, spawnText, type PanelModel } from "./mission-pa
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const RST = "\x1b[0m";
-const esc = (s: string) => s.replace(/[[\]]/g, "\\$&");
+const esc = (s: string) => s.replace(/[[\]\\]/g, "\\$&");
 // Wide (two-cell) glyphs make a row shorter than the panel in code points: that is the one way a painted row gets the fill tail.
 const wide = (ui: Ui) => paintMission(worldModel(80, ui, { rich: true, maxRows: 3, project: "漢字漢字漢字", workers: [{ name: "漢字-0001", state: "running", secs: 0 }, { name: "実装-0002", state: "done", secs: 0 }] }));
 

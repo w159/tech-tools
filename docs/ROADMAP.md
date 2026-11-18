@@ -240,7 +240,7 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.22.0); evidence: `docs/audits/2026-1
 - [planned] Run the real Ollama benchmark (`atlas_provider.py bench`, commands in the audit) on Jerry's machine; no real Ollama model ran in development.
 - [planned] Add the Claude Platform on AWS and Bedrock Mantle env names to the Ollama worker strip list once the Claude Code docs name them.
 - [planned] Mux failover for a worker that authenticates only through `ATLAS_WORKER_FORWARD_ENV`: the pane unsets the token, so the relaunch on Claude cannot authenticate.
-- [planned] Check the first runs of the `atlas-mod-gate`, `atlas-mod-gate-latest` and `mod-gate` CI jobs and the `oven-sh/setup-bun` SHA mapping.
+- [planned] Check the first runs of the `atlas-mod-gate` and `mod-gate` CI jobs and the `oven-sh/setup-bun` SHA mapping.
 
 ### Atlas 17.15.0 follow-ups (added 2026-11-13)
 

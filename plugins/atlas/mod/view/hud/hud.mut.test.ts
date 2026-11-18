@@ -16,6 +16,7 @@ import { worldHudAgents, worldPhases, worldPlan } from '../../../contracts/hud-w
 import { hudRows, reclaimBlanks, segmentOf, todoModel, type HudInput } from './hud';
 import { hostEnv, spinFrameOf, type Ui } from '../../design/atlas-ui';
 import { rowSpinnerGlyph } from './hud-surface';
+import { clearLook } from '../../design/look';
 import type { Segment } from '../../design/runs';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -39,6 +40,8 @@ describe('hud surfaces: defaults', () => {
     const draw = (rich?: boolean) => text(hudRows(input(), { cols: 120, maxRows: 60, ui, now: 0, ...(rich === undefined ? {} : { rich }) }));
     const env = hostEnv() as Record<string, string | undefined>; // the live process.env, mutable for this test
     const saved = env.ATLAS_BAND_RICH;
+    // An earlier file in the same bun process may have cached a session look (lookOf), which lookRich prefers over the env.
+    clearLook();
     try {
       delete env.ATLAS_BAND_RICH;
       const plain = draw();

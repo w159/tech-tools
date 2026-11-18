@@ -1616,7 +1616,7 @@ atlas/
 - **Live check (authoritative).** `--live` boots the modules in the real host through `claude plugin test`, on a trimmed temp copy under an isolated `HOME` and `CLAUDE_CONFIG_DIR`, with one probe beside every module in `hooks.json`. The host refuses code the offline load accepts (for example `$.env.get(<variable>)`). It passes only when the CLI exits 0, prints no `HooksError` or `(fail)`, and reports at least one pass per probe.
 - **`--require-live`** (implies `--live`) makes a live check that could not run (CLI missing, cannot spawn, timeout) a FAIL. Without it that case is a SKIP and exits 0. CI and the release job always pass it. `claude plugin test` needs no login and no network, so a failed run is never read as "not runnable here".
 
-`--root` points the gate at another plugin copy. Run it from the repo root: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live`. CI runs it as the `atlas-mod-gate` job in `tests.yml` (CLI pinned to 2.1.325, blocking), as the non-blocking `atlas-mod-gate-latest` job against `@anthropic-ai/claude-code@latest`, and as the `mod-gate` job in `release.yml`, which the `release` job needs. That job has a read-only token and no secrets because it installs the CLI from npm.
+`--root` points the gate at another plugin copy. Run it from the repo root: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live`. CI runs it as the `atlas-mod-gate` job in `tests.yml` (CLI pinned to 2.1.325, blocking) and as the `mod-gate` job in `release.yml`, which the `release` job needs. That job has a read-only token and no secrets because it installs the CLI from npm.
 
 ## Release notes and license
 

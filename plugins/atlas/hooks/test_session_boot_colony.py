@@ -272,7 +272,7 @@ class BootHerdrGateTests(unittest.TestCase):
             elif not os.path.exists(f) or open(f).read() != want[n]:  # untouched shim keeps its mtime: warm cache
                 with open(f, "w") as fh:
                     fh.write(want[n])
-                os.chmod(f, 0o755)
+                os.chmod(f, 0o700)
 
     def gate(self, node, rig, installed, server):
         import atlas_herdr

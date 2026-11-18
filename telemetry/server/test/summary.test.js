@@ -102,6 +102,6 @@ test("the dashboard page draws the signals, rates and per-feature share", async 
   assert.match(html, /Fix or build next/);
   assert.match(html, /d\.signals/);
   assert.match(html, /per_100_sessions/);
-  const script = /<script[^>]*>([\s\S]*?)<\/script>/.exec(html)?.[1] ?? "";
+  const script = /<script[^>]*>([\s\S]*?)<\/script>/i.exec(html)?.[1] ?? "";
   assert.doesNotThrow(() => new Function(script));
 });

@@ -1,6 +1,8 @@
-// Renders every persona x mood sprite (size m, frame 0) to /tmp/atlas-sprites.svg (+ .png via rsvg-convert).
+// Renders every persona x mood sprite (size m, frame 0) to <mkdtemp dir>/atlas-sprites.svg (+ .png via rsvg-convert).
 import { spawnSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { MOODS, PERSONA_KEYS, spriteRows } from '../mod/sprites/api';
 import { runsToSvg } from '../mod/sprites/review';
 
@@ -19,7 +21,9 @@ PERSONA_KEYS.forEach((p, i) => {
 });
 const W = 90 + MOODS.length * cellPx, H = 20 + PERSONA_KEYS.length * rowPx;
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="100%" height="100%" fill="#0d1017"/>${parts.join('')}</svg>`;
-writeFileSync('/tmp/atlas-sprites.svg', svg);
-console.log(`/tmp/atlas-sprites.svg ${svg.length} bytes`);
-const r = spawnSync('rsvg-convert', ['-o', '/tmp/atlas-sprites.png', '/tmp/atlas-sprites.svg']);
-console.log(r.error ? 'rsvg-convert missing: png skipped' : '/tmp/atlas-sprites.png written');
+const OUT = mkdtempSync(join(tmpdir(), 'atlas-sprites-')); // private 0700 dir, not a predictable /tmp path
+const SVG = join(OUT, 'atlas-sprites.svg'), PNG = join(OUT, 'atlas-sprites.png');
+writeFileSync(SVG, svg);
+console.log(`${SVG} ${svg.length} bytes`);
+const r = spawnSync('rsvg-convert', ['-o', PNG, SVG]);
+console.log(r.error ? 'rsvg-convert missing: png skipped' : `${PNG} written`);

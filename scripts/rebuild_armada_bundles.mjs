@@ -157,7 +157,13 @@ if (!existsSync(tsupCli)) fail(`tsup CLI not found at ${tsupCli}`);
 
 mkdirSync(opts.out, { recursive: true });
 const lockPath = join(opts.out, LOCK_NAME);
-const prev = existsSync(lockPath) ? readJson(lockPath).bundles ?? {} : {};
+// Read-then-handle-ENOENT instead of exists-then-read: no check/use window on the lock file.
+let prev = {};
+try {
+  prev = readJson(lockPath).bundles ?? {};
+} catch (err) {
+  if (err?.code !== 'ENOENT') throw err;
+}
 const bundles = { ...prev };
 for (const { svc, pkgDir, cfg } of wanted) {
   console.log(`== ${svc} (${relative(ROOT, pkgDir)})`);

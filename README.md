@@ -411,7 +411,7 @@ with tag `<plugin>-v<version>` for atlas, armada and programmer whenever a
 section. To release, bump `plugin.json` and the marketplace entry, add a
 `## <version>` CHANGELOG section, and update the "Current versions:" line above.
 `python3 scripts/check_versions.py` enforces that, in CI
-(`.github/workflows/version-check.yml`) and in the atlas contract tests.
+(the `tests` and `full` jobs in `.github/workflows/tests.yml`) and in the atlas contract tests.
 
 ## Developing atlas
 

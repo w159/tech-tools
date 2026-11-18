@@ -64,7 +64,6 @@ so `bunfig.toml` loads the preloads):
 | `atlas-py-slow` (matrix `hooks`, `scripts`) | `python -m pytest -q -p no:cacheprovider $(grep -E '^<dir>/' ci-slow-tests.txt)` |
 | `atlas-herdr` | in `colony/herdr-web-ui`: `bun run build`, `bun run test:unit`, `bun run test:integration` (checksum-pinned herdr 0.9.3) |
 | `atlas-mod-gate` | `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live` against `@anthropic-ai/claude-code@2.1.325` |
-| `atlas-mod-gate-latest` | the same gate against `@latest`; `continue-on-error`, early warning only |
 | `full` (push, schedule, dispatch) | root `python -m pytest -q -p no:cacheprovider`, then `bun test` in `plugins/atlas` |
 
 `scripts/test_ci_tiers.py` proves every `test_*.py` under `hooks/` and `scripts/` is in exactly one Python tier.

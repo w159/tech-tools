@@ -1,6 +1,6 @@
 // Shared env preloader for atlas MCP servers, loaded via `node --import`.
 // stdout is reserved for JSON-RPC; all diagnostics go to stderr only.
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { closeSync, fstatSync, openSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -40,15 +40,21 @@ const shellKeys = new Set(Object.keys(process.env).filter((k) => isUsable(proces
 
 function loadEnvFile(path, label) {
   if (!path) return;
-  if (!existsSync(path)) {
-    note(`${label} not found: ${path} (skipped)`);
-    return;
-  }
   let text;
   try {
-    if (statSync(path).mode & 0o077) note(`${path} is group/world-readable; run chmod 600`);
-    text = readFileSync(path, "utf8");
+    // Open once, then fstat/read the same descriptor: no exists-then-open race.
+    const fd = openSync(path, "r");
+    try {
+      if (fstatSync(fd).mode & 0o077) note(`${path} is group/world-readable; run chmod 600`);
+      text = readFileSync(fd, "utf8");
+    } finally {
+      closeSync(fd);
+    }
   } catch (err) {
+    if (err.code === "ENOENT") {
+      note(`${label} not found: ${path} (skipped)`);
+      return;
+    }
     note(`failed to load ${path}: ${err.message}`);
     return;
   }

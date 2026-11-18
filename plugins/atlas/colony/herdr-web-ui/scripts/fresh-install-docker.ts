@@ -88,7 +88,7 @@ async function oneLineInstall(): Promise<void> {
   assert.match(running, /exit=0/, running.slice(-2500));
   assert.match(running, /Installed /, running.slice(-2500));
   assert.doesNotMatch(running, /not running yet|did not start/, running.slice(-1500));
-  console.log(`\nA bare Ubuntu 24.04 goes from one line to a running herdr web ui. install.sh said:\n${out.split("\n").filter((line) => /^herdr web ui|Installed /.test(line)).map((l) => `  ${l.trim()}`).join("\n")}`);
+  console.log(`\nA bare Ubuntu 24.04 goes from one line to a running herdr web ui. install.sh said:\n${out.split("\n").filter((line) => /^(?:herdr web ui|Installed )/.test(line)).map((l) => `  ${l.trim()}`).join("\n")}`);
 }
 
 async function pluginInstall(): Promise<void> {

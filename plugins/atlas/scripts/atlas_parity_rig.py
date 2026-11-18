@@ -416,7 +416,7 @@ def write_shim(shim_dir: str, real_python: str, log_path: str) -> str:
     )
     with open(path, "w", encoding="utf-8") as f:
         f.write(text)
-    os.chmod(path, 0o755)
+    os.chmod(path, 0o700)
     return path
 
 
@@ -638,7 +638,7 @@ def make_project(root: str) -> tuple[str, str, str]:
     hook = os.path.join(proj, ".git", "hooks", "pre-push")
     with open(hook, "w", encoding="utf-8") as f:
         f.write(f"#!/bin/sh\ntouch {json.dumps(marker)}\nexit 0\n")
-    os.chmod(hook, 0o755)
+    os.chmod(hook, 0o700)
     return proj, remote, marker
 
 

@@ -127,7 +127,7 @@ class CandidatesTest(unittest.TestCase):
         os.makedirs(os.path.dirname(local), exist_ok=True)
         with open(local, "w") as f:
             f.write("#!/bin/sh\nexit 0\n")
-        os.chmod(local, 0o755)
+        os.chmod(local, 0o700)
         try:
             with mock.patch.object(
                 format_after_edit.shutil, "which", return_value=None
@@ -135,7 +135,7 @@ class CandidatesTest(unittest.TestCase):
                 out = format_after_edit.candidates_for("a.js", self.cwd)
             self.assertEqual(out, [[local, "--write", "--log-level", "warn"]])
         finally:
-            os.chmod(local, 0o644)
+            os.chmod(local, 0o600)
 
     def test_prettier_global_skipped_without_project_config(self):
         with mock.patch.object(
@@ -184,7 +184,7 @@ class CandidatesTest(unittest.TestCase):
         os.makedirs(os.path.dirname(local), exist_ok=True)
         with open(local, "w") as f:
             f.write("#!/bin/sh\nexit 0\n")
-        os.chmod(local, 0o755)
+        os.chmod(local, 0o700)
         try:
             with mock.patch.object(
                 format_after_edit.shutil, "which", side_effect=lambda c: c == "prettier"
@@ -194,7 +194,7 @@ class CandidatesTest(unittest.TestCase):
             self.assertEqual(out[0], [local, "--write", "--log-level", "warn"])
             self.assertEqual(out[1], ["prettier", "--write", "--log-level", "warn"])
         finally:
-            os.chmod(local, 0o644)
+            os.chmod(local, 0o600)
 
     def test_prettier_exts_covered(self):
         with mock.patch.object(format_after_edit.shutil, "which", return_value=None):
@@ -513,7 +513,7 @@ class MainInProcessTest(unittest.TestCase):
         prettier = os.path.join(bin_dir, "prettier")
         with open(prettier, "w") as f:
             f.write("#!/bin/sh\n")
-        os.chmod(prettier, 0o755)
+        os.chmod(prettier, 0o700)
         sub = os.path.join(root, "pkg", "src")
         os.makedirs(sub)
         elsewhere = tempfile.mkdtemp()

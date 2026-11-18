@@ -114,7 +114,7 @@ class GitParserTests(unittest.TestCase):
                 'case "$1" in --version) echo "fallow 9.9.9";; '
                 '*) echo \'{"verdict":"fail"}\'; exit 1;; esac\n'
             )
-        os.chmod(p, 0o755)
+        os.chmod(p, 0o700)
         env = {"PATH": shim + os.pathsep + os.environ["PATH"]}
         for cmd, expect in (
             ("git -C . commit -m x", True),

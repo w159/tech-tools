@@ -201,7 +201,7 @@ class ModGateLiveWiringTests(unittest.TestCase):
         exe = os.path.join(d, "claude")
         with open(exe, "w", encoding="utf-8") as f:
             f.write(FAKE_CLAUDE)
-        os.chmod(exe, 0o755)
+        os.chmod(exe, 0o700)
         return d
 
     def test_require_live_without_cli_fails(self):
@@ -219,7 +219,7 @@ class ModGateLiveWiringTests(unittest.TestCase):
         exe = os.path.join(d, "claude")
         with open(exe, "wb") as f:
             f.write(b"\x00\x01 not an executable")
-        os.chmod(exe, 0o755)
+        os.chmod(exe, 0o700)
         rc, out = _gate_env(ATLAS, ["--live", "--require-live"], path=d)
         self.assertEqual(rc, 1, out)
         self.assertIn("FAIL live claude plugin test", out)

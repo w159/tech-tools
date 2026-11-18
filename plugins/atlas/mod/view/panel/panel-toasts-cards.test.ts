@@ -7,6 +7,7 @@ import { forgetRefusals } from '../../data/channels';
 import type { Ui } from '../../design/atlas-ui';
 import { boardText, boardTimeline } from '../board/board-model';
 import { bodyLines, lineText } from './panel-layout';
+import { forgetStamps } from './panel-shared';
 import { panelModelOf } from './pane/sidebar-model';
 import { sidebarTree, type SidebarHandlers, type SidebarModel, type SidebarView } from './pane/sidebar';
 import { FINISH_W, finishWidth, notificationTree } from '../transcript/cards';
@@ -57,7 +58,8 @@ const snap = (now = NOW) => ({
 type Run = NonNullable<SidebarModel['run']>;
 const model = (view: SidebarView, columns: number, rows: number, run?: Run): SidebarModel => ({ snapshot: snap(), gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows, look: ui, ...(run ? { run } : {}) } as SidebarModel);
 const render = (view: SidebarView, columns: number, rows: number, run?: Run): string[] => { forgetRefusals(); return textOf(sidebarTree(els, model(view, columns, rows, run), on) as unknown as Node).split('\n'); };
-const body = (view: SidebarView, columns: number, rows: number, run?: Run): string[] => { forgetRefusals(); return bodyLines(panelModelOf(model(view, columns + 1, rows, run), ui, columns)).map((l) => lineText(l).trimEnd()); };
+// forgetStamps: bun runs every file in one process, and a stamp cached by an earlier file for the same fixture post would win over this run's start.
+const body = (view: SidebarView, columns: number, rows: number, run?: Run): string[] => { forgetRefusals(); forgetStamps(); return bodyLines(panelModelOf(model(view, columns + 1, rows, run), ui, columns)).map((l) => lineText(l).trimEnd()); };
 
 describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: `● don` / `e` at 110 columns, widths 42/62/61)', () => {
   for (const cols of [110, 150, 60]) {

@@ -41,7 +41,7 @@ describe('C2: outcomeOf reads the live result shapes', () => {
     expect(cells(out)).toBeLessThanOrEqual(40);
   });
   test('every live shape gives an outcome of 40 cells or fewer with no ellipsis, never `returned` or `<file> read`', () => {
-    for (const text of Object.values(LIVE)) { const out = outcomeOf(text); expect(cells(out)).toBeLessThanOrEqual(40); expect(out).not.toContain('...'); expect(out).not.toMatch(/returned|\bread$/); }
+    for (const text of Object.values(LIVE)) { const out = outcomeOf(text); expect(cells(out)).toBeLessThanOrEqual(40); expect(out).not.toContain('...'); expect(out).not.toMatch(/(?:returned|\bread$)/); }
   });
   test('a dump with no function in it states no outcome (was `alpha.py read`)', () => {
     expect(outcomeOf('1. Read `/p/notes.md` -> first 3 lines: `# Notes` / `` / `text`')).toBe('');

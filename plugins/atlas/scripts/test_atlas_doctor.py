@@ -1182,7 +1182,7 @@ class AtlasDoctorTest(unittest.TestCase):
         p = os.path.join(self.tmp, f"cmux{exit_code}")
         with open(p, "w") as f:
             f.write(f'#!/bin/sh\n[ "$1" = capabilities ] || exit 9\nexit {exit_code}\n')
-        os.chmod(p, 0o755)
+        os.chmod(p, 0o700)
         return p
 
     def test_cmux_absent_is_na_never_a_failure(self):
@@ -1490,10 +1490,10 @@ class AtlasDoctorTest(unittest.TestCase):
     def test_unwritable_db_fails_the_doctor(self):
         db = os.path.join(self.tmp, "ro.db")
         atlas_db.connect(db).close()
-        os.chmod(db, 0o444)
+        os.chmod(db, 0o400)
         with mock.patch.dict(os.environ, {"ATLAS_DB": db}):
             c = self._checks()["db-writable"]
-        os.chmod(db, 0o644)
+        os.chmod(db, 0o600)
         if os.geteuid() != 0:
             self.assertFalse(c["ok"])
 

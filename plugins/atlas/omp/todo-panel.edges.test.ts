@@ -7,7 +7,7 @@ import { boardLines, todoLines } from "./todo-panel";
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const RST = "\x1b[0m";
-const esc = (s: string) => s.replace(/[[\]]/g, "\\$&");
+const esc = (s: string) => s.replace(/[[\]\\]/g, "\\$&");
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const items = worldItems();
 

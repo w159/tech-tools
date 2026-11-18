@@ -7,25 +7,26 @@ import * as path from 'node:path';
 import { MOODS, PERSONA_KEYS } from '../mod/sprites/api';
 
 const SCRIPT = path.resolve(import.meta.dir, 'sprite_review.ts');
-const SVG = '/tmp/atlas-sprites.svg';
 let dir: string;
 beforeEach(() => { dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sprite-review-')); });
 afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
 /** Runs the script with PATH=`bin` only; returns stdout and the SVG once it is fully written. */
-async function run(bin: string): Promise<{ out: string; svg: string; code: number }> {
-  const proc = Bun.spawn([process.execPath, SCRIPT], { env: { PATH: bin, HOME: dir }, stdout: 'pipe', stderr: 'pipe' });
+async function run(bin: string): Promise<{ out: string; svg: string; code: number; svgPath: string }> {
+  const proc = Bun.spawn([process.execPath, SCRIPT], { env: { PATH: bin, HOME: dir, TMPDIR: dir }, stdout: 'pipe', stderr: 'pipe' });
   const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  const bytes = Number(/atlas-sprites\.svg (\d+) bytes/.exec(out)?.[1]);
-  // another run may be rewriting the same fixed path: wait until the file is whole
+  const m = /^(\S+atlas-sprites\.svg) (\d+) bytes/.exec(out);
+  const svgPath = m?.[1] ?? '';
+  const bytes = Number(m?.[2]);
+  // wait until the file is whole
   const end = Date.now() + 5000;
   let svg = '';
   while (Date.now() < end) {
-    svg = fs.existsSync(SVG) ? fs.readFileSync(SVG, 'utf8') : '';
+    svg = svgPath && fs.existsSync(svgPath) ? fs.readFileSync(svgPath, 'utf8') : '';
     if (svg.length === bytes) break;
     await new Promise((r) => setTimeout(r, 5));
   }
-  return { out, svg, code };
+  return { out, svg, code, svgPath };
 }
 
 function fakeRsvg(): { bin: string; log: string } {
@@ -41,18 +42,19 @@ function fakeRsvg(): { bin: string; log: string } {
 describe('sprite_review gallery', () => {
   test('reports the SVG size and that the PNG was written when rsvg-convert runs, passing it the fixed paths', async () => {
     const { bin, log } = fakeRsvg();
-    const { out, svg, code } = await run(bin);
+    const { out, svg, code, svgPath } = await run(bin);
+    const png = svgPath.replace(/\.svg$/, '.png');
     expect(code).toBe(0);
-    expect(out).toBe(`/tmp/atlas-sprites.svg ${svg.length} bytes\n/tmp/atlas-sprites.png written\n`);
-    expect(fs.readFileSync(log, 'utf8').trim()).toBe('-o /tmp/atlas-sprites.png /tmp/atlas-sprites.svg');
+    expect(out).toBe(`${svgPath} ${svg.length} bytes\n${png} written\n`);
+    expect(fs.readFileSync(log, 'utf8').trim()).toBe(`-o ${png} ${svgPath}`);
   });
 
   test('says the PNG was skipped when rsvg-convert is not installed, and still writes the SVG', async () => {
     const empty = path.join(dir, 'empty');
     fs.mkdirSync(empty);
-    const { out, svg, code } = await run(empty);
+    const { out, svg, code, svgPath } = await run(empty);
     expect(code).toBe(0);
-    expect(out).toBe(`/tmp/atlas-sprites.svg ${svg.length} bytes\nrsvg-convert missing: png skipped\n`);
+    expect(out).toBe(`${svgPath} ${svg.length} bytes\nrsvg-convert missing: png skipped\n`);
     expect(svg.startsWith('<svg')).toBe(true);
   });
 

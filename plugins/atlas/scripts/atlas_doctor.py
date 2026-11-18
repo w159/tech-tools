@@ -366,7 +366,7 @@ def update_probe(clone, plugin_name):
         if not url or not local:
             return out
         out["local"] = local
-        out["repo"] = norm_repo(url) if "github.com" in url else ""
+        out["repo"] = norm_repo(url) if re.match(r"^(?:[a-z+]+://)?(?:[^@/]+@)?github\.com[:/]", url, re.I) else ""
         out["remote"] = _ls_remote_head(url)
         if not out["remote"]:
             out["state"] = "offline"

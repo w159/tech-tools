@@ -11,5 +11,8 @@
   },
   "dependencies": {
     "@vercel/blob": "2.8.2"
+  },
+  "resolutions": {
+    "zod": "4.6.7"
   }
 }

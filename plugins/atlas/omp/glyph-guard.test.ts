@@ -14,7 +14,7 @@ const walk = (dir: string): string[] =>
     return statSync(p).isDirectory() ? (n === 'node_modules' || n === 'fx' ? [] : walk(p)) : [p];
   });
 const isSource = (f: string): boolean =>
-  /\.(ts|tsx)$/.test(f) && !/\.(test|golden-cases|golden-fixture)\.|-golden\.|fixture|test-shim|test_helpers|\.d\.ts$/.test(f);
+  /\.(ts|tsx)$/.test(f) && !/(?:\.(test|golden-cases|golden-fixture)\.|-golden\.|fixture|test-shim|test_helpers|\.d\.ts$)/.test(f);
 
 /** Source with block and line comments removed: prose may say a check mark, code may not draw one. */
 const code = (src: string): string => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`\\])\/\/.*$/gm, '$1');

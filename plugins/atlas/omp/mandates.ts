@@ -302,8 +302,8 @@ function markerExists(sessionId: string, dir?: string): boolean {
 /** Record the recall (idempotent, O_CREAT|O_EXCL like the Python twin); fails open on any fs error. */
 function markRecalled(sessionId: string, dir: string = defaultMarkerDir()): void {
 	try {
-		fs.mkdirSync(dir, { recursive: true });
-		fs.closeSync(fs.openSync(markerPath(sessionId, dir), "wx"));
+		fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+		fs.closeSync(fs.openSync(markerPath(sessionId, dir), "wx", 0o600));
 	} catch {
 		// EEXIST means already recorded; any other fs error must not break the turn
 	}

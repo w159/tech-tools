@@ -13784,5 +13784,41 @@
     "verified_at": "2026-11-18T09:30:13+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "ci-cleanup-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Workflow trim, 2 CI-only bun test isolation fixes, Dependabot lockfile bumps, CodeQL fixes",
+    "evidence": [
+      "pytest CI set 315 passed; touched atlas tests 860 passed; bun test omp mod 5141 pass 0 fail; telemetry node --test 69 pass; test_armada_bundles pass; check_versions ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "python -m pytest -q scripts plugins/armada/tests plugins/programmer/tests plugins/atlas/hooks/test_atlas_contract.py && (cd plugins/atlas && bun test omp mod)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T13:28:28+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "codeql-dismissals-1118",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CodeQL dismissals: 14 of 16 confirmed; blumira 61/62 refuted (env-persisted credentials reused across callers)",
+    "evidence": [
+      ".atlas/.run/codeql/verifier.tsv"
+    ],
+    "doc_refs": [],
+    "reproduction": "read cited file:line",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T13:30:46+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

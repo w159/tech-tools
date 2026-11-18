@@ -1685,7 +1685,7 @@ def test_connector(name: str, env: dict | None = None, timeout: float = 20.0) ->
                 timed_out = True
                 break
     except BrokenPipeError as exc:
-        logging.getLogger(__name__).debug("connector %s stdin closed: %s", name, exc)
+        logging.getLogger(__name__).debug("connector %r stdin closed: %s", name, exc)
     finally:
         proc.kill()
         proc.wait()

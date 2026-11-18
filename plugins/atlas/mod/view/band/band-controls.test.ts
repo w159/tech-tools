@@ -82,7 +82,7 @@ describe('band footer buttons', () => {
     const snapshot = busySnap({ squad: [], activity: {}, comms: [] });
     for (const columns of [160, 140, 80]) {
       const t = bandTree(els, { snapshot, live: [], gates: groups, columns, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
-      expect(textOf(kids(t).at(-1)!), `${columns}`).not.toMatch(/ctrl\+|tab\s*$/);
+      expect(textOf(kids(t).at(-1)!), `${columns}`).not.toMatch(/(?:ctrl\+|tab\s*$)/);
     }
     expect(textOf(band())).not.toMatch(/click or/);
   });

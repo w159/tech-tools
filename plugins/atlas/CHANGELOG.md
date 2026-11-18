@@ -1,4 +1,10 @@
 # Changelog
+## Unreleased
+
+- Colony herdr-web-ui CodeQL triage: ssh known_hosts is created atomically with mode 0o600 (no exists-then-write race); anchored a regex alternation in fresh-install-docker.ts.
+
+- Security (CodeQL triage): test and parity-rig chmod calls now use owner-only modes (0o700/0o600/0o400); the recall-gate marker dir and file are created 0o700/0o600; `sprite_review.ts` writes into a `mkdtemp` dir instead of fixed `/tmp` paths; `fault-log.ts` and `gen-agents.ts` drop their exists-then-use races; the dashboard hash router parses params into null-prototype objects; `atlas_doctor` anchors its github.com remote check; `atlas_control` logs connector names with `%r`; test regexes are grouped and `esc` helpers escape backslashes.
+
 ## 17.30.1 - 2026-11-18
 
 Crew and router fixes: a crew plan with a long literal `context` entry no longer crashes, the pre-launch check guard no longer starts one copy of the same check per worker, and the prompt router no longer prints a crew command for a document that is not a per-file spec.

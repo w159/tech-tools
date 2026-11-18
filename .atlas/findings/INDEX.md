@@ -80,13 +80,15 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-18 | w2-dash-x2 | verified | dash X2 follow-ups (url, ensure, token readers, fail-closed serve, pty not-a-bug) fixed | [2026-11-18_w2-dash-x2.md](2026-11-18_w2-dash-x2.md) |
 | 2026-11-18 | w2-ci | rejected | ci worker changed no CI file: no tiers, no typecheck, TESTING.md stale, no per-agent or router pin | [2026-11-18_w2-ci.md](2026-11-18_w2-ci.md) |
 | 2026-11-18 | tdf12a538 | verified | mod reorg S0-S11 + register split: layout only, no test lost (stale paths in 11-18 audit doc noted) | [2026-11-18_tdf12a538.md](2026-11-18_tdf12a538.md) |
+| 2026-11-18 | t8865d576-p5 | rejected | claim 5 false: git diff HEAD is empty, no uncommitted docs/CHANGELOG.md edit | [2026-11-18_t8865d576-p5.md](2026-11-18_t8865d576-p5.md) |
+| 2026-11-18 | t8865d576-p1-4 | verified | fable52 contract tests, version check, attribution, changelog entries pass | [2026-11-18_t8865d576-p1-4.md](2026-11-18_t8865d576-p1-4.md) |
 | 2026-11-18 | t83cd4026 | rejected | 6b9d922 claims panel-layout split but the 7 modules and panel-acyclic test are not in the commit or tree | [2026-11-18_t83cd4026.md](2026-11-18_t83cd4026.md) |
 | 2026-11-18 | resolve-context-oserror | verified | resolve_context returns an over-long single-line context entry as literal text | [2026-11-18_resolve-context-oserror.md](2026-11-18_resolve-context-oserror.md) |
 | 2026-11-18 | panel-split-reverify | verified | panel-layout split is move-only: 219/219 decls identical, facade exports 58/58, no cycle, mod 4302/0 fail, omp 839/0 fail, live gate PASS, relative TS2307 0 | [2026-11-18_panel-split-reverify.md](2026-11-18_panel-split-reverify.md) |
 | 2026-11-18 | crew-guard-fanout | verified | green-check guard runs identical checks once and caps concurrent shell commands; _weight treats an over-long entry as literal text | [2026-11-18_crew-guard-fanout.md](2026-11-18_crew-guard-fanout.md) |
 | 2026-11-18 | crew-command-spec-guard | verified | crew_command emits a crew command only when the spec has section headings for the planned files | [2026-11-18_crew-command-spec-guard.md](2026-11-18_crew-command-spec-guard.md) |
-| 2026-11-18 | t8865d576-p5 | rejected | claim 5 false: git diff HEAD is empty, no uncommitted docs/CHANGELOG.md edit | [2026-11-18_t8865d576-p5.md](2026-11-18_t8865d576-p5.md) |
-| 2026-11-18 | t8865d576-p1-4 | verified | fable52 contract tests, version check, attribution, changelog entries pass | [2026-11-18_t8865d576-p1-4.md](2026-11-18_t8865d576-p1-4.md) |
+| 2026-11-18 | codeql-dismissals-1118 | rejected | CodeQL dismissals: 14 of 16 confirmed; blumira 61/62 refuted (env-persisted credentials reused across callers) | [2026-11-18_codeql-dismissals-1118.md](2026-11-18_codeql-dismissals-1118.md) |
+| 2026-11-18 | ci-cleanup-1118 | verified | Workflow trim, 2 CI-only bun test isolation fixes, Dependabot lockfile bumps, CodeQL fixes | [2026-11-18_ci-cleanup-1118.md](2026-11-18_ci-cleanup-1118.md) |
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
 | 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
 | 2026-11-18 | audit-C7 | rejected | eager import true but 7-14 ms not 40; event_dispatch 38-44 ms | [2026-11-18_audit-c7.md](2026-11-18_audit-c7.md) |

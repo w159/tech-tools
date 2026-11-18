@@ -78,7 +78,7 @@ describe('agent names: displayName on the team and route tabs', () => {
     expect(text).toContain('board-auditor');
     expect(text).not.toContain('explorer-3fa9c1');
     expect(text).not.toContain('lead-a3a3ab');
-    expect(text).toMatch(/^ {2}\S? ?lead\b|lead {2}/m);
+    expect(text).toMatch(/(?:^ {2}\S? ?lead\b|lead {2})/m);
   });
 
   test('the route tab names a working agent the same way', () => {

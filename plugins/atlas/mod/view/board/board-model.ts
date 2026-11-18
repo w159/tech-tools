@@ -399,7 +399,7 @@ function paneRow(row: BoardRow, focus: boolean, o: BoardOpts, g: ReturnType<type
   if (g.wordW) { const word = clipE(plainWord(row, true), g.wordW); out.push(gutter, r(word + ' '.repeat(Math.max(0, g.wordW - cells(word))), doubt ? 'bad' : rowWordTone(row.state, row.word))); }
   // The reason (`owner failed`, `worker killed`) and the age ride the same row as a dim suffix, cut with `…` to the room left: never a row of its own (critique 22: `owner failed` wrapped under T2).
   // Where the owner column leaves no room for it, the reason takes the owner's cell: why a row is open says more than who holds it.
-  const suffix = noteOf(row, false).replace(ownerDown(row) ? /^owner failed( · )?/ : /^$/, ''); // the word says it: no `owner failed` after `failed`
+  const suffix = ownerDown(row) ? noteOf(row, false).replace(/^owner failed( · )?/, '') : noteOf(row, false); // the word says it: no `owner failed` after `failed`
   const used = (): number => out.reduce((n, x) => n + cells(x.t), 0);
   if (g.ownerW) {
     const who = paneOwner(row);

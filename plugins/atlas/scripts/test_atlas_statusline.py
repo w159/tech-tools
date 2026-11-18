@@ -362,7 +362,7 @@ class FallowOffRenderPath(unittest.TestCase):
         stub = os.path.join(self.bindir, "fallow")
         with open(stub, "w") as f:
             f.write('#!/bin/sh\nsleep 2\necho "fallow impact: 3 findings"\n')
-        os.chmod(stub, 0o755)
+        os.chmod(stub, 0o700)
         patcher = mock.patch.dict(os.environ, {"PATH": self.bindir + os.pathsep + os.environ["PATH"]})
         patcher.start()
         self.addCleanup(patcher.stop)

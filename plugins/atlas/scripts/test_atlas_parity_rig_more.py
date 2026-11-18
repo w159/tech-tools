@@ -579,7 +579,7 @@ class FindBinary(TmpCase):
             with mock.patch.object(rig, "TOOLS_BIN", self.tmp):
                 p = os.path.join(self.tmp, h)
                 Path(p).write_text("#!/bin/sh\n")
-                os.chmod(p, 0o755)
+                os.chmod(p, 0o700)
                 with mock.patch.object(rig.shutil, "which", return_value="/usr/bin/" + h):
                     self.assertEqual(rig.find_binary(h), p)
 
@@ -587,7 +587,7 @@ class FindBinary(TmpCase):
         with mock.patch.object(rig, "TOOLS_BIN", self.tmp):
             p = os.path.join(self.tmp, "claude")
             Path(p).write_text("#!/bin/sh\n")
-            os.chmod(p, 0o755)
+            os.chmod(p, 0o700)
             with mock.patch.object(rig.shutil, "which", return_value="/usr/bin/claude") as w:
                 self.assertEqual(rig.find_binary("claude"), "/usr/bin/claude")
             w.assert_called_once_with("claude")
@@ -602,7 +602,7 @@ class FindBinary(TmpCase):
     def test_non_executable_local_ignored(self):
         with mock.patch.object(rig, "TOOLS_BIN", self.tmp):
             Path(self.tmp, "codex").write_text("x")
-            os.chmod(os.path.join(self.tmp, "codex"), 0o644)
+            os.chmod(os.path.join(self.tmp, "codex"), 0o600)
             with mock.patch.object(rig.shutil, "which", return_value="/w/codex"):
                 self.assertEqual(rig.find_binary("codex"), "/w/codex")
 

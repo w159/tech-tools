@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runCli, type CliIo } from "../admin/cli.js";
@@ -35,9 +35,9 @@ export async function cli(args: string[], env: NodeJS.ProcessEnv): Promise<{ cod
 
 export function allFileText(dir: string): string {
   let text = "";
-  for (const name of readdirSync(dir)) {
-    const p = join(dir, name);
-    text += statSync(p).isDirectory() ? allFileText(p) : readFileSync(p, "utf8");
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, entry.name);
+    text += entry.isDirectory() ? allFileText(p) : readFileSync(p, "utf8");
   }
   return text;
 }

@@ -91,7 +91,7 @@ export class SshConnection {
     const helper = join(this.dir, "askpass");
     writeFileSync(helper, `#!/bin/sh\nexec ${shellQuote(process.execPath)} ${shellQuote(join(import.meta.dir, "ssh-askpass.ts"))} "$@"\n`, { mode: 0o700 });
     const knownHosts = join(this.stateDir, "known_hosts");
-    if (!existsSync(knownHosts)) writeFileSync(knownHosts, "", { mode: 0o600 });
+    writeFileSync(knownHosts, "", { mode: 0o600, flag: "a" }); // create-if-missing in one syscall, never truncates
     const args = [...this.base(), "-M", "-N", "-T", "-o", "ControlPersist=no", "-o", "ExitOnForwardFailure=yes", "-o", `BatchMode=${challenge ? "no" : "yes"}`, "-o", `StrictHostKeyChecking=${challenge ? "ask" : "yes"}`, "-o", `UserKnownHostsFile=${shellQuote(knownHosts)} ${shellQuote(join(homedir(), ".ssh/known_hosts"))} ${shellQuote(join(homedir(), ".ssh/known_hosts2"))}`, this.target.destination];
     const proc = this.master = Bun.spawn(args, { stdin: "ignore", stdout: "ignore", stderr: "pipe", env: { ...process.env, SSH_ASKPASS: helper, SSH_ASKPASS_REQUIRE: "force", DISPLAY: "herdr:0", HERDR_ASKPASS_SOCKET: askPath } });
     void (async () => {
