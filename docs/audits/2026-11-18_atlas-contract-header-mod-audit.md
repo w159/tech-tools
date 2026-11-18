@@ -218,3 +218,64 @@ What the green suites do not prove (completeness-critic, 68 README and docs clai
 5. S1, S2, X4: log the fail-open paths; fence injected text. Check `git_guard.py` (X1) and count dispatch denies in analytics (S4).
 6. Mod reorganization (4.3) in small moves, one directory per change, tests moved with sources.
 7. Tests for gate letters o, p, q, s and at least a smoke test per skill; fix `test_tmp_hygiene`.
+
+## 7. Remediation status (2026-11-18)
+
+Written after two fix commits and independent verify passes: wave 1 is `b325c84`, wave 2 is `6b9fb8c`. "Working tree" marks a follow-up that was uncommitted when this table was written. Sections 1 to 6 above are the audit as filed and are not edited; where a verify pass disagreed with a finding, the verdict is here. Release notes: `plugins/atlas/CHANGELOG.md` 17.29.0.
+
+| ID | Verdict | Detail |
+|---|---|---|
+| G1 | fixed (`b325c84`) | The exemption follows the `model:` pinned in the agent file (`_cheap_exploration`); the dispatch `model` param is not read. Working tree: comment rewrite and opus/unpinned tests. |
+| G2 | fixed (`b325c84`) | A PostToolUse with an unrecorded `tool_use_id` no longer frees a slot. |
+| G3 | fixed (`b325c84`, working tree) | A fully absent lean-ctx was already handled at the audited commit. The real gap, a server named only in an enabled list or disabled, is closed by `_lean_ctx_loadable` (working tree). |
+| G4 | fixed (`6b9fb8c`) | `_docs_letters`: an absent file is an advisory, a present but empty file blocks. |
+| G5 | not a bug | Run scoping for (a) and (b) already existed; characterization tests were added. |
+| G6 | fixed (`b325c84`, `6b9fb8c`) | The nudge counts the same set as the deny; board and brief reads, `docs/` and `.atlas/` edits and bookkeeping do not count; `InlineOpRuleTest` pins the 7th-op deny. |
+| G7 | fixed (docs only, working tree) | CLAUDE.md and `subagent-kit.md` no longer tell the lead to pass `name`; the hook names an unnamed dispatch. The deny text under `ATLAS_AUTONAME=off` still says "Agent tool's `name` argument" (code, not changed here). |
+| T1 | fixed (`b325c84`) | `atlas_todo.py report` hands back a final report from `--file` or stdin. |
+| T2 | fixed (`b325c84`) | A long report keeps its start and names the full copy under `.atlas/.run/board/reports/`. |
+| T3 | fixed (`b325c84`) | A report needs a `STATUS:` line; `atlas_mux.py wait` prints progress and returns when all have reported. |
+| T4 | fixed (`b325c84`) | `duration_s` and `elapsed_s` are null when the team record has no start time. |
+| P1 | fixed (`b325c84`) | `event_dispatch.py` exits early for a tool no hook handles. No latency pin test. |
+| P2 | fixed (`b325c84`) | `READ_ONLY_ROLES` is resolved lazily. |
+| P3 | fixed (`b325c84`) | `fallow_gate` timeout 300 s to 90 s in `hooks.json` and `hooks.codex.json`. |
+| P4 | open (in progress) | No fast test tier yet; `tests.yml` is unchanged. |
+| S1 | fixed (`b325c84`, `6b9fb8c`) | An unreadable todo board and a failed friction write are announced. |
+| S2 | fixed (`b325c84`, `6b9fb8c`) | The two suppressed probes record faults (`_plugin_enabled` still suppresses by design). |
+| S3 | open (host behavior) | Whether the host skips `classic.Stop` cannot be seen from repo code; only a session-start notice is possible (see H5). |
+| S4 | fixed (`6b9fb8c`) | `dispatch.deny.<code>` counters added to the schema and `telemetry/allowed-keys.json`. The W46 gap is the 3-install publishing threshold or no block that week; the published file cannot tell which. |
+| X1 | fixed (`b325c84`) | Indirection forms are matched in `bash_advisor.py` and `git_guard.py`. |
+| X2 | fixed (`b325c84`, `6b9fb8c`) | `GET /` is gated; token in an owner-only file; `url` and `ensure` print the launch URL; gateway and probe read the file; `serve` fails closed. |
+| X3 | fixed (`b325c84`, `6b9fb8c`) | Bare loopback needs the local token; the Tailscale owner login works without it (`resolveToken`). |
+| X4 | fixed (`b325c84`, `6b9fb8c`) | Resume block, crew and inbox text and recalled memory are fenced as untrusted data. |
+| X5 | fixed (`b325c84`) | The optimizer refuses a non-loopback Ollama URL unless `ATLAS_DECISION_ALLOW_REMOTE=1`. |
+| X6 | fixed (`b325c84`) | `validate-readonly-query.sh` blocks the listed state-changing statements. |
+| X7 | fixed (`b325c84`) | Note files 0600; the session id is sanitized in the dirty-snapshot name. |
+| H1 | fixed (`b325c84`, `6b9fb8c`) | One phase table in `operating-contract.json`; `mod/theme.ts` is built from it. |
+| H2 | fixed (`b325c84`, `6b9fb8c`) | Each phase has its own tone in `leadTone`. |
+| H3 | fixed (`b325c84`, `6b9fb8c`) | The template carries the bold `**ATLAS**` brand and the plain `ATLAS` brand still passes. Two fallback literals (`session_boot_core.py`, `completion_gate_core.py`) are still plain and pass the gate. |
+| H4 | fixed (`b325c84`, `6b9fb8c`) | One first-line rule in `parse_status_header`, `firstHeaderLine` and `discipline.ts`; shared corpus `contracts/header-corpus.json`. |
+| H5 | fixed (`b325c84`) | Session start and `atlas_doctor.py` say when the mod is not confirmed active; the host skipping handlers is not observable. |
+| M1 | fixed (`b325c84`) | One state-glyph table. |
+| M2 | fixed (`b325c84`, `6b9fb8c`) | One theme read (`readLook`); a structural guarantee, since no prior behavior difference was found. |
+| M3 | open (in progress) | `register.ts` is not split yet. |
+| M4 | fixed (`b325c84`) | The `band-frame.ts` and `status-frame.ts` import cycle is removed. |
+| M5 | fixed (`b325c84`) | Hex colours moved into `mod/atlas-ui.ts` tokens. |
+| M6 | fixed (`6b9fb8c`, working tree) | `no data yet`, `read failed` and stale ages replace `unknown` (`mod/data/datastate.ts`); the gates and hooks tables carry the read state in the working tree. |
+| M7 | fixed (`6b9fb8c`) | One worker tally for band, HUD and panel (`mod/data/tally.ts`). |
+| M8 | not a bug | Deliberate invariant: the idle band keeps one height at every width, so it does not move when the pane docks. |
+| 4.3 proposed layout | open (in progress) | No file moved. |
+| 4.4 items 1-6 | fixed | Same as M1, H1 and H2, M2, M6, M7, H5. |
+| 4.4 item 7, 256-colour mapping | fixed (`b325c84`, `6b9fb8c`) | `EXACT_256` entries and a pin test; not checked in a real 256-colour terminal. |
+| 4.4 item 8, narrow-width row | not a bug | Same as M8. |
+| 4.4 item 9, emoji width at 80 columns | not a bug | All eight phase glyphs measure 2 cells in the mod's width function and the header row fits in 80 cells; how a real terminal draws the emoji was not checked. |
+| 4.4 item 10, `mod/TESTING.md` and CI typecheck | open (in progress) | `TESTING.md` is being rewritten; no CI `tsc` job yet (`tests.yml` gives the reason: host types are generated locally). |
+| Section 5, failing `test_tmp_hygiene` | fixed (`b325c84`) | The test loads a fresh module copy. |
+| Section 5, skill behavior | fixed (`6b9fb8c`) | `scripts/test_skill_smoke.py` checks each skill's paths, script `--help` flags and agent roles; it does not run a skill. |
+| Section 5, Stop-gate letters o, p, q, s | not a bug | Block-path tests already existed at the audited commit (`test_completion_gate.py`); more were added. |
+| Section 5, agents | open | No per-agent test; `test_skill_smoke.py` only checks that referenced roles exist. |
+| Section 5, live host | open | Needs a live session: mod load, clicks, omp parity, `claude --bg` provider env. |
+| Section 5, published numbers | open | Crew benchmarks, hook latency and verifier catch rates have no pinning test; no test asserting the router 84/86 score was found in the tree. |
+| Section 5, `mod/TESTING.md` stale | open (in progress) | See 4.4 item 10. |
+| Dashboard pty shell route (X2 partial) | not a bug | `GET /api/v2/term/ws` upgrades only with a single-use ticket, and a ticket needs the token header (`atlas_dash_term.py`, `AnonymousPtyAccessTests`). |
+| Command Center iframe token prompt | open (needs a browser check) | The frame uses a bare herdr URL, so a browser with no herdr cookie sees the token prompt once; putting the token in the URL would leak it. |

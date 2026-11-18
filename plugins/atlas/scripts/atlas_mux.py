@@ -2257,18 +2257,15 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     cmd = f"python3 {todo}"
     flags = f"--root {qr} --channel {qc}"
     return (
-        f"You are {me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), 1 of {len(rec['members'])} workers of team {rec['team_id']} "
-        f"on {chan}. Lead: {lead}. Peers: {', '.join(peers) or '(none)'}.\n\n"
-        f"# Task\n{rec.get('member_tasks', {}).get(me) or rec['task']}\n\n# Scope\n{scope}\n\n"
-        f"# Protocol\nPost (do not read the script): {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
-        f"Read: {cmd} notes --to {me} {flags}\n"
-        f"Report (long final output, body on stdin): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
-        "Give the report body as a heredoc on that command; it must hold a STATUS: DONE|FAILED|BLOCKED line or it is rejected. "
-        "A read-only worker has no Write tool: this is the only way to hand back a long deliverable.\n"
-        f"1. After a first finding, note {lead}.\n"
-        "2. Before finishing, note each peer once (found, changed, avoid).\n"
-        "3. Reply once to any peer note.\n"
-        "4. End with STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT.\n"
+        f"{me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), peers {', '.join(peers) or '-'}.\n"
+        f"{rec.get('member_tasks', {}).get(me) or rec['task']}\nScope: {scope}\n"
+        # the brief is re-sent on every model call, so it stays terse (channel and team id are inside the
+        # commands); the rejection detail for a report lacking STATUS lives in atlas_todo.py's
+        # report_missing_status error, where the worker meets it
+        f"Post {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
+        f"Read {cmd} notes --to {me} {flags}\n"
+        f"Report (stdin, STATUS: DONE|FAILED|BLOCKED): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
+        f"Note {lead} 1st, peers last. End: STATUS/FILES/EVIDENCE/DELIVERABLE/NEXT"
     )
 
 

@@ -12,8 +12,8 @@
 import { dataWord } from './data/datastate';
 import { elapsedClock, type Run, type Ui, type UiState } from './atlas-ui';
 import type { CoreModel } from './data/core';
-import { agoText, teamOf, type Health } from './idle-health';
-import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type StatusGate, type StatusIn } from './status-frame';
+import { teamOf, type Health } from './idle-health';
+import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, lastCellText, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type ReadInfo, type StatusGate, type StatusIn } from './status-frame';
 import { fitText, textWidth } from './theme';
 import { checkOff, gateCounts } from './vocab';
 
@@ -45,6 +45,8 @@ export type TabIn = {
   /** Who a message goes to (the compose chip's name); null: the lead. */
   recipient: string | null;
   core?: CoreModel | null;
+  /** M6: how the gate and hook figures were read (snapshot age against refresh interval, failed read); absent: nothing is marked. */
+  read?: ReadInfo;
   /** Keys the user flipped from their default (open to closed, closed to open); remembered for the session. */
   flips: readonly string[];
   /** A blank row first: the header leaves none above the body (below 100 columns). */
@@ -136,13 +138,14 @@ function gatesPart(a: TabIn, kit: Kit, collapsed: ReadonlySet<string>, prompted:
     const fired = n.total > 0 && (prompted || deny > 0);
     const key = `gate:${c.id}`;
     const grp = a.gates.find((x) => x.id === c.id);
+    const failed = !!a.read?.failed?.gates || !!grp?.error;
     const canOpen = !!grp && grp.lines.length > 0;
     const open = canOpen && ((fired || force) !== flips.has(key)) && !collapsed.has(key);
     if (open && !flips.has(key) && deny === 0) order.push({ key, done: true });
     const lastSecs = fired ? gateLastSecs(h, c) : undefined;
     const right: Run[] = fired
-      ? [n.pass > 0 ? green(pad(String(n.pass))) : dim(pad('0')), deny > 0 ? red(pad(String(deny))) : dim(pad('0')), dim(pad(lastSecs !== undefined ? agoText(lastSecs) : none))]
-      : [dim(pad('0')), dim(pad('0')), dim(pad(none))];
+      ? [n.pass > 0 ? green(pad(String(n.pass))) : dim(pad('0')), deny > 0 ? red(pad(String(deny))) : dim(pad('0')), dim(pad(lastCellText(lastSecs, none, a.read, failed)))]
+      : [dim(pad('0')), dim(pad('0')), dim(pad(lastCellText(undefined, none, a.read, failed)))];
     const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
     // AA6: a group that opens is one raised chip across the row (`▸`/`▾` inside the fill, the numbers inside it too; the alert tile on a failing group); a group with nothing under it is a plain row; the row presses as a whole
     const caret = canOpen ? (open ? g('▾', 'v') : g('▸', '>')) : ' ';
@@ -328,6 +331,8 @@ function corePart(a: TabIn, kit: Kit): Part {
 /** AA7: the core tab's routing data: one row per recorded route (its name, the class and effort it ran at, how it ran); nothing when the mod recorded none. */
 function routingPart(a: TabIn, kit: Kit): Run[][] {
   const { dim, txt, row, ribbon, metaText } = kit;
+  // M6: a failed read of the routes says so; an empty list (nothing recorded) still draws nothing. A route record carries no read time, so no age can be shown for it.
+  if (a.read?.failed?.routes) return [ribbon('ROUTING'), row([dim(dataWord({ kind: 'error' }))])];
   const routes = a.core?.routes ?? [];
   if (!routes.length) return [];
   const out: Run[][] = [ribbon('ROUTING', metaText(`${routes.length} ${routes.length === 1 ? 'route' : 'routes'}`))];
@@ -376,7 +381,7 @@ export function tabFrame(a: TabIn): TabLine[] {
       case 'team': return statusActivityRows(kit, h, chartRows(a.room)).map(plain);
       case 'channel': return feed.length ? statusRecentRows(kit, h, feed, Math.min(feed.length, Math.max(2, 2 + extra))).map(plain) : [];
       case 'core': return routing();
-      default: return statusHooksRows(kit, h).map(plain);
+      default: return statusHooksRows(kit, h, undefined, a.read).map(plain);
     }
   };
   const lead = a.lead ? 1 : 0;

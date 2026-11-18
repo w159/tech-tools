@@ -153,8 +153,10 @@ separate install: `claude plugin install armada@tech-tools`
        -> blocks with the failing condition letters, or stays silent on pass
 ```
 
-Phases and glyphs come from `contracts/operating-contract.json`. The header
-format is `ATLAS | <glyph> <phase> | <state>`, defined in
+Phases and glyphs come from `contracts/operating-contract.json` (one phase
+table: id, glyph, label, tone and single-cell glyph). The header format is
+`**ATLAS** | <glyph> <phase> | <state>` (a plain `ATLAS |` still passes the gate),
+defined in
 `output-styles/atlas-orchestrator.md`, which sets `force-for-plugin: true` so it
 applies whenever Atlas is enabled.
 
@@ -185,9 +187,9 @@ blocks, it names the letters:
 | ------ | ------------------------------------------------ | ------ | ------------------------------------------ |
 | a      | no `.atlas/evidence` artifact                    | j      | worktrees left open                        |
 | b      | no verified finding backed by a hook record      | k      | no plan (todo list) was made               |
-| c      | CHANGELOG missing                                | l      | dated docs not named `<YYYY-MM-DD>_<slug>` |
-| d      | ROADMAP missing                                  | m      | code shipped with zero subagent dispatches |
-| e      | README missing                                   | n      | status header missing                      |
+| c      | CHANGELOG present but empty (absent: advisory)   | l      | dated docs not named `<YYYY-MM-DD>_<slug>` |
+| d      | ROADMAP present but empty (absent: advisory)     | m      | code shipped with zero subagent dispatches |
+| e      | README present but empty (absent: advisory)      | n      | status header missing                      |
 | f      | docs drift (no CHANGELOG entry for shipped code) | o      | required phases missing                    |
 | g      | implementer work not independently verified      | p      | colony channel unused                      |
 | h      | ROADMAP not reconciled                           | q      | unmerged worker branches                   |
@@ -883,7 +885,11 @@ It shows the colony roster, the todo board, per-branch channels, live terminal
 seats, doctor findings and settings, updated over Server-Sent Events. It binds
 loopback only unless `--allow-remote` is passed; every request checks the
 `Host` and `Origin`, and mutations and the live stream need a per-daemon
-`X-Atlas-Token`. API reference:
+`X-Atlas-Token`. The bare URL answers `401`: open the launch URL that
+`atlas_dashboard.py launch` (or `url`, or the `url` field of `ensure`) prints.
+The token lives in an owner-only file, `dashboard-<port>.token` (mode 0600)
+under `~/.atlas` (`$ATLAS_HOME` when set); scripts read it from there and the
+daemon refuses to start if it cannot write it. API reference:
 `skills/atlas-orchestrate/references/dashboard-api.md`.
 
 Statusline. Project, model, effort, context meter, rate-limit meters and session
@@ -1014,6 +1020,13 @@ text, from `contracts/band-golden.ts`:
  verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked
  checks  ● lint  ● test  △ doctor  2/3 green
 ```
+
+**Missing figures.** A figure that is not a plain value is drawn one of three ways, defined once in
+`mod/data/datastate.ts`: `no data yet` when nothing has been read or recorded, `read failed` when the read
+itself failed (in a table cell, a dash and `err`), and an age such as `stale 3m` (cell `~3m`) when data is older
+than its refresh interval. It replaces the old `unknown` in the facts line, the routing rows and note toasts.
+Worker counts come from one tally (`mod/data/tally.ts`), so the band, the HUD and the panel agree, and a
+`thinking` worker counts as running on all three.
 
 **Idle health.** An idle session shows what is healthy, with history, instead of an
 empty band (`mod/idle-health.ts`, figures from `mod/metrics.ts`). The band is built
@@ -1303,11 +1316,23 @@ placed once per blocked spell, with a 203 bar, in the band's own words:
 ▌ ◆ ATLAS  ▲ blocked · stop refused                 0:36
 ```
 
-A placed card is never removed, replaced or rewritten. The lead's `ATLAS | ...`
+A placed card is never removed, replaced or rewritten. The mod, the Stop gate and
+the missing-header toast read the header the same way: the first line, after
+splitting on newline only, that is non-empty once ASCII whitespace is stripped
+(`firstHeaderLine` in `mod/contract-pattern.ts`, `parse_status_header` in
+`hooks/completion_gate_core.py`). Each of the eight phases has its own colour
+(`PHASE_TABLE` in `mod/contract-pattern.ts`, from `phases[]` in the contract). The lead's `ATLAS | ...`
 header line is rewritten for the screen by the classic `MessageDisplay` hook to
 `phase n/m · state` in lower case (`displayLine` in
 `mod/transcript/leadheader.ts`); the stored message and the Stop gate keep the
-contract form. A turn footer is frozen at its first draw and prints the band's
+contract form. Session start says `atlas mod: not confirmed active (<reason>)` when
+the surface cannot show the mod (cloud session, SDK or headless entry point, unknown
+entry point), and `atlas_doctor.py` prints the same reason as a warn-only `mod-surface`
+line; whether the host actually fires the mod's handlers cannot be observed from a hook,
+so a confirmed surface means assumed, not proven (`mod_surface_status` in
+`hooks/session_boot_core.py`). When `contracts/operating-contract.json` cannot be read,
+session start gives the header template and says the phase glyph table is unavailable
+(use the phase names) instead of dropping it silently. A turn footer is frozen at its first draw and prints the band's
 run clock (`run 4:12`, `durationTree` in `mod/restyle.tsx`). Worker
 cards are drawn only on omp, where a running worker is a 44-cell box
 (`cardLines` and `CARD_W` in `mod/panel-layout.ts`, painted by `omp/panel-view.ts`):

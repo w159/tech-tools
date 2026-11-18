@@ -7,7 +7,7 @@
 //
 // Overflow (2.8): HOOKS rows shrink first (one row stays), then RUNS goes, then gate child rows collapse to group rows. NOW and the denial line never shrink.
 // Colour (2.4): green only for measured passes, amber for ctx >= 70 % or a hook p50 >= 50 ms, red for denial and failure, violet ramp 97/141/183 for the bars.
-import { dataCell } from './data/datastate';
+import { dataCell, dataStateOf, type DataState } from './data/datastate';
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { bandLook, ctxLevel, latencyLevel } from './band-frame';
 import { WIRED_HOOKS } from './hook-log';
@@ -52,6 +52,8 @@ export type StatusIn = {
   health: Health;
   /** The phases the run entered, in order (the panel's memo): the stepper fills only those it passed. Absent or empty: the position decides. */
   entered?: readonly string[];
+  /** M6: how the gate and hook figures were read; absent: nothing is marked stale or failed. */
+  read?: ReadInfo;
   /** A blank row first: the header leaves none above the body (below 100 columns). */
   lead: boolean;
 };
@@ -127,7 +129,7 @@ export function frameKit(ui: Ui, u: number) {
 export type Kit = ReturnType<typeof frameKit>;
 
 /** The elements the dock and the card share. Each builder takes the kit (so the width is the caller's: U in the pane, a column in the card) and the health. */
-export type GateSrc = { gates: readonly StatusGate[]; prompted: boolean };
+export type GateSrc = { gates: readonly StatusGate[]; prompted: boolean; /** M6: how the gate figures were read (age, failed read); absent: nothing is marked. */ read?: ReadInfo };
 
 export type FeedRow = { label: string; ageSecs: number; n: number; ms?: number };
 /** The HOOKS feed: events of one label in one second fold into one row (`×2`), newest first. */
@@ -143,6 +145,17 @@ export function hookFeed(h: Health): FeedRow[] {
 // ---- the W1 status tab builders (round W spec, items A-E): full-width chart, gates table, wired-hooks table, recent log ----
 
 const GUTTER = 3; // y gutter of the chart: a two-cell label and the `┤` tick
+/** M6: what the caller knows about how the gate and hook figures were read: the snapshot's age against its refresh interval (past it a figure is drawn `~` with its real age), and which read failed (drawn `err`, never the no-data dash). Absent: nothing is known, so nothing is marked. */
+export type ReadInfo = { ageSecs?: number; refreshSecs?: number; failed?: { gates?: boolean; hooks?: boolean; /** the core tab's recorded routes */ routes?: boolean } };
+
+/** The `last` cell of a gates or hooks row through the shared data state: `err` for a failed read, the no-data dash for none, `~` and the figure's real age (its own age plus the snapshot's) once the snapshot is older than its refresh interval, else the plain age. */
+export function lastCellText(secs: number | undefined, none: string, read: ReadInfo | undefined, failed: boolean): string {
+  const s: DataState = dataStateOf({ has: secs !== undefined, failed, ...(read?.ageSecs !== undefined ? { ageSecs: read.ageSecs } : {}), ...(read?.refreshSecs !== undefined ? { refreshSecs: read.refreshSecs } : {}) });
+  if (s.kind === 'error') return dataCell(s);
+  if (s.kind === 'stale') return `~${agoText((secs ?? 0) + s.ageSecs)}`;
+  return secs === undefined ? none : agoText(secs);
+}
+
 export const GATE_COL = 5;
 /** Z1: the activity chart's rows follow the pane's height alone (never the run's state): the same pane draws the same chart idle, working and done. Rows the chart does not take go to the section that grows (RECENT, RUNS). Unknown room: 4. */
 export const chartRows = (room: number): number => (room <= 0 ? 4 : room >= 40 ? 6 : room >= 32 ? 5 : room >= 26 ? 4 : 3);
@@ -350,7 +363,9 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
   const none = g(dataCell({ kind: 'empty' }), dataCell({ kind: 'empty' }, true));
   const counts = h.gates.checks.map((c) => { const n = gateCounts(c); return { c, n, deny: n.total - n.pass, fired: n.total > 0 && (src.prompted || n.total - n.pass > 0) }; });
   // AA4: before any check ran, the table is one summary line; with the gate counts of an earlier session (history) it is that session's rows, dimmed and tagged `prev`
-  if (counts.length && !counts.some((x) => x.fired)) {
+  // a failed read is never folded into the `0 checks yet` summary: its rows say `err`
+  const failedOf = (id: string): boolean => !!src.read?.failed?.gates || !!src.gates.find((x) => x.id === id)?.error;
+  if (counts.length && !counts.some((x) => x.fired) && !counts.some((x) => failedOf(x.c.id))) {
     const old = h.hist?.gates ?? [];
     if (!old.length) return [ribbon('GATES'), row([dim(`${g('○', 'o')} ${counts.length} ${counts.length === 1 ? 'gate' : 'gates'} armed · 0 checks yet`)])];
     const out: Run[][] = [ribbon('GATES', metaText(`${cell('pass')}${cell('deny')}${cell('last')}`))];
@@ -365,8 +380,8 @@ export function statusGatesRows(kit: Kit, h: Health, src: GateSrc, children: boo
     const mark = deny > 0 ? red(g('■', 'x')) : fired ? green(g('●', '*')) : dim(g('○', 'o'));
     const lastSecs = fired ? gateLastSecs(h, c) : undefined;
     const right: Run[] = fired
-      ? [n.pass > 0 ? green(cell(String(n.pass))) : dim(cell('0')), deny > 0 ? red(cell(String(deny))) : dim(cell('0')), lastSecs !== undefined ? dim(cell(agoText(lastSecs))) : dim(cell(none))]
-      : [dim(cell('0')), dim(cell('0')), dim(cell(none))];
+      ? [n.pass > 0 ? green(cell(String(n.pass))) : dim(cell('0')), deny > 0 ? red(cell(String(deny))) : dim(cell('0')), dim(cell(lastCellText(lastSecs, none, src.read, failedOf(c.id))))]
+      : [dim(cell('0')), dim(cell('0')), dim(cell(lastCellText(undefined, none, src.read, failedOf(c.id))))];
     out.push(row([mark, fired ? txt(` ${fitText(c.id, nameW)}`) : dim(` ${fitText(c.id, nameW)}`)], right));
     if (deny > 0 && children) {
       const grp = src.gates.find((x) => x.id === c.id);
@@ -400,12 +415,14 @@ export function hookTable(h: Health): HookRow[] {
 }
 
 /** HOOKS (D): the fixed table of the wired hooks, header row then one row each: name, count, p50, p95, last (right-aligned, flush right). A hook that never fired is dim `0 — — —`. Z2: a hook with fewer than 5 samples shows its single or median value in p50 and `—` in p95, so one number is never printed as two statistics. Z3: p50 and p95 take the latency colours (green to 100 ms, amber above, red above 500) whatever the session; the rule states the two thresholds once. `rows` cuts the table from the end on a short pane. */
-export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length): Run[][] {
+export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length, read?: ReadInfo): Run[][] {
   const { on, dim, txt, red, amber, green, row, ribbon, metaText, g, k, ascii } = kit;
   const table = hookTable(h);
-  const none = g(dataCell({ kind: 'empty' }), dataCell({ kind: 'empty' }, true));
+  // M6: a failed hook read says `err` where an unread one says the no-data dash
+  const failed = !!read?.failed?.hooks;
+  const none = failed ? dataCell({ kind: 'error' }) : g(dataCell({ kind: 'empty' }), dataCell({ kind: 'empty' }, true));
   // AA4: nothing measured and nothing fired but the session's own start: one summary line instead of a table of zeros
-  if (!table.some((e) => e.p50 !== undefined) && table.every((e) => e.name === 'session.start' || e.n === 0)) {
+  if (!failed && !table.some((e) => e.p50 !== undefined) && table.every((e) => e.name === 'session.start' || e.n === 0)) {
     const start = table.find((e) => e.name === 'session.start');
     return [ribbon('HOOKS'), row([dim(`${g('○', 'o')} ${table.length} ${table.length === 1 ? 'hook' : 'hooks'} wired · ${start?.lastSecs !== undefined ? `last session.start ${agoText(start.lastSecs)}` : 'none fired yet'}`)])];
   }
@@ -428,7 +445,7 @@ export function statusHooksRows(kit: Kit, h: Health, rows = WIRED_HOOKS.length):
     const old = !fired && e.p50 !== undefined; // an earlier session's figures, this session has not fired the hook
     const p95 = (e.samples ?? e.n) >= P95_MIN_SAMPLES ? e.p95 : undefined;
     const spark: Run[] = sparkOn ? [dim(' '.repeat(Math.max(0, nameW - textWidth(e.name)))), sp8(e.ring ?? [], on, k, ascii)] : [];
-    out.push(row([fired ? txt(e.name) : dim(e.name), ...spark], [fired ? txt(pad(String(e.n), 4)) : dim(pad('0', 4)), ms(e.p50, old), ...(withP95 ? [ms(p95, old)] : []), e.lastSecs !== undefined ? dim(pad(agoText(e.lastSecs), 5)) : dim(pad(old ? 'prev' : none, 5))]));
+    out.push(row([fired ? txt(e.name) : dim(e.name), ...spark], [fired ? txt(pad(String(e.n), 4)) : dim(pad('0', 4)), ms(e.p50, old), ...(withP95 ? [ms(p95, old)] : []), e.lastSecs !== undefined && !failed ? dim(pad(lastCellText(e.lastSecs, none, read, false), 5)) : dim(pad(old && !failed ? 'prev' : none, 5))]));
   }
   return out;
 }
@@ -524,7 +541,7 @@ export function statusFrame(a: StatusIn): Run[][] {
     }
   }
 
-  const src: GateSrc = { gates: a.gates, prompted };
+  const src: GateSrc = { gates: a.gates, prompted, ...(a.read ? { read: a.read } : {}) };
   const feed = hookFeed(h);
   const footer = footerRow(kit, h);
   const context = statusContextRows(kit, h);
@@ -535,7 +552,7 @@ export function statusFrame(a: StatusIn): Run[][] {
   const dropped = (o: Plan): string[] => [...(o.activity ? [] : ['activity']), ...(o.ctx || !context.length ? [] : ['context']), ...(o.runs || !runsSec.length ? [] : ['runs']), ...(o.hooks ? [] : ['hooks'])];
   const sectionsOf = (o: Plan): Run[][][] => [
     now, ...(o.activity ? [statusActivityRows(kit, h, o.chart)] : []), ...(o.ctx && context.length ? [context] : []), ...(o.runs && runsSec.length ? [runsSec] : []),
-    statusGatesRows(kit, h, src, o.children), ...(o.hooks ? [statusHooksRows(kit, h)] : []), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
+    statusGatesRows(kit, h, src, o.children), ...(o.hooks ? [statusHooksRows(kit, h, undefined, a.read)] : []), ...(o.recent > 0 && feed.length ? [statusRecentRows(kit, h, feed, o.recent)] : []),
   ];
   const sizeOf = (o: Plan): number => { const s = sectionsOf(o); return (a.lead ? 1 : 0) + sum(s.map((x) => x.length)) + s.length - 1 + (dropped(o).length ? 2 : 0); };
   const foot = footer.length ? 1 : 0;

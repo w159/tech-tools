@@ -4742,7 +4742,8 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertIn('"decision": "block"', out)
         reason = json.loads(out)["reason"]  # the model sees the decoded text
         self.assertIn("(n)", reason)
-        self.assertRegex(reason, r"ATLAS(\*\*)? \| <glyph> <phase> \| <one-line state>")
+        # the exact form _header_reason_part prints: the contract headerTemplate, bold brand included
+        self.assertIn("`**ATLAS** | <glyph> <phase> | <one-line state>`", reason)
         self.assertIn("research", reason)  # phase ids; glyphs come from SessionStart
         self.assertIn("blocked", reason)
         self.assertIn("re-send", reason.lower())
@@ -5051,7 +5052,7 @@ class ContractVisibilityTest(unittest.TestCase):
         self.assertLess(len(repeat), 260)
         self.assertNotIn("once per session", first)
         # The repeat still carries the one thing needed to fix the reply: the template.
-        self.assertRegex(repeat, r"ATLAS(\*\*)? \| <glyph> <phase> \| <one-line state>")
+        self.assertIn("`**ATLAS** | <glyph> <phase> | <one-line state>`", repeat)
         self.assertIn("(n)", repeat)
 
     def test_n_kill_switch_and_global_off(self):

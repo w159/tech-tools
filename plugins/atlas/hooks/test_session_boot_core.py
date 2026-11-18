@@ -463,5 +463,56 @@ class ContractUnreadableTest(unittest.TestCase):
         self.assertIn("unreadable", text)
         self.assertIn("operating-contract", log)
 
+class DashboardLaunchTokenTest(unittest.TestCase):
+    """`ensure` returns a launch URL carrying the owner token: it must never reach the model context."""
+
+    SECRET = "SECRET-LAUNCH-TOKEN-0123"
+
+    def _ensure(self) -> subprocess.CompletedProcess:
+        url = f"http://127.0.0.1:7500/?launch={self.SECRET}#frag-{self.SECRET}"
+        return subprocess.CompletedProcess([], 0, json.dumps({"url": url, "already_running": True}), "")
+
+    def test_ensure_dashboard_line_has_no_query_or_token(self) -> None:
+        env = {"ATLAS_DASHBOARD": "on", "ATLAS_DASHBOARD_PORT": "7500"}
+        with mock.patch.dict(os.environ, env), mock.patch("subprocess.run", return_value=self._ensure()):
+            line = session_boot.ensure_dashboard()
+        self.assertEqual(line, "dashboard: http://127.0.0.1:7500/ (ready)")
+        self.assertNotIn(self.SECRET, line)
+
+    def test_session_start_output_never_carries_the_token(self) -> None:
+        import io
+
+        real_run = subprocess.run
+        ensure = self._ensure()
+
+        def fake_run(argv, *a, **kw):
+            if isinstance(argv, (list, tuple)) and any(str(x).endswith("atlas_dashboard.py") for x in argv):
+                return ensure
+            return real_run(argv, *a, **kw)
+
+        tmp = tempfile.mkdtemp()
+        env = {
+            "ATLAS_DASHBOARD": "on",
+            "ATLAS_DASHBOARD_PORT": "7500",
+            "ATLAS_DB": os.path.join(tmp, "atlas.db"),
+            "ATLAS_COLONY": "off",
+        }
+        stdout = io.StringIO()
+        with (
+            mock.patch.dict(os.environ, env),
+            mock.patch("subprocess.run", side_effect=fake_run),
+            mock.patch("sys.stdin", new=io.StringIO(json.dumps({"session_id": "tok1", "cwd": tmp}))),
+            mock.patch("sys.stdout", new=stdout),
+        ):
+            with self.assertRaises(SystemExit):
+                session_boot.main()
+        out = stdout.getvalue()
+        self.assertNotIn(self.SECRET, out)
+        self.assertNotIn("launch=", out)
+        ctx = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("dashboard: http://127.0.0.1:7500/ (ready)", ctx)
+        self.assertRegex(ctx, r"atlas_dashboard\.py\" launch")
+
+
 if __name__ == "__main__":
     unittest.main()

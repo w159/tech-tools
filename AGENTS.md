@@ -159,7 +159,7 @@ The atlas hook gates (recall gate, dispatch contract, advisor gate, completion g
 
 Codex loads Atlas skills and lifecycle hooks through the plugin; this block keeps the contract visible and is the fallback until those hooks are trusted.
 
-- Open every reply with `ATLAS | <glyph> <phase> | <state>`. Phases: 🔍 research 💡 theory 🧪 test 📋 validate 🔧 implement ✅ verify 🏁 done ⛔ blocked.
+- Open every reply with `**ATLAS** | <glyph> <phase> | <state>`. Phases: 🔍 research 💡 theory 🧪 test 📋 validate 🔧 implement ✅ verify 🏁 done ⛔ blocked.
 - Evidence before done: do not say fixed, done, or working without running the verifying command and showing its output in the same message.
 - Every subagent dispatch prompt carries: GOAL:, DELIVERABLE:, SUCCESS CRITERIA:, OUT OF SCOPE:, STOP CONDITIONS:, REPORT:.
 - Tiers (agents/*.md frontmatter):

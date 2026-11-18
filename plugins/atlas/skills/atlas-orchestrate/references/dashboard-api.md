@@ -30,7 +30,7 @@ http://127.0.0.1:7421/
 The bare URL answers `401 launch_required`: loopback is not a trust boundary on a shared host, so `GET /` is served only to a caller that already holds the per-daemon secret. Open the **launch URL** instead (`http://127.0.0.1:7421/?launch=<token>`): the daemon trades it for an `HttpOnly; SameSite=Strict` cookie and redirects to `/`, so the secret does not stay in the address bar. `atlas_dashboard.py launch` and `url` print it, and `ensure` returns it as `url`.
 
 - Open it **once**. Every terminal that activates atlas shares the same page.
-- `session_boot.py` (SessionStart) runs `atlas_dashboard.py ensure` and injects the launch URL into boot context. It does **not** open a browser.
+- `session_boot.py` (SessionStart) runs `atlas_dashboard.py ensure` and injects the bare URL plus the `atlas_dashboard.py launch` command into boot context (the token never enters the model context). It does **not** open a browser.
 - Disable auto-start with `export ATLAS_DASHBOARD=off`.
 
 ```bash

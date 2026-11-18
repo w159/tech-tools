@@ -94,7 +94,7 @@ auto-trigger from their description. The three manual skills,
 yourself (Claude Code prefixes a plugin skill with the plugin name; omp takes
 the bare `/atlas:atlas-setup` form). The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
-`ATLAS | <glyph> <phase> | <state>` status line the output style requires.
+`**ATLAS** | <glyph> <phase> | <state>` status line the output style requires (a plain `ATLAS |` still passes the gate).
 
 **Boot a project once.**
 
@@ -276,9 +276,9 @@ which conditions are unmet:
 
 - (a) evidence saved under `.atlas/evidence/` during this run; nested dated folders (`.atlas/evidence/<date>-<slug>/...`) count
 - (b) a finding with status `verified` in `.atlas/.run/findings.json`, stamped this run and backed by a hook-written record for this session and run: an `atlas:verifier` or `atlas:completeness-critic` dispatch row with `ts` at most `verified_at` + 1 s and a role matching `verified_by`, or a team or crew member record (verifier or completeness-critic role) whose name equals `stamped_by`; or a `reproduction` or `evidence` that matches a passing test-runner command of this session. The row and each command that ran are split on `;`, `&&` and `||` outside quotes, and each segment is compared with whitespace collapsed, leading `cd X &&` and env assignments stripped (`_canon_segments`, `hooks/completion_gate_core.py`), so a compound reproduction such as `fallow audit ...; cd plugins/atlas && env -u NO_COLOR bun test omp mod` credits when its `bun test omp mod` segment ran passing. Known limit: the pass status is the whole command's status, not one segment's. A bare `--by atlas:verifier` does not credit. Residual limits: an in-process verifier stamps as `lead`, so credit depends on the dispatch row; a lead can pair a real verifier dispatch with a self-stamped row; `ATLAS_WORKER_NAME` can be set from the process environment; an unreadable DB fails open with a stderr line
-- (c) `docs/CHANGELOG.md` exists and is non-empty
-- (d) `docs/ROADMAP.md` exists and is non-empty
-- (e) root `README.md` exists and is non-empty
+- (c) `docs/CHANGELOG.md` is non-empty when present (a project that never had it gets a stderr advisory, not a block; a present-but-empty file blocks)
+- (d) `docs/ROADMAP.md`: same rule as (c)
+- (e) root `README.md`: same rule as (c)
 - (f) no docs drift: non-docs files written this run, but no `docs/` file changed
 - (g) verification coverage: shipped implementer dispatches are covered by an
   `atlas:verifier` dispatch or a `verified` finding backed by an executed test run
@@ -288,7 +288,7 @@ which conditions are unmet:
 - (k) a plan existed on some surface (TodoWrite, board items, or ledger line) before code shipped
 - (l) dated artifacts touched this run use date-first names
 - (m) delegation mandate: at least one `Task`/`Agent` dispatch when main-thread code shipped outside `docs/`
-- (n) status header: an orchestrating session's final reply starts with `ATLAS | <glyph> <phase> | <state>`
+- (n) status header: an orchestrating session's final reply starts with `**ATLAS** | <glyph> <phase> | <state>` (plain `ATLAS |` passes too; the header line is the first line, split on `\n` only, that is non-empty after stripping ASCII whitespace)
 - (o) phased todo: when code shipped, the session's board items cover the `implement` and `verify` phases
 - (p) colony channel: with two or more atlas workers dispatched, the board notes or IRC show use: a board note on this run's lead channel authored by a registered (or departed) member that is not a lead, or IRC/`SendMessage` traffic recorded for the run
 - (q) unmerged worker branches: no `worker/*` branch holding commits that are not merged into the base, and no dirty worker worktree (`atlas_wt.py status`); merge with `atlas_wt.py merge <agent>`. Not limited to code-shipping runs; sidechains are exempt
@@ -352,11 +352,11 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_OLLAMA_MIN_CTX` | smallest context window `/api/show` may report (default 32768); below it the worker falls back with `ctx_too_small`; a model without the `tools` capability falls back with `no_tools` |
 | `ATLAS_OLLAMA_PROBE_TIMEOUT` | seconds the one-token `/v1/messages` health probe may take (default 30: the first request loads the model); a bad answer is `probe_failed` |
 | `ATLAS_OLLAMA_RETRY_LIMIT` | `api_retry` events an Ollama worker may emit before it is relaunched once on Claude (default 3); the record shows `runtime_down`, `runtime_5xx` or `runtime_model_missing` |
-| `ATLAS_OLLAMA_URL` | Ollama endpoint (default `http://127.0.0.1:11434`); loopback only unless `ATLAS_OLLAMA_ALLOW_REMOTE=1` |
-| `ATLAS_OLLAMA_ALLOW_REMOTE=1` | lets `ATLAS_OLLAMA_URL` name a non-loopback host; otherwise fallback `remote_refused` (default off) |
+| `ATLAS_OLLAMA_URL` | Ollama endpoint (default `http://127.0.0.1:11434`); for Ollama workers, loopback only unless `ATLAS_OLLAMA_ALLOW_REMOTE=1`. The prompt optimizer reads the same variable but refuses a non-loopback URL unless `ATLAS_DECISION_ALLOW_REMOTE=1` (see the decision rows above) |
+| `ATLAS_OLLAMA_ALLOW_REMOTE=1` | lets an Ollama worker's `ATLAS_OLLAMA_URL` name a non-loopback host; otherwise fallback `remote_refused` (default off). Does not apply to the prompt optimizer |
 | `ATLAS_OLLAMA_STRICT=1` | an unhealthy or unconfigured Ollama refuses the worker (exit 2) instead of falling back to claude (default off) |
 | `ATLAS_ADVERSARIAL_PAIRING` | `on` (default) or `off`: cross-family verifier pairing in `spawn-team` (ollama implementers get claude verifiers; claude implementers may get a configured ollama verifier) |
-| `ATLAS_NOTE_MAX_BYTES` | largest board note body accepted (default 8192 bytes); longer notes are refused with `body_too_large` |
+| `ATLAS_NOTE_MAX_BYTES` | largest board note body (default 8192 bytes); a longer `report`, `wrapup` or `kickoff` note keeps its start and closing `exit` line and names the full copy saved under `.atlas/.run/board/reports/`; any other note kind is refused with `body_too_large` |
 | `ATLAS_NOTE_ARCHIVE_BYTES` | size an owner's note file may reach before notes older than 14 days move to `board/archive` (default 2097152 bytes) |
 | `ATLAS_CHECK_INSTALL_PARITY=1` | opt in to the two contract tests that compare the repo with the installed plugin cache (default off, so a suite run never depends on the install) |
 | `ATLAS_CREW_MAX_BLOCKS` | times a crew worker's Stop is refused (unread messages, failing `irc check`) before it is let go with the failure recorded (default 3; `atlas_crew.py` sets it from the plan's `max_blocks`; read by `hooks/crew_worker.py`) |
@@ -369,6 +369,7 @@ edit warns, then every 5th, until a `docs/` change clears it.
 
 **Related flags and miners.**
 
+- `atlas_todo.py report --owner <name> [--file F]` is the worker hand-back (body from stdin by default): it needs a `STATUS: DONE|FAILED|BLOCKED` line (else `report_missing_status`) and appends the closing `exit` line `wait` reads. `atlas_mux.py wait` prints per-member progress to stderr every `--progress` seconds (default 60, `0` = off) and returns once every member has reported.
 - `atlas_mux.py wait --kill-on-timeout` closes the team's tmux session when the wait times out (`ATLAS_WAIT_KILL=1` sets it for every wait).
 - `atlas_todo.py notes-archive [--days N]` moves every owner's board notes older than N days (default 14) to `board/archive`; it also runs when a note file passes `ATLAS_NOTE_ARCHIVE_BYTES`.
 - `atlas_doctor.py --redact-history [--apply]` runs the secret and NPI redactor over stored messages, prompts, tool calls, session logs and memory files. Without `--apply` it is a dry run that prints counts.
@@ -514,7 +515,7 @@ them. The table lists the main entry points, not every module.
 | `atlas_memory.py` | File-backed memory store. |
 | `atlas_todo.py` | The board and per-worker notes: `list`, `set`, `add`, `scaffold`, `claim`, `complete`, `status`, `remove`, `carry`, `counts`, `note`, `notes`. |
 | `atlas_finding.py` | Appends verdict rows to `.atlas/.run/findings.json` (the verifier's write path). |
-| `atlas_dashboard.py` | Local dashboard daemon: `status`, `serve`, `ensure`, `stop`, `url`; UI at `http://127.0.0.1:7421/`. |
+| `atlas_dashboard.py` | Local dashboard daemon: `status`, `serve`, `ensure`, `stop`, `url`, `launch`; UI at `http://127.0.0.1:7421/` (the bare URL answers 401: open the launch URL that `launch` prints). |
 | `atlas_dash_work.py` | Dashboard v2 routes: the todo board (`/api/v2/todos`). |
 | `atlas_dash_irc.py` | Dashboard v2 routes: IRC board notes, delivery through herdr (`/api/v2/irc`). |
 | `atlas_dash_herd.py` | Dashboard v2 routes: herdr agents, prompts, panes, ensure (`/api/v2/herd/*`). |
@@ -588,8 +589,9 @@ helper, and `mcp-gateway`, an Entra-ID remote gateway not declared in
 ![Atlas architecture](../../img/architecture-section-header.png)
 
 One lead orchestrator, named sibling workers, one shared board. Every dispatch
-is named: in Claude Code the dispatch tripwire denies an unnamed `atlas:*`
-dispatch (convention `<role>-<slice>`, e.g. `auth-explorer`); in omp each `task`
+is named: in Claude Code the dispatch tripwire names an unnamed `atlas:*`
+dispatch itself (convention `<role>-<slice>`, e.g. `auth-explorer`; `ATLAS_AUTONAME=off`
+turns the miss into a deny); in omp each `task`
 item takes a unique CamelCase `name` (<=32 chars). The name is the sibling
 address: a worker reaches a sibling with `write agent://<Name>` in omp
 (`SendMessage` by roster name in Claude Code). Workers report to the lead,
@@ -702,7 +704,7 @@ inspector's Terminal tab frames one pane as `?chrome=pane`. The legacy
 visit of `/` redirects to `/atlas/#/herd` (which the router sends to `#/colony`) and `/atlas/**` is
 proxied to the loopback dashboard on `127.0.0.1:7421`. Env: `ATLAS_LANDING=off`
 disables the redirect; `ATLAS_DASHBOARD_URL` points the proxy at the dashboard;
-`HERDR_WEB_TOKEN` is the web UI's shared token; `HERDR_WEB_URL` overrides the
+`HERDR_WEB_TOKEN` is the web UI's operator token (it gates the Tailscale owner login too; unset, bare loopback needs the server's 0600 `local-token` file unless `HERDR_WEB_TRUST_LOCAL=1`); `HERDR_WEB_URL` overrides the
 colony URL (loopback only); `ATLAS_COLONY=off` skips the SessionStart start;
 `ATLAS_COLONY_TRANSPORT=tmux` forces tmux workers; `ATLAS_REMOTE_PORT` sets the
 tailnet port (default 8443). Install herdr from https://herdr.dev and run
@@ -738,7 +740,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_remote.py" disable --yes
 `ATLAS_REMOTE_PORT` (default 8443, never 443) picks the HTTPS port; the
 tailnet URL it prints opens the Atlas dashboard (via the `/` redirect). `apply`
 refuses while an anonymous tailnet request would be let in, so set
-`HERDR_WEB_TOKEN` or pair a device first: the colony exposes live terminals, so
+`HERDR_WEB_TOKEN` or pair a device first (`atlas_remote.py status` reports `auth.token_source`, never the token): the colony exposes live terminals, so
 reaching it is code execution as your user. Details and the auth order:
 [docs/architecture/atlas-colony.md](../architecture/atlas-colony.md) and
 [remote-access.md](../../plugins/atlas/skills/atlas-orchestrate/references/remote-access.md).
@@ -760,11 +762,13 @@ single-page UI, `/api/v2`, SSE, the token guard) ships in atlas 10.0.1; older
 installs answer 404 on `/api/v2/*`.
 
 **Start.** The SessionStart hook runs `atlas_dashboard.py ensure` and adds one
-line to the boot context, then you open the URL once:
+line to the boot context (the bare URL and the command that prints the launch URL; the token itself never enters the context), then you open the launch URL once:
 
 ```text
-dashboard: http://127.0.0.1:7421/ (ready) - open once; all concurrent terminals share it
+dashboard: http://127.0.0.1:7421/ (ready) - launch URL (carries the owner token, never paste it anywhere): python3 ".../atlas_dashboard.py" launch
 ```
+
+The bare URL answers `401 launch_required`. `atlas_dashboard.py launch` (also `url`, and the `url` field of `ensure`) prints `http://127.0.0.1:7421/?launch=<token>`; the daemon trades it for an `HttpOnly; SameSite=Strict` cookie and redirects to `/`.
 
 Manual control (from a shell; `${CLAUDE_PLUGIN_ROOT}` resolves inside a session):
 
@@ -821,11 +825,16 @@ client polls every 8 seconds and the topbar says `Polling every 8s`.
 | 4 | Mutations, `/api/v2/stream` and sensitive GETs (IRC, transcripts) need `X-Atlas-Token` | `401 bad_token` |
 
 The token is `secrets.token_urlsafe(32)`, regenerated at every daemon start and
-delivered only inside `GET /` as `<meta name="atlas-token">`; `?token=` is
-accepted on the stream only. No CORS headers are sent, bodies are capped at 4
-MiB, and other read-only GETs are unauthenticated, so keep the loopback
-default. External scripts must fetch `GET /` first, read the token, then send
-`X-Atlas-Token` and the JSON content type on every mutation.
+written to an owner-only (0600) file, `dashboard-<port>.token`, under `~/.atlas`
+(`$ATLAS_HOME` when set); the daemon exits 1 before listening if it cannot write
+that file. `GET /` is served only to a caller that holds the token (`?launch=`
+URL, cookie or `X-Atlas-Token` header), and the token appears in the page as
+`<meta name="atlas-token">` only then. The stream takes a single-use `?ticket=`,
+not `?token=`. No CORS headers are sent, bodies are capped at 4 MiB, and other
+read-only GETs are unauthenticated, so keep the loopback default. External
+scripts do not scrape `GET /`: they read the token file, then send
+`X-Atlas-Token` and the JSON content type on every mutation. The herdr gateway
+and the scorecard probe read the same file.
 
 Sending to an agent from IRC (or from the embedded herdr web UI) goes through
 herdr: an idle interactive `claude`/`omp` pane is typed into (IRC stamps the
@@ -1024,7 +1033,8 @@ tech-tools/
 | Every first tool call is denied with `[atlas gate] REQUIRED once per session: ...` | Recall gate is armed (claude-mem enabled), no claude-mem call this session yet. | Make one claude-mem recall (e.g. a search of prior work). To disable: `ATLAS_MANDATES=off`. |
 | `DENY - 6 inline ops since your last dispatch...` | Tripwire: the orchestrator is doing too much inline work. | Dispatch `atlas:implementer` (edits) or `atlas:explorer` (investigation); `docs/` and `.atlas/` writes don't count. `ATLAS_TRIPWIRE_HARD=off` to lift. |
 | Stop blocked listing `(a)`, `(f)`, ... | Completion gate found unmet conditions. | Fix the listed ones: capture evidence to `.atlas/evidence/`, write a verified finding via `scripts/atlas_finding.py`, update `docs/CHANGELOG.md`, drain todos. For (n)/(o)/(p) fix the presentation once. `ATLAS_GATE=off` disables. |
-| Dashboard call returns `403 bad_host`, `403 bad_origin`, `415 unsupported_media_type` or `401 bad_token` | The 10.0.1 request guard rejected a script or proxied call. | Use `http://127.0.0.1:<port>/` or `localhost`; fetch `GET /` for the token; send `X-Atlas-Token` and `Content-Type: application/json` on every mutation. |
+| Dashboard call returns `403 bad_host`, `403 bad_origin`, `415 unsupported_media_type` or `401 bad_token` | The 10.0.1 request guard rejected a script or proxied call. | Use `http://127.0.0.1:<port>/` or `localhost`; read the token from `~/.atlas/dashboard-<port>.token`; send `X-Atlas-Token` and `Content-Type: application/json` on every mutation. |
+| Browser shows `401 launch_required` at `http://127.0.0.1:<port>/` | The bare URL is not served to anonymous callers. | Open the URL printed by `atlas_dashboard.py launch`. |
 | `/api/v2/*` answers 404 | Older atlas install serving the legacy dashboard. | Update both harnesses ([Install and update](#install-and-update)) and restart. |
 | Connector tool 401s / credential watch fires | Stale or missing credentials for that server. | Re-set the server's `userConfig` keys, then restart the session. |
 | Atlas workers still run old paths (`atlas_todo.py` unresolved) after `omp plugin upgrade` | Long-lived omp process kept the pre-upgrade `CLAUDE_PLUGIN_ROOT`. | Restart omp; the extension re-resolves the plugin root at load. |

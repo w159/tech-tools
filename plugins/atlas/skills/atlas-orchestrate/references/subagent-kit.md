@@ -24,16 +24,16 @@ This shape is enforced, not advised: the dispatch tripwire DENIES an `atlas:*` d
 
 **Dispatch contract (enforced by `hooks/dispatch_tripwire_core.py`; every denial is friction row `dispatch_denied:<code>`).** One line per requirement:
 
-- `name` (a tool argument): `DENY - this <tool> dispatch to <agent> carries no `name`.` Auto-named unless `ATLAS_AUTONAME=off` (`:1303`).
-- `TOOLS:` block naming `ToolSearch` and a code-nav token (code `toolkit`, `_toolkit_gap`); shared rule: name the code-navigation tools the harness provides.
-- `SCOPE: <class>/<effort>` line (code `scope`): `DENY - this dispatch to <agent> has no `SCOPE: <class>/<effort>` line.` (`:445`).
+- A name (code `name`): `DENY - this <tool> dispatch to <agent> carries no `name`.` The lead does not need to pass one: the hook names an unnamed dispatch itself (`_name_missing`, `_inject_name`) unless `ATLAS_AUTONAME=off`, which turns the miss into this deny.
+- `TOOLS:` block naming `ToolSearch` and a code-nav token (code `toolkit`, `_toolkit_gap`). The gate demands it only when lean-ctx is loadable: the `lean-ctx` binary is on PATH and an MCP server for it is defined and not disabled for the project (`_lean_ctx_reachable`, `_lean_ctx_loadable`); an enabled-list name with no definition, or a disabled server, counts as not loadable. Otherwise a `TOOLS:` line naming native Grep, Glob, Read passes. Shared rule: name the code-navigation tools the harness provides.
+- `SCOPE: <class>/<effort>` line (code `scope`, `_SCOPE_LINE`): `DENY - this dispatch to <agent> has no `SCOPE: <class>/<effort>` line.`
 - 2nd in-process working-role dispatch of a run (code `team`, `_team_note`): `DENY - 2nd in-process working dispatch this run; SCOPE <class>/<effort> = N working seats, a team.` plus the `atlas_mux.py spawn-team` and `atlas_crew.py run` commands. Only when the scope (the dispatch's `SCOPE:` line, else the scope the prompt optimizer stored) has 2+ working seats and tmux is on PATH. Closing roles are never counted, and a run that already launched a team or crew is skipped. No tmux, omp or `ATLAS_TEAM_GATE=off`: the same text as an advisory.
-- `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`/`DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS` `:69`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
-- A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.` (`:1342`).
-- `atlas:runner` only: numbered `STEPS:` (`:644`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
-- Never pass `model` (or `effort`); agents pin their own model in frontmatter. Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).
-- No built-in agent types (code `builtin_agent`): `DENY - this <tool> dispatch uses the built-in agent '<type>'` (`:1281`); `ATLAS_BUILTIN_AGENT_NUDGE=off` disables.
-- A subagent never dispatches: `DENY - a subagent must never dispatch another subagent.` (`:197`).
+- `GOAL:`, `DELIVERABLE:`/`DELIVERABLES:`/`DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (code `spec`, `REQUIRED_SPEC_BLOCKS`): `DENY - this <tool> dispatch to <agent> is unbounded: missing <labels>.` A missing `REPORT:` alone is injected, not denied; the first spec offense per session is an advisory.
+- A single `GOAL:` (code `multi_goal`): `DENY - this <tool> dispatch carries N GOAL: blocks.`
+- `atlas:runner` only: numbered `STEPS:` (code `steps`): `DENY - an atlas:runner dispatch must carry numbered STEPS:`.
+- Never pass `model` (or `effort`); agents pin their own model in frontmatter, and that pin (not any param) decides whether a read-only role is exempt from the concurrent-dispatch deny: `atlas:explorer` (haiku) and `atlas:db-prober` (sonnet) may run in parallel, a read-only role pinned to opus or to nothing may not (`_cheap_exploration`). Passing one is denied: `DENY - this <tool> dispatch to <agent> overrides model with '<m>'.` (code `model_override`; `effort_override` for effort).
+- No built-in agent types (code `builtin_agent`): `DENY - this <tool> dispatch uses the built-in agent '<type>'` (`_builtin_agent`); `ATLAS_BUILTIN_AGENT_NUDGE=off` disables.
+- A subagent never dispatches: `DENY - a subagent must never dispatch another subagent.` (`_deny_nested_dispatch`, code `nested`).
 
 ```
 ROLE: <one line, which specialist this is>
@@ -189,6 +189,20 @@ before starting, so two agents never build the same thing:
   completion; skip entirely when the var is unset or off.
 - `--force` steals a stale claim (30 min idle). Never force-steal a live agent's item.
 - Done: `complete --id <id> --evidence "<command + output, or file:line>"`.
+- Hand back your final report with `report`, the sanctioned path for a read-only worker
+  that cannot run `note` through its own pane wrapper:
+  `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py" report --owner <agent-name> [--to <lead>] [--channel <chan>] [--file <path>]`
+  (body from `--file`, default stdin; `--to` defaults to `lead`; `--owner` defaults to
+  `ATLAS_WORKER_NAME`). The body must carry a line `STATUS: DONE`, `STATUS: FAILED` or
+  `STATUS: BLOCKED`; without one the call fails with `report_missing_status` (a progress
+  or waiting message is not a report; `note --kind report` is held to the same rule).
+  `report` appends the closing `exit 0` (STATUS: DONE) or `exit 1 [failed: see STATUS]`
+  line that `atlas_mux.py wait` reads when the body has none. A report longer than
+  `ATLAS_NOTE_MAX_BYTES` (default 8192) is not refused: the note keeps its START (STATUS
+  and the findings lead) plus the closing `exit` line and a marker
+  `[truncated N bytes; full report: <path>]` naming the full copy, saved 0600 under
+  `.atlas/.run/board/reports/`. Any other note kind over the cap is refused with
+  `body_too_large`.
 - Add an item from the CLI: `atlas_todo.py add [--unique] --session <session_id> "<text>"`.
   `--unique` makes the add idempotent per (session, exact content) across every
   status and archived items: a repeat returns `{"ok": true, "duplicate": true,
@@ -204,9 +218,10 @@ before starting, so two agents never build the same thing:
 ## Colony protocol (siblings)
 
 Dispatches into the colony are named, and the name is load-bearing. A dispatch
-without `name: <role>-<slice>` (e.g. `auth-explorer`) is denied by the dispatch
-tripwire: only a named sibling appears on the sibling roster, and the roster is
-what makes the channel below work. One exception: with
+without a name (`<role>-<slice>`, e.g. `auth-explorer`) gets one from the dispatch
+tripwire (`ATLAS_AUTONAME=off` turns that into a deny): only a named sibling
+appears on the sibling roster, and the roster is what makes the channel below
+work. The lead does not need to pass `name`. One exception: with
 `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` the name requirement is lifted - in
 teams mode a named dispatch from the main conversation launches as a teammate
 (inherits the lead's effort, runs in the lead's cwd) instead of a scoped
@@ -266,14 +281,19 @@ SessionStart.
   full output goes to `.atlas/.run/logs/<Name>.log`. `omp -p` exits 0 on
   `Model "..." not found` and on HTTP 402, so output matching model-not-found / 402 /
   credit / auth patterns is recorded as `exit 1`.
-  Workers post their own notes with `atlas_todo.py note --owner <Name>`.
+  Workers post their own notes with `atlas_todo.py note --owner <Name>`, and a final report with
+  `atlas_todo.py report --owner <Name>` (needs a `STATUS:` line; see "Claim before work").
 - claude-bg workers have no run-worker wrapper: the brief itself carries the note command,
   and - only when the lead exports `ATLAS_LEAD_AGENT` (its lead session name) - a best-effort
   native wake: send the same report text via `SendMessage` to that session right after
   posting the note (no retries; skip when unset or the session is not listed). The board
   note is the transport of record.
 - The lead needs nothing beyond `atlas_todo.py notes --channel <its lead subchannel>`; no
-  separate `--to lead` read.
+  separate `--to lead` read. `atlas_mux.py wait --team T` prints a per-member state line
+  (`reported`, `dead` or `running`) to stderr every `--progress` seconds (default 60, `0` = off)
+  and returns as soon as every member has reported or is dead without a report, or at
+  `--timeout` (default 600). `duration_s` and `elapsed_s` are `null` when the team record
+  has no start time.
 - Not Claude Code agent teams: teammates inherit the lead's effort, which would erase
   the per-role tiers.
 - Test-only: `ATLAS_MUX_WORKER_CMD` / `--command-override` replaces the harness command.

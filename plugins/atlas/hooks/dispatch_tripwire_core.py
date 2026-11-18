@@ -924,28 +924,32 @@ def _lean_ctx_reachable(root=None):
         if base is None:
             cwd = Path(_PAYLOAD_CWD[0] or os.getcwd())
             base = find_root(cwd) or cwd
-        return bool(_lean_ctx_server_key(base)) and _lean_ctx_loadable(base)
+        return _lean_ctx_loadable(base)
     except Exception as exc:  # fail open (nothing demanded) but leave a trace
         _record_fault(exc, hook="dispatch_tripwire.lean_ctx_probe")
     return False
 
 
-def _lean_ctx_loadable(base) -> bool:
-    """True when a lean-ctx server is DEFINED (an mcpServers entry) and not disabled for this project.
-    `_lean_ctx_server_key` also accepts an enabledMcpjsonServers name, which only approves a server some
-    .mcp.json defines; a name with no definition, or one in a disabled list, can never load, so the
-    toolkit gate must not demand it. Raises on unreadable config: the caller records the fault."""
+def _lean_ctx_loadable_keys(base) -> list:
+    """Server keys that look like lean-ctx, DEFINED (an mcpServers entry) and not disabled for this project,
+    in the documented precedence: <project>/.mcp.json; <project>/.claude/settings*.json; ~/.claude.json
+    (top-level, then projects[<root>]); ~/.claude/settings.json. An enabledMcpjsonServers name only approves
+    a server some .mcp.json defines; a name with no definition, or one in a disabled list, can never load,
+    so it is not a key. The hook sees only these files: a server a plugin provides or an --mcp-config file
+    adds is invisible here (so it counts as not loadable, which fails toward allowing native tools).
+    Raises on unreadable config: the callers decide how to fail."""
     home = Path.home()
     defined: list = []
     disabled: set = set()
     mcp = _read_json(base / ".mcp.json") or {}
     defined += _lean_hits(mcp.get("mcpServers"))
-    settings = sorted((base / ".claude").glob("settings*.json")) + [home / ".claude" / "settings.json"]
-    for path in settings:
+    project_settings = sorted((base / ".claude").glob("settings*.json"))
+    for path in project_settings + [home / ".claude" / "settings.json"]:
         data = _read_json(path) or {}
-        defined += _lean_hits(data.get("mcpServers"))
         if isinstance(data.get("disabledMcpjsonServers"), list):
             disabled.update(str(n) for n in data["disabledMcpjsonServers"])
+    for path in project_settings:
+        defined += _lean_hits((_read_json(path) or {}).get("mcpServers"))
     claude_json = _read_json(home / ".claude.json") or {}
     defined += _lean_hits(claude_json.get("mcpServers"))
     projects = claude_json.get("projects")
@@ -954,7 +958,15 @@ def _lean_ctx_loadable(base) -> bool:
         defined += _lean_hits(project.get("mcpServers"))
         if isinstance(project.get("disabledMcpServers"), list):
             disabled.update(str(n) for n in project["disabledMcpServers"])
-    return any(key not in disabled for key in defined)
+    defined += _lean_hits((_read_json(home / ".claude" / "settings.json") or {}).get("mcpServers"))
+    return [key for key in defined if key not in disabled]
+
+
+def _lean_ctx_loadable(base) -> bool:
+    """True when a lean-ctx server is defined and not disabled for this project. The one decision both the
+    native Grep/Glob/Bash deny policy (_lean_ctx_server_key) and the toolkit gate use, so a session is never
+    denied native search while lean-ctx cannot load. Raises on unreadable config."""
+    return bool(_lean_ctx_loadable_keys(base))
 
 
 def _plugin_enabled(fragment):
@@ -2063,6 +2075,11 @@ def _pre_tool_use(
                 )
             )
         if problems:
+            # One friction row (the first code) but every distinct code is counted once, or the
+            # counter under-reports the toolkit/scope problems that rode along with a spec deny.
+            for extra_code in dict.fromkeys(c for c, _ in problems[1:]):
+                if extra_code != problems[0][0]:
+                    _record_analytics("dispatch.deny." + extra_code)
             text = problems[0][1] + "".join(
                 "\nALSO - " + t.removeprefix("DENY - ") for _, t in problems[1:]
             )
@@ -2272,58 +2289,15 @@ def _lean_hits(servers):
 
 
 def _lean_ctx_server_key(root):
-    """First MCP server key that looks like lean-ctx, checked in the documented
-    precedence: <project>/.mcp.json; <project>/.claude/settings*.json
-    (mcpServers, then enabledMcpjsonServers); ~/.claude.json (top-level
-    mcpServers, then projects[<root>].mcpServers); ~/.claude/settings.json.
-    The key is what the deny text turns into the ToolSearch selector.
-    None means lean-ctx MCP is not plausibly configured for this project, so
-    the Grep/Glob deny must downgrade to the one-time nudge. Unreadable config
-    fails open: None, never an exception."""
-    home = Path.home()
+    """First lean-ctx MCP server key that can actually load (see _lean_ctx_loadable_keys: defined, not
+    disabled; an enabled-list name alone does not count). The key is what the deny text turns into the
+    ToolSearch selector. None means lean-ctx MCP is not plausibly loadable for this project, so the
+    Grep/Glob deny must downgrade to the one-time nudge. Unreadable config fails open: None, never an
+    exception."""
     with contextlib.suppress(Exception):
-        # (1) <project>/.mcp.json
-        mcp = _read_json(root / ".mcp.json")
-        hits = _lean_hits((mcp or {}).get("mcpServers"))
-        if hits:
-            return hits[0]
-        # (2) <project>/.claude/settings*.json
-        try:
-            settings = sorted((root / ".claude").glob("settings*.json"))
-        except Exception:
-            settings = []
-        for settings_path in settings:
-            data = _read_json(settings_path)
-            if not data:
-                continue
-            hits = _lean_hits(data.get("mcpServers"))
-            if hits:
-                return hits[0]
-            hits = _lean_hits(data.get("enabledMcpjsonServers"))
-            if hits:
-                return hits[0]
-        # (3) ~/.claude.json: top-level mcpServers, then projects[<root>]
-        claude_json = _read_json(home / ".claude.json")
-        if claude_json:
-            hits = _lean_hits(claude_json.get("mcpServers"))
-            if hits:
-                return hits[0]
-            projects = claude_json.get("projects")
-            if isinstance(projects, dict):
-                project = projects.get(str(root))
-                if isinstance(project, dict):
-                    hits = _lean_hits(project.get("mcpServers"))
-                    if hits:
-                        return hits[0]
-        # (4) ~/.claude/settings.json
-        home_settings = _read_json(home / ".claude" / "settings.json")
-        if home_settings:
-            hits = _lean_hits(home_settings.get("mcpServers"))
-            if hits:
-                return hits[0]
-            hits = _lean_hits(home_settings.get("enabledMcpjsonServers"))
-            if hits:
-                return hits[0]
+        keys = _lean_ctx_loadable_keys(root)
+        if keys:
+            return keys[0]
     return None
 
 

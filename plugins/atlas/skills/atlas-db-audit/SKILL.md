@@ -30,7 +30,7 @@ If the DB connection or repo path is missing or ambiguous, ask once for it, then
 This is READ-ONLY. Nothing here may change the database or the code. The only outputs are a findings report and a remediation plan you review before anything changes.
 
 ENFORCE READ-ONLY:
-- Install the bundled guard at `${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh` as a PreToolUse(Bash) hook on every audit subagent. The guard is a coarse denylist, NOT a "blocks any non-SELECT" guarantee. It matches a fixed set of SQL write/DDL/privilege structures: `DELETE FROM`, `INSERT INTO`, `REPLACE INTO`, `MERGE INTO`, `UPDATE <table> SET`, `TRUNCATE[ TABLE]`, `DROP|CREATE|ALTER` against `TABLE|DATABASE|SCHEMA|INDEX|VIEW|MATERIALIZED|SEQUENCE|TRIGGER|FUNCTION|ROLE|USER|EXTENSION|POLICY|PUBLICATION`, `GRANT|REVOKE ... ON`, and `COPY ... FROM|TO`. It does NOT catch every mutating statement: `CREATE OR REPLACE FUNCTION`, `CREATE TEMPORARY|UNLOGGED TABLE`, `CREATE AGGREGATE`, and `UPDATE|DELETE|INSERT` whose verb and target are split by SQL comments all pass the guard and can install persistent executable DB code or write rows. Enforce read-only at the database level (a read-only role or a replica) and treat the guard as defense-in-depth, not the boundary.
+- Install the bundled guard at `${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh` as a PreToolUse(Bash) hook on every audit subagent. The guard is a coarse denylist, NOT a "blocks any non-SELECT" guarantee. It matches a fixed set of SQL write/DDL/privilege structures: `DELETE FROM`, `INSERT INTO`, `REPLACE INTO`, `MERGE INTO`, `UPDATE <table> SET`, `TRUNCATE[ TABLE]`, `DROP|CREATE|ALTER` against `TABLE|DATABASE|SCHEMA|INDEX|VIEW|MATERIALIZED|SEQUENCE|TRIGGER|FUNCTION|ROLE|USER|EXTENSION|POLICY|PUBLICATION`, `GRANT|REVOKE ... ON`, and `COPY ... FROM|TO`; the `DROP|CREATE|ALTER` check also covers `OR REPLACE`, `TEMPORARY`, `UNLOGGED`, `GLOBAL|LOCAL` forms and `AGGREGATE`, and SQL comments are stripped before matching, so `UPDATE/**/t/**/SET` is caught. It also blocks state-changing statements outside that list: `ALTER SYSTEM|TYPE|SERVER|...`, `CREATE|DROP SUBSCRIPTION|FOREIGN|SERVER|EVENT|OPERATOR|TYPE|DOMAIN|...`, `DO` blocks, `SELECT ... INTO <name>`, `INTO OUTFILE|DUMPFILE`, `LOAD DATA`, `LOCK TABLE`, `COMMENT ON`, `SECURITY LABEL`, `REFRESH MATERIALIZED`, `IMPORT FOREIGN`, `ATTACH DATABASE`, `PRAGMA x =`, `VACUUM INTO`, `SET [SESSION|LOCAL] ROLE|AUTHORIZATION|GLOBAL|PERSIST|transaction_read_only`, `BEGIN|START|SET TRANSACTION ... READ WRITE`, and calls to `nextval(`, `setval(`, `set_config(`, `lo_import|export|create|unlink|...(`, `dblink*(` and the `pg_terminate_backend`, `pg_reload_conf`, `pg_file_write`, `pg_stat_reset*` family (matched as `name(`, so a column named `nextval_count` passes). It is still a denylist, not a "blocks any non-SELECT" guarantee. Enforce read-only at the database level (a read-only role or a replica) and treat the guard as defense-in-depth, not the boundary.
 - Subagents query the catalog and read code. They never mutate.
 - Manual-only: the guard ships unwired (hooks.json does not load it); wiring it per-audit as above is the only enforcement path.
 
@@ -69,7 +69,9 @@ REPORT:
   policies, grants, roles, sequences, functions). The
   `${CLAUDE_PLUGIN_ROOT}/hooks/validate-readonly-query.sh` guard is a coarse denylist that blocks
   the SQL write/DDL/privilege structures listed under ENFORCE READ-ONLY before
-  they run. It is NOT a "blocks any non-SELECT" guarantee: `CREATE OR REPLACE
-  FUNCTION`, `CREATE TEMPORARY|UNLOGGED TABLE`, `CREATE AGGREGATE`, and
-  comment-split `UPDATE|DELETE|INSERT` pass it, so pair it with a read-only
+  they run. Since 17.29.0 it also blocks `CREATE OR REPLACE FUNCTION`, `CREATE
+  TEMPORARY|UNLOGGED TABLE`, `CREATE AGGREGATE`, comment-split
+  `UPDATE|DELETE|INSERT`, `SELECT ... INTO`, `nextval(`/`setval(`/`set_config(`,
+  `LOCK TABLE` and the other state-changing statements listed under ENFORCE READ-ONLY. It is
+  still NOT a "blocks any non-SELECT" guarantee, so pair it with a read-only
   DB role or replica.

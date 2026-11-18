@@ -59,14 +59,17 @@ close the tab or leave Settings. The same API stays callable directly, and
 `/plugin config` or a `.env` still work.
 
 1. SessionStart runs `atlas_dashboard.py ensure` (or run it manually).
-2. Open the shared dashboard once; the page carries the per-daemon token.
+2. Open the shared dashboard once from its **launch URL**: `atlas_dashboard.py launch`
+   (or `url`, or the `url` field `ensure` prints) prints `http://127.0.0.1:<port>/?launch=<token>`.
+   The bare `http://127.0.0.1:<port>/` answers `401 launch_required`.
 3. Settings -> Connectors shows `configured` or `needs credentials` per
    connector and the settings file path.
 4. Enter the secrets in the connector's credential form and press **Save** (the
    page sends the token for you). To script it instead, post the payload below:
    every mutation must send `Content-Type: application/json` and the
-   `X-Atlas-Token` header (the value of `<meta name="atlas-token">` in the
-   served page); a stale token returns `401 bad_token`.
+   `X-Atlas-Token` header (the contents of the owner-only `dashboard-<port>.token`
+   file, mode 0600, under `~/.atlas` or `$ATLAS_HOME`); a stale token returns
+   `401 bad_token`.
 5. `GET /api/connectors` reports set / not set and source (`pluginConfigs`,
    `env`, or `dashboard_mark`) without echoing secrets.
 6. **Reload Claude Code / start a new session** so MCP child processes re-read
@@ -77,7 +80,7 @@ Save payload:
 ```http
 POST /api/connectors/env
 Content-Type: application/json
-X-Atlas-Token: <value of <meta name="atlas-token"> in the served page>
+X-Atlas-Token: <contents of ~/.atlas/dashboard-<port>.token>
 
 {"updates":{"auvik_api_key":"...","auvik_username":"..."}}
 ```
@@ -173,8 +176,10 @@ Dashboard-side checks:
 - `GET /api/connectors` or `/api/status` -> **13** connectors (one per `mcpServers`
   entry in `.mcp.json`, including panos and sonicwall), set/missing only
 - `POST /api/connectors/env` rejects unknown keys
-- `GET /api/v2/prefs` and `GET /api/v2/projects` answer, and `GET /` serves the
-  Workboard shell with `<meta name="atlas-token">` filled in
+- `GET /api/v2/prefs` and `GET /api/v2/projects` answer, bare `GET /` answers
+  `401 launch_required`, and `GET /` with the `X-Atlas-Token` header (or the
+  `?launch=` URL) serves the Workboard shell with `<meta name="atlas-token">`
+  filled in
 
 ## Observed
 
@@ -192,7 +197,7 @@ Current state of the wiring: all 13 connectors declared in `plugins/armada/.mcp.
 | Status MISSING_CREDENTIALS | required userConfig empty in all layers | save via `POST /api/connectors/env`, `/plugin config`, or a plugin `.env` |
 | Tools still missing after save | MCP child started before save | fully reload Claude Code |
 | Dashboard shows wrong DB / empty metrics | stale daemon on temp `ATLAS_DB` | `atlas_dashboard.py stop && ensure` |
-| `401 bad_token` on a credential POST | page or client predates the daemon (the token is regenerated each daemon start) | reload the dashboard page; direct callers must send the `X-Atlas-Token` from the served `<meta name="atlas-token">` |
+| `401 bad_token` on a credential POST | page or client predates the daemon (the token is regenerated each daemon start) | reopen the launch URL (`atlas_dashboard.py launch`); direct callers re-read `dashboard-<port>.token` and send it as `X-Atlas-Token` |
 | `415` / `403 bad_origin` / `403 bad_host` | missing `Content-Type: application/json`, foreign `Origin`, or a Host other than `127.0.0.1:<port>` / `localhost:<port>` | call the API from the dashboard page, with the JSON header, on the dashboard's own host |
 
 ## Security rules

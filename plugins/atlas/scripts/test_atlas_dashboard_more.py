@@ -654,13 +654,27 @@ class MainTest(Tmp):
         self.assertTrue(out.endswith("\n"))
 
     def test_url_prints_only_when_port_open(self):
-        with mock.patch.object(d, "_port_open", return_value=True) as po:
-            rc, out, _ = self.run_main(["url"])
-        po.assert_called_once_with(d.LOOPBACK, d.DEFAULT_PORT)
-        self.assertEqual((rc, out), (0, d.dashboard_url(d.DEFAULT_PORT) + "\n"))
-        with mock.patch.object(d, "_port_open", return_value=False):
-            rc, out, _ = self.run_main(["url"])
-        self.assertEqual((rc, out), (1, ""))
+        # Since X2 `url` prints the launch URL built from the 0600 token file (the bare URL is 401).
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / f"dashboard-{d.DEFAULT_PORT}.token").write_text("tok-more")
+            with mock.patch.object(d, "STATE_DIR", Path(tmp)):
+                with mock.patch.object(d, "_port_open", return_value=True) as po:
+                    rc, out, _ = self.run_main(["url"])
+                po.assert_called_once_with(d.LOOPBACK, d.DEFAULT_PORT)
+                self.assertEqual(
+                    (rc, out),
+                    (0, d.dashboard_url(d.DEFAULT_PORT) + "?launch=tok-more\n"),
+                )
+                with mock.patch.object(d, "_port_open", return_value=False):
+                    rc, out, _ = self.run_main(["url"])
+                self.assertEqual((rc, out), (1, ""))
+            # Port open but no token file: exit 1, nothing on stdout, hint on stderr.
+            with tempfile.TemporaryDirectory() as empty, mock.patch.object(
+                d, "STATE_DIR", Path(empty)
+            ), mock.patch.object(d, "_port_open", return_value=True):
+                rc, out, err = self.run_main(["url"])
+            self.assertEqual((rc, out), (1, ""))
+            self.assertIn("no token file", err)
 
     def test_ensure_exit_code_follows_result(self):
         with mock.patch.object(d, "ensure_daemon", return_value={"ok": True, "port": 9}) as e:

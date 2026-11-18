@@ -20,7 +20,9 @@ The tailnet URL (`atlas_remote.py url`) lands on the **Atlas dashboard**, not on
 request: browser -> `tailscale serve :8443` -> herdr-web-ui Bun server. After herdr-web-ui's own auth (below)
 accepts the request, a plain browser navigation of `/` is answered `302 /atlas/#/herd`
 (`server/atlas-landing.ts`), and `/atlas/**` is proxied to the loopback dashboard (`server/atlas-gateway.ts`,
-`ATLAS_DASHBOARD_URL`, default `http://127.0.0.1:7421`). The Command Center's Colony page frames the herdr app as
+`ATLAS_DASHBOARD_URL`, default `http://127.0.0.1:7421`). The gateway authenticates to the dashboard with the token
+it reads from the owner-only file `dashboard-<port>.token` under `$ATLAS_HOME` (or `~/.atlas`), so the web UI must run
+as the dashboard's owner with the same `ATLAS_HOME`; it no longer fetches `GET /` for it. The Command Center's Colony page frames the herdr app as
 `/?chrome=full` and the Fleet inspector frames a pane as `/?chrome=pane&pane=<id>&machine=local`; open
 `https://<node>.<tailnet>.ts.net:8443/?chrome=full` to get the herdr UI on its own (a top-level `chrome=full` visit shows
 the normal herdr UI; the legacy `?embed=1` is rewritten to `chrome=pane`/`chrome=full`). An
@@ -47,17 +49,34 @@ redirect off (the herdr app is then served at `/`). A dashboard that is down ans
 
 First match wins:
 
-1. **token**: shared `HERDR_WEB_TOKEN` matched (cookie/bearer) -> full, role `drive`.
+1. **token**: the shared token matched (cookie/bearer) -> full, role `drive`. The token is
+   `HERDR_WEB_TOKEN` when an operator set it, otherwise the per-install 0600 `local-token` file
+   the server creates (state dir `HERDR_WEB_STATE_DIR`, else `$ATLAS_HOME/colony/state/app`, else
+   `~/.config/herdr-web-ui`; `scripts/plugin.ts` reads the same file).
 2. **paired device**: valid device cookie -> full, device's role.
-3. **token_required**: a token is configured but not presented -> refused. This precedes the
-   login check so a forged `Tailscale-User-Login` header cannot bypass a token.
+3. **token_required**: an **operator-configured** token (`HERDR_WEB_TOKEN`) is set but not
+   presented -> refused. This precedes the login check so a forged `Tailscale-User-Login` header
+   cannot bypass an operator's token. The generated `local-token` does not count here: it stands
+   in for "this PC" only, so it never blocks the owner login.
 4. **owner login**: loopback + `Tailscale-User-Login` equals this PC's own Tailscale login (or
-   `HERDR_WEB_TAILSCALE_OWNER`) -> full via `tailscale`; any other login -> `other_user`.
-5. **pairing_required**: a proxied request with no usable identity (tagged node, no login header,
+   `HERDR_WEB_TAILSCALE_OWNER`) -> full via `tailscale`, no token needed; any other login ->
+   `other_user`.
+5. **bare loopback**: a direct loopback request with no proxy headers is `token_required`
+   (it needs the `local-token` file) unless the host opts out with `HERDR_WEB_TRUST_LOCAL=1`,
+   which makes it `via: local` (open). Another local user can open a loopback port, so "from
+   this PC" is not an identity.
+6. **pairing_required**: a proxied request with no usable identity (tagged node, no login header,
    or a gated/funnel request) is refused until the device is paired.
 
-A direct loopback request with no proxy headers is always `via: local` (open) so the local UI
-keeps working. That makes a plain `/api/health` **useless as a tailnet check**.
+Because bare loopback is gated, a plain `/api/health` is still **useless as a tailnet check**:
+`atlas_remote.py` probes as a proxied, anonymous peer instead (below). `/api/health`,
+`/api/auth` and `/api/devices/pair` stay reachable without a token so a client can discover
+the gate (`server/auth.ts` `requiresAuth`).
+
+Known limit: the Command Center frames the herdr app with a bare URL (`scripts/dashboard_ui/js/fleet.js`
+`consoleUrl`/`paneUrl`), so a browser with no herdr cookie sees the herdr token prompt inside the
+frame once per browser, until the token is entered (the cookie is host-scoped, `SameSite=Strict`).
+Putting the token in the frame URL would leak it, so it is not done. Not yet checked in a live browser.
 
 ## How atlas verifies auth
 
@@ -70,7 +89,11 @@ header, i.e. exactly what an anonymous tailnet peer looks like to `decideAccess`
 - herdr-web-ui unreachable or probe failed: `apply` refuses (fail closed).
 
 `status` also reports the direct `/api/health` auth (`required/via/role`) and `/api/access`
-(Tailscale state, DNS name, serving URL).
+(Tailscale state, DNS name, serving URL). The direct calls send the local token as a bearer
+(`HERDR_WEB_TOKEN`, else the `local-token` file), because a bare loopback request is refused
+without it; the proxied probe never carries a token. `herdr_web_ui.auth.token_source` names
+where the token came from (`HERDR_WEB_TOKEN`, a file path, or why none was found), never the
+token itself.
 
 ## Commands
 
@@ -91,8 +114,8 @@ tailscale serve --https=8443 off
 ```
 
 Env read by `atlas_remote.py`: `ATLAS_REMOTE_PORT` (default 8443, clamped 1024-65535, never 443) and `HERDR_WEB_URL`
-(loopback `http://127.0.0.1:<port>` only; anything else is rejected; overrides the colony URL). Read by the web UI, not
-by `atlas_remote.py`: `HERDR_WEB_TOKEN` (shared token), `ATLAS_DASHBOARD_URL` (where `/atlas/**` proxies; loopback
+(loopback `http://127.0.0.1:<port>` only; anything else is rejected; overrides the colony URL). Read by `atlas_remote.py` and the web UI: `HERDR_WEB_TOKEN`, `HERDR_WEB_STATE_DIR` (where `local-token` lives). Read by the web UI, not
+by `atlas_remote.py`: `HERDR_WEB_TRUST_LOCAL` (`1` lets a bare loopback request in without the token), `ATLAS_DASHBOARD_URL` (where `/atlas/**` proxies; loopback
 `http://` host with a port, default `http://127.0.0.1:7421`) and `ATLAS_LANDING` (`off` disables the `/` redirect).
 
 Exit codes: `0` ok, `1` tailscale command failed or post-check mismatch, `2` refused / usage

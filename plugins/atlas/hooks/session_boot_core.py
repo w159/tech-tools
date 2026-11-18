@@ -25,6 +25,22 @@ COLONY_OFF_HINT = (
 )
 
 
+def _bare_url(url: str) -> str:
+    """scheme://host/path of `url`: no query, no fragment, no credential."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    parts = urlsplit(url)
+    return urlunsplit((parts.scheme, parts.netloc.rpartition("@")[2], parts.path, "", ""))
+
+
+def _dashboard_launch_hint() -> str:
+    """Names the command that prints the launch URL; the URL itself carries the owner token."""
+    script = os.path.abspath(
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "atlas_dashboard.py")
+    )
+    return f' - launch URL (carries the owner token, never paste it anywhere): python3 "{script}" launch'
+
+
 def ensure_dashboard():
     """Start the shared multi-session dashboard daemon if needed.
 
@@ -96,7 +112,9 @@ def ensure_dashboard():
         if not url:
             return None
         state = "ready" if data.get("already_running") else "started"
-        return f"dashboard: {url} ({state})"
+        # `ensure` returns the launch URL (?launch=<owner token>). This line goes into the model
+        # context and the transcript, so show only scheme://host/path.
+        return f"dashboard: {_bare_url(str(url))} ({state})"
     except subprocess.TimeoutExpired:
         with contextlib.suppress(Exception):
             sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -1671,7 +1689,7 @@ def main():
     with contextlib.suppress(Exception):  # dashboard is best-effort; never block boot
         dash = ensure_dashboard()
         if dash:
-            lines.append(dash + DASHBOARD_OFF_HINT)
+            lines.append(dash + _dashboard_launch_hint() + DASHBOARD_OFF_HINT)
     with contextlib.suppress(Exception):  # colony is best-effort; never block boot
         colony = ensure_colony()
         if colony:
