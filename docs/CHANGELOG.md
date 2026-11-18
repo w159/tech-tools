@@ -1,5 +1,9 @@
 # Changelog
 
+## Audit - 2026-11-18
+
+- Read-only audit of the operating-contract gates, the status header, the mods and feature test coverage at atlas 17.28.1: `docs/audits/2026-11-18_atlas-contract-header-mod-audit.md`. No product code changed. Verifier verdicts for the 12 key claims are in `.atlas/findings/2026-11-18_audit-c*.md`.
+
 ## atlas 17.28.1 - 2026-11-17
 
 Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries below ship in this version. Second fix wave (crew `crew-205854560b`), regression tests in `hooks/test_audit2_*.py` and `scripts/test_audit2_*.py`:

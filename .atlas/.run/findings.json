@@ -13024,5 +13024,221 @@
     "status": "verified",
     "verified_at": "2026-11-18T02:47:46+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "audit-C1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mux exemption needs explicit haiku/sonnet model param",
+    "evidence": [
+      "plugins/atlas/hooks/dispatch_tripwire_core.py:488-495,869"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "completion_gate import-fail emits systemMessage, visible",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate.py:29-37"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C3",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "_findings_count 0 fallback makes verdict check fire, not pass",
+    "evidence": [
+      "plugins/atlas/hooks/dispatch_tripwire_core.py:112-122,183"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C4",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "silent fail-open at 1006 and 863",
+    "evidence": [
+      "plugins/atlas/hooks/completion_gate_core.py:1006,863"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C5",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "recall_gate wired via event_dispatch BINDINGS",
+    "evidence": [
+      "plugins/atlas/hooks/event_dispatch.py:62"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C6",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "gate.{letter}.block key exists in schema and code; reports hold gate.pass only",
+    "evidence": [
+      "plugins/atlas/contracts/analytics-schema.json:337; completion_gate_core.py:2307"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C7",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "eager import true but 7-14 ms not 40; event_dispatch 38-44 ms",
+    "evidence": [
+      "importtime 3 runs"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -X importtime dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C8",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "leadTone 3 tones verified; interactive gating in register.ts not found",
+    "evidence": [
+      "plugins/atlas/mod/transcript/leadheader.ts:63; mod/register.ts:1396"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C9",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "header parse grammar drift",
+    "evidence": [
+      "completion_gate_core.py:3147,3198; leadheader.ts:28"
+    ],
+    "doc_refs": [],
+    "reproduction": "read code",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C10",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "two glyph tables, uiFromEnv 31 sites",
+    "evidence": [
+      "mod/atlas-ui.ts:272,426"
+    ],
+    "doc_refs": [],
+    "reproduction": "grep",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C11",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "band-frame<->status-frame runtime cycle; gates->sidebar is import type",
+    "evidence": [
+      "mod/band-frame.ts:14; mod/status-frame.ts:11; mod/gates.ts:3"
+    ],
+    "doc_refs": [],
+    "reproduction": "read imports",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "audit-C12",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "four bypass forms return False",
+    "evidence": [
+      "plugins/atlas/hooks/bash_advisor.py:485"
+    ],
+    "doc_refs": [],
+    "reproduction": "python import and call",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-18T04:18:53+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

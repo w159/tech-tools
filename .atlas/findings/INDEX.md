@@ -65,6 +65,17 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-11-18 | audit-fixes-low-2026-11-17 | verified | Low audit findings and crew process defects fixed on atlas/audit-fixes-1117; atlas bumped to 17.28.1 | [2026-11-18_audit-fixes-low-2026-11-17.md](2026-11-18_audit-fixes-low-2026-11-17.md) |
+| 2026-11-18 | audit-C9 | verified | header parse grammar drift | [2026-11-18_audit-c9.md](2026-11-18_audit-c9.md) |
+| 2026-11-18 | audit-C7 | rejected | eager import true but 7-14 ms not 40; event_dispatch 38-44 ms | [2026-11-18_audit-c7.md](2026-11-18_audit-c7.md) |
+| 2026-11-18 | audit-C6 | rejected | gate.{letter}.block key exists in schema and code; reports hold gate.pass only | [2026-11-18_audit-c6.md](2026-11-18_audit-c6.md) |
+| 2026-11-18 | audit-C5 | verified | recall_gate wired via event_dispatch BINDINGS | [2026-11-18_audit-c5.md](2026-11-18_audit-c5.md) |
+| 2026-11-18 | audit-C4 | verified | silent fail-open at 1006 and 863 | [2026-11-18_audit-c4.md](2026-11-18_audit-c4.md) |
+| 2026-11-18 | audit-C3 | rejected | _findings_count 0 fallback makes verdict check fire, not pass | [2026-11-18_audit-c3.md](2026-11-18_audit-c3.md) |
+| 2026-11-18 | audit-C2 | rejected | completion_gate import-fail emits systemMessage, visible | [2026-11-18_audit-c2.md](2026-11-18_audit-c2.md) |
+| 2026-11-18 | audit-C12 | verified | four bypass forms return False | [2026-11-18_audit-c12.md](2026-11-18_audit-c12.md) |
+| 2026-11-18 | audit-C11 | verified | band-frame<->status-frame runtime cycle; gates->sidebar is import type | [2026-11-18_audit-c11.md](2026-11-18_audit-c11.md) |
+| 2026-11-18 | audit-C10 | verified | two glyph tables, uiFromEnv 31 sites | [2026-11-18_audit-c10.md](2026-11-18_audit-c10.md) |
+| 2026-11-18 | audit-C1 | verified | mux exemption needs explicit haiku/sonnet model param | [2026-11-18_audit-c1.md](2026-11-18_audit-c1.md) |
 | 2026-11-17 | root-sanitize-2026-11-17 | verified | worker/t95494f-implementer-7f36: sanitize maps plugins/<name> of a marketplace repo to the repo root | [2026-11-17_root-sanitize-2026-11-17.md](2026-11-17_root-sanitize-2026-11-17.md) |
 | 2026-11-17 | pushed-head-guarantees-2026-11-17 | verified | Four behavioural guarantees reproduced directly against the pushed HEAD archive | [2026-11-17_pushed-head-guarantees-2026-11-17.md](2026-11-17_pushed-head-guarantees-2026-11-17.md) |
 | 2026-11-17 | pushed-head-archive-tests-2026-11-17 | verified | Pushed HEAD 73fdaa79 archive: all three test commands green from a pristine checkout | [2026-11-17_pushed-head-archive-tests-2026-11-17.md](2026-11-17_pushed-head-archive-tests-2026-11-17.md) |
