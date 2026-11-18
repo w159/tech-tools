@@ -6,7 +6,7 @@ import { tabFrame, tabText, type TabId, type TabIn } from './tabs-frame';
 import { hexTo256, uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { bandLook } from './band-frame';
 import { chipStyle, tileOf } from './input/clickable';
-import type { Health, HealthCheck } from './idle-health';
+import type { Health, HealthCheck } from './data/idle-health';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const ui256: Ui = { ...uiFromEnv({}), color: '256' };

@@ -4,15 +4,15 @@
 // underlying data is missing, unreadable or corrupt. Plan §2.
 import type {
   AtlasSnapshot, ChannelMember, ChannelNote, Contract, FsLike, Persona, PhaseId, SquadAgent,
-} from './contract';
-import { boardRoot, leadChannelName } from './data/root';
-import { readCrew } from './data/crew';
-import { computeCounts, currentPhase, dispatchOpen, endedOf, groupTodos, readTodos, settleDispatch, type TodosCache, type TodosError } from './data/todos';
-import { NoteReader, readRoster } from './data/channels';
-import { loadContract, loadPersonas } from './data/personas';
-import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './data/orchestration';
-import type { LiveSnapshot } from './orchestra-types';
-import { mergeSquad, parseHerdrStatus } from './data/herdr';
+} from '../contract';
+import { boardRoot, leadChannelName } from './root';
+import { readCrew } from './crew';
+import { computeCounts, currentPhase, dispatchOpen, endedOf, groupTodos, readTodos, settleDispatch, type TodosCache, type TodosError } from './todos';
+import { NoteReader, readRoster } from './channels';
+import { loadContract, loadPersonas } from './personas';
+import { deriveOrchestration, EMPTY_ORCH, type Orch, type WtRow } from './orchestration';
+import type { LiveSnapshot } from '../orchestra-types';
+import { mergeSquad, parseHerdrStatus } from './herdr';
 
 /** Contract stand-in when <pluginRoot>/contracts/operating-contract.json is missing/corrupt. */
 const EMPTY_CONTRACT: Contract = {

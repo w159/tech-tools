@@ -12,7 +12,7 @@ import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
 import { bandLook } from './band-frame';
 import { runHex } from './atlas-ui';
-import type { Health, HealthCheck } from './idle-health';
+import type { Health, HealthCheck } from './data/idle-health';
 import type { CoreModel } from './data/core';
 import { healthCardRows } from './hud-surface';
 import { bandLines } from './mission-layout';

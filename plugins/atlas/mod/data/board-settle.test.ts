@@ -1,10 +1,10 @@
 // S1 through the real snapshot build: the explorers finish, their dispatch rows stay pending in todos.json, and every
 // surface (band count, board, side panel) must read them as ended (not done) or failed, so the screen and the store agree. The fix is at the one place the todos enter the snapshot.
 import { describe, expect, test } from 'claude-code/testing';
-import type { SquadAgent } from './contract';
-import { planCounts } from './data/todos';
+import type { SquadAgent } from '../contract';
+import { planCounts } from './todos';
 import { SnapshotBuilder } from './snapshot';
-import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs } from './test_helpers';
+import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs } from '../test_helpers';
 
 const ROOT = '/r';
 const PLUGIN = '/plugin';

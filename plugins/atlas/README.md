@@ -1029,7 +1029,7 @@ Worker counts come from one tally (`mod/data/tally.ts`), so the band, the HUD an
 `thinking` worker counts as running on all three.
 
 **Idle health.** An idle session shows what is healthy, with history, instead of an
-empty band (`mod/idle-health.ts`, figures from `mod/metrics.ts`). The band is built
+empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The band is built
 from fixed-width slots, so the separators do not move between idle, working and done:
 
 ```

@@ -3,7 +3,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import type { FsLike } from '../contract';
 import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs } from '../test_helpers';
-import { SnapshotBuilder } from '../snapshot';
+import { SnapshotBuilder } from './snapshot';
 import { liveWorkers } from './live';
 import { crewSig, readCrew } from './crew';
 import { channelRows } from '../pane/sidebar-channel';

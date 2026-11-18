@@ -1082,12 +1082,12 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/snapshot.test.ts": {
+    "plugins/atlas/mod/data/snapshot.test.ts": {
       "crap_high": {
         "count": 1
       }
     },
-    "plugins/atlas/mod/snapshot.ts": {
+    "plugins/atlas/mod/data/snapshot.ts": {
       "crap_high": {
         "count": 1
       },

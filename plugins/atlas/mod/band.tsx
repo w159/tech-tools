@@ -24,7 +24,7 @@ import { contractRail, railOf, type Rail } from './rail';
 import { chipText, STRIP_TABS } from './panel-layout';
 import { fitText, textWidth } from './theme';
 import { chipStyle, hoverStyle } from './input/clickable';
-import type { Health, HealthIn } from './idle-health';
+import type { Health, HealthIn } from './data/idle-health';
 import { BAND_GATES_KEY } from './band-frame';
 
 export { planRows } from './mission-layout';

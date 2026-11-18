@@ -1,5 +1,5 @@
 // Shared sidebar model types and the one padding helper the section builders use.
-import type { Health } from '../idle-health';
+import type { Health } from '../data/idle-health';
 import type { CoreModel } from '../data/core';
 import type { Ui } from '../atlas-ui';
 import type { MotionCtx } from '../motion';

@@ -1,6 +1,6 @@
 // Pulse (S1): the observed-only data the band, panel and card draw shapes from. Nothing here is invented: an empty session is all zeros and empty rings.
 import { describe, expect, test } from 'claude-code/testing';
-import { noteHook, resetHookLog } from './hook-log';
+import { noteHook, resetHookLog } from '../hook-log';
 import { BUCKETS, BUCKET_MS, CTX_KEEP, RUNS_KEEP, noteBilling, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
 
 const fresh = (): void => { resetHookLog(); resetPulse(); };

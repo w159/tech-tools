@@ -5,7 +5,7 @@ import { uiFromEnv, type Run, type Ui } from './atlas-ui';
 import { bandRuns, type BandModel } from './band';
 import { cardFrame } from './card-frame';
 import { busySnap, NOW } from './live_fixture';
-import type { Health, HealthCheck } from './idle-health';
+import type { Health, HealthCheck } from './data/idle-health';
 import { lineText, panelLines, stripLayout, tabRows, type PanelModel, type PanelTab } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { CHART_AXIS_MIN, chartRows, latencyLevel, P95_MIN_SAMPLES } from './status-frame';

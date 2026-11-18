@@ -14,8 +14,8 @@ import { busySnap, NOW } from './live_fixture';
 import { register, resetCore } from './register';
 import { memState } from './test_helpers';
 import { textWidth } from './theme';
-import type { Health } from './idle-health';
-import type { Pulse } from './pulse';
+import type { Health } from './data/idle-health';
+import type { Pulse } from './data/pulse';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const green = (id: string, lines = 8) => ({ id, ok: true, lines, pass: lines });

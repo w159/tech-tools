@@ -6,7 +6,7 @@ import { statusFrame as buildStatus } from './status-frame';
 import { cardFrame } from './card-frame';
 import { tabFrame, tabText, type TabIn, type TabId } from './tabs-frame';
 import { uiFromEnv, type Run, type Ui } from './atlas-ui';
-import type { Health, HealthCheck } from './idle-health';
+import type { Health, HealthCheck } from './data/idle-health';
 import { IDLE_RAMP_256 } from './band-motion';
 import { textWidth } from './theme';
 import { gateValue } from './tabs-frame';

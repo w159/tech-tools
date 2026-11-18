@@ -17,7 +17,7 @@ import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
 import { fitText, textWidth } from './theme';
 import { bandFrameRuns } from './band-frame';
-import type { Health } from './idle-health';
+import type { Health } from './data/idle-health';
 
 export type { Run, Tone };
 /** One row, on the theme's panel colour. `keys`: the footer, where the band appends its key buttons in `keysWidth`

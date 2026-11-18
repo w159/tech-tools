@@ -9,9 +9,9 @@ import { NOW } from './live_fixture';
 import { textWidth } from './theme';
 import { BLOCKS } from './chart';
 import { hookStats, noteHook, noteHookMs, resetHookLog, WIRED_HOOKS } from './hook-log';
-import { ctxRunway } from './pulse';
+import { ctxRunway } from './data/pulse';
 import { chartSeries, hookTable } from './status-frame';
-import type { Health, HealthCheck } from './idle-health';
+import type { Health, HealthCheck } from './data/idle-health';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const PHASES = ['research', 'theory', 'test', 'implement', 'verify', 'review'];

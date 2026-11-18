@@ -8,7 +8,7 @@ import type { On } from 'claude-code';
 import { fullModel, promptName, registerCompletion, registerRouting } from './routing';
 import type { Persona } from '../contract';
 import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, memState } from '../test_helpers';
-import { SnapshotBuilder } from '../snapshot';
+import { SnapshotBuilder } from '../data/snapshot';
 
 // Structural mirrors of the event shapes the handlers read (d.ts: AgentSpawnInput,
 // TurnStepInput, TurnCompleteInput, PromptSubmitInput).

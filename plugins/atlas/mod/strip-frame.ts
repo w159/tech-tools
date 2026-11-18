@@ -7,8 +7,8 @@
 import { elapsedClock, type Run, type Ui } from './atlas-ui';
 import { blockSpark } from './chart';
 import { CARD_KEY } from './card-frame';
-import { fitFields, gatesSummary, promptedOf, type Health, type HealthField } from './idle-health';
-import { metricsOf, runFigures, runsOf } from './metrics';
+import { fitFields, gatesSummary, promptedOf, type Health, type HealthField } from './data/idle-health';
+import { metricsOf, runFigures, runsOf } from './data/metrics';
 import { frameKit, latencyLevel } from './status-frame';
 import { textWidth } from './theme';
 import { WIRED_HOOKS } from './hook-log';

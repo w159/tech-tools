@@ -20,7 +20,7 @@
 //   ctxText(pulse)        `6% · 64k of 1M · +12k/turn` (the window and the delta ride only when known); undefined before the first measure
 //   activityStats(pulse, runTools) -> `6 events · 1.2/min · peak 4 · 3 tools`   the events of the window, per minute over the window's span, the busiest bucket, the tools the run has called
 //   resetPulse()         a new session: empty rings, no cost, billing unknown (the event stamps are cleared by hook-log's resetHookLog)
-import { eventBuckets, eventStamps } from './hook-log';
+import { eventBuckets, eventStamps } from '../hook-log';
 
 export type CtxSample = { tokens: number; pct: number; at: number };
 export type RunSample = { secs: number; ok: boolean; at: number };

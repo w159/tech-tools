@@ -7,8 +7,8 @@ import { runHex, uiFromEnv, xtermHex, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
 import { durationTree } from './view/transcript/restyle';
 import { textWidth } from './theme';
-import type { Health } from './idle-health';
-import type { Pulse } from './pulse';
+import type { Health } from './data/idle-health';
+import type { Pulse } from './data/pulse';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

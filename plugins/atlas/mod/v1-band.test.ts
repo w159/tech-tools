@@ -6,10 +6,10 @@ import { bandRuns, bandTree, type BandModel } from './band';
 import { hostEnv, PALETTES, uiFromEnv, xtermHex, type Run, type Ui } from './atlas-ui';
 import { busySnap } from './live_fixture';
 import { hookStats, noteHook, noteHookMs, resetHookLog } from './hook-log';
-import { denyAgeSecs, noteDenied, resetPulse } from './pulse';
+import { denyAgeSecs, noteDenied, resetPulse } from './data/pulse';
 import { deniedCalls } from './vocab';
 import { textWidth } from './theme';
-import type { Pulse } from './pulse';
+import type { Pulse } from './data/pulse';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const NOW = 4_000_000_000_000; // a multiple of 1600 ms: tick 0 is heartbeat frame 0 and spinner frame 0

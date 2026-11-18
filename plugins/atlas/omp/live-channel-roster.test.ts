@@ -8,7 +8,7 @@ import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SnapshotBuilder } from "../mod/snapshot";
+import { SnapshotBuilder } from "../mod/data/snapshot";
 import type { FsLike } from "../mod/contract";
 
 const SCRIPTS = join(import.meta.dir, "..", "scripts");

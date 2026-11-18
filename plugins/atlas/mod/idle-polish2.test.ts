@@ -9,7 +9,7 @@ import { hudLines } from './hud';
 import { bodyLines, headerRows, lineText, ribbonRow, type PanelModel } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
-import type { Health } from './idle-health';
+import type { Health } from './data/idle-health';
 import { shouldDockAsked } from './register';
 import { todoRows, agentRows } from './hud-surface';
 

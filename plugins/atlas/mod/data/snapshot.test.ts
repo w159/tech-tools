@@ -1,12 +1,12 @@
-// Tests for mod/snapshot.ts under the claude-code testing kit.
+// Tests for mod/data/snapshot.ts under the claude-code testing kit.
 // Covers: root/lead-channel resolution, session filter + counts, phase
 // precedence (header > todo > default), instance-held mtime cache, notes/
 // roster/squad merge, live pass-throughs, and the no-root idle snapshot.
 import { describe, expect, test } from 'claude-code/testing';
-import type { SquadAgent, TodoItem } from './contract';
-import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, makeSnapshot } from './test_helpers';
+import type { SquadAgent, TodoItem } from '../contract';
+import { FIXTURE_CONTRACT, FIXTURE_EPOCH_MS, memFs, makeSnapshot } from '../test_helpers';
 import { SnapshotBuilder } from './snapshot';
-import { EMPTY_ORCH, onComplete, onSpawn, onToolEnd, onToolStart, type WtRow } from './data/orchestration';
+import { EMPTY_ORCH, onComplete, onSpawn, onToolEnd, onToolStart, type WtRow } from './orchestration';
 
 const ROOT = '/r';
 const CWD = '/r/sub';

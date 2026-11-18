@@ -1,13 +1,13 @@
 // idle-health.ts: the health summary shown while Atlas has no run yet (wave 42). One pure model (`Health`) every surface reads: the band's segments, the HUD's expanded card, the side panel's rows.
 // It holds only what the mod really has; a figure it does not have is left out, never made up.
-import { elapsedClock, stateRun, type Run, type Ui } from './atlas-ui';
-import { fitText, textWidth } from './theme';
-import type { HookStats } from './hook-log';
+import { elapsedClock, stateRun, type Run, type Ui } from '../atlas-ui';
+import { fitText, textWidth } from '../theme';
+import type { HookStats } from '../hook-log';
 import type { HistView } from './history';
 import { activityStats, BUCKETS, BUCKET_MS, ctxSeries, ctxText as pulseCtxText, RATE_BUCKETS, rateLabel, type Pulse } from './pulse';
-import { ctxInk, gaugeRuns, sparkRuns } from './spark';
-import { areaChartRuns, runBars, runsSummary } from './chart';
-import { gateCounts, gateLine, gatesTotal } from './vocab';
+import { ctxInk, gaugeRuns, sparkRuns } from '../spark';
+import { areaChartRuns, runBars, runsSummary } from '../chart';
+import { gateCounts, gateLine, gatesTotal } from '../vocab';
 
 export type HealthLast = { secs?: number; done: number; total: number; agents: number; failed: number; /** Whole seconds since the run ended (a clock with no zone read as a time of day only to its owner): drawn `ended 3m ago`. */ endedAgo?: number; /** Each worker of the run with how it ended and how long it ran. */ workers?: readonly { name: string; state: string; secs?: number }[] };
 /** One gate group: its mark, and (from the gate groups the mod reads) how many of its lines pass and the first line's own words. */

@@ -9,8 +9,8 @@ import { panelWorld } from '../contracts/panel-world';
 import { gateLastSecs } from './status-frame';
 import { textWidth } from './theme';
 import { NOW } from './live_fixture';
-import type { Health } from './idle-health';
-import type { Pulse } from './pulse';
+import type { Health } from './data/idle-health';
+import type { Pulse } from './data/pulse';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const text = (rs: Run[]): string => rs.map((x) => x.t).join('');

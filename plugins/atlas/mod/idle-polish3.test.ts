@@ -5,7 +5,7 @@ import { healthCardRows } from './hud-surface';
 import { bodyLines, headerRows, lineText, tabRows, type PanelModel } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { NOW } from './live_fixture';
-import { agoText, humanEvent, recentEvents, type Health } from './idle-health';
+import { agoText, humanEvent, recentEvents, type Health } from './data/idle-health';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const green = (id: string, note?: string) => ({ id, ok: true, lines: 3, pass: 3, ...(note ? { note } : {}) });

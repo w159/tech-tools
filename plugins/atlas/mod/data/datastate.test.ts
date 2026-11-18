@@ -2,7 +2,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { diffSnapshots } from '../notify';
 import { factsLine } from '../discipline';
 import { uiFromEnv, type Run } from '../atlas-ui';
-import type { Health, HealthCheck } from '../idle-health';
+import type { Health, HealthCheck } from './idle-health';
 import { frameKit, statusFrame, statusGatesRows, statusHooksRows, type GateSrc, type StatusIn } from '../status-frame';
 import { tabFrame, tabText, type TabIn } from '../tabs-frame';
 import { ageShort, dataCell, dataStateOf, dataWord } from './datastate';

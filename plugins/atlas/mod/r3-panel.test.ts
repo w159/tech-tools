@@ -8,7 +8,7 @@ import { panelWorld } from '../contracts/panel-world';
 import { NOW } from './live_fixture';
 import * as model from './pane/sidebar-model';
 import { textWidth } from './theme';
-import type { Health } from './idle-health';
+import type { Health } from './data/idle-health';
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const green = (id: string, lines = 8) => ({ id, ok: true, lines, pass: lines });

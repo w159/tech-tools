@@ -8,7 +8,7 @@
 // `…` through `clipE`; the surface is the rev 4 panel token.
 import { phaseFigure, workerTally } from './data/tally';
 import { chipRun, tileOf } from './input/clickable';
-import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from './idle-health';
+import { activitySection, contextSection, fitFields, gatesSection, healthRows, recentEvents, recentSection, ROW_AT, runsSection, sessionRow, teamOf, VALUE_AT, type Health } from './data/idle-health';
 import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
 import { chevron } from './input/clickable';
 import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';

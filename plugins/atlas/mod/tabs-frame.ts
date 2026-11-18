@@ -12,7 +12,7 @@
 import { dataWord } from './data/datastate';
 import { elapsedClock, type Run, type Ui, type UiState } from './atlas-ui';
 import type { CoreModel } from './data/core';
-import { teamOf, type Health } from './idle-health';
+import { teamOf, type Health } from './data/idle-health';
 import { chartRows, footerRow, frameKit, GATE_COL, gateHead, gateLastSecs, hookFeed, lastCellText, moreRow, promptedOf, statusActivityRows, statusHooksRows, statusRecentRows, statusRunsChart, type Kit, type ReadInfo, type StatusGate, type StatusIn } from './status-frame';
 import { fitText, textWidth } from './theme';
 import { checkOff, gateCounts } from './vocab';

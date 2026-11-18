@@ -4,7 +4,7 @@
 // starts on the same row (a shorter first section is padded), and no cell is cut: a row that does not fit is shortened at its end by the kit, never mid-word by the column. The title is a chip that closes the card
 // (`▾ HEALTH ───`; the band right under it already carries the pill), and so does the band's `▾ health` chip.
 import { type Run, type Ui } from './atlas-ui';
-import type { Health } from './idle-health';
+import type { Health } from './data/idle-health';
 import { CARD_MORE_KEY, frameKit, moreRow, promptedOf, statusActivityRows, statusContextRows, statusGatesRows, statusHooksRows, statusRunsRows } from './status-frame';
 import { textWidth } from './theme';
 

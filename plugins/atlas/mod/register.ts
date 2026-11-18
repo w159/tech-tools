@@ -7,7 +7,7 @@
 // a person is at the prompt (hooks also run headless, surface null).
 import { atom, read, update } from 'claude-code';
 import type { ClientElements, EngineInterface, On, PluginOptions, RenderElement } from 'claude-code';
-import { SnapshotBuilder } from './snapshot';
+import { SnapshotBuilder } from './data/snapshot';
 import type { AgentState, AtlasSnapshot, FsLike, SquadAgent } from './contract';
 import { intentToArgv } from './input/intents';
 import { bandBlockedOf, bandHealth, bandKindOf, bandTree, hudPhases, railPhase, type BandHandlers, type BandModel } from './band';
@@ -16,11 +16,11 @@ import { noteStopVerdict } from './view/transcript/superseded';
 import { composeSlot } from './slot';
 import { healthCardRows } from './hud-surface';
 import { CARD_MORE_KEY } from './status-frame';
-import { healthLine, type HealthIn } from './idle-health';
+import { healthLine, type HealthIn } from './data/idle-health';
 import { hookDone, hookStamp, hookStats, noteHook, resetHookLog } from './hook-log';
-import { denyAgeSecs, noteBilling, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './pulse';
+import { denyAgeSecs, noteBilling, noteDenied, noteMeasure, noteRunEnd, pulseOf, resetPulse } from './data/pulse';
 import { healthStripRows, STRIP_ROWS, stripWanted } from './strip-frame';
-import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './history';
+import { flushHistory, historyView, loadHistory, noteHistoryCtx, noteHistoryGates, noteHistoryRun } from './data/history';
 import { deniedCalls, gateCounts } from './vocab';
 import { allSettled, ARM_MS, beatDue, beatStale, easedNow, FRAME_MS, gaugeTargets, newKindHold, newRunClock, readRun, resumeOk, runKey, runLive, type ClockHold, stepKind, type KindHold, restSecsOf, retargetAll, stepRun, type GaugeMoves, type RunClock } from './band-motion';
 import { hudAgents, hudListsAgents, hudRows, isAlive, isRunning, namedAgents, segmentOf } from './hud';

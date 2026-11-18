@@ -7,7 +7,7 @@ import { uiFromEnv, type Ui } from './atlas-ui';
 import { busySnap } from './live_fixture';
 import { hudLines } from './hud';
 import { textWidth } from './theme';
-import type { Pulse } from './pulse';
+import type { Pulse } from './data/pulse';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });

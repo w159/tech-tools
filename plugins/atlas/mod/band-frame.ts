@@ -9,8 +9,8 @@
 import { contrast, elapsedClock, PALETTES, xtermHex, type Run, type Ui } from './atlas-ui';
 import { idleRamp } from './band-motion';
 import { blockSpark } from './chart';
-import { agoText, gatesSummary, promptedOf, type Health } from './idle-health';
-import { metricsOf } from './metrics';
+import { agoText, gatesSummary, promptedOf, type Health } from './data/idle-health';
+import { metricsOf } from './data/metrics';
 import { fitText, textWidth } from './theme';
 
 /** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it (AA2: packed in one 28-cell state slot, `● done 6/6 · ended 18s`). */

@@ -6,13 +6,13 @@ import { bandTree, type BandHandlers, type BandModel } from './band';
 import { busySnap, NOW } from './live_fixture';
 import { uiFromEnv, type Run } from './atlas-ui';
 import { healthCardRows } from './hud-surface';
-import { gateOf, healthRows, type Health } from './idle-health';
+import { gateOf, healthRows, type Health } from './data/idle-health';
 import { bodyLines, lineText } from './panel-layout';
 import { panelWorld } from '../contracts/panel-world';
 import { textWidth } from './theme';
 import { gateLine, gatesTotal } from './vocab';
 import { forgetPlaced, noteRunFinal, placeFinished, placedTree } from './view/transcript/placed';
-import type { Pulse } from './pulse';
+import type { Pulse } from './data/pulse';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const text = (row: Run[]): string => row.map((x) => x.t).join('');
