@@ -38,6 +38,8 @@ jobs:
 
   # Atlas Bun suites: the omp extension and the Claude Code mods (mod/ runs through mod/test-shim.ts, see
   # mod/TESTING.md). Run from plugins/atlas so bunfig.toml loads the preloads.
+  # No tsc step: tsconfig.json extends .claude-plugin/types/, which the Claude Code host generates locally and
+  # .gitignore excludes, so a checkout here has no host types. Typecheck locally with `bun run typecheck`.
   atlas-bun:
     if: github.event_name == 'pull_request' || github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -47,8 +49,6 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.4.4
-      - run: bunx -p typescript@5 tsc --noEmit -p tsconfig.json
-        working-directory: plugins/atlas
       - run: bun test omp mod
         working-directory: plugins/atlas
 
