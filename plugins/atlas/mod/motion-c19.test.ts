@@ -1,7 +1,7 @@
 // Critique 19, slice B: the HUD agent row and the side panel's worker row fade on one phase (stoprun-150-232567af-1/f0093.ans:11 vs :34: beta `◍`/193 in the
 // panel, `◌`/231 in the HUD, one frame), and the 256-colour ramp drops its weight on the frame its colour lands (motion-232567af/todo-strip.ans:4-5).
 import { describe, expect, test } from 'claude-code/testing';
-import { Motion, MOTION_MS } from './motion';
+import { Motion, MOTION_MS } from './motion/motion';
 
 describe('B3: one agent, one fade phase on every surface', () => {
   const seen = (hudAt: number, panelAt: number): Motion => {

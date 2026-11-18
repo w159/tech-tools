@@ -12,7 +12,7 @@ import { ownTodos } from './data/todos';
 import { hudAgents, hudLines, hudRows, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import { bandLines } from './mission-layout';
-import { DONE_FADE, MOTION_STEP_MS, type MotionCtx } from './motion';
+import { DONE_FADE, MOTION_STEP_MS, type MotionCtx } from './motion/motion';
 import type { LiveSnapshot } from './orchestra-types';
 import { resetCore, register, STOP_SETTLE_MS } from './register';
 import type { Segment } from './runs';

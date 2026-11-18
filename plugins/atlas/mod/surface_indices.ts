@@ -11,7 +11,7 @@ import { hudAgents, hudRows } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_MS } from './motion';
+import { Motion, MOTION_MS } from './motion/motion';
 import { sidebarTree, type SidebarHandlers, type SidebarModel } from './pane/sidebar';
 import { leadOf, leadRow } from './view/transcript/leadheader';
 import { bubbleTree, notificationTree, workerCard, type CallLike } from './view/transcript/cards';

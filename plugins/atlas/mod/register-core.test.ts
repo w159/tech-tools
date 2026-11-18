@@ -96,7 +96,7 @@ describe('coreTick', () => {
       s.files[`${RUN}/findings.json`] = JSON.stringify([verdict('b', 'rejected', '2026-10-27T08:05:00+00:00')]);
       s.mtimes[`${RUN}/findings.json`] = 1;
       await coreTick(s.$);
-      expect(s.rec.plays).toEqual(sound ? ['mod/fx/fail.wav'] : []);
+      expect(s.rec.plays).toEqual(sound ? ['mod/motion/fx/fail.wav'] : []);
     }
   });
 

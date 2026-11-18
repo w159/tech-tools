@@ -10,7 +10,7 @@ import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import { boardRoot, sessionTodos } from "./channel-view";
 import { hudText, paintHud } from "./hud-paint";
 import { hudMotionItems } from "../mod/hud";
-import { Motion, reducedMotion } from "../mod/motion";
+import { Motion, reducedMotion } from "../mod/motion/motion";
 import type { TodoItem } from "../mod/contract";
 
 export const TODO_WIDGET_KEY = "atlas-todo";
@@ -50,7 +50,7 @@ export interface FallbackDeps {
 	pollMs?: number;
 	setInterval?: (fn: () => void, ms: number) => unknown;
 	clearInterval?: (h: unknown) => void;
-	/** The transition frame timer (mod/motion.ts), apart from the poll timer; defaults to setInterval. */
+	/** The transition frame timer (mod/motion/motion.ts), apart from the poll timer; defaults to setInterval. */
 	setFrame?: (fn: () => void, ms: number) => unknown;
 	clearFrame?: (h: unknown) => void;
 	/** Clock in ms. */

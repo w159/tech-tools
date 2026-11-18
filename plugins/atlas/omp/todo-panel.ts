@@ -6,7 +6,7 @@
  */
 import { hostEnv, paintAnsi, sgrColor, surfaceHex, uiFromEnv, type Run, type Ui } from "../mod/atlas-ui";
 import { boardBody, boardFolded, boardOpenFolded, boardLines as modelLines, boardRowsOf, type BoardLine, type BoardSource } from "../mod/board-model";
-import type { MotionCtx } from "../mod/motion";
+import type { MotionCtx } from "../mod/motion/motion";
 import { RST } from "./panel-paint";
 
 export interface PanelTodo extends BoardSource {
@@ -25,7 +25,7 @@ export interface TodoOpts {
 	now?: number;
 	ui?: Ui;
 	rich?: boolean;
-	/** Motion view (mod/motion.ts); absent: the resting render. */
+	/** Motion view (mod/motion/motion.ts); absent: the resting render. */
 	motion?: MotionCtx | undefined;
 }
 

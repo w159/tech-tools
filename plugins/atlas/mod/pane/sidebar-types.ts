@@ -2,7 +2,7 @@
 import type { Health } from '../data/idle-health';
 import type { CoreModel } from '../data/core';
 import type { Ui } from '../atlas-ui';
-import type { MotionCtx } from '../motion';
+import type { MotionCtx } from '../motion/motion';
 import type { LiveSnapshot } from '../orchestra-types';
 import { textWidth } from '../theme';
 
@@ -21,7 +21,7 @@ export type SidebarModel = {
   rows: number;
   /** Spinner tick the render reads (never writes); animates working badges. */
   tick?: number;
-  /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
+  /** Motion view (mod/motion/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The band's run state and run clock (register.ts builds them from the band's own inputs, pane/band-kind.ts): the panel prints the same word and the same total. */
   /** The shared clock reading the HUD times a running agent on (`$.clock.now()`): the lanes read the same figure as the SUBAGENTS rows (truth 41: alpha 0:16 against 0:17 on one frame). */

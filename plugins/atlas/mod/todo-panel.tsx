@@ -3,7 +3,7 @@
 // rows without the ribbon, for the band's inline slot, capped by the row budget with a `+N more` row. Pure: rows in, Segments out.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { surfaceHex, type Run, type Ui, runHex } from './atlas-ui'; import { lookUi, lookRich } from './look';
-import type { MotionCtx } from './motion';
+import type { MotionCtx } from './motion/motion';
 import { boardBody, boardFolded, boardOpenFolded, boardLines, boardRowsOf, type BoardLine, type BoardSource } from './board-model';
 import { rowOf, type Segment } from './runs';
 import { textWidth } from './theme';

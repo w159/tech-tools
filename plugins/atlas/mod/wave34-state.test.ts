@@ -22,7 +22,7 @@ import type { Segment } from './runs';
 import { composeSlot } from './slot';
 import { memState } from './test_helpers';
 import { FRAME_MS } from './band-motion';
-import { animateRow, DONE_FADE } from './motion';
+import { animateRow, DONE_FADE } from './motion/motion';
 import { motionFeed } from './motion-feed';
 
 type Node = { kind: string; props: Record<string, unknown> };

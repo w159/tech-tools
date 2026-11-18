@@ -1,7 +1,7 @@
-// The motion model (mod/motion.ts) with an injected clock: frames at t=0, mid and end, the end equal to the resting render
+// The motion model (mod/motion/motion.ts) with an injected clock: frames at t=0, mid and end, the end equal to the resting render
 // byte for byte, idle scheduling nothing, a new row revealing left to right, a done row popping its glyph, reduced motion.
 import { describe, expect, test } from 'claude-code/testing';
-import { cells, easeOutCubic, runsCells, runsString, sgrColor, type Run, type Ui } from './atlas-ui';
+import { cells, easeOutCubic, runsCells, runsString, sgrColor, type Run, type Ui } from '../atlas-ui';
 import { animateRow, keysOf, mixHex, Motion, MotionDriver, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, reducedMotion, sinceChange, REVEAL_MS, revealRuns, stepTrack, trackBusy, type MotionItem } from './motion';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

@@ -7,7 +7,7 @@ import { panelWorld } from '../contracts/panel-world';
 import { cells, runsString, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudBudget, hudCompactRows, hudFloorRows, hudWantRows, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
-import { Motion } from './motion';
+import { Motion } from './motion/motion';
 import { bodyLines, lineText, stripLayout, tabRows } from './panel-layout';
 import { hudGapRows, hudSlotCap } from './register';
 

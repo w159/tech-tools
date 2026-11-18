@@ -17,7 +17,7 @@ export type Token = 'base' | 'panel' | 'text' | 'sub' | 'muted' | 'line' | 'ok' 
 /** A run's role. `dim` is the legacy tone (mission-layout TONE_HEX before rev 4); it has no token and paints as `line`. */
 export type Tone = Token | 'dim';
 /** One styled piece of a row. `bg` overrides the row surface (chips, the capsule); `chip` marks a fill (one per row). */
-export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; /** A fill as #rrggbb (the selected row's 236 bar), when no theme token is the colour; wins over `bg`. */ bgHex?: string; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion.ts). */ fg?: string; /** A clickable control (mod/input/clickable.ts): the run is drawn as a Button with this key, and the hover style. */ press?: string; hover?: true };
+export type Run = { t: string; tone: Tone; bold?: boolean; strike?: boolean; bg?: Token; /** A fill as #rrggbb (the selected row's 236 bar), when no theme token is the colour; wins over `bg`. */ bgHex?: string; chip?: boolean; /** Motion override: a #rrggbb foreground that replaces the tone's colour for this frame (mod/motion/motion.ts). */ fg?: string; /** A clickable control (mod/input/clickable.ts): the run is drawn as a Button with this key, and the hover style. */ press?: string; hover?: true };
 
 /** Catppuccin Mocha and Latte (https://raw.githubusercontent.com/catppuccin/palette/main/palette.json). */
 export const PALETTES: Record<ThemeName, Record<Token, string>> = {

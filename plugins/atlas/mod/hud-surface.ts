@@ -3,7 +3,7 @@
 // paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
 // Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { workerTally } from './data/tally';
-import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion';
+import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from './motion/motion';
 import { clipWords, lastText } from './data/lasttext';
 import { noteWorkerFacts, tallyOf } from './data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from './board-model';
@@ -99,7 +99,7 @@ export type SurfaceOpts = {
   rich?: boolean;
   /** Phase ids and the 0-based lit phase for the rich rail. */
   phases?: { ids: readonly string[]; active: number };
-  /** Motion view (mod/motion.ts): a row with a key and an entry is drawn mid-transition. Absent: the resting render. */
+  /** Motion view (mod/motion/motion.ts): a row with a key and an entry is drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The snapshot clock in epoch ms: a done row that completed within LINGER_MS of it ranks with running rows when the plan folds. */
   now?: number | undefined;

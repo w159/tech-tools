@@ -12,7 +12,7 @@ import { hudAgents, hudRows } from './hud';
 import { liveWorkers, queuedMembers } from './data/live';
 import { ownTodos } from './data/todos';
 import { busySnap, NOW } from './live_fixture';
-import { Motion } from './motion';
+import { Motion } from './motion/motion';
 import { hostTo256, holdSpinFrame, spinClock, spinFrameOf, withSpinFrame } from './atlas-ui';
 import { sidebarTree } from './pane/sidebar';
 import { boardTimeline } from './board-model';

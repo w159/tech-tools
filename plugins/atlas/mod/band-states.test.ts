@@ -3,7 +3,7 @@
 import { describe, expect, test } from 'claude-code/testing';
 import type { Ui } from './atlas-ui';
 import { cells, sweepIndex, WORDMARK } from './atlas-ui';
-import { reducedMotion } from './motion';
+import { reducedMotion } from './motion/motion';
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };

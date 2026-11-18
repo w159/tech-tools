@@ -32,7 +32,7 @@ This section wins over the 12.x sections below where they differ. Paths are unde
 - **Truth.** The side panel draws the snapshot as is, with no hold. The phase is never `done` while a dispatch row is open or a worker runs (`currentPhase`, `mod/data/todos.ts:270`). The status tab's phase row is built from the band's own inputs and glyph function (`phaseRow`, `phaseGlyph`, `mod/panel-layout.ts`), so it matches the band on one frame; lane and event times come from the same worker clock and one run start (`originOf`, `runBandModel`, `mod/register.ts`). A row whose owner returned is a neutral `◉` with the word in 245 (`mod/hud-surface.ts:25`). The lead header line is lower case with no `▌` after the host's `●` (`displayLine`, `mod/view/transcript/leadheader.ts:41`; the chip, `:64`).
 - **Durations.** An agent's run is `m:ss` (`h:mm:ss` from an hour) on every surface (`elapsedClock`, `mod/atlas-ui.ts:413`). A plan row's `ran` and `elapsed ... of` detail is `mm:ss` (`mod/hud.ts:99`, `mod/board-model.ts:66`).
 - **Palette.** `PALETTE5` (`mod/atlas-ui.ts:405`): accent 141, ok 114, warn 179, error 203, neutrals 236, 240, 245, 252. In 256-colour output every surface is limited to those, the panel fills 234 and 235, and 231 as a fade's first step (`PALETTE_INDICES`, `mod/surface_indices.ts:24`, checked by `mod/critique26.test.ts:39`).
-- **Done motion.** A done mark holds its first state `DONE_HOLD_MS = 1000` (`mod/motion.ts:29`), then three `MOTION_STEP_MS = 200` beats (`:23`); the timer runs at `MOTION_FRAME_MS = 100` (`:16`).
+- **Done motion.** A done mark holds its first state `DONE_HOLD_MS = 1000` (`mod/motion/motion.ts:29`), then three `MOTION_STEP_MS = 200` beats (`:23`); the timer runs at `MOTION_FRAME_MS = 100` (`:16`).
 - **Host load rules.** The host drops the whole mod if `$` is assigned, stored, returned or spread, or if mod code has a `.json` import or a dynamic `import()` (`mod/host-load-rules.test.ts:228`, `:232`; `hooks/test_atlas_contract.py:1858`).
 
 #### The band, 12.x history (superseded by the list above)
@@ -90,7 +90,7 @@ One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on t
 - **`ToolUse` for `Agent`/`Task` on atlas personas** becomes a deployment card tracking `$.agent.list()` status live. A finished `Bash`/`Read`/`Grep` call whose output is 8000 bytes or more collapses to a one-line `<tool> <target> ▸ <size>` summary instead of drawing the raw output.
 - **`TurnDuration`** becomes a one-line receipt: duration, phase move, completions this turn, live agent count and context fill. Since 12.4.0 the receipt shows no dollar cost and no token count (the engine exposes no per-turn token count).
 - **`PromptHint`** shows contextual chords (`/atlas-cc Command Center · /atlas-say @name …`).
-- Toasts for a subagent completed or failed, a note to the lead, a todo completed, fired on answer-turn boundaries (`mod/notify.ts` `registerNotify`). An opt-in sound pack (`atlas_mod_sound`, off by default) ships its assets in `mod/fx/`.
+- Toasts for a subagent completed or failed, a note to the lead, a todo completed, fired on answer-turn boundaries (`mod/notify.ts` `registerNotify`). An opt-in sound pack (`atlas_mod_sound`, off by default) ships its assets in `mod/motion/fx/`.
 
 ### Context discipline (`mod/discipline.ts`)
 

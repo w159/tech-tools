@@ -1354,8 +1354,8 @@ On a 256-colour terminal the host maps each hex to the nearest xterm index, and
 every surface is limited to `PALETTE_INDICES` in `mod/surface_indices.ts`.
 
 **Motion.** A row that turns done holds its first state for one 200 ms beat
-(`DONE_HOLD_MS`, `mod/motion.ts`), then eases over up to four more
-200 ms beats (`MOTION_STEP_MS`, `MAX_BEATS` in `mod/motion.ts`). The motion timer runs at 100 ms
+(`DONE_HOLD_MS`, `mod/motion/motion.ts`), then eases over up to four more
+200 ms beats (`MOTION_STEP_MS`, `MAX_BEATS` in `mod/motion/motion.ts`). The motion timer runs at 100 ms
 (`MOTION_FRAME_MS`), at most 10 redraws a second.
 
 **Host load rules.** The mod loads in the host only if its files keep the host's
@@ -1367,7 +1367,7 @@ the same invariant in the contract suite.
 
 ### Terminal variables
 
-These are read by the mod (`mod/atlas-ui.ts`, `mod/motion.ts`, `mod/look.ts`,
+These are read by the mod (`mod/atlas-ui.ts`, `mod/motion/motion.ts`, `mod/look.ts`,
 `mod/register.ts`) and by the omp extension (`omp/`). Unset means the default.
 
 | Variable | Default | Effect |
@@ -1377,9 +1377,9 @@ These are read by the mod (`mod/atlas-ui.ts`, `mod/motion.ts`, `mod/look.ts`,
 | `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/band.tsx`, `mod/look.ts`) |
 | `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/atlas-ui.ts`) |
 | `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/atlas-ui.ts`) |
-| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts`; `reducedMotion`, `mod/motion.ts`) |
+| `NO_COLOR` | unset | Any non-empty value turns colour off and also stops row transitions (`colorMode`, `mod/atlas-ui.ts`; `reducedMotion`, `mod/motion/motion.ts`) |
 | `COLORTERM` | unset | `truecolor` or `24bit` selects 24-bit colour; with `TERM` containing `256` and `COLORTERM` unset the mod uses the 256-colour palette; otherwise truecolor (`mod/atlas-ui.ts`) |
-| `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion.ts`) |
+| `ATLAS_REDUCED_MOTION` | off | `1`, `true`, `yes` or `on` draws the resting render only: no state-change fade and no reveal of a new row; the spinner still steps (`mod/motion/motion.ts`) |
 | `ATLAS_PROJECT_ROOT` | unset | A project root that contains `.atlas`; it wins over the search. Unset, the mod walks up from the working directory to the nearest `.git` or `.atlas` (`mod/data/root.ts`) |
 | `ATLAS_HOME`, `ATLAS_DB` | `~/.atlas`, `<home>/atlas.db` | Where the mod looks for the gate database (`mod/register.ts`) |
 | `ATLAS_STATUSLINE` | on | omp only: `off` skips the usage statusline (`omp/index.ts`) |

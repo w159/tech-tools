@@ -1,14 +1,14 @@
 // motion-demo.ts: renders the frames of a TODO row and an agent row going running -> done to .ans files, so they can be recorded.
 // Deterministic: the clock is injected (no Date.now), the rows are fixed, so two runs write byte-identical files.
-//   bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
+//   bun mod/motion/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]   (default: the terminal's depth, see colorMode)
 // Writes, per surface (todo, agent): `<surface>-00-running.ans` (the resting row before the change), `<surface>-01-t0000ms.ans` ...
 // one file per frame of the 800 ms window, `<surface>-99-done.ans` (the resting row after), and `<surface>-strip.ans` (all of them,
 // one per line, `cat` it in a terminal). Each file is the ribbon and the row exactly as the live HUD draws them (24-bit ANSI, or xterm-256 with --color 256).
 // The frames are built by `demoFrames` (pure: file name -> text); only the CLI at the bottom touches the disk, through dynamic imports
 // that the mod's tsconfig (which has no node types) never resolves.
-import { colorMode, paintAnsi, type Ui } from './atlas-ui'; import { uiFrom } from './look';
-import type { TodoItem } from './contract';
-import { hudLines, hudMotionItems, type HudAgent, type HudInput } from './hud';
+import { colorMode, paintAnsi, type Ui } from '../atlas-ui'; import { uiFrom } from '../look';
+import type { TodoItem } from '../contract';
+import { hudLines, hudMotionItems, type HudAgent, type HudInput } from '../hud';
 import { Motion, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
 
 /** The demo draws through the live HUD (hudLines) and paints with the live ANSI painter (paintAnsi): same builder, same options, same
@@ -89,7 +89,7 @@ export async function demoMain(host: Host, io?: DemoIo): Promise<void> {
   };
   const out = arg('--out');
   if (!out) {
-    host.stderr.write('usage: bun mod/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]\n');
+    host.stderr.write('usage: bun mod/motion/motion-demo.ts --out <dir> [--cols 100] [--step 200] [--color truecolor|256]\n');
     host.exit(2);
     return;
   }

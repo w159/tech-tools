@@ -12,7 +12,7 @@ import * as hud from './hud';
 import { hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import { BLOCKED_TEXT, runStateOf, type MissionModel } from './mission-layout';
-import { sharedSpinFrame } from './motion';
+import { sharedSpinFrame } from './motion/motion';
 import type { LiveSnapshot } from './orchestra-types';
 import type { Segment } from './runs';
 import { composeSlot } from './slot';

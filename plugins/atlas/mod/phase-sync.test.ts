@@ -10,7 +10,7 @@ import { ownTodos } from './data/todos';
 import { RETURNED_ASCII, RETURNED_GLYPH, STATE_ASCII, STATE_GLYPHS, spinClock, spinFrameOf, spinnerGlyph, type Run, type Ui } from './atlas-ui';
 import { rowSpinnerGlyph } from './hud-surface';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion';
+import { Motion, MOTION_FRAME_MS, MOTION_MS, MOTION_STEP_MS, sinceChange, windowOf } from './motion/motion';
 import { motionFeed } from './motion-feed';
 import { panelModelOf } from './pane/sidebar-model';
 import type { TodoItem } from './contract';

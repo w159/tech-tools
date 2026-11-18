@@ -12,7 +12,7 @@ import { activitySection, contextSection, fitFields, gatesSection, healthRows, r
 import { checkOff, gateCounts, gateDot, gateLine, gatesTotal } from './vocab';
 import { chevron } from './input/clickable';
 import { PALETTE5, PALETTES, brandMark, capsule, phaseGlyph, cells, countRuns, GLYPH5, GLYPH5_ASCII, elapsedClock, GRID_LEAD, meter, todoMeter, gridPlan, gridRow as gridRowAt, markOf, motionState, percent, ribbon, RETURNED, rowWordTone, spinFrameOf, stateGlyph, stateRun, stateWordTone, UI_STATES, gateMark, warnMark, type MarkState, type Run, type Tone, type Ui, type UiState } from './atlas-ui';
-import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion/motion';
 import { ELLIPSIS, clipE, labelCut, lightRibbon, planFigure } from './board-model';
 import { hasCore, plannedText, tok, type CoreModel, type Verdict } from './data/core';
 import { clipWords, lastText } from './data/lasttext';
@@ -128,7 +128,7 @@ export type PanelModel = {
   finishes?: readonly PanelNote[];
   /** Wave 38 (critique 37: `no events yet · 0 messages` while three agents ran): the workers that started, one event each, stamped with the instant their dispatch started. */
   starts?: readonly PanelNote[];
-  /** Motion view (mod/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
+  /** Motion view (mod/motion/motion.ts): rows with an entry are drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** The band's own run state and run clock (wave 31): `kind` is runStateOf(band).kind, `secs` the figure the band prints (`working 0:28`, `done . 0:58`), `startMs` the run's start on the snapshot clock.
    * Present: the phase row prints exactly the band's glyph and word, and every total on the panel reads `secs`. Absent (omp, fixtures): the panel derives its own. */

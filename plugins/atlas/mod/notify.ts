@@ -158,7 +158,7 @@ export function registerNotify(
 							break;
 						case 'phase':
 							if (deps.soundEnabled()) {
-								void $.audio.play({ asset: 'mod/fx/advance.wav' }).catch(() => {});
+								void $.audio.play({ asset: 'mod/motion/fx/advance.wav' }).catch(() => {});
 							}
 							break;
 					}

@@ -6,7 +6,7 @@
  * panel background, so no line is wider than `width` and no escape is ever cut. Pure: renderPanel(model) -> lines.
  * Gate status comes from a throttled async cache over atlas_gates.py.
  */
-import type { MotionCtx, MotionItem } from "../mod/motion";
+import type { MotionCtx, MotionItem } from "../mod/motion/motion";
 import { coreCells } from "../mod/core-row";
 import type { CoreModel } from "../mod/data/core";
 import { gatesError, parseGates } from "../mod/gates";
@@ -56,7 +56,7 @@ export interface PanelModel {
 	spin: string; // kept for callers; the layout picks its own spinner frame from `tick`
 	laneSpin: string; // the todo list's in-progress glyph
 	tick: number;
-	/** Motion view (mod/motion.ts); absent: the resting render. */
+	/** Motion view (mod/motion/motion.ts); absent: the resting render. */
 	motion?: MotionCtx | undefined;
 	done: number;
 	total: number;

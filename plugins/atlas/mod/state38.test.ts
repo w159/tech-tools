@@ -11,7 +11,7 @@ import { clipEvidence, ownTodos } from './data/todos';
 import { hudAgents, hudLines, isRunning, outcomeOf, type HudAgent, type HudInput } from './hud';
 import { busySnap, NOW } from './live_fixture';
 import { blockedText, STOP_REFUSED } from './data/runstate';
-import { bandFrame, forgetBandFrame, noteBandFrame } from './motion';
+import { bandFrame, forgetBandFrame, noteBandFrame } from './motion/motion';
 import { KIND_HOLD_MS, newKindHold, stepKind, type KindHold, type KindWord } from './band-motion';
 import type { LiveSnapshot } from './orchestra-types';
 import { composeSlot } from './slot';

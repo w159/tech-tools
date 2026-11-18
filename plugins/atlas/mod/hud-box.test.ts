@@ -5,7 +5,7 @@ import { runsCells, runsString, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { agentRows, clipEll, fitStack, todoRows, type AgentRow, type TodoRow } from './hud-surface';
 import { hudLines, namedAgents, type HudAgent } from './hud';
-import { Motion, MOTION_MS } from './motion';
+import { Motion, MOTION_MS } from './motion/motion';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const full = { spacers: true, extras: false, close: true };

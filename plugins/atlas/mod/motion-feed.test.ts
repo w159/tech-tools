@@ -6,7 +6,7 @@ import { ownTodos } from './data/todos';
 import { hudPhases } from './band';
 import { runsString, type Ui } from './atlas-ui';
 import { busySnap, NOW } from './live_fixture';
-import { Motion, windowOf } from './motion';
+import { Motion, windowOf } from './motion/motion';
 import { motionFeed } from './motion-feed';
 import type { TodoItem } from './contract';
 

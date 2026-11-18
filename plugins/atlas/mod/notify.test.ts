@@ -370,7 +370,7 @@ describe('registerNotify toasts', () => {
 	test('a phase advance plays the sound only when sound is on', async () => {
 		const prev = snap({ phase: 'research' });
 		const next = snap({ phase: 'implement' });
-		expect((await run(prev, next, true)).played).toEqual([{ asset: 'mod/fx/advance.wav' }]);
+		expect((await run(prev, next, true)).played).toEqual([{ asset: 'mod/motion/fx/advance.wav' }]);
 		expect((await run(prev, next, false)).played).toEqual([]);
 		expect((await run(prev, next, true)).toasts).toEqual([]);
 	});

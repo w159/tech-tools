@@ -10,7 +10,7 @@ import { cardAged, cardsDue, forgetPlaced, noteBlocked, noteRunFinal, placedTree
 import { bandLines, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { panelWorld } from '../contracts/panel-world';
 import type { Ui } from './atlas-ui';
-import { bandFrame, forgetBandFrame, noteBandFrame } from './motion';
+import { bandFrame, forgetBandFrame, noteBandFrame } from './motion/motion';
 import { lineText, panelLines, type PanelModel } from './panel-layout';
 
 describe('step 1: no `working` after done or idle without a new prompt, and the clock never passes the run total', () => {

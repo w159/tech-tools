@@ -2,16 +2,16 @@
 // row and a band count draws at least 3 distinct in-between frames, and the end of the window is the resting render byte for byte.
 // The clock is injected: the Motion saw the old state at t=0 (a first sight) and the new one at t=1000.
 import { describe, expect, test } from 'claude-code/testing';
-import { world, worldModel } from '../contracts/band-world';
-import { worldBoardRows } from '../contracts/board-golden';
-import { panelWorld } from '../contracts/panel-world';
-import { worldHudAgents, worldPhases, worldPlan } from '../contracts/hud-world';
-import { runsCells, runsString, type Run, type Ui, type UiState } from './atlas-ui';
-import { boardBody, boardMotionItems, type BoardRow } from './board-model';
-import { hudLines, hudMotionItems, type HudInput } from './hud';
-import { bandLines, bandMotionItems } from './mission-layout';
+import { world, worldModel } from '../../contracts/band-world';
+import { worldBoardRows } from '../../contracts/board-golden';
+import { panelWorld } from '../../contracts/panel-world';
+import { worldHudAgents, worldPhases, worldPlan } from '../../contracts/hud-world';
+import { runsCells, runsString, type Run, type Ui, type UiState } from '../atlas-ui';
+import { boardBody, boardMotionItems, type BoardRow } from '../board-model';
+import { hudLines, hudMotionItems, type HudInput } from '../hud';
+import { bandLines, bandMotionItems } from '../mission-layout';
 import { Motion, sinceChange, windowOf, type MotionCtx, type MotionItem } from './motion';
-import { bodyLines, panelMotionItems, type PanelModel } from './panel-layout';
+import { bodyLines, panelMotionItems, type PanelModel } from '../panel-layout';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const T0 = 1000;

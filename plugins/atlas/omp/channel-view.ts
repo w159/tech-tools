@@ -21,7 +21,7 @@ import * as nodePath from "node:path";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 import type { PanelTodo } from "./todo-panel";
 import { type GatesCache,type IdleWave, type LaneTool, type PanelModel, type PanelNote, type PanelWorker, createGatesCache, panelMotionOf, renderPanel, spawnText } from "./mission-panel";
-import { Motion, reducedMotion } from "../mod/motion";
+import { Motion, reducedMotion } from "../mod/motion/motion";
 import { SPINNER_MS } from "../mod/atlas-ui";
 import { shellTarget } from "./cmd-unwrap";
 import { gatesArmed } from "./scope";
@@ -73,7 +73,7 @@ export interface ViewDeps {
 	setInterval?: (fn: () => void, ms: number) => unknown;
 	clearInterval?: (h: unknown) => void;
 	setTimeout?: (fn: () => void, ms: number) => unknown;
-	/** The transition frame timer (mod/motion.ts), apart from the poll timer; defaults to setInterval. */
+	/** The transition frame timer (mod/motion/motion.ts), apart from the poll timer; defaults to setInterval. */
 	setFrame?: (fn: () => void, ms: number) => unknown;
 	clearFrame?: (h: unknown) => void;
 	clearTimeout?: (h: unknown) => void;

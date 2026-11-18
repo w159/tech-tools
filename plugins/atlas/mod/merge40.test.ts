@@ -6,7 +6,7 @@ import { bandKindOf, bandRuns, bandTree, type BandModel } from './band';
 import { newRunClock, restSecsOf, runLive, stepRun } from './band-motion';
 import { runsText } from './mission-layout';
 import type { Ui } from './atlas-ui';
-import { forgetBandFrame, bandFrame } from './motion';
+import { forgetBandFrame, bandFrame } from './motion/motion';
 import { busySnap, NOW } from './live_fixture';
 
 type Node = { kind: string; props: Record<string, any> };

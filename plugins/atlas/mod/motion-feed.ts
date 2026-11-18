@@ -9,7 +9,7 @@ import { hudAgents, hudMotionItems } from './hud';
 import { liveWorkers, queuedMembers, withOwnerStates, workerStates } from './data/live';
 import { ownTodos } from './data/todos';
 import type { CoreModel } from './data/core';
-import type { MotionItem } from './motion';
+import type { MotionItem } from './motion/motion';
 import type { LiveSnapshot } from './orchestra-types';
 import { panelModelOf } from './pane/sidebar-model';
 import type { GateGroup } from './pane/sidebar-types';

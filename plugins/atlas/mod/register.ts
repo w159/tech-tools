@@ -46,7 +46,7 @@ import { EASE_FRAMES, EASE_MS, holdSpinFrame, sharedSpinFrame, type Ui } from '.
 import { IDLE_AFTER_SECS } from './mission-layout';
 import { clearLook, lookOf } from './look';
 import { hoverStyle } from './input/clickable';
-import { Motion, MotionDriver, reducedMotion } from './motion';
+import { Motion, MotionDriver, reducedMotion } from './motion/motion';
 import { motionFeed } from './motion-feed';
 import { ownRows, paneExit, paneTool, parseMuxStatus, teamsOf } from './data/mux';
 import type { LiveSnapshot, TeamTool } from './orchestra-types';
@@ -211,7 +211,7 @@ async function easeTick($: EngineInterface, snap: LiveSnapshot): Promise<void> {
 	});
 }
 
-// ---- motion (mod/motion.ts): row transitions and reveals ----------------------------------------------------------
+// ---- motion (mod/motion/motion.ts): row transitions and reveals ----------------------------------------------------------
 // The tick observes the snapshot (only when a rebuild produced a new one), the Motion keeps each row's window, and a timer
 // bumps the band's redraw atom only while a window is open: idle runs no timer and writes nothing. Renders read `motion.ctx`.
 let motion: Motion | null = null;
@@ -1044,7 +1044,7 @@ function coreToasts($: EngineInterface, m: CoreModel, seen: Set<string> | null):
 	if (seen === null) return;
 	for (const v of m.verdicts) {
 		if (seen.has(`${v.id}:${v.status}`)) continue;
-		if (v.status === 'rejected' && soundOn()) void $.audio.play({ asset: 'mod/fx/fail.wav' }).catch(() => {});
+		if (v.status === 'rejected' && soundOn()) void $.audio.play({ asset: 'mod/motion/fx/fail.wav' }).catch(() => {});
 	}
 }
 

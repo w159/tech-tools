@@ -1,7 +1,7 @@
 // Critique 16 C5, from motion-e4a8186a/todo-strip.ans:1-7 (256 colours): the glyph ran 231, 193, bold 193, bold 151, 151 (bold arrived at 400-600 ms,
 // a brightness pop), the 800 ms frame repeated the final one, and the TODO strip's third column read `implementer-band` then `tests green`.
 import { describe, expect, test } from 'claude-code/testing';
-import { luminance, xtermHex } from './atlas-ui';
+import { luminance, xtermHex } from '../atlas-ui';
 import { demoFrames } from './motion-demo';
 import { MOTION_MS, MOTION_STEP_MS } from './motion';
 

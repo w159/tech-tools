@@ -5,7 +5,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { cells, paintAnsi, runsString, type Run, type Ui } from './atlas-ui';
 import type { TodoItem } from './contract';
 import { hudLines, hudWantRows, type HudAgent, type HudInput } from './hud';
-import { Motion } from './motion';
+import { Motion } from './motion/motion';
 import { hudGapRows, hudSlotCap } from './register';
 import { hudCompactRows, hudFloorRows, hudMotionItems } from './hud';
 

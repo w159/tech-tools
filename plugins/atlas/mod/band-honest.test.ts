@@ -2,8 +2,8 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { cells, holdSpinFrame, paintAnsi, PALETTES, sharedSpinFrame, SPINNER_MS, spinClock, withSpinFrame, type Tone, type Ui } from './atlas-ui';
 import { beatStale, END_GRACE_MS, FRAME_MS, newRunClock, ranSecsOf, restSecsOf, stepRun, STALE_BEATS, workSecsOf } from './band-motion';
-import { demoFrames } from './motion-demo';
-import { MOTION_STEP_MS } from './motion';
+import { demoFrames } from './motion/motion-demo';
+import { MOTION_STEP_MS } from './motion/motion';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';
 import { fitHudToBand } from './register';
 

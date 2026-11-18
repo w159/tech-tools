@@ -1,8 +1,8 @@
-// mod/motion-demo.ts: deterministic frames of a TODO row and an agent row going running -> done.
+// mod/motion/motion-demo.ts: deterministic frames of a TODO row and an agent row going running -> done.
 import { describe, expect, test } from 'claude-code/testing';
-import { paintHud } from '../omp/hud-paint';
-import { fitHex, PALETTES, uiFromEnv, type Ui } from './atlas-ui';
-import { hudLines, hudMotionItems, type HudInput } from './hud';
+import { paintHud } from '../../omp/hud-paint';
+import { fitHex, PALETTES, uiFromEnv, type Ui } from '../atlas-ui';
+import { hudLines, hudMotionItems, type HudInput } from '../hud';
 import { demoFrames, demoInput, demoMain, type DemoIo } from './motion-demo';
 import { Motion, MOTION_MS, MOTION_STEP_MS } from './motion';
 

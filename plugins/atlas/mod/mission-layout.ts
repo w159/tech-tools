@@ -11,7 +11,7 @@
 //   - Rows drop in a fixed order under a tight budget: blanks, the message, the footer, then workers past "+N more".
 import { phaseFigure, workerTally } from './data/tally';
 import { atColumn, clipEll, contrast, ellOf, COUNT_ORDER, countRuns, elapsedClock, GLYPH5, GLYPH5_ASCII, inkFor, meter, NEED, padEnd, PALETTE5, PALETTES, percent, rail, leadSpinnerGlyph, phaseGlyph, rowWordTone, spinFrameOf, spinnerGlyph, stateRun, STATE_GLYPHS, gateMark, wordmark, xtermHex, type Run, type Token, type Tone, type Ui, type UiState } from './atlas-ui'; import { lookUi } from './look';
-import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion';
+import { animateRow, BAND_OPTS, reducedMotion, sharedSpinFrame, type MotionCtx, type MotionItem } from './motion/motion';
 import { blockedText, STOP_REFUSED } from './data/runstate';
 import { tallyOf, type Tally } from './data/live';
 import { displayName } from './hud';
@@ -110,7 +110,7 @@ export type MissionModel = {
   noWorkerRows?: boolean;
   /** Gauge values on screen while a figure glides (0..1); the labels keep the true figures. Absent: the figure itself. */
   eased?: { todo?: number; ctx?: number };
-  /** Motion view (mod/motion.ts): a count that changed is drawn mid-transition. Absent: the resting render. */
+  /** Motion view (mod/motion/motion.ts): a count that changed is drawn mid-transition. Absent: the resting render. */
   motion?: MotionCtx | undefined;
   /** Seconds the turn has been working (the host's turn clock, ticked each second): the `0:42` after `working`. Absent: the oldest running worker's age. */
   turnSecs?: number;
