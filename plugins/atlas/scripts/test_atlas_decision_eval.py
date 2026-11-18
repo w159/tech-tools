@@ -24,7 +24,20 @@ class StatsTest(unittest.TestCase):
         self.assertAlmostEqual(hi, 1.0, places=6)
         lo, hi = ev.wilson(17, 25)
         self.assertAlmostEqual(lo, 0.4840, places=3)
-        self.assertEqual(ev.wilson(0, 0), (0.0, 0.0))
+        self.assertIsNone(ev.wilson(0, 0))
+
+    def test_zero_rows_score_and_report_use_null_interval_not_zero(self):
+        dset = {"rows": [], "target": 0, "mined": 0}
+        cache = {"spend": [], "answers": {"m": {}}}
+        res = ev.score(dset, cache)
+        for m in res["backends"].values():
+            self.assertIsNone(m["wilson95"])
+        m = res["backends"]["m"]
+        self.assertIsNone(m["combined_wilson95"])
+        self.assertIsNone(m["combined_timeout_wilson95"])
+        text = ev.format_report(res, dset, cache)
+        self.assertIn("Wilson95 n/a", text)
+        self.assertNotIn("[0.000, 0.000]", text)
 
     def test_percentile(self):
         self.assertEqual(ev.percentile([1, 2, 3, 4, 5], 50), 3)

@@ -413,9 +413,9 @@ def score(dset: dict, cache: dict) -> dict:
         for r in rows:
             conf.setdefault(labels[r["id"]], {}).setdefault(preds.get(r["id"]) or "none", 0)
             conf[labels[r["id"]]][preds.get(r["id"]) or "none"] += 1
-        lo, hi = wilson(k, n)
+        ci = wilson(k, n)
         return {
-            "correct": k, "n": n, "accuracy": k / n if n else None, "wilson95": [lo, hi],
+            "correct": k, "n": n, "accuracy": k / n if n else None, "wilson95": list(ci) if ci else None,
             "confusion": conf, "latency_p50_s": percentile(lats, 50), "latency_p95_s": percentile(lats, 95),
         }
 
@@ -451,7 +451,8 @@ def score(dset: dict, cache: dict) -> dict:
         m["confident"] = len(conf_preds)
         m["confident_correct"] = sum(1 for i, c in conf_preds.items() if c == labels[i])
         m["combined_correct"] = ck
-        m["combined_wilson95"] = list(wilson(ck, len(rows)))
+        ci = wilson(ck, len(rows))
+        m["combined_wilson95"] = list(ci) if ci else None
         m["combined_mcnemar_vs_keyword"] = paired(rows, labels, combined, kw)
         # a call slower than the hook's TIMEOUT_S would return nothing: the keyword class stands
         timed = {r["id"]: (kw[r["id"]] if r["id"] in slow else combined[r["id"]]) for r in rows}
@@ -459,10 +460,16 @@ def score(dset: dict, cache: dict) -> dict:
         m["over_timeout"] = len(slow)
         m["calls"] = len(lats)
         m["combined_timeout_correct"] = tk
-        m["combined_timeout_wilson95"] = list(wilson(tk, len(rows)))
+        ci = wilson(tk, len(rows))
+        m["combined_timeout_wilson95"] = list(ci) if ci else None
         m["combined_timeout_mcnemar_vs_keyword"] = paired(rows, labels, timed, kw)
         res["backends"][name] = m
     return res
+
+
+def _ci(ci) -> str:
+    """Format a Wilson interval; n = 0 has none, so it prints n/a rather than a fake [0, 0]."""
+    return "n/a" if not ci else "[%.3f, %.3f]" % (ci[0], ci[1])
 
 
 def _mc(d: dict) -> str:
@@ -508,18 +515,16 @@ def format_report(res: dict, dset: dict, cache: dict) -> str:
     )
     conf_min = _hooks()[0].ROUTE_CONFIDENCE_MIN
     for name, m in res["backends"].items():
-        lo, hi = m["wilson95"]
         out.append("")
-        out.append("[%s] accuracy %d/%d = %.3f  Wilson95 [%.3f, %.3f]" % (name, m["correct"], m["n"], m["accuracy"] or 0, lo, hi))
+        out.append("[%s] accuracy %d/%d = %.3f  Wilson95 %s" % (name, m["correct"], m["n"], m["accuracy"] or 0, _ci(m["wilson95"])))
         p50, p95 = m["latency_p50_s"], m["latency_p95_s"]
         out.append("  latency p50 %s s  p95 %s s" % ("n/a" if p50 is None else "%.4f" % p50, "n/a" if p95 is None else "%.4f" % p95))
         if "combined_correct" in m:
-            clo, chi = m["combined_wilson95"]
-            tlo, thi = m["combined_timeout_wilson95"]
             out.append(
-                "  answered %d, confident(>=%.1f) %d (%d correct); hook-combined %d/%d = %.3f Wilson95 [%.3f, %.3f]"
+                "  answered %d, confident(>=%.1f) %d (%d correct); hook-combined %d/%d = %.3f Wilson95 %s"
                 % (m["answered"], conf_min, m["confident"], m["confident_correct"],
-                   m["combined_correct"], m["n"], m["combined_correct"] / m["n"] if m["n"] else 0, clo, chi)
+                   m["combined_correct"], m["n"], m["combined_correct"] / m["n"] if m["n"] else 0,
+                   _ci(m["combined_wilson95"]))
             )
             out.append("  McNemar exact, %s vs keyword: %s" % (name, _mc(m["mcnemar_vs_keyword"])))
             out.append("  McNemar exact, hook-combined %s vs keyword: %s" % (name, _mc(m["combined_mcnemar_vs_keyword"])))
@@ -528,9 +533,9 @@ def format_report(res: dict, dset: dict, cache: dict) -> str:
                 % (res["timeout_s"], m["over_timeout"], m["calls"], m["over_timeout"] / m["calls"] if m["calls"] else 0.0)
             )
             out.append(
-                "  hook-combined with calls over %.1f s falling back to keyword: %d/%d = %.3f Wilson95 [%.3f, %.3f]"
+                "  hook-combined with calls over %.1f s falling back to keyword: %d/%d = %.3f Wilson95 %s"
                 % (res["timeout_s"], m["combined_timeout_correct"], m["n"],
-                   m["combined_timeout_correct"] / m["n"] if m["n"] else 0.0, tlo, thi)
+                   m["combined_timeout_correct"] / m["n"] if m["n"] else 0.0, _ci(m["combined_timeout_wilson95"]))
             )
             out.append("  McNemar exact, timeout-aware hook-combined %s vs keyword: %s" % (name, _mc(m["combined_timeout_mcnemar_vs_keyword"])))
         out.append("  confusion (rows = label, cols = predicted):")

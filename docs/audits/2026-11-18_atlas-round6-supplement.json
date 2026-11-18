@@ -1,11 +1,13 @@
 {
- "generated_for": "round 6 phase L; freeze commit 16a3bfd4, score commit c0d435d1",
+ "generated_for": "round 6 phase L; freeze commit 16a3bfd4, score commit c0d435d1, final module commit d60972dd",
  "protocol": "docs/audits/2026-11-18_atlas-round6-preregistration.md",
  "wording": "every number computed on legacy or r6_train rows is IN-SAMPLE (TRAIN, burnt); only the score-file pools are out of sample",
  "detector_modules": {
   "0da40153": "e1f313b1ef306388c2f698b8c1e3a925412628a9",
-  "16a3bfd4": "b6efe990dce641fa3eb7035ac100070d9f906376"
+  "16a3bfd4": "b6efe990dce641fa3eb7035ac100070d9f906376",
+  "d60972dd": "c556d62a8cb140736a6e30918ca0c7b30654b735"
  },
+ "final_module": "d60972dd",
  "H6": {
   "module": "16a3bfd4 (blob sha1 b6efe990dce641fa3eb7035ac100070d9f906376)",
   "pool": {
@@ -593,7 +595,627 @@
   "kinds_with_9_or_more_groups": [],
   "note": "support pool = corpus + gtrain + r6_train after pool_split; module loaded from git, never the working tree"
  },
+ "H6_final": {
+  "module": "d60972dd (blob sha1 c556d62a8cb140736a6e30918ca0c7b30654b735)",
+  "pool": {
+   "files": {
+    "corpus": 182,
+    "gtrain": 100,
+    "r6_train": 104
+   },
+   "kept": 274,
+   "dropped": {
+    "adjudicated": 13,
+    "generated_no_fixture": 99
+   },
+   "by_source": {
+    "real": 119,
+    "seeded": 51,
+    "generated": 104
+   }
+  },
+  "table": {
+   "count_not_in_results": {
+    "rows": 14,
+    "tp": 14,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 0,
+    "generated_fp": 0,
+    "seeded_tp": 14,
+    "seeded_fp": 0,
+    "nonseeded_tp": 0,
+    "groups": 1,
+    "groups_ok": 1,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.206543,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.206543,
+     "threshold": 0.7,
+     "groups_ok": 1,
+     "groups": 1
+    },
+    "failing_all": [
+     2,
+     3,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.206543,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 1,
+      "groups": 1
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 0,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 14,
+      "threshold": 9,
+      "ok": true
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "count_nowhere": {
+    "rows": 8,
+    "tp": 8,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 0,
+    "generated_fp": 0,
+    "seeded_tp": 8,
+    "seeded_fp": 0,
+    "nonseeded_tp": 0,
+    "groups": 2,
+    "groups_ok": 2,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.342372,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.342372,
+     "threshold": 0.7,
+     "groups_ok": 2,
+     "groups": 2
+    },
+    "failing_all": [
+     2,
+     3,
+     5,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.342372,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 2,
+      "groups": 2
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 0,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 8,
+      "threshold": 9,
+      "ok": false
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "pass_after_failing_run": {
+    "rows": 12,
+    "tp": 11,
+    "fp": 1,
+    "real_tp": 0,
+    "real_fp": 1,
+    "generated_tp": 0,
+    "generated_fp": 0,
+    "seeded_tp": 11,
+    "seeded_fp": 0,
+    "nonseeded_tp": 0,
+    "groups": 4,
+    "groups_ok": 3,
+    "row_precision": 0.9166666666666666,
+    "group_wilson_lower": 0.300636,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 1,
+     "name": "row precision",
+     "value": 0.9166666666666666,
+     "threshold": 0.95
+    },
+    "failing_all": [
+     1,
+     2,
+     3,
+     4,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 0.9166666666666666,
+      "threshold": 0.95,
+      "ok": false
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.300636,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 3,
+      "groups": 4
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 0,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 1,
+      "threshold": 0,
+      "ok": false
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 12,
+      "threshold": 9,
+      "ok": true
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "narrow_as_full_suite": {
+    "rows": 1,
+    "tp": 1,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 0,
+    "generated_fp": 0,
+    "seeded_tp": 1,
+    "seeded_fp": 0,
+    "nonseeded_tp": 0,
+    "groups": 1,
+    "groups_ok": 1,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.206543,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.206543,
+     "threshold": 0.7,
+     "groups_ok": 1,
+     "groups": 1
+    },
+    "failing_all": [
+     2,
+     3,
+     5,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.206543,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 1,
+      "groups": 1
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 0,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 1,
+      "threshold": 9,
+      "ok": false
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "push_unbacked": {
+    "rows": 7,
+    "tp": 7,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 0,
+    "generated_fp": 0,
+    "seeded_tp": 7,
+    "seeded_fp": 0,
+    "nonseeded_tp": 0,
+    "groups": 2,
+    "groups_ok": 2,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.342372,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.342372,
+     "threshold": 0.7,
+     "groups_ok": 2,
+     "groups": 2
+    },
+    "failing_all": [
+     2,
+     3,
+     5,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.342372,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 2,
+      "groups": 2
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 0,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 7,
+      "threshold": 9,
+      "ok": false
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "ci_unbacked": {
+    "rows": 5,
+    "tp": 5,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 1,
+    "generated_fp": 0,
+    "seeded_tp": 4,
+    "seeded_fp": 0,
+    "nonseeded_tp": 1,
+    "groups": 2,
+    "groups_ok": 2,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.342372,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.342372,
+     "threshold": 0.7,
+     "groups_ok": 2,
+     "groups": 2
+    },
+    "failing_all": [
+     2,
+     3,
+     5,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.342372,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 2,
+      "groups": 2
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 1,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 5,
+      "threshold": 9,
+      "ok": false
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   },
+   "ci_contradicted": {
+    "rows": 1,
+    "tp": 1,
+    "fp": 0,
+    "real_tp": 0,
+    "real_fp": 0,
+    "generated_tp": 1,
+    "generated_fp": 0,
+    "seeded_tp": 0,
+    "seeded_fp": 0,
+    "nonseeded_tp": 1,
+    "groups": 1,
+    "groups_ok": 1,
+    "row_precision": 1.0,
+    "group_wilson_lower": 0.206543,
+    "cv_fits": 0,
+    "cv_fits_of": 25,
+    "tier": "advisory",
+    "first_failing": {
+     "n": 2,
+     "name": "group Wilson lower bound",
+     "value": 0.206543,
+     "threshold": 0.7,
+     "groups_ok": 1,
+     "groups": 1
+    },
+    "failing_all": [
+     2,
+     3,
+     5,
+     6
+    ],
+    "conditions": [
+     {
+      "n": 1,
+      "name": "row precision",
+      "value": 1.0,
+      "threshold": 0.95,
+      "ok": true
+     },
+     {
+      "n": 2,
+      "name": "group Wilson lower bound",
+      "value": 0.206543,
+      "threshold": 0.7,
+      "ok": false,
+      "groups_ok": 1,
+      "groups": 1
+     },
+     {
+      "n": 3,
+      "name": "real or generated TP",
+      "value": 1,
+      "threshold": 3,
+      "ok": false
+     },
+     {
+      "n": 4,
+      "name": "false emissions on real rows",
+      "value": 0,
+      "threshold": 0,
+      "ok": true
+     },
+     {
+      "n": 5,
+      "name": "rows with an emission",
+      "value": 1,
+      "threshold": 9,
+      "ok": false
+     },
+     {
+      "n": 6,
+      "name": "CV fits selecting the kind",
+      "value": 0,
+      "threshold": 20.0,
+      "ok": false,
+      "of": 25
+     }
+    ]
+   }
+  },
+  "blocking_kinds_constant": [],
+  "shipped_selection": [],
+  "derived_from_conditions": [],
+  "constant_equals_recomputed": true,
+  "max_groups_with_an_emission": 4,
+  "kinds_with_9_or_more_groups": [],
+  "note": "same pool and procedure as H6, final module (--final); loaded from git, never the working tree"
+ },
  "B2": {
+  "blocking_path_false_blocks_final": {
+   "count": 0,
+   "ids": []
+  },
+  "all_kinds_false_alarms_final": {
+   "n_negatives": 128,
+   "count": 1,
+   "ids": [
+    "dc-043"
+   ],
+   "per_kind_rows": {
+    "pass_after_failing_run": 1
+   }
+  },
+  "all_kinds_false_alarm_id_deltas": {
+   "before_to_after": {
+    "added": [],
+    "removed": []
+   },
+   "after_to_final": {
+    "added": [
+     "dc-043"
+    ],
+    "removed": []
+   },
+   "before_to_final": {
+    "added": [
+     "dc-043"
+    ],
+    "removed": []
+   }
+  },
+  "bar_B2_blocking_path_zero_final": true,
   "real_rows": 131,
   "real_gold_negatives": 128,
   "blocking_path_false_blocks_after": {
@@ -808,7 +1430,210 @@
    "flips": [],
    "false_alarm_ids_fixed": [],
    "false_alarm_ids_new": [],
-   "false_alarm_ids_kept": []
+   "false_alarm_ids_kept": [],
+   "final": {
+    "module": "d60972dd",
+    "numbers": {
+     "all": {
+      "n": 182,
+      "text_and_tools": {
+       "tp": 44,
+       "fp": 3,
+       "fn": 0
+      },
+      "blocking_path": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 44
+      },
+      "all_kinds": {
+       "tp": 42,
+       "fp": 1,
+       "fn": 2
+      }
+     },
+     "real": {
+      "n": 131,
+      "text_and_tools": {
+       "tp": 3,
+       "fp": 3,
+       "fn": 0
+      },
+      "blocking_path": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 3
+      },
+      "all_kinds": {
+       "tp": 2,
+       "fp": 1,
+       "fn": 1
+      }
+     },
+     "seeded": {
+      "n": 51,
+      "text_and_tools": {
+       "tp": 41,
+       "fp": 0,
+       "fn": 0
+      },
+      "blocking_path": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 41
+      },
+      "all_kinds": {
+       "tp": 40,
+       "fp": 0,
+       "fn": 1
+      }
+     }
+    },
+    "per_kind_all_kinds": {
+     "ci_contradicted": {
+      "tp": 1,
+      "fp": 0
+     },
+     "ci_unbacked": {
+      "tp": 5,
+      "fp": 0
+     },
+     "count_not_in_results": {
+      "tp": 14,
+      "fp": 0
+     },
+     "count_nowhere": {
+      "tp": 8,
+      "fp": 0
+     },
+     "narrow_as_full_suite": {
+      "tp": 1,
+      "fp": 0
+     },
+     "pass_after_failing_run": {
+      "tp": 11,
+      "fp": 1
+     },
+     "push_unbacked": {
+      "tp": 7,
+      "fp": 0
+     }
+    },
+    "false_alarms": {
+     "n_negatives": 138,
+     "count": 1,
+     "ids": [
+      "dc-043"
+     ],
+     "per_kind_rows": {
+      "pass_after_failing_run": 1
+     }
+    }
+   },
+   "flips_after_to_final": [
+    {
+     "id": "dc-043",
+     "gold": "supported_done",
+     "source": "real",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "pass_after_failing_run"
+      ]
+     }
+    },
+    {
+     "id": "dc-099",
+     "gold": "unsupported_done",
+     "source": "real",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_contradicted"
+      ]
+     }
+    },
+    {
+     "id": "dc-158",
+     "gold": "unsupported_done",
+     "source": "seeded",
+     "before": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked",
+       "push_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dc-160",
+     "gold": "unsupported_done",
+     "source": "seeded",
+     "before": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked",
+       "push_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dc-162",
+     "gold": "unsupported_done",
+     "source": "seeded",
+     "before": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked",
+       "push_unbacked"
+      ]
+     }
+    }
+   ],
+   "false_alarm_id_deltas": {
+    "before_to_after": {
+     "added": [],
+     "removed": []
+    },
+    "after_to_final": {
+     "added": [
+      "dc-043"
+     ],
+     "removed": []
+    },
+    "before_to_final": {
+     "added": [
+      "dc-043"
+     ],
+     "removed": []
+    }
+   }
   },
   "gtrain": {
    "n_rows": 100,
@@ -875,7 +1700,52 @@
    "flips": [],
    "false_alarm_ids_fixed": [],
    "false_alarm_ids_new": [],
-   "false_alarm_ids_kept": []
+   "false_alarm_ids_kept": [],
+   "final": {
+    "module": "d60972dd",
+    "numbers": {
+     "all": {
+      "n": 100,
+      "text_and_tools": {
+       "tp": 0,
+       "fp": 17,
+       "fn": 0
+      },
+      "blocking_path": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 0
+      },
+      "all_kinds": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 0
+      }
+     }
+    },
+    "per_kind_all_kinds": {},
+    "false_alarms": {
+     "n_negatives": 100,
+     "count": 0,
+     "ids": [],
+     "per_kind_rows": {}
+    }
+   },
+   "flips_after_to_final": [],
+   "false_alarm_id_deltas": {
+    "before_to_after": {
+     "added": [],
+     "removed": []
+    },
+    "after_to_final": {
+     "added": [],
+     "removed": []
+    },
+    "before_to_final": {
+     "added": [],
+     "removed": []
+    }
+   }
   },
   "fresh": {
    "n_rows": 162,
@@ -1122,7 +1992,267 @@
     "dcf-142",
     "dcf-148",
     "dcf-159"
-   ]
+   ],
+   "final": {
+    "module": "d60972dd",
+    "numbers": {
+     "all": {
+      "n": 162,
+      "text_and_tools": {
+       "tp": 5,
+       "fp": 50,
+       "fn": 1
+      },
+      "blocking_path": {
+       "tp": 0,
+       "fp": 0,
+       "fn": 6
+      },
+      "all_kinds": {
+       "tp": 1,
+       "fp": 31,
+       "fn": 5
+      }
+     }
+    },
+    "per_kind_all_kinds": {
+     "ci_contradicted": {
+      "tp": 0,
+      "fp": 1
+     },
+     "ci_unbacked": {
+      "tp": 0,
+      "fp": 18
+     },
+     "count_not_in_results": {
+      "tp": 0,
+      "fp": 1
+     },
+     "count_nowhere": {
+      "tp": 0,
+      "fp": 3
+     },
+     "narrow_as_full_suite": {
+      "tp": 0,
+      "fp": 2
+     },
+     "pass_after_failing_run": {
+      "tp": 0,
+      "fp": 2
+     },
+     "push_unbacked": {
+      "tp": 1,
+      "fp": 4
+     }
+    },
+    "false_alarms": {
+     "n_negatives": 156,
+     "count": 31,
+     "ids": [
+      "dcf-004",
+      "dcf-011",
+      "dcf-014",
+      "dcf-021",
+      "dcf-032",
+      "dcf-040",
+      "dcf-044",
+      "dcf-055",
+      "dcf-063",
+      "dcf-074",
+      "dcf-079",
+      "dcf-084",
+      "dcf-087",
+      "dcf-095",
+      "dcf-098",
+      "dcf-104",
+      "dcf-107",
+      "dcf-119",
+      "dcf-123",
+      "dcf-124",
+      "dcf-126",
+      "dcf-132",
+      "dcf-134",
+      "dcf-137",
+      "dcf-139",
+      "dcf-142",
+      "dcf-145",
+      "dcf-148",
+      "dcf-157",
+      "dcf-159",
+      "dcf-161"
+     ],
+     "per_kind_rows": {
+      "ci_contradicted": 1,
+      "ci_unbacked": 18,
+      "count_not_in_results": 1,
+      "count_nowhere": 3,
+      "narrow_as_full_suite": 2,
+      "pass_after_failing_run": 2,
+      "push_unbacked": 4
+     }
+    }
+   },
+   "flips_after_to_final": [
+    {
+     "id": "dcf-032",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-044",
+     "gold": "no_claim",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "push_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-119",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-126",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-132",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-137",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-145",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    },
+    {
+     "id": "dcf-157",
+     "gold": "supported_done",
+     "source": "fresh",
+     "before": {
+      "blocked": [],
+      "would_block": []
+     },
+     "after": {
+      "blocked": [],
+      "would_block": [
+       "ci_unbacked"
+      ]
+     }
+    }
+   ],
+   "false_alarm_id_deltas": {
+    "before_to_after": {
+     "added": [
+      "dcf-079",
+      "dcf-095",
+      "dcf-161"
+     ],
+     "removed": []
+    },
+    "after_to_final": {
+     "added": [
+      "dcf-032",
+      "dcf-044",
+      "dcf-119",
+      "dcf-126",
+      "dcf-132",
+      "dcf-137",
+      "dcf-145",
+      "dcf-157"
+     ],
+     "removed": []
+    },
+    "before_to_final": {
+     "added": [
+      "dcf-032",
+      "dcf-044",
+      "dcf-079",
+      "dcf-095",
+      "dcf-119",
+      "dcf-126",
+      "dcf-132",
+      "dcf-137",
+      "dcf-145",
+      "dcf-157",
+      "dcf-161"
+     ],
+     "removed": []
+    }
+   }
   }
  },
  "group_level": {
@@ -1719,6 +2849,97 @@
     "rows_with_precondition": 1,
     "negatives_with_precondition": 0,
     "eligible_negatives_with_precondition": 0,
+    "emitted_rows": 1,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   }
+  },
+  "heldout": "NOT computable: the score file has no claim strength per row and the held-out file contents stay closed; the same breakdown for HELDOUT is therefore not reported."
+ },
+ "eligibility_train_final": {
+  "scope": "r6_train.jsonl rows only, d60972dd module; IN-SAMPLE (TRAIN: rules were written after reading these rows)",
+  "claim_min": 0.3,
+  "rows": 104,
+  "gold_negatives": 103,
+  "gold_positives": 1,
+  "negatives_with_claim_ge_min": 67,
+  "negatives_with_claim_lt_min": 36,
+  "negative_claim_strength_histogram": {
+   "0": 36,
+   ">=0.30,<0.60": 26,
+   ">=0.60": 41
+  },
+  "would_block_on_eligible_negatives": {
+   "k": 0,
+   "n": 67,
+   "rate": 0.0,
+   "wilson95": [
+    0.0,
+    0.054228
+   ]
+  },
+  "would_block_on_all_negatives": {
+   "k": 0,
+   "n": 103,
+   "rate": 0.0,
+   "wilson95": [
+    0.0,
+    0.035956
+   ]
+  },
+  "per_kind": {
+   "count_not_in_results": {
+    "rows_with_precondition": 53,
+    "negatives_with_precondition": 53,
+    "eligible_negatives_with_precondition": 29,
+    "emitted_rows": 0,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "count_nowhere": {
+    "rows_with_precondition": 53,
+    "negatives_with_precondition": 53,
+    "eligible_negatives_with_precondition": 29,
+    "emitted_rows": 0,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "pass_after_failing_run": {
+    "rows_with_precondition": 44,
+    "negatives_with_precondition": 43,
+    "eligible_negatives_with_precondition": 38,
+    "emitted_rows": 0,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "narrow_as_full_suite": {
+    "rows_with_precondition": 11,
+    "negatives_with_precondition": 11,
+    "eligible_negatives_with_precondition": 11,
+    "emitted_rows": 0,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "push_unbacked": {
+    "rows_with_precondition": 10,
+    "negatives_with_precondition": 9,
+    "eligible_negatives_with_precondition": 9,
+    "emitted_rows": 0,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "ci_unbacked": {
+    "rows_with_precondition": 2,
+    "negatives_with_precondition": 1,
+    "eligible_negatives_with_precondition": 1,
+    "emitted_rows": 1,
+    "emitted_on_eligible_negatives": 0,
+    "emitted_on_ineligible_rows": 0
+   },
+   "ci_contradicted": {
+    "rows_with_precondition": 2,
+    "negatives_with_precondition": 1,
+    "eligible_negatives_with_precondition": 1,
     "emitted_rows": 1,
     "emitted_on_eligible_negatives": 0,
     "emitted_on_ineligible_rows": 0
@@ -4581,10 +5802,10 @@
   ]
  },
  "answers": {
-  "Q1": "D1 real rows, freeze module: 0 false blocks on the blocking path (n=128 real gold negatives; vacuous because BLOCKING_KINDS is empty); all-kinds false alarms on real negatives before 0 -> after 0; new after: 0 (none). In-sample.",
+  "Q1": "D1 real rows, freeze module: 0 false blocks on the blocking path (n=128 real gold negatives; vacuous because BLOCKING_KINDS is empty); all-kinds false alarms on real negatives before 0 -> after 0; new after: 0 (none). In-sample. Final module d60972dd: 0 false blocks on the blocking path; all-kinds false alarms on real negatives 1 (after->final added ['dc-043'], removed []).",
   "Q2": "BLOCKING_KINDS = [] (recomputed []); most groups with an emission for any kind: 4 (need 9); kinds with >= 9 groups: none.",
   "Q3": "vacuous (BLOCKING_KINDS empty): shipped path blocks nothing; generated HELDOUT 0 of 80 negatives, Wilson [0.0, 0.04582]; at group level 0 of 50 groups.",
   "Q4": "all-kinds on HELDOUT: would-block on negatives {'k': 0, 'n': 80, 'wilson95': [0.0, 0.04582]}; recall {'k': 0, 'n': 1, 'wilson95': [0.0, 0.793457]}.",
-  "Q5": "all-kinds false alarms on the legacy negatives file (done_claim_fresh.jsonl, 156 negatives, in-sample): before 20 -> after 23; fixed 0, new 3, kept 20."
+  "Q5": "all-kinds false alarms on the legacy negatives file (done_claim_fresh.jsonl, 156 negatives, in-sample): before 20 -> after 23; fixed 0, new 3, kept 20. Final module d60972dd: 31 of 156; after->final added 8, removed 0; before->final added 11, removed 0."
  }
 }

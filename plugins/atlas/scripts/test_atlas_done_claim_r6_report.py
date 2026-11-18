@@ -154,6 +154,54 @@ class FlipsTest(unittest.TestCase):
         self.assertEqual(R.per_kind_tp_fp(a), {"k_a": {"tp": 0, "fp": 1}, "k_b": {"tp": 1, "fp": 0}})
 
 
+class FinalColumnTest(unittest.TestCase):
+    class Det:
+        """Fake detector: blocks (and would block) the kinds listed in its table for a row id; no row_tools needed."""
+        FINDING_KINDS = ("k_a",)
+
+        def __init__(self, table):
+            self.table = table
+
+        @staticmethod
+        def row_tools(r):
+            return None
+
+        def analyze(self, text, tools, kinds=None):
+            return {"finding_kinds": self.table.get(text, [])}
+
+        def metrics(self, rows):
+            return {"tp": 0, "fp": 0, "fn": 0}
+
+        def blocking_metrics(self, rows, kinds=None):
+            return {"tp": 0, "fp": 0, "fn": 0}
+
+    def test_id_delta(self):
+        self.assertEqual(R.id_delta(["a", "b"], ["b", "c"]), {"added": ["c"], "removed": ["a"]})
+        self.assertEqual(R.id_delta([], []), {"added": [], "removed": []})
+
+    def test_three_module_columns_and_deltas(self):
+        rows = [{"id": i, "label": "supported_done", "text": i, "source": "real"} for i in ("x", "y", "z")]
+        old, new, fin = self.Det({"x": ["k_a"], "y": ["k_a"]}), self.Det({"y": ["k_a"]}), self.Det({"y": ["k_a"], "z": ["k_a"]})
+        res = R.legacy_before_after(old, new, {"corpus": rows}, fin, "abcd1234")["corpus"]
+        self.assertEqual(res["final"]["module"], "abcd1234")
+        self.assertEqual(res["final"]["false_alarms"]["ids"], ["y", "z"])
+        self.assertEqual(res["false_alarm_id_deltas"]["before_to_after"], {"added": [], "removed": ["x"]})
+        self.assertEqual(res["false_alarm_id_deltas"]["after_to_final"], {"added": ["z"], "removed": []})
+        self.assertEqual(res["false_alarm_id_deltas"]["before_to_final"], {"added": ["z"], "removed": ["x"]})
+        b = R.b2({"corpus": res})
+        self.assertEqual(b["all_kinds_false_alarms_final"]["count"], 2)
+        self.assertEqual(b["all_kinds_false_alarm_id_deltas"]["after_to_final"]["added"], ["z"])
+
+    def test_without_final_nothing_extra(self):
+        rows = [{"id": "x", "label": "supported_done", "text": "x", "source": "real"}]
+        res = R.legacy_before_after(self.Det({}), self.Det({}), {"corpus": rows})["corpus"]
+        self.assertNotIn("final", res)
+
+    def test_final_default_is_head(self):
+        import inspect
+        self.assertEqual(inspect.signature(R.build).parameters["final_rev"].default, "HEAD")
+
+
 def srow(i, group, gold, blocked=(), would=(), source="generated", family="f1", model="sonnet"):
     return {"id": i, "source": source, "group": group, "family": family, "model": model, "gold": gold,
             "blocked_kinds": list(blocked), "would_block_kinds": list(would), "advisory_kinds": []}

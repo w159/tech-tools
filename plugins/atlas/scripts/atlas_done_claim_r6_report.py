@@ -210,7 +210,7 @@ def tier_table(mod, rows: list[dict]) -> dict:
     return out
 
 
-def h6(mod, scratch_note: str) -> dict:
+def h6(mod, scratch_note: str, module_name: str | None = None) -> dict:
     corpus = mod.load_corpus(os.path.join(DATA_DIR, "done_claim_corpus.jsonl"))
     gtrain = mod.load_gtrain(os.path.join(DATA_DIR, "done_claim_gtrain.jsonl"))
     r6 = mod.load_r6_train(os.path.join(DATA_DIR, "r6_train.jsonl"))
@@ -223,7 +223,7 @@ def h6(mod, scratch_note: str) -> dict:
         s = r.get("source") if r.get("source") in ("real", "generated") else "seeded"
         by_src[s] = by_src.get(s, 0) + 1
     return {
-        "module": f"{FREEZE_COMMIT} (blob sha1 {mod.__r6_blob_sha1__})",
+        "module": f"{module_name or FREEZE_COMMIT} (blob sha1 {mod.__r6_blob_sha1__})",
         "pool": {"files": {"corpus": len(corpus), "gtrain": len(gtrain), "r6_train": len(r6)}, "kept": len(pool), "dropped": dropped, "by_source": by_src},
         "table": table,
         "blocking_kinds_constant": sorted(mod.BLOCKING_KINDS),
@@ -298,7 +298,13 @@ def per_kind_tp_fp(dump: dict) -> dict:
     return dict(sorted(out.items()))
 
 
-def legacy_before_after(old, new, files: dict[str, list[dict]]) -> dict:
+def id_delta(old_ids, new_ids) -> dict:
+    """Ids added to and removed from a false-alarm list going from `old_ids` to `new_ids`."""
+    return {"added": sorted(set(new_ids) - set(old_ids)), "removed": sorted(set(old_ids) - set(new_ids))}
+
+
+def legacy_before_after(old, new, files: dict[str, list[dict]], final=None, final_name: str | None = None) -> dict:
+    """before = baseline module, after = freeze module, final = the module at --final (optional third column)."""
     res = {}
     for name, rows in files.items():
         d0, d1 = per_row(old, rows), per_row(new, rows)
@@ -313,6 +319,17 @@ def legacy_before_after(old, new, files: dict[str, list[dict]]) -> dict:
             "false_alarm_ids_kept": sorted(set(fa0["ids"]) & set(fa1["ids"])),
             "_dump_before": d0, "_dump_after": d1,
         }
+        if final is not None:
+            d2 = per_row(final, rows)
+            fa2 = false_alarms(d2)
+            res[name]["final"] = {"module": final_name, "numbers": eval_numbers(final, rows, name == "corpus"), "per_kind_all_kinds": per_kind_tp_fp(d2), "false_alarms": fa2}
+            res[name]["flips_after_to_final"] = flips(d1, d2)
+            res[name]["false_alarm_id_deltas"] = {
+                "before_to_after": id_delta(fa0["ids"], fa1["ids"]),
+                "after_to_final": id_delta(fa1["ids"], fa2["ids"]),
+                "before_to_final": id_delta(fa0["ids"], fa2["ids"]),
+            }
+            res[name]["_dump_final"] = d2
     return res
 
 
@@ -324,7 +341,20 @@ def b2(ba: dict) -> dict:
     fb1 = sorted(i for i, v in real1.items() if v["gold"] != "unsupported_done" and v["blocked"])
     fb0 = sorted(i for i, v in real0.items() if v["gold"] != "unsupported_done" and v["blocked"])
     fa1, fa0 = false_alarms(real1), false_alarms(real0)
+    extra = {}
+    if "_dump_final" in c:
+        real2 = {i: v for i, v in c["_dump_final"].items() if v["source"] == "real"}
+        fb2 = sorted(i for i, v in real2.items() if v["gold"] != "unsupported_done" and v["blocked"])
+        fa2 = false_alarms(real2)
+        extra = {
+            "blocking_path_false_blocks_final": {"count": len(fb2), "ids": fb2},
+            "all_kinds_false_alarms_final": fa2,
+            "all_kinds_false_alarm_id_deltas": {"before_to_after": id_delta(fa0["ids"], fa1["ids"]), "after_to_final": id_delta(fa1["ids"], fa2["ids"]),
+                                                 "before_to_final": id_delta(fa0["ids"], fa2["ids"])},
+            "bar_B2_blocking_path_zero_final": len(fb2) == 0,
+        }
     return {
+        **extra,
         "real_rows": len(real1), "real_gold_negatives": sum(1 for v in real1.values() if v["gold"] != "unsupported_done"),
         "blocking_path_false_blocks_after": {"count": len(fb1), "ids": fb1}, "blocking_path_false_blocks_before": {"count": len(fb0), "ids": fb0},
         "all_kinds_false_alarms_after": fa1, "all_kinds_false_alarms_before": fa0,
@@ -470,6 +500,8 @@ def default_preconditions(mod) -> dict:
     """kind -> callable(text) -> bool: does a sentence its claim pattern matches exist (mirrors crosscheck_kinds)."""
     def sents(text):
         body = mod._strip_fences(text)
+        if hasattr(mod, "_assertions"):  # later modules hedge per clause
+            return [a for s in mod._sentences(body) for a in mod._assertions(s)]
         return [s for s in mod._sentences(body) if not mod._hedged(s)]
 
     def count_claim(text):
@@ -485,11 +517,11 @@ def default_preconditions(mod) -> dict:
         "narrow_as_full_suite": lambda t: any(mod._FULL_CLAIM.search(s) for s in sents(t)),
         "push_unbacked": lambda t: any(mod._PUSH_CLAIM.search(s) for s in sents(t)),
         "ci_unbacked": lambda t: any(mod._CI_CLAIM.search(s) for s in sents(t)),
-        "ci_contradicted": lambda t: any(mod._CI_PASS_CLAIM.search(s) for s in sents(t)),
+        "ci_contradicted": lambda t: any(getattr(mod, "_CI_PASS_CLAIM", mod._CI_CLAIM).search(s) for s in sents(t)),
     }
 
 
-def eligibility(mod, rows: list[dict], pre: dict | None = None) -> dict:
+def eligibility(mod, rows: list[dict], pre: dict | None = None, module_name: str | None = None) -> dict:
     pre = default_preconditions(mod) if pre is None else pre
     kinds = mod._row_kinds(rows)
     cmin = mod.CLAIM_MIN
@@ -517,7 +549,7 @@ def eligibility(mod, rows: list[dict], pre: dict | None = None) -> dict:
         }
     kk = sum(1 for x in elig if x["emits"])
     return {
-        "scope": "r6_train.jsonl rows only, freeze module; IN-SAMPLE (TRAIN: rules were written after reading these rows)",
+        "scope": f"r6_train.jsonl rows only, {'freeze' if module_name is None else module_name} module; IN-SAMPLE (TRAIN: rules were written after reading these rows)",
         "claim_min": cmin, "rows": len(per_row_), "gold_negatives": len(neg), "gold_positives": len(per_row_) - len(neg),
         "negatives_with_claim_ge_min": len(elig), "negatives_with_claim_lt_min": len(neg) - len(elig),
         "negative_claim_strength_histogram": dict(sorted(hist.items())),
@@ -865,12 +897,19 @@ def answers(rep: dict) -> dict:
     return {
         "Q1": f"D1 real rows, freeze module: {b['blocking_path_false_blocks_after']['count']} false blocks on the blocking path (n={b['real_gold_negatives']} real gold negatives; vacuous because BLOCKING_KINDS is empty); "
               f"all-kinds false alarms on real negatives before {b['all_kinds_false_alarms_before']['count']} -> after {b['all_kinds_false_alarms_after']['count']}; "
-              f"new after: {len(b['all_kinds_false_alarm_ids_new_after'])} ({', '.join(b['all_kinds_false_alarm_ids_new_after']) or 'none'}). In-sample.",
+              f"new after: {len(b['all_kinds_false_alarm_ids_new_after'])} ({', '.join(b['all_kinds_false_alarm_ids_new_after']) or 'none'}). In-sample."
+              + (f" Final module {rep['final_module']}: {b['blocking_path_false_blocks_final']['count']} false blocks on the blocking path; all-kinds false alarms on real negatives "
+                 f"{b['all_kinds_false_alarms_final']['count']} (after->final added {b['all_kinds_false_alarm_id_deltas']['after_to_final']['added']}, "
+                 f"removed {b['all_kinds_false_alarm_id_deltas']['after_to_final']['removed']})." if "blocking_path_false_blocks_final" in b else ""),
         "Q2": f"BLOCKING_KINDS = {t['blocking_kinds_constant']} (recomputed {t['shipped_selection']}); most groups with an emission for any kind: {t['max_groups_with_an_emission']} (need 9); kinds with >= 9 groups: {t['kinds_with_9_or_more_groups'] or 'none'}.",
         "Q3": f"vacuous (BLOCKING_KINDS empty): shipped path blocks nothing; generated HELDOUT {gen['false_blocks']} of {gen['n_gold_negative']} negatives, Wilson {gen['wilson95']}; at group level {hb['H1_shipped_path']['generated']['false_groups']} of {hb['H1_shipped_path']['generated']['n_groups']} groups.",
         "Q4": f"all-kinds on HELDOUT: would-block on negatives {rep['score_file_pools']['H3_generated']['would_block_on_negatives']}; recall {rep['score_file_pools']['H3_generated']['recall']}.",
         "Q5": f"all-kinds false alarms on the legacy negatives file (done_claim_fresh.jsonl, {q5['before']['false_alarms']['n_negatives']} negatives, in-sample): before {q5['before']['false_alarms']['count']} -> after {q5['after']['false_alarms']['count']}; "
-              f"fixed {len(q5['false_alarm_ids_fixed'])}, new {len(q5['false_alarm_ids_new'])}, kept {len(q5['false_alarm_ids_kept'])}.",
+              f"fixed {len(q5['false_alarm_ids_fixed'])}, new {len(q5['false_alarm_ids_new'])}, kept {len(q5['false_alarm_ids_kept'])}."
+              + (f" Final module {q5['final']['module']}: {q5['final']['false_alarms']['count']} of {q5['final']['false_alarms']['n_negatives']}; "
+                 f"after->final added {len(q5['false_alarm_id_deltas']['after_to_final']['added'])}, removed {len(q5['false_alarm_id_deltas']['after_to_final']['removed'])}; "
+                 f"before->final added {len(q5['false_alarm_id_deltas']['before_to_final']['added'])}, removed {len(q5['false_alarm_id_deltas']['before_to_final']['removed'])}."
+                 if "final" in q5 else ""),
     }
 
 
@@ -882,7 +921,13 @@ def strip_private(d):
     return d
 
 
-def build(scratch: str) -> dict:
+def resolve_commit(rev: str) -> str:
+    """Short (8 char) commit id of `rev` (HEAD by default), so the module name in the report is a fixed commit."""
+    p = subprocess.run(["git", "rev-parse", "--short=8", "--verify", rev + "^{commit}"], cwd=REPO_ROOT, capture_output=True, text=True, check=True)
+    return p.stdout.strip()
+
+
+def build(scratch: str, final_rev: str = "HEAD") -> dict:
     with open(SCORE_PATH, encoding="utf-8") as fh:
         score = json.load(fh)
     with open(FREEZE_PATH, encoding="utf-8") as fh:
@@ -901,13 +946,17 @@ def build(scratch: str) -> dict:
     manifest_ids = {f["id"] for fx in manifests.values() for f in fx}
     old = load_detector(BASELINE, scratch)
     new = load_detector(FREEZE_COMMIT, scratch)
+    final_name = resolve_commit(final_rev)
+    final = load_detector(final_name, scratch)
     rep: dict = {
-        "generated_for": "round 6 phase L; freeze commit " + FREEZE_COMMIT + ", score commit " + SCORE_COMMIT, "protocol": "docs/audits/2026-11-18_atlas-round6-preregistration.md",
+        "generated_for": "round 6 phase L; freeze commit " + FREEZE_COMMIT + ", score commit " + SCORE_COMMIT + ", final module commit " + final_name, "protocol": "docs/audits/2026-11-18_atlas-round6-preregistration.md",
         "wording": "every number computed on legacy or r6_train rows is IN-SAMPLE (TRAIN, burnt); only the score-file pools are out of sample",
-        "detector_modules": {BASELINE: old.__r6_blob_sha1__, FREEZE_COMMIT: new.__r6_blob_sha1__},
+        "detector_modules": {BASELINE: old.__r6_blob_sha1__, FREEZE_COMMIT: new.__r6_blob_sha1__, final_name: final.__r6_blob_sha1__},
+        "final_module": final_name,
     }
     rep["H6"] = h6(new, "support pool = corpus + gtrain + r6_train after pool_split; module loaded from git, never the working tree")
-    legacy = legacy_before_after(old, new, {"corpus": corpus, "gtrain": gtrain, "fresh": fresh})
+    rep["H6_final"] = h6(final, "same pool and procedure as H6, final module (--final); loaded from git, never the working tree", final_name)
+    legacy = legacy_before_after(old, new, {"corpus": corpus, "gtrain": gtrain, "fresh": fresh}, final, final_name)
     rep["B2"] = b2(legacy)
     rep["legacy"] = legacy
     rep["group_level"] = group_bounds(score)
@@ -915,6 +964,7 @@ def build(scratch: str) -> dict:
     rep["by_model"] = by_model(score, train_rows, train_header, held_header)
     rep["spend"] = spend(ledger)
     rep["eligibility_train"] = eligibility(new, train_rows)
+    rep["eligibility_train_final"] = eligibility(final, train_rows, module_name=final_name)
     rep["reconciliation"] = reconcile(train_rows, train_header, held_header, score["rows"], ledger, manifest_ids)
     train_groups = {r["group"] for r in train_rows}
     rep["siblings"] = siblings(fixture_hashes(), manifests, train_groups, score["rows"])
@@ -938,15 +988,31 @@ def summarize(rep: dict) -> list[str]:
             "n/a" if v["row_precision"] is None else "%.3f" % v["row_precision"], v["group_wilson_lower"], v["cv_fits"], v["tier"],
             "-" if ff is None else "cond %d %s: %s vs %s" % (ff["n"], ff["name"], ff["value"], ff["threshold"])))
     out.append("   BLOCKING_KINDS constant %s; recomputed %s; equal: %s" % (rep["H6"]["blocking_kinds_constant"], rep["H6"]["shipped_selection"], rep["H6"]["constant_equals_recomputed"]))
-    out.append("== H5 before/after (%s -> %s)" % (BASELINE, FREEZE_COMMIT))
+    fin = rep.get("final_module")
+    if "H6_final" in rep:
+        h = rep["H6_final"]
+        out.append("== H6 final module %s: BLOCKING_KINDS %s; recomputed %s; tiers %s" % (
+            h["module"], h["blocking_kinds_constant"], h["shipped_selection"], {k: v["tier"] for k, v in h["table"].items()}))
+        e = rep["eligibility_train_final"]
+        out.append("== TRAIN eligibility final: negatives %d, claim>=min %d, would-block on eligible %d/%d (freeze: %d/%d)" % (
+            e["gold_negatives"], e["negatives_with_claim_ge_min"], e["would_block_on_eligible_negatives"]["k"], e["would_block_on_eligible_negatives"]["n"],
+            rep["eligibility_train"]["would_block_on_eligible_negatives"]["k"], rep["eligibility_train"]["would_block_on_eligible_negatives"]["n"]))
+    out.append("== H5 before/after/final (%s -> %s -> %s)" % (BASELINE, FREEZE_COMMIT, fin))
+    tpfpfn = lambda x: "TP=%(tp)d FP=%(fp)d FN=%(fn)d" % x  # noqa: E731
     for name, d in rep["legacy"].items():
         for part in d["before"]["numbers"]:
             b, a = d["before"]["numbers"][part], d["after"]["numbers"][part]
-            out.append("   %-7s %-6s n=%-4d blocking before %s after %s | all-kinds before %s after %s" % (
-                name, part, b["n"], "TP=%(tp)d FP=%(fp)d FN=%(fn)d" % b["blocking_path"], "TP=%(tp)d FP=%(fp)d FN=%(fn)d" % a["blocking_path"],
-                "TP=%(tp)d FP=%(fp)d FN=%(fn)d" % b["all_kinds"], "TP=%(tp)d FP=%(fp)d FN=%(fn)d" % a["all_kinds"]))
+            f = d["final"]["numbers"][part] if "final" in d else None
+            out.append("   %-7s %-6s n=%-4d blocking before %s after %s%s | all-kinds before %s after %s%s" % (
+                name, part, b["n"], tpfpfn(b["blocking_path"]), tpfpfn(a["blocking_path"]), "" if f is None else " final " + tpfpfn(f["blocking_path"]),
+                tpfpfn(b["all_kinds"]), tpfpfn(a["all_kinds"]), "" if f is None else " final " + tpfpfn(f["all_kinds"])))
         out.append("   %-7s flips: %d rows; false alarms on negatives %d -> %d (fixed %d, new %d)" % (
             name, len(d["flips"]), d["before"]["false_alarms"]["count"], d["after"]["false_alarms"]["count"], len(d["false_alarm_ids_fixed"]), len(d["false_alarm_ids_new"])))
+        if "final" in d:
+            dl = d["false_alarm_id_deltas"]
+            out.append("   %-7s final: false alarms %d; after->final added %s removed %s; before->final added %s removed %s" % (
+                name, d["final"]["false_alarms"]["count"], dl["after_to_final"]["added"], dl["after_to_final"]["removed"],
+                dl["before_to_final"]["added"], dl["before_to_final"]["removed"]))
     for q, text in rep["answers"].items():
         out.append("== %s: %s" % (q, text))
     return out
@@ -956,8 +1022,9 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--scratch", default=DEFAULT_SCRATCH, help="where git-show copies of the detector modules are written")
     ap.add_argument("--out", default=OUT_PATH)
+    ap.add_argument("--final", default="HEAD", help="commit whose done_claim.py is the 'final' module column (default HEAD)")
     args = ap.parse_args(argv)
-    rep = build(args.scratch)
+    rep = build(args.scratch, args.final)
     with open(args.out, "w", encoding="ascii") as fh:
         json.dump(rep, fh, indent=1, sort_keys=False, ensure_ascii=True)
         fh.write("\n")
