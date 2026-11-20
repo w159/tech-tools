@@ -8,6 +8,8 @@
 - Marketplace 5.37.0 to 5.38.0 (`.claude-plugin/marketplace.json`). armada and programmer are unchanged.
 - Version 17.30.2 to 17.31.0. Details: `plugins/atlas/CHANGELOG.md`.
 
+- Fixed after the 17.31.0 tag: the root pytest run (CI `full` job) collected the seeded-fault sample projects under `evals/done_claim/fixtures`; `conftest.py` now skips `evals/*`.
+
 ## atlas 17.30.2 - 2026-11-18
 
 - Removed: Blumira connector; CodeQL triage hardening in tests, hooks and scripts.

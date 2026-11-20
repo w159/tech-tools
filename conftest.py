@@ -8,4 +8,6 @@ Plugin-local conftest files and configs still apply when those suites run from t
 collect_ignore_glob = [
     "plugins/armada/mcp/falcon/*",
     "plugins/programmer/tests/fixtures/*",
+    # done-claim eval fixtures are seeded-fault sample projects run by claude -p, not repo tests.
+    "evals/*",
 ]
