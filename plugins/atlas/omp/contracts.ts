@@ -221,6 +221,30 @@ export function isExplorationShell(command: string, ...contract: [contract?: Nat
 	return explorationSegments(command, contract.length ? contract[0] : (loadNativeTools() ?? undefined)) !== undefined;
 }
 
+/**
+ * True when every path argument of every exploration segment is an absolute path
+ * outside `root` (neither inside it nor an ancestor): a listing there is not code
+ * navigation, so the lean-ctx deny does not apply. A first segment, or any segment
+ * after a non-pipe separator, with no path argument reads the cwd and stays denied;
+ * a piped later segment (`| head -50`) reads stdin. A relative or flag-valued
+ * argument (`grep pat /x`) fails closed. Twin: dispatch_tripwire._outside_project_only.
+ */
+export function explorationOutsideRoot(command: string, root: string, ...contract: [contract?: NativeToolContract | undefined]): boolean {
+	const segments = explorationSegments(command, contract.length ? contract[0] : (loadNativeTools() ?? undefined));
+	if (!segments) return false;
+	const base = nodePath.posix.normalize(root).replace(/\/+$/, "");
+	const pipedOnly = !/&&|\|\||[;\n&]/.test(command);
+	return segments.every((tokens, i) => {
+		const paths = tokens.slice(1).filter(t => !t.startsWith("-"));
+		if (paths.length === 0) return i > 0 && pipedOnly;
+		return paths.every(p => {
+			if (!p.startsWith("/")) return false;
+			const n = nodePath.posix.normalize(p).replace(/\/+$/, "");
+			return !(n === base || n.startsWith(`${base}/`) || `${base}/`.startsWith(`${n}/`));
+		});
+	});
+}
+
 /** The lean-ctx replacement a session can reach right now (structurally index.ts LeanReplacement). */
 export type ExplorationRoute = { via: "tool"; name: string } | { via: "device"; device: string };
 

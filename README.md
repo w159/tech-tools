@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.33.2, armada 2.5.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.34.0, armada 2.5.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -85,76 +85,64 @@ Terms used below: a "colony" is the set of named worker subagents a lead session
 
 ## What it looks like
 
-Every image below is a real capture of the installed plugin, taken from a tmux
-session or the browser. The band, box and card captures are from the 17.15.0
-build (main ef38fc50); the rendered text of each surface is in
-[plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
+Pictures marked as renders below are not screenshots of a live session. They are
+drawn by the mod's own view code (`bandTree`, `hudRows`, `sidebarTree` under
+`plugins/atlas/mod/view/`) from the test fixture scenario, with the version string
+17.34.0, then turned into PNG with headless Chrome. The pictures marked "from an
+earlier build" are older captures of the installed plugin. The rendered text of
+each surface is in [plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
-**Mission Control band.** The band is the row above the prompt: the `◖ ◆ ATLAS ◗`
-pill, then three filled segments. The first is the run state with its clock
-(`◐ working 0:42`, `● done 1:08`, `○ idle · 1:08`, `▲ blocked · stop refused
-0:37`), the second is `todo N/M` with a meter, and the third counts the agents
-(`◐ 2 running · ● 1 done · ■1`, or `no agents`). A failing gate adds a
-`△ gates 2/3` chip. The band reads `working` whenever the host's turn is on, with a
-turning circle-quarter spinner (`◐◓◑◒`) that steps every 100 ms, the same one the panel, board and dispatch cards use. The run clock starts at your
-prompt, never steps back, and stops when Claude Code reports its turn idle; a
-closed run has one total, so the band, run card, side panel and board print the
-same figure and `done` does not count on. A run that ends with a failed worker or
-a refused stop reads `blocked`, not `idle`, until a new run starts.
+**Mission Control band.** The band is the row above the prompt: the `◆ ATLAS` pill,
+then the run state with its clock (`◐ working 0:14`, `✓ done 0:14`), `todo N/M`
+with a count of failed items (`todo 2/5 ✗1`), and the agent count (`◐ 3 running`,
+`✓ 2 done · ✗1`). A failing gate adds a chip that opens the gates tab. While a
+run is on, the band reads `working` with a turning circle-quarter spinner
+(`◐◓◑◒`). The run clock starts at your prompt, never steps back, and stops when
+Claude Code reports its turn idle; a closed run has one total, so the band, run
+card, side panel and board print the same figure. A run that ends with a failed
+worker or a refused stop reads `blocked`, not `idle`, until a new run starts.
 `ATLAS_BAND_RICH=1` draws a tall form with the phase rail.
 
-The HUD under the band draws the TODO and SUBAGENTS boxes. TODO rows share fixed
-columns (title, state, owner, time); rows that do not fit are counted on one dim
-summary row (`● 2 done  ◇ 1 queued`) and a failed row is the last to hide.
-SUBAGENTS is a table of `AGENT STATE TIME CALLS FN LAST`, with `LAST` the worker's
-last tool action (`edit gamma.py`). A run holds its HUD height from the first
-frame, so the band keeps its screen row.
+The HUD under the band draws the TODO and SUBAGENTS boxes. TODO rows share the
+columns `ITEM STATE OWNER TIME`; the title carries a done count and a segmented
+bar (`2/5 · ×1`). SUBAGENTS is a table of `AGENT ROLE STATE NOW / RESULT TIME`.
+Rows that do not fit are counted on one dim summary row inside the box, and a
+running or failed row is the last to hide. A run holds its HUD height from the
+first frame, so the band keeps its screen row.
 
-The side panel has six clickable tabs: `status`, `team`, `channel`, `gates`, `core` and
-`board`. No key hints are printed; every control is a chip or a `▸`/`▾` toggle. The board tab lists the plan items and draws a Gantt
-timeline, one lane per agent with the lead first. The status tab opens with the band's own glyph and word and the phase stepper. The panel never says `done`
-while a dispatch is open or a worker runs. The transcript gets one-row cards: a
-finish card per worker (`▌ ◆ ATLAS  ● done  beta-explorer  0:13 · 3 calls`), one
-run card per clean run, and one blocked card per blocked spell. 256-colour
-terminals see only Atlas's palette indices. The rendered text of each surface,
-with the code file each was checked against, is in
-[plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
+![TODO and SUBAGENTS boxes with three workers running (render of the mod view code with fixture data)](img/showcase/mod-band-running.png)
 
-![Band, TODO box and SUBAGENTS box with one worker running, side panel on the status tab](img/showcase/cc-band-running.png)
+After the workers end the rows read `done` or `failed` and the box titles count
+them. This render shows the fixture's failed state: two workers done and one
+failed (`✗ 1 failed  ✓ 2 done`).
 
-When the run ends the band reads `done` with the frozen run time for 30 seconds
-and then settles into `idle · 1:08`, with the gate chip still shown.
+![TODO and SUBAGENTS boxes after the workers ended, one of them failed (render of the mod view code with fixture data)](img/showcase/mod-band-finished.png)
 
-![Idle band after a wave, with the gate warning and the finished TODO and SUBAGENTS boxes](img/showcase/cc-band-idle.png)
+The side panel has four clickable tabs: `health`, `status`, `gates` and `channel`.
+`gates` carries its denial count and `channel` its unread count as badges. Every
+control is a click; no key letters are printed. The health tab shows the SESSION
+state, context use, hook latency, tool rate, denials and a RUNS bar chart. The
+status tab shows the PHASE rail (`research theory test validate implement
+verify`), the PLAN rows, the TEAM rows and the SESSION facts. The gates tab lists
+each gate with a pass or deny mark, the DENIED cards with the fix command, and a
+TIMELINE with one tick per gate check. The channel tab is the chat with the lead
+and the workers, with a composer and recipient chips at the bottom. The panel
+never says `done` while a dispatch is open or a worker runs. The transcript gets
+one-row cards: a finish card per worker, one run card per clean run, and one
+blocked card per blocked spell.
 
-An idle session shows live health with history instead of an empty band. The band
-reads `◖ ◆ ATLAS ◗ ◌ idle up 0:13 │ ○ gates armed › │ ▁▁▁▁▅▁▁▁ peak 1 / 5s`; the
-`gates` chip opens the gates tab and the `▸ health` chip opens a HEALTH card with
-the same sections as the status tab. The status tab is an instrument: a stepper
-(`●●◆○○○ 3/6`), an ACTIVITY column chart with axes and a named bucket, a GATES
-table (`pass`, `deny`, `last`), a HOOKS table with p50 and its colour thresholds,
-and RUNS bars with the median. One module computes every figure, so the band,
-panel, tabs and card show the same number. A small history (last 50 runs, hook
-latency, events per minute, gate counts) is kept in `.atlas/.run/history.json`, so
-a returning project shows its last run and median at idle, labelled `prev`. Below
-144 columns, where the host does not dock the side pane at rest, a two-row idle
-strip above the band carries the summary. All six tabs fit at 110 columns. The idle
-animation is a slow breathe of the wordmark pill, and a run's time is printed once
-per view.
+![The four side panel tabs: health, status, gates, channel (render of the mod view code with fixture data)](img/showcase/mod-panel-tabs.png)
 
-![Idle band and side panel at 150 columns](plugins/atlas/img/showcase/cc-idle-health-150.png)
-
-The same project after an earlier session, with its last runs and gate counts shown as `prev`:
-
-![Idle band and side panel at 150 columns in a project with history](plugins/atlas/img/showcase/cc-seeded-idle-150.png)
-
-![Idle band and side panel at 110 columns](plugins/atlas/img/showcase/cc-idle-health-110.png)
-
-![The HEALTH card open above the prompt at 150 columns](plugins/atlas/img/showcase/cc-health-open.png)
+An idle session shows live health with history instead of an empty band. A small
+history (last 50 runs, hook latency) is kept in `.atlas/.run/history.json`, so a
+returning project shows its last run and median at idle. Below 144 columns, where
+the host does not dock the side pane at rest, a two-row idle strip above the band
+carries the summary.
 
 In paired scoring against btop and htop the mods reach a mean of 5.33 in a fresh
 session and 5.75 with history, against 7.75 for btop; the target of 8 was not met
-([audit](docs/audits/2026-11-15_atlas-mods-expert-rounds.md)).
+([audit](docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). The scoring used the
+earlier build.
 
 **Parallel teams.** Two or more workers run side by side in one tmux window,
 each pane headed by its role, with tool and peer chips.
@@ -171,6 +159,8 @@ command that fixes it. A worker's card updates in place when it reports.
 This picture is from an earlier build.
 
 ![Worker done cards in the transcript, with the band and boxes below](img/showcase/cc-card-done.png)
+
+This picture is from an earlier build.
 
 ## What it changes on your machine
 
@@ -343,6 +333,8 @@ channels the hooks write.
 
 ![Overview](img/showcase/dashboard-overview.png)
 
+This picture is from an earlier build.
+
 | Page | What it shows |
 |---|---|
 | Overview | KPIs, the needs-attention inbox, recent runs |
@@ -358,6 +350,8 @@ channels the hooks write.
 
 ![Health](img/showcase/dashboard-health.png)
 ![Improve](img/showcase/dashboard-improve.png)
+
+This picture is from an earlier build.
 
 Every route checks the `Host` header, content type, origin and, for mutations,
 a per-start token. Details: [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md).

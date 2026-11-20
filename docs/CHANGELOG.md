@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.34.0, marketplace 5.41.0 - 2026-11-20 -- friction audit fixes (atlas.db)
+
+Source: audit of atlas.db friction data on 2026-11-20. Details and measurements in `plugins/atlas/CHANGELOG.md` (17.34.0).
+
+- Changed, README refresh: the in-terminal mod pictures are new renders of the mod view code (`img/showcase/mod-*.png`) and the mod sections of `README.md` and `plugins/atlas/README.md` describe the four tabs, box columns and glyphs the code draws.
+- Fixed, team gate text: `output-styles/atlas-orchestrator.md`, `skills/atlas-orchestrate/SKILL.md`, `references/the-loop.md` state that with tmux on PATH a working role goes through `atlas_mux.py spawn-team` or `atlas_crew.py run` (`dispatch_denied:team`, 41 denials in 14 days).
+- Fixed, omp ingest: a live-ingested subagent transcript lands as `is_sidechain=1` rows under its parent session and gets no `session_logs` or `facets` row (`hooks/ingest_session.py`, `scripts/session_ingest.py`).
+- Fixed, Stop gate (m): the gate's own test re-run proof clears (m) in a non-orchestrating session; the message no longer cites a "delegation exemption" (`hooks/completion_gate_core.py`, `_gate_proof`).
+- Fixed, Stop gate (i): open todos alone no longer block while a `shell` or `monitor` background task runs and the reply is no done claim (`_has_running_background_job`).
+- Fixed, friction visibility: denied read-only Bash calls are mirrored as `friction_events` category `bash_read_denied` (`hooks/chronicle_facet.py`).
+- Fixed, exploration deny: absolute paths outside the project root are allowed (`hooks/dispatch_tripwire_core.py` `_outside_project_only`, `omp/contracts.ts`, `omp/index.ts`, `contracts/native-tools.json`).
+- Fixed, database size: `scripts/atlas_maint.py` auto-VACUUMs at a freelist of 25,000 pages and 10% of the file; `vacuum_error` on a locked database; 820.8 MB to 655.6 MB on a copy.
+- Fixed, stale improvements: verdict-less improvements without metric or baseline older than 30 days get verdict `unmeasurable` (`scripts/atlas_db.py`, `scripts/atlas_maint.py`).
+- Fixed, session-start noise: doctor notes print as one line with one `--fix` command (`scripts/atlas_doctor.py`, `scripts/doctor_layout.py`).
+
 ## atlas 17.33.2, marketplace 5.40.2 - 2026-11-20 -- the mod loads in the host again
 
 - Fixed, release blocker: 17.33.0 and 17.33.1 failed the CI mod gate because the real host could not load the mod

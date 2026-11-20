@@ -22,6 +22,58 @@ def _touch(path, mtime=None, data="x"):
         os.utime(path, (mtime, mtime))
 
 
+class VacuumTest(unittest.TestCase):
+    """_db_part against a throwaway DB; thresholds are arguments so pages stay few."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.dbp = os.path.join(self.tmp.name, "atlas.db")
+        env = mock.patch.dict(os.environ, {"ATLAS_DB": self.dbp})
+        env.start()
+        self.addCleanup(env.stop)
+        import atlas_db
+
+        conn = atlas_db.connect(self.dbp)
+        atlas_db.init(conn)
+        conn.execute("CREATE TABLE junk(b BLOB)")
+        conn.executemany("INSERT INTO junk VALUES(?)", [(b"x" * 4000,)] * 400)
+        conn.commit()
+        conn.execute("DELETE FROM junk")
+        conn.commit()
+        self.free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+        conn.close()
+        self.assertGreater(self.free, 100)
+
+    def test_below_threshold_no_vacuum(self):
+        out = atlas_maint._db_part(False, False, min_free_pages=self.free + 1, min_free_ratio=0)
+        self.assertNotIn("vacuumed", out)
+        self.assertIn("improvements_closed", out)
+
+    def test_above_threshold_vacuums_and_shrinks(self):
+        before = os.path.getsize(self.dbp)
+        out = atlas_maint._db_part(False, False, min_free_pages=10, min_free_ratio=0.01)
+        self.assertTrue(out["vacuumed"])
+        self.assertEqual(out["freelist_pages"], self.free)
+        self.assertLess(os.path.getsize(self.dbp), before)
+
+    def test_dry_run_never_vacuums(self):
+        before = os.path.getsize(self.dbp)
+        out = atlas_maint._db_part(True, True, min_free_pages=0, min_free_ratio=0)
+        self.assertEqual(out, {"skipped": "dry-run"})
+        self.assertEqual(os.path.getsize(self.dbp), before)
+
+    def test_vacuum_error_is_recorded_not_raised(self):
+        import sqlite3
+
+        import atlas_db
+
+        with mock.patch.object(atlas_db, "vacuum", side_effect=sqlite3.OperationalError("locked")):
+            out = atlas_maint._db_part(False, False, min_free_pages=10, min_free_ratio=0.01)
+        self.assertFalse(out["vacuumed"])
+        self.assertEqual(out["vacuum_error"], "locked")
+
+
 class MaintTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

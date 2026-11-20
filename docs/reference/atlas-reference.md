@@ -322,7 +322,7 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_DASHBOARD=on` | SessionStart dashboard auto-start; default `off`, so the dashboard starts only when you run `atlas_dashboard.py ensure` or `serve` |
 | `ATLAS_FALLOW=off` | fallow commit/push gate; the gate also skips itself when the fallow plugin's own `fallow-gate.sh` is enabled and installed (one audit per commit/push), and `ATLAS_FALLOW=force` runs it anyway |
 | `ATLAS_MAINT=off` | SessionStart's detached daily upkeep (`scripts/atlas_maint.py`): DB retention, full run-kind backfill, `.atlas/.run` cleanup |
-| `ATLAS_DB_RETENTION_DAYS=0` | DB retention; default 90 days of raw `messages`, `tool_calls`, `user_prompts`, `turn_scores`, `signals` rows (summary tables are kept). Reclaim disk with `python3 scripts/atlas_maint.py --force --vacuum` |
+| `ATLAS_DB_RETENTION_DAYS=0` | DB retention; default 90 days of raw `messages`, `tool_calls`, `user_prompts`, `turn_scores`, `signals` rows (summary tables are kept). Upkeep runs VACUUM by itself when the freelist is at least 25,000 pages and at least 10% of the file; `--vacuum` still forces it, and a locked VACUUM is recorded as `vacuum_error` without failing upkeep. Force it with `python3 scripts/atlas_maint.py --force --vacuum` |
 | `ATLAS_RUN_RETENTION_DAYS=0` | `.atlas/.run` cleanup; default 14 days for files in `logs/` and `inbox/` and for whole `crew/<id>/` dirs |
 
 Knob precedence: a value saved from the dashboard lands in both `~/.atlas/settings.json` and
@@ -524,7 +524,7 @@ them. The table lists the main entry points, not every module.
 | `omp_transcript.py` | Converts an omp session file to the Claude transcript shape for the bridge. |
 | `omp_runstate.py` | Writes the omp run/dispatch/edit state Claude hooks would have written. |
 | `atlas_doctor.py` | Rollback repair (`--fix`, `--hook`), self-improvement miners (`--mine`, `--list-findings`, `--set-status`, `--baseline`, `--remeasure`), `--json`, `--status`. |
-| `atlas_maint.py` | Daily upkeep, spawned detached from SessionStart: DB retention and full run-kind backfill, `.atlas/.run` cleanup (`--dry-run`, `--vacuum`, `--force`). |
+| `atlas_maint.py` | Daily upkeep, spawned detached from SessionStart: DB retention and full run-kind backfill, `.atlas/.run` cleanup, automatic VACUUM past the freelist threshold, and verdict `unmeasurable` for improvements with no verdict and no metric or baseline older than 30 days (`--dry-run`, `--vacuum`, `--force`). |
 | `atlas_memory.py` | File-backed memory store. |
 | `atlas_todo.py` | The board and per-worker notes: `list`, `set`, `add`, `scaffold`, `claim`, `complete`, `status`, `remove`, `carry`, `counts`, `note`, `notes`. |
 | `atlas_finding.py` | Appends verdict rows to `.atlas/.run/findings.json` (the verifier's write path). |

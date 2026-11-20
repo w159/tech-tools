@@ -160,6 +160,24 @@ class SyncFrictionTest(Base):
         self.assertEqual(got, [("assumption_admission", "fresh"), ("gate_block", "keep"), ("memory_drop", "keep")])
         self.assertEqual(self.conn.execute("SELECT snippet FROM friction_events WHERE session_id='f4'").fetchone()[0], "other")
 
+    def test_denied_read_only_bash_call_becomes_friction_once(self):
+        self._session("f5")
+        deny = "this bash command only reads files; use lean-ctx"
+        for tid, name, snip in (("t1", "Bash", deny), ("t2", "bash", deny), ("t3", "Bash", "other"), ("t4", "Read", deny)):
+            atlas_db.insert_tool_call(self.conn, "f5", {
+                "tool_use_id": tid, "tool_name": name, "ts": 5,
+            })
+            atlas_db.update_tool_result(self.conn, tid, 1, len(snip), snip)
+        self.conn.commit()
+        for _ in range(2):  # re-ingest must not duplicate
+            chronicle_facet._sync_friction_events(self.conn, "f5")
+        self.assertEqual(
+            self.conn.execute(
+                "SELECT category, weight FROM friction_events WHERE session_id='f5'"
+            ).fetchall(),
+            [("bash_read_denied", 1.0)] * 2,
+        )
+
     def test_mapping_is_complete_for_known_signals(self):
         self.assertEqual(
             chronicle_facet.FRICTION_CATEGORY_BY_SIGNAL,

@@ -71,6 +71,13 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-20 | mod-host-load-17-33-2 | verified | Mod loads in the real host: type-only imports fixed, guard test added | [2026-11-20_mod-host-load-17-33-2.md](2026-11-20_mod-host-load-17-33-2.md) |
 | 2026-11-20 | mod-clock-stop | verified | Finished crew workers keep a frozen SUBAGENTS clock; ended agents without a finish stamp read - | [2026-11-20_mod-clock-stop.md](2026-11-20_mod-clock-stop.md) |
 | 2026-11-20 | git-guard-approval-grant | verified | Approved protected commit/push grants the branch for 30 min; no repeat prompts | [2026-11-20_git-guard-approval-grant.md](2026-11-20_git-guard-approval-grant.md) |
+| 2026-11-20 | FF-7 | verified | Session-start doctor notes print as one line | [2026-11-20_ff-7.md](2026-11-20_ff-7.md) |
+| 2026-11-20 | FF-6 | verified | Unmeasurable improvements closed | [2026-11-20_ff-6.md](2026-11-20_ff-6.md) |
+| 2026-11-20 | FF-5 | verified | Maintenance vacuums automatically past the freelist threshold | [2026-11-20_ff-5.md](2026-11-20_ff-5.md) |
+| 2026-11-20 | FF-4 | verified | Read-only Bash denials recorded as bash_read_denied; listings wholly outside the project allowed | [2026-11-20_ff-4.md](2026-11-20_ff-4.md) |
+| 2026-11-20 | FF-3 | verified | Stop gate (m) accepts test proof outside orchestrated runs; (i) yields to a running shell or monitor job | [2026-11-20_ff-3.md](2026-11-20_ff-3.md) |
+| 2026-11-20 | FF-2 | verified | omp subagent transcripts ingest as sidechain rows under the parent | [2026-11-20_ff-2.md](2026-11-20_ff-2.md) |
+| 2026-11-20 | FF-1 | verified | Orchestrator text matches the team gate | [2026-11-20_ff-1.md](2026-11-20_ff-1.md) |
 | 2026-11-18 | wave2-hooks-dash-secret | rejected | dash: ensure launch URL (token) is injected into SessionStart additionalContext | [2026-11-18_wave2-hooks-dash-secret.md](2026-11-18_wave2-hooks-dash-secret.md) |
 | 2026-11-18 | w2bc-9 | verified | worker brief under 800 bytes with report command and STATUS rule | [2026-11-18_w2bc-9.md](2026-11-18_w2bc-9.md) |
 | 2026-11-18 | w2bc-7 | rejected | no exact router-score pin and no per-agent tool-list table test added; model table and write/edit deny tests pre-exist | [2026-11-18_w2bc-7.md](2026-11-18_w2bc-7.md) |

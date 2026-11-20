@@ -4119,6 +4119,23 @@ class AtlasAgentDefinitionTest(unittest.TestCase):
         self.assertIn("ctx_tree path=.", deny("ls -la"))
         self.assertIn("ctx_glob pattern=*.py", deny("find . -name *.py"))
 
+    def test_exploration_deny_allows_listing_wholly_outside_project(self):
+        sys.path.insert(0, os.path.dirname(__file__))
+        import dispatch_tripwire as dt
+
+        deny = lambda c: dt._exploration_deny(c, "lean-ctx", "/repo")  # noqa: E731
+        self.assertIsNone(deny("ls -la /private/tmp/x | head -50"))
+        self.assertIsNone(deny("ls /private/tmp/x /var/log"))
+        self.assertIsNotNone(deny("ls -la /repo/src | head"))
+        self.assertIsNotNone(deny("ls -la /repo-other/../repo/src"))
+        self.assertIsNotNone(deny("ls /"))  # an ancestor of the project
+        self.assertIsNotNone(deny("cat README.md"))
+        self.assertIsNotNone(deny("ls /private/tmp/x; cat /repo/a.py"))
+        self.assertIsNotNone(deny("ls /private/tmp/x; ls"))
+        self.assertIsNotNone(deny("ls"))
+        # without a root the old behavior holds
+        self.assertIsNotNone(dt._exploration_deny("ls /private/tmp/x", "lean-ctx"))
+
     def test_main_parses_payload_with_raw_control_char(self):
         import io
 

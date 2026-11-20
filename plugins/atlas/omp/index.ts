@@ -62,7 +62,7 @@ import { registerTeamTool } from "./team-tool";
 import { registerUsageStatusline, userStatuslineCopyExists } from "./usage-statusline";
 import { registerAtlasCoreCommand } from "./core-command";
 import { registerAtlasTuiCommand } from "./tui-command";
-import { type LeanKind, explorationDenyReason, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
+import { type LeanKind, explorationDenyReason, explorationOutsideRoot, explorationTool, kindOfOmpTool, loadNativeTools, resolveTarget } from "./contracts";
 import { createShellEditTracker } from "./delegation";
 import { atlasKnob, atlasStoreEnv } from "./knobs";
 import { registerHookBridge } from "./hook-bridge";
@@ -547,7 +547,8 @@ export function register(pi: Pick<ExtensionAPI, "on">, deps: ExtensionDeps): voi
 				// replacement is reachable now (contracts/native-tools.json explorationShell).
 				if (tool === "bash" && atlasKnob("ATLAS_TRIPWIRE_HARD") !== "off") {
 					const command = typeof input.command === "string" ? input.command : "";
-					const picked = explorationTool(command, contract);
+					// a listing wholly outside the project is not code navigation: allow it
+					const picked = explorationOutsideRoot(command, docsRoot(cwd) ?? cwd, contract) ? undefined : explorationTool(command, contract);
 					const route = picked ? resolveLeanToolRoute(picked, activeToolsOf(deps)) : undefined;
 					const reason = route ? explorationDenyReason(command, route, contract) : undefined;
 					if (reason) return { block: true, reason };

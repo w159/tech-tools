@@ -24,6 +24,7 @@ import atlas_hook_guard  # noqa: E402
 
 # Maps a `signals.signal_type` to a friction_events.category. Extend here as
 # session_ingest.py learns to detect new signal types.
+BASH_READ_DENIED = "bash_read_denied"
 FRICTION_CATEGORY_BY_SIGNAL = {
     "user_correction": "user_correction",
     "assumption_admission": "assumption_admission",
@@ -150,7 +151,7 @@ def _sync_friction_events(conn, session_id):
         "SELECT signal_type, weight, snippet, ts FROM signals WHERE session_id=?",
         (session_id,),
     ).fetchall()
-    mirrored = sorted(set(FRICTION_CATEGORY_BY_SIGNAL.values()))
+    mirrored = sorted(set(FRICTION_CATEGORY_BY_SIGNAL.values()) | {BASH_READ_DENIED})
     conn.execute(
         "DELETE FROM friction_events WHERE session_id=? AND category IN (%s)"
         % ",".join("?" * len(mirrored)),
@@ -162,6 +163,17 @@ def _sync_friction_events(conn, session_id):
             continue
         atlas_db.record_friction(
             conn, session_id, category, weight=weight or 1.0, snippet=snippet, ts=ts
+        )
+    # The exploration gate's most frequent denial never reaches `signals`; it
+    # only shows on the denied tool call, so mirror it from there.
+    for tool_name, snippet, ts in conn.execute(
+        "SELECT tool_name, error_snippet, ts FROM tool_calls WHERE session_id=? "
+        "AND LOWER(tool_name)='bash' AND error_snippet LIKE ?",
+        (session_id, "%only reads files%"),
+    ).fetchall():
+        atlas_db.record_friction(
+            conn, session_id, BASH_READ_DENIED, weight=1.0, snippet=snippet, ts=ts,
+            tool_name=tool_name,
         )
 
 

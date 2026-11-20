@@ -2455,12 +2455,40 @@ def _is_exploration_shell(command):
     return _exploration_segments(command) is not None
 
 
-def _exploration_deny(command, server):
+def _outside_project_only(command, segments, root):
+    """True when every path argument of every segment is an absolute path outside
+    `root` (neither inside it nor an ancestor of it): a listing there is not code
+    navigation, so lean-ctx is the wrong redirect. A first segment, or any segment
+    after a non-pipe separator, with no path argument reads the cwd and stays
+    denied; a piped later segment (`| head -50`) reads stdin. Any relative or
+    flag-valued argument (`grep pat /x`) fails closed. Twin: omp/contracts.ts
+    explorationOutsideRoot."""
+    root = os.path.normpath(str(root))
+    piped_only = not re.search(r"&&|\|\||[;\n&]", command)
+    for i, tokens in enumerate(segments):
+        paths = [t for t in tokens[1:] if not t.startswith("-")]
+        if not paths:
+            if i == 0 or not piped_only:
+                return False
+            continue
+        for p in paths:
+            if not p.startswith("/"):
+                return False
+            p = os.path.normpath(p)
+            if p == root or p.startswith(root + os.sep) or root.startswith(p.rstrip(os.sep) + os.sep):
+                return False
+    return True
+
+
+def _exploration_deny(command, server, root=None):
     """Deny text for an exploration-only Bash command, or None. The ctx_* tool is
     ctx_read (cat/head/tail), ctx_search (grep/rg/ag), ctx_tree (ls/tree),
-    ctx_glob (find/fd), else ctx_shell; mixed pipelines -> ctx_shell."""
+    ctx_glob (find/fd), else ctx_shell; mixed pipelines -> ctx_shell. With a
+    `root`, a command that only touches absolute paths outside it is allowed."""
     segments = _exploration_segments(command)
     if segments is None:
+        return None
+    if root is not None and _outside_project_only(command, segments, root):
         return None
     tools = {_EXPLORATION_TOOL.get(t[0], "ctx_shell") for t in segments}
     tool = tools.pop() if len(tools) == 1 else "ctx_shell"
@@ -2556,7 +2584,7 @@ def _native_tool_policy(payload):
             server = _lean_ctx_server_key(root) if shutil.which("lean-ctx") else None
             tinput = payload.get("tool_input")
             reason = server and _exploration_deny(
-                tinput.get("command") if isinstance(tinput, dict) else None, server
+                tinput.get("command") if isinstance(tinput, dict) else None, server, root
             )
             if reason:
                 _deny(reason)

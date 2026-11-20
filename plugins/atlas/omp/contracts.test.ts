@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import contract from "../contracts/native-tools.json";
-import { resolveTarget, explorationDenyReason, explorationTool, isExplorationShell, kindOfOmpTool, loadNativeTools } from "./contracts";
+import { resolveTarget, explorationDenyReason, explorationOutsideRoot, explorationTool, isExplorationShell, kindOfOmpTool, loadNativeTools } from "./contracts";
 import { isNonDocsPath, resolveLeanReplacement } from "./index";
 
 test("shared delegation-exemption cases (also asserted by test_completion_gate.py)", () => {
@@ -307,4 +307,19 @@ test("sed option and quoting edge cases: option terminators, long read flags and
 		["sed -n", true],
 	];
 	for (const [cmd, exploration] of cases) expect([cmd, isExplorationShell(cmd, c)]).toEqual([cmd, exploration]);
+});
+
+// Twin of test_dispatch_tripwire test_exploration_deny_allows_listing_wholly_outside_project.
+test("explorationOutsideRoot allows only listings wholly outside the project root", () => {
+	const out = (cmd: string) => explorationOutsideRoot(cmd, "/repo");
+	expect(out("ls -la /private/tmp/x | head -50")).toBe(true);
+	expect(out("ls /private/tmp/x /var/log")).toBe(true);
+	expect(out("ls -la /repo/src | head")).toBe(false);
+	expect(out("ls -la /repo-other/../repo/src")).toBe(false);
+	expect(out("ls /")).toBe(false); // an ancestor of the project
+	expect(out("cat README.md")).toBe(false);
+	expect(out("ls /private/tmp/x; cat /repo/a.py")).toBe(false);
+	expect(out("ls /private/tmp/x; ls")).toBe(false);
+	expect(out("ls")).toBe(false);
+	expect(out("git status /tmp")).toBe(false); // not exploration at all
 });

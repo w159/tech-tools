@@ -280,6 +280,31 @@ class HookTest(LayoutBase):
         ):
             self.assertEqual(self.hook(), "")
 
+    def test_all_notes_share_one_line_and_one_fix_command(self):
+        touch(os.path.join(self.repo, "frontend", ".atlas", ".run", "c.json"), "{}")
+        with mock.patch.object(
+            doctor_layout, "docs_naming_violations", return_value=[("a", "b")] * 3
+        ), mock.patch.object(
+            doctor_layout, "project_memory_status", return_value=(2, 1)
+        ):
+            out = self.hook()
+        self.assertEqual(len(out.strip().splitlines()), 1)
+        self.assertEqual(out.count("--fix"), 1)
+        for note in ("atlas layout:", "docs naming:", "project memory:"):
+            self.assertIn(note, out)
+        self.assertTrue(out.strip().endswith(atlas_doctor.fix_command()))
+
+    def test_single_note_keeps_its_fix_command(self):
+        with mock.patch.object(
+            doctor_layout, "docs_naming_violations", return_value=[("a", "b")]
+        ), mock.patch.object(
+            doctor_layout, "project_memory_status", return_value=(0, 0)
+        ):
+            out = self.hook().strip()
+        self.assertEqual(
+            out, f"docs naming: 1 files need renaming; run {atlas_doctor.fix_command()}"
+        )
+
     def _quiet_hook(self):
         with mock.patch.object(
             doctor_layout, "docs_naming_violations", return_value=[]
@@ -303,7 +328,7 @@ class HookTest(LayoutBase):
         self.assertEqual(
             out,
             "atlas layout: 1 misplaced .atlas path(s): "
-            f"plugins/x/.atlas; run {doctor_layout._fix_command()} to archive them\n",
+            f"plugins/x/.atlas; run {doctor_layout._fix_command()}\n",
         )
         self.assertTrue(os.path.exists(stray))
 

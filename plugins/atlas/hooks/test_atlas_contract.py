@@ -556,6 +556,15 @@ class OutputStyleContract(unittest.TestCase):
         self.assertIn("Evidence is exempt from brevity", body)
         self.assertIn("DECISION NEEDED", body)
 
+    def test_team_rule_text_matches_the_team_gate(self):
+        """With tmux a working role never stays in-process (dispatch_denied:team):
+        the style and the skill must say so and point at spawn-team."""
+        for path in (OUTPUT_STYLE, PLUGIN_ROOT / "skills" / "atlas-orchestrate" / "SKILL.md"):
+            body = path.read_text(encoding="utf-8")
+            self.assertNotIn("One bounded worker", body, path.name)
+            self.assertIn("spawn-team", body, path.name)
+            self.assertIn("Without tmux", body, path.name)
+
     def test_style_file_is_plain_ascii(self):
         """The file must obey the ASCII rule it declares (phase glyphs excepted)."""
         banned = "–—‘’“”…"

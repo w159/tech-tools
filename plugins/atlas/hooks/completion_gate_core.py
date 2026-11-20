@@ -16,7 +16,9 @@ The gate also stays silent whenever the Stop payload's `background_tasks`
 still lists an in-flight subagent, workflow, or teammate dispatch (see
 `_has_in_flight_dispatch`): a turn is not a completion claim while dispatched
 work is still running, so the gate does not fire once per wave-Stop. A
-long-running `shell` or `monitor` task does not suppress it. Two conditions
+long-running `shell` or `monitor` task does not suppress it, except that
+it lets a Stop through when open todos (i) are the only failing letter and the
+reply is no done claim (`_has_running_background_job`). Two conditions
 are about the reply itself and are checked even then: (n) and (r).
 
 Twenty conditions, (a) through (s) and (v), must ALL hold before the gate passes. A
@@ -1247,6 +1249,19 @@ def _has_in_flight_dispatch(data: dict, root=None) -> bool:
     return root is not None and _team_in_flight(root, str(data.get("session_id") or ""))
 
 
+def _has_running_background_job(data: dict) -> bool:
+    """True when `background_tasks` lists a non-terminal `shell` or `monitor`
+    task. Only (i) alone may yield to it; it never suppresses the whole gate
+    (see `_has_in_flight_dispatch`)."""
+    tasks = data.get("background_tasks")
+    return any(
+        isinstance(t, dict)
+        and str(t.get("type", "")).lower() in ("shell", "monitor")
+        and str(t.get("status", "")).lower() not in _TERMINAL_TASK_STATUSES
+        for t in (tasks if isinstance(tasks, list) else [])
+    )
+
+
 _SHELL_MEMO: dict | None = None  # set by main(): one `git status` per Stop
 
 
@@ -1734,10 +1749,11 @@ def _reason(
             "  (m) Delegation mandate: this run shipped non-docs code from the main "
             "thread with zero Task/Agent dispatches."
             + named
-            + " -> Dispatch atlas:implementer "
-            "(or another atlas:* agent) for the code change, then verify and retry Stop.\n"
-            "     (m) try: dispatch atlas:implementer (Task) for the files listed "
-            "above, or record why main-thread work was right (delegation exemption).",
+            + " -> Run the project's test command (the gate re-runs it and a green "
+            "exit clears (m)), or dispatch atlas:implementer (or another atlas:* agent) "
+            "for the code change, then retry Stop.\n"
+            "     (m) try: run the tests, or dispatch atlas:implementer (Task) for the "
+            "files listed above.",
         )
     if solo_delegation_note:
         # ATLAS_MODE=solo: (m) is acknowledged, not failing -- this line rides
@@ -1814,6 +1830,22 @@ def _delegation_state(data: dict, root: Path) -> tuple[bool, list, str]:
     return missing_delegation, delegation_paths, solo_delegation_note
 
 
+def _gate_proof(data: dict, root: Path, session: str, run_paths: list, started):
+    """The gate's own test proof (valid re-run or crew proof) for this run, or
+    None. Shared by evaluate() and the non-orchestrating (m) path in main()."""
+    if not _nondocs_changed(run_paths) or gate_rerun.switched_off():
+        return None
+    return gate_rerun.valid_proof(root, session, started, run_paths) or gate_rerun.crew_proof(
+        root,
+        session,
+        started,
+        run_paths,
+        str(data.get("transcript_path") or ""),
+        display=bool(data.get("display_only")),  # set by atlas_gates.py, never by a Stop payload
+        cwd=str(data.get("cwd") or ""),
+    )
+
+
 def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     """Evaluate gate letters a..q for an ORCHESTRATING session. Read-only:
     no markers, no block records, no DB writes. main() and atlas_gates.py share
@@ -1834,21 +1866,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # after-the-fact dispatch that (a)(b)(g)(k)(m)(o) otherwise demand: those were paperwork around the
     # same test, and cost a measured ~80 s and ~500k tokens per run.
     started_early = _run_started_at(session)
-    proof = None
-    if code_changed and not gate_rerun.switched_off():
-        proof = gate_rerun.valid_proof(
-            root, session, started_early, run_paths
-        ) or gate_rerun.crew_proof(
-            root,
-            session,
-            started_early,
-            run_paths,
-            str(data.get("transcript_path") or ""),
-            display=bool(
-                data.get("display_only")
-            ),  # set by atlas_gates.py, never by a Stop payload
-            cwd=str(data.get("cwd") or ""),
-        )
+    proof = _gate_proof(data, root, session, run_paths, started_early)
     if proof:
         missing_delegation = False
     # (c)-(f) and (h) are docs-currency checks: they need a docs/ SSOT to
@@ -2205,6 +2223,10 @@ def _main() -> int:
             data, root
         )
         if not _session_is_orchestrating(session):
+            if missing_delegation and _gate_proof(
+                data, root, session, _run_paths_for(session, root), _run_started_at(session)
+            ):
+                missing_delegation = False  # green re-run proof clears (m), as in evaluate()
             if missing_delegation and not _has_in_flight_dispatch(data, root):
                 # Same loop cap as an orchestrating run: the continuation is
                 # re-checked, so without it an unfixable (m) never ends.
@@ -2407,6 +2429,10 @@ def _main() -> int:
                 print(json.dumps({"systemMessage": "atlas: " + fault_note}))
             _block_loop_reset(session, keep="" if _reply_has_header(data) else "n")
             _record_pass()
+            return 0
+        if failed == ["i"] and _has_running_background_job(data):
+            # Open todos only, and the lead is waiting on a shell/monitor job that
+            # re-invokes it: waiting is not a completion claim ((r) already ran).
             return 0
         count, loop_exhausted = _block_loop_state(
             session, failed, continuation, _run_dispatch_count(session)

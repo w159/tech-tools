@@ -1,4 +1,22 @@
 # Changelog
+## 17.34.0 - 2026-11-20
+
+### Fixed
+
+- Orchestrator text no longer says one bounded worker may be an in-process `atlas:*` call: `output-styles/atlas-orchestrator.md`, `skills/atlas-orchestrate/SKILL.md` and `references/the-loop.md` state the team-gate rule (with tmux on PATH a working role goes through `atlas_mux.py spawn-team` or `atlas_crew.py run`). `dispatch_denied:team` was the top friction category, 41 denials in 14 days. Contract test in `hooks/test_atlas_contract.py`.
+- A live-ingested omp subagent transcript lands as `is_sidechain=1` rows under its parent session id and gets no `session_logs` or `facets` row (`hooks/ingest_session.py`, `scripts/session_ingest.py`); 298 of 532 session rows in 7 days were such files.
+- Stop gate (m) in a non-orchestrating session is cleared by the gate's own test re-run proof (`_gate_proof`), as in orchestrated runs; the (m) message names only real exits (run the tests, or dispatch) and no longer mentions a "delegation exemption" (`hooks/completion_gate_core.py`).
+- Stop gate: when open todos (i) is the only failing condition, a non-terminal `shell` or `monitor` background task is running and the reply does not claim done, Stop is allowed without a block (`_has_running_background_job`). Other conditions unchanged.
+- Denied read-only Bash calls are mirrored into `friction_events` as category `bash_read_denied` (`hooks/chronicle_facet.py`); 171 such denials in 7 days were invisible to friction rollups.
+- An exploration-only Bash command whose every path argument is an absolute path outside the project root is no longer denied (`hooks/dispatch_tripwire_core.py`, `omp/contracts.ts`, `omp/index.ts`, `contracts/native-tools.json`). Effect is small: 8 of 170 real denied commands; listings inside the project stay denied by design.
+- `scripts/atlas_maint.py` runs VACUUM automatically when the freelist is at least 25,000 pages and at least 10% of the file; `--vacuum` still forces it; a locked VACUUM is recorded as `vacuum_error` and does not fail maintenance. On a copy of the real database: 820.8 MB to 655.6 MB.
+- Improvements with no verdict and no metric or baseline, older than 30 days, get verdict `unmeasurable` (`scripts/atlas_db.py`, `scripts/atlas_maint.py`); 38 rows on the real data copy.
+- Session-start doctor notes print as one line with one `--fix` command instead of up to three lines (`scripts/atlas_doctor.py`, `scripts/doctor_layout.py`).
+
+### Changed
+
+- README pictures and text of the in-terminal mod match the 17.33.0 redesign: three new renders (`img/showcase/mod-band-running.png`, `mod-band-finished.png`, `mod-panel-tabs.png`) drawn by the mod's own view code from the test fixtures, the four tabs `health status gates channel`, the TODO and SUBAGENTS columns, and the state glyphs; claims about the removed team, core and board tabs are gone.
+
 ## 17.33.2 - 2026-11-20
 
 ### Fixed

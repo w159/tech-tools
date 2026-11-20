@@ -313,13 +313,15 @@ def layout_summary(findings):
     return [f"{f['kind']}: {f['path']}" for f in findings]
 
 
-def hook_layout(cwd):
+def hook_layout(cwd, fix_hint=True):
     """SessionStart report for the payload cwd's project. READ-ONLY: it never
     moves, renames or deletes; only `atlas_doctor.py --fix` does. Returns ''
     when nothing is misplaced (or cwd resolves to HOME or another non-project
     root, which is never walked), else one short line naming the paths:
     project-relative ones first, then those outside the project with the home
-    directory written as `~` (this line lands in the model context)."""
+    directory written as `~` (this line lands in the model context).
+    `fix_hint=False` drops the `run <cmd>` tail so a caller can add one for
+    several notes."""
     root = atlas_paths.project_root(cwd)
     if layout_refusal(root):
         return ""
@@ -333,10 +335,8 @@ def hook_layout(cwd):
         return ""
     shown = [name for _outside, name in found[:5]]
     more = f" (+{len(found) - 5} more)" if len(found) > 5 else ""
-    return (
-        f"atlas layout: {len(found)} misplaced .atlas path(s): "
-        f"{', '.join(shown)}{more}; run {_fix_command()} to archive them"
-    )
+    line = f"atlas layout: {len(found)} misplaced .atlas path(s): {', '.join(shown)}{more}"
+    return f"{line}; run {_fix_command()} to archive them" if fix_hint else line
 
 
 # --- project memory (findings records, global memory tagged with the project) --

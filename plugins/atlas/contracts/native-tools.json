@@ -95,7 +95,7 @@
         "cat README.md",
         "head -20 src/app.py",
         "tail -n 5 app.log",
-        "less /var/log/system.log",
+        "less logs/system.log",
         "grep -rn TODO src/",
         "grep -i warn app.log",
         "rg 'def main' .",

@@ -14471,5 +14471,162 @@
     "verified_at": "2026-11-20T20:12:04+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "friction-fixes-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Fixes 1,2,3a,3b,4a,4b,5,6,7 unverifiable: no implementer edits or reports exist yet",
+    "evidence": [
+      "git status --short empty; board has only lead kickoff note"
+    ],
+    "doc_refs": [],
+    "reproduction": "git status --short; atlas_todo.py notes --to verifier-757c",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-20T21:29:47+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-757c"
+  },
+  {
+    "id": "gate-rerun-175641-1795210557",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest --version 2>&1 | head -2`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_213557_gate-rerun_175641.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-20T21:35:57+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "FF-1",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Orchestrator text matches the team gate",
+    "evidence": [
+      "test_atlas_contract.py test_team_rule_text_matches_the_team_gate fails on old text, passes now; full suite 10139 passed, bun 4699 pass"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:35+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-2",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "omp subagent transcripts ingest as sidechain rows under the parent",
+    "evidence": [
+      "real transcript replay: session_logs 1->0, facets 1->0, 8 tool calls sidechain=1"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:46+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-3",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Stop gate (m) accepts test proof outside orchestrated runs; (i) yields to a running shell or monitor job",
+    "evidence": [
+      "test_gate_friction_fixes.py: 5 of 8 fail on old gate code, 8 pass now"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:47+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-4",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Read-only Bash denials recorded as bash_read_denied; listings wholly outside the project allowed",
+    "evidence": [
+      "new chronicle test fails on old code; replay: 8 of 170 real denied commands now allowed"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:47+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-5",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Maintenance vacuums automatically past the freelist threshold",
+    "evidence": [
+      "atlas.db copy: 820.8 MB -> 655.6 MB, freelist 33315 -> 0, integrity ok"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:48+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-6",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Unmeasurable improvements closed",
+    "evidence": [
+      "atlas.db copy: 38 verdict-less rows -> unmeasurable, 0 pending"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:48+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "FF-7",
+    "surface": "backend",
+    "category": "friction-audit",
+    "severity": "medium",
+    "title": "Session-start doctor notes print as one line",
+    "evidence": [
+      "hook_layout_notes replay: 3 lines with 3 --fix -> 1 line with 1 --fix"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T21:57:49+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

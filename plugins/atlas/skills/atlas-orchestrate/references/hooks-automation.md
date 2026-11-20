@@ -178,6 +178,9 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   - (i) Todo drain: if this run shipped code and the most recent plan still holds
     non-`completed` items, block. TodoWrite rewrites the whole list every call, so the last
     one is current state. (i) enforces DRAINING a list; (k) is what enforces having one.
+    When (i) is the only failing condition, a non-terminal `shell` or `monitor` entry sits in
+    the Stop input's `background_tasks` and the reply is no done claim, Stop is allowed without a
+    block (`_has_running_background_job`, `hooks/completion_gate_core.py`). Other conditions are unchanged.
   - (j) Worktree close-out: if this run dispatched an agent with `isolation: "worktree"`
     (recorded by the dispatch tripwire in `runs.used_worktrees`) and `git worktree list`
     still shows trees beyond the main one, block (close with `atlas_wt.py merge` then `atlas_wt.py prune` / `atlas_git.py clean`). Scoped to this run's own dispatches, so a
@@ -199,7 +202,9 @@ orchestrator rationalizes "I'll mark it unverified and move on"); this is the ma
   - (m) Delegation mandate: main-thread non-docs code writes require a Task/Agent
     dispatch this run. Enforced even if orchestration was never armed; sidechains
     and docs-only changes are exempt. Dispatch `atlas:implementer` (or another
-    `atlas:*` agent) for the code change, then verify. DB/transcript failures fail open;
+    `atlas:*` agent) for the code change, then verify. A green test re-run by the gate itself
+    (`_gate_proof`) also clears (m), in orchestrated and non-orchestrating sessions alike; the
+    (m) message names only those two exits (run the tests, or dispatch). DB/transcript failures fail open;
     in-flight dispatches suppress Stop as usual, except for a reply whose header phase is
     `done` (condition (r) below).
   - (n) Status header: for an orchestrating, non-sidechain session the final reply must start, on

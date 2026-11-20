@@ -148,3 +148,34 @@ class Prune(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CloseUnmeasurable(unittest.TestCase):
+    def test_only_old_verdictless_unmeasurable_rows_close(self):
+        c = fresh()
+        now = time.time()
+        old, new = now - 40 * DAY, now - 5 * DAY
+
+        def add(ts, metric, base, verdict=None):
+            return c.execute(
+                "INSERT INTO improvements(run_id,ts,dimension,metric,baseline_value,verdict) "
+                "VALUES(1,?,?,?,?,?)",
+                (ts, "d", metric, base, verdict),
+            ).lastrowid
+
+        old_nometric = add(old, None, None)
+        old_nobase = add(old, "m", None)
+        recent = add(new, None, None)
+        measurable = add(old, "m", 1.0)
+        decided = add(old, None, None, "improved")
+        c.commit()
+        self.assertEqual(atlas_db.close_unmeasurable_improvements(c, now=now), 2)
+        got = dict(c.execute("SELECT id, verdict FROM improvements"))
+        self.assertEqual(got[old_nometric], "unmeasurable")
+        self.assertEqual(got[old_nobase], "unmeasurable")
+        self.assertIsNone(got[recent])
+        self.assertIsNone(got[measurable])
+        self.assertEqual(got[decided], "improved")
+        self.assertIsNotNone(
+            c.execute("SELECT remeasured_at FROM improvements WHERE id=?", (old_nometric,)).fetchone()[0]
+        )

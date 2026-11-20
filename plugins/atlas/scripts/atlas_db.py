@@ -1097,6 +1097,20 @@ def pending_remeasures(conn, limit=50):
     )
 
 
+def close_unmeasurable_improvements(conn, older_than_days=30, now=None):
+    """Mark verdict-less improvements that can never be remeasured (no metric or
+    no baseline_value) and are older than `older_than_days` as 'unmeasurable'.
+    Returns the row count."""
+    now = time.time() if now is None else now
+    cur = conn.execute(
+        "UPDATE improvements SET verdict='unmeasurable', remeasured_at=? "
+        "WHERE verdict IS NULL AND (metric IS NULL OR baseline_value IS NULL) AND ts < ?",
+        (now, now - older_than_days * 86400),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def set_improvement_remeasure(
     conn, improvement_id, remeasured_value, verdict, remeasured_at=None
 ):

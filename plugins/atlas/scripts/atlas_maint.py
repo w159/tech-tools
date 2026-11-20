@@ -11,10 +11,14 @@ import json
 import os
 import shutil
 import stat
+import sqlite3
 import sys
 import time
 
 INTERVAL_S = 24 * 3600
+# Reclaim space automatically once the freelist is both big and a real share of the file.
+VACUUM_MIN_FREE_PAGES = 25000
+VACUUM_MIN_FREE_RATIO = 0.10
 SWEPT_DIRS = ("logs", "inbox")
 
 
@@ -61,7 +65,9 @@ def due(last, now):
         return True
 
 
-def _db_part(dry_run, vacuum):
+def _db_part(dry_run, vacuum, min_free_pages=None, min_free_ratio=None):
+    min_free_pages = VACUUM_MIN_FREE_PAGES if min_free_pages is None else min_free_pages
+    min_free_ratio = VACUUM_MIN_FREE_RATIO if min_free_ratio is None else min_free_ratio
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import atlas_db
 
@@ -72,9 +78,18 @@ def _db_part(dry_run, vacuum):
         atlas_db.init(conn)
         out = {"pruned": atlas_db.prune_old(conn, atlas_db.retention_days())}
         out["backfilled"] = atlas_db.backfill_run_kinds(conn)
-        if vacuum:
-            atlas_db.vacuum(conn)
-            out["vacuumed"] = True
+        out["improvements_closed"] = atlas_db.close_unmeasurable_improvements(conn)
+        conn.commit()
+        free = conn.execute("PRAGMA freelist_count").fetchone()[0]
+        total = conn.execute("PRAGMA page_count").fetchone()[0] or 1
+        if vacuum or (free >= min_free_pages and free / total >= min_free_ratio):
+            out["freelist_pages"] = free
+            try:
+                atlas_db.vacuum(conn)
+                out["vacuumed"] = True
+            except sqlite3.OperationalError as e:  # locked or full disk must not fail upkeep
+                out["vacuumed"] = False
+                out["vacuum_error"] = str(e)
         return out
     finally:
         conn.close()

@@ -188,6 +188,16 @@ def main():
     import session_ingest
 
     session_id = payload.get("session_id")
+    # An omp subagent lands like a colony member: is_sidechain=1 rows under its
+    # parent's session id, no session_logs/facets row of its own. No resolvable
+    # parent means skip, never a top-level row.
+    is_sub, parent = session_ingest.omp_subagent_parent(
+        os.environ.get("ATLAS_SOURCE_TRANSCRIPT")
+    )
+    if is_sub:
+        if parent:
+            session_ingest.ingest_transcript(path, session_id=parent, sidechain=True)
+        return
     session_ingest.ingest_transcript(path, session_id=session_id)
     # omp's bridge ingests a throwaway conversion; record the retained original.
     session_ingest.adopt_source_transcript(

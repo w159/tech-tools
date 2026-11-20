@@ -381,7 +381,7 @@ def update_probe(clone, plugin_name):
 
 def fix_command():
     """The runnable --fix command: absolute, shell-quoted script path."""
-    return shlex.join(["python3", os.path.abspath(__file__), "--fix"])
+    return doctor_layout._fix_command()  # one builder, so every hook line names the same path
 
 
 # Failures apply_fixes cannot repair: they need an update or a reinstall.
@@ -4276,10 +4276,12 @@ def layout_checks(root):
 
 def hook_layout_notes(cwd):
     """SessionStart: report (never fix) .atlas layout, docs naming and project
-    memory; only --fix moves anything. Returns printable lines; empty when clean."""
+    memory; only --fix moves anything. Returns printable lines; empty when clean.
+    All notes share one line and one trailing `run <cmd>` (the hook prints it
+    into the model context, so repeating the command three times is waste)."""
     lines = []
     try:
-        line = doctor_layout.hook_layout(cwd)
+        line = doctor_layout.hook_layout(cwd, fix_hint=False)
         if line:
             lines.append(line)
         # --fix refuses a non-project root, so never advise it there
@@ -4287,19 +4289,19 @@ def hook_layout_notes(cwd):
         n = 0 if refused else len(doctor_layout.docs_naming_violations(cwd))
         if n:
             lines.append(
-                f"docs naming: {n} files need renaming; run {fix_command()}"
+                f"docs naming: {n} files need renaming"
             )
         miss, tagged = doctor_layout.project_memory_status(cwd)
         if miss or tagged:
             lines.append(
                 f"project memory: {miss} finding(s) unrecorded, {tagged} global "
-                f"memory entr(ies) to migrate; run {fix_command()}"
+                f"memory entr(ies) to migrate"
             )
     except Exception as e:  # a hook never breaks the session
         import atlas_faults
 
         atlas_faults.record("atlas_doctor", e)
-    return lines
+    return [f"{'; '.join(lines)}; run {fix_command()}"] if lines else []
 
 
 def _fix_project_layout(root):

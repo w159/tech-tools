@@ -578,9 +578,11 @@ def reconcile_task_dispatches(conn, session_id):
         return 0
 
 
-def ingest_transcript(path, conn=None, session_id=None, force=False):
+def ingest_transcript(path, conn=None, session_id=None, force=False, sidechain=False):
     """Ingest new lines of one transcript. Returns a small stats dict.
-    Incremental via byte cursor; resets cleanly if the file was truncated."""
+    Incremental via byte cursor; resets cleanly if the file was truncated.
+    `sidechain` flags every row is_sidechain=1 and leaves the session row to the
+    owning main file (an omp subagent landing under its parent's session id)."""
     # `skipped` counts per-line failures that were swallowed rather than fatal
     # (corrupt JSON, unparseable records); `skip_reasons` keeps a few samples so a
     # silent partial ingest is observable. See M15.
@@ -684,6 +686,8 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                         f"json parse failed: {type(e).__name__}: {e}"
                     )
                 continue
+            if sidechain and isinstance(obj, dict):
+                obj["isSidechain"] = True
             _ingest_line(conn, session_id, obj, meta, stats, keys)
         # link project from the cwd seen in the transcript
         if meta["cwd"]:
@@ -694,7 +698,9 @@ def ingest_transcript(path, conn=None, session_id=None, force=False):
                 )
             except Exception:
                 pass
-        if owner_path and owner_path != path and not durable_owner:
+        if sidechain:
+            pass  # the parent's own file owns the session row; never create one here
+        elif owner_path and owner_path != path and not durable_owner:
             # A different transcript file sharing this sessionId (a subagent
             # file) must not move the session row's ownership columns: the
             # transcript_path/cursor stay with the file that created the row.
@@ -1414,6 +1420,18 @@ def _omp_colony_parent(colony_dir):
     except OSError:
         pass
     return None
+
+
+def omp_subagent_parent(source):
+    """(is_subagent, parent session id) for an omp session file. A subagent is a
+    file with a `parentSession` header or one inside a lead's colony directory;
+    its parent id is the sibling main file's session id (None when unreadable)."""
+    if not source or not os.path.isfile(source):
+        return False, None
+    d = os.path.dirname(source)
+    if not (transcript_facts(source)[2] or os.path.isfile(_omp_colony_main(d))):
+        return False, None
+    return True, _omp_colony_parent(d)
 
 
 # Colony agents (omp): member transcripts carry their own internal session ids

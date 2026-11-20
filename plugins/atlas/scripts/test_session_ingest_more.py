@@ -503,5 +503,76 @@ class NormalizeAndEpochTest(unittest.TestCase):
         self.assertIsNone(si._epoch(""))
 
 
+class OmpSubagentHookIngestTest(Base):
+    """The live omp SubagentStop path (hooks/ingest_session.main) must land a
+    `task` subagent like a colony member: sidechain rows under the parent id,
+    no session_logs row of its own; a main session still ingests as before."""
+
+    def setUp(self):
+        super().setUp()
+        hooks = os.path.join(os.path.dirname(__file__), "..", "hooks")
+        if hooks not in sys.path:
+            sys.path.insert(0, hooks)
+        import ingest_session
+        import omp_transcript
+
+        self.hook, self.conv = ingest_session, omp_transcript
+        os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
+        self.proj = os.path.join(self.tmp, "sessions", "-w-proj")
+        self.stem = "2026-10-02T05-00-00Z_lead-1"
+
+    def _omp(self, path, sid, parent=None):
+        head = {"type": "session", "id": sid, "timestamp": "2026-10-02T05:00:00Z", "cwd": "/w/proj"}
+        if parent:
+            head["parentSession"] = parent  # omp stamps this on every `task` subagent
+        lines = [
+            json.dumps(head),
+            json.dumps({"type": "message", "id": "a1", "parentId": None, "timestamp": "2026-10-02T05:00:01Z",
+                        "message": {"role": "assistant", "content": [
+                            {"type": "toolCall", "id": "t1", "name": "bash", "arguments": {"command": "ls"}}]}}),
+        ]
+        return _w(path, lines)
+
+    def _run_hook(self, source, sid):
+        out = os.path.join(self.tmp, "conv", f"{sid}.jsonl")
+        self.conv.convert_file(source, out)
+        os.environ["ATLAS_SOURCE_TRANSCRIPT"] = source
+        payload = {"session_id": sid, "transcript_path": out, "hook_event_name": "SubagentStop"}
+        with mock.patch.object(self.hook.atlas_hook_guard, "read_payload", return_value=payload), \
+                mock.patch.object(self.hook.atlas_hook_guard, "should_run", return_value=True), \
+                mock.patch.object(self.hook, "_refresh_facet"), \
+                mock.patch.object(self.hook, "_finish_lead"), \
+                mock.patch.object(self.hook, "_sweep_todos"):
+            self.hook.main()
+
+    def _count(self, sql):
+        return self.conn.execute(sql).fetchone()[0]
+
+    def test_subagent_lands_sidechain_under_parent_without_own_row(self):
+        self._omp(os.path.join(self.proj, f"{self.stem}.jsonl"), "lead-1")
+        sub = self._omp(os.path.join(self.proj, self.stem, "Worker.jsonl"), "sub-1", parent="lead-1")
+        self._run_hook(sub, "sub-1")
+        self.assertEqual(self._count("SELECT COUNT(*) FROM session_logs WHERE session_id='sub-1'"), 0)
+        self.assertEqual(self._count("SELECT COUNT(*) FROM facets WHERE session_id='sub-1'"), 0)
+        self.assertEqual(
+            self._count("SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' AND is_sidechain=1"), 1
+        )
+        self.assertEqual(self._count("SELECT COUNT(*) FROM tool_calls WHERE session_id='sub-1'"), 0)
+
+    def test_subagent_without_resolvable_parent_is_skipped(self):
+        sub = self._omp(os.path.join(self.proj, self.stem, "Worker.jsonl"), "sub-1", parent="lead-1")
+        self._run_hook(sub, "sub-1")  # no sibling main file
+        self.assertEqual(self._count("SELECT COUNT(*) FROM session_logs"), 0)
+        self.assertEqual(self._count("SELECT COUNT(*) FROM tool_calls"), 0)
+
+    def test_main_session_still_ingests_as_before(self):
+        main = self._omp(os.path.join(self.proj, f"{self.stem}.jsonl"), "lead-1")
+        self._run_hook(main, "lead-1")
+        self.assertEqual(self._count("SELECT COUNT(*) FROM session_logs WHERE session_id='lead-1'"), 1)
+        self.assertEqual(
+            self._count("SELECT COUNT(*) FROM tool_calls WHERE session_id='lead-1' AND is_sidechain=0"), 1
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

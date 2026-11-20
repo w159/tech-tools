@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.33.2 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.34.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -935,97 +935,57 @@ steps.
 
 | Glyph | Meaning | Glyph | Meaning |
 | ----- | ------- | ----- | ------- |
-| `◐ ◓ ◑ ◒` | running, on every surface (`\| / - \` in ASCII mode) | `■` | failed (killed workers read the same) |
-| `▲` | blocked, it needs you | `◇` | queued |
-| `◉` | waiting | `●` | done |
-| `○` | idle | `△` | a gate warning |
-| `▰▱` | a meter, filled and empty cells | | |
+| `◐ ◓ ◑ ◒` | running, on every surface (`\| / - \` in ASCII mode) | `✗` | failed |
+| `✓` | done | `○` | queued |
+| `▲` | blocked, it needs you | `◉` | waiting |
+| `△` | a gate warning | | |
 
-The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`. No row is struck through:
-a done row is dim and keeps its green `●`.
+The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`.
 
 **The band.** The band is one row above the prompt, drawn as three filled
-segments after the `◖ ◆ ATLAS ◗` pill, with a half block `▌` at each seam:
+segments after the `◆ ATLAS` pill:
 
 ```
 STATE (glyph, word, clock)  |  PLAN (todo n/m)  |  WORKERS (counts)
 ```
 
+Rendered from the mod's view code with fixture data (`bandTree`), a run with
+three workers, then the same run after the workers ended with one failed:
+
+```
+◆ ATLAS  ◐ working 0:14 ▌ todo 0/5 ▌ ◐ 3 running
+◆ ATLAS  ✓ done 0:14 ▌ todo 2/5 ✗1 ▌ ✓ 2 done · ✗1
+ last run  3 workers · 0:14 · 1 failed
+```
+
 The STATE segment reads one of four words (`runStateOf` in
-`mod/view/band/mission-layout.ts`) and is filled to match: `working` with a turning spinner
-(fill 141), `done` (114, bold dark ink), `blocked` (203), or `idle` (240, with 252
-text). The pill is a fixed 97. The PLAN segment is `todo n/m` with a `▰▱` meter
-when the row is 120 columns or wider, and a `■1` beside it when a worker failed.
-The WORKERS segment prints the same counts as the SUBAGENTS title: running first,
-then waiting, done and failed (`◐ 2 running · ● 1 done · ■1`), or `no agents`
-when there are none. A gate that fails while Stop has not refused shows as a
-`△ gates 2/3` chip at the end of that segment.
+`mod/view/band/mission-layout.ts`): `working` with a turning spinner, `done`,
+`blocked` or `idle`. The PLAN segment is `todo n/m` with a `✗1` beside it when an
+item failed. The WORKERS segment prints the same counts as the SUBAGENTS title
+(`◐ 3 running`, `✓ 2 done · ✗1`), or `no agents` when there are none. A gate that
+fails while Stop has not refused adds a gate chip; it opens the gates tab.
 
 Rules the band follows:
 
 - **Working** is shown whenever the host reports its turn is on, a worker runs or a
-  plan row is running, until the host reports the turn over. The run clock starts at your prompt, never steps
-  back, and ends when the host reports the turn idle (`stepRun`,
-  `mod/view/band/band-motion.ts`). A closed run has one total, set when it closed and
-  never raised after (`closedTotal`): the band, the run card, the side panel's
-  phase row, the board footer and axis all print that same figure. A host turn with no live run, such as a slash command
-  typed after a run finished, reads `◐ working` with no clock and opens no run
-  (`hostOnly` in `mod/view/band/band.tsx`).
-- **Done** shows the run total, frozen (`● done 1:08` stays 1:08 and does not count on), for 30 seconds
-  (`IDLE_AFTER_SECS`), then the segment turns idle (`○ idle · 1:08`).
-- **Blocked** reads `▲ blocked · stop refused 0:37` when the Stop hook refused (or
-  a dispatch row Stop will refuse on is still open), and `▲ blocked · 1 failed
-  0:37` when workers failed. Those are the only two reasons. A run that ends with a
-  failed worker (its dispatch row not closed) or a refused stop reads blocked from
-  the end of the run until a new run starts, never `idle` (`failedOpen` in
-  `runStateOf`, `mod/view/band/mission-layout.ts`). The band and the side
-  panel read the Stop verdict on the same beat, so both switch on the same update.
+  plan row is running, until the host reports the turn over. The run clock starts
+  at your prompt, never steps back, and ends when the host reports the turn idle
+  (`stepRun`, `mod/view/band/band-motion.ts`). A closed run has one total, set when
+  it closed and never raised after (`closedTotal`): the band, the run card and the
+  side panel print that same figure.
+- **Done** shows the run total, frozen, for 30 seconds after the run ends. It then
+  settles to `idle` (`IDLE_AFTER_SECS`).
+- **Blocked** reads `▲ blocked` when the Stop hook refused (or a dispatch row Stop
+  will refuse on is still open), and when workers failed. A run that ends with a
+  failed worker or a refused stop reads blocked from the end of the run until a new
+  run starts, never `idle` (`failedOpen` in `runStateOf`).
 - **Width.** Below the full form the meter goes first, then `todo`, then the
-  counts shrink to bare figures, then the state word goes and the clock stays.
-  The host draws its own `[-]` handle at the right end of the row; the band does
-  not draw one.
+  counts shrink to bare figures, then the state word goes and the clock stays. The
+  host draws its own `[-]` handle at the right end of the row.
 
-At 150 columns (`mod/view/band/mission-layout.ts` `standardForms`, via `bandLines`):
-
-```
-◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo ▰▰▰▰▱▱▱▱▱▱ 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
-◖ ◆ ATLAS ◗ ● done 1:08 ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents · △ gates 2/3
-◖ ◆ ATLAS ◗ ○ idle · 1:08 ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents
-◖ ◆ ATLAS ◗ ▲ blocked · stop refused 0:37 ▌ todo ▰▰▰▰▰▰▰▱▱▱ 5/7 ▌ no agents
-◖ ◆ ATLAS ◗ ◐ working ▌ todo ▰▰▰▰▰▰▰▰▰▰ 7/7 ▌ no agents
-```
-
-The lines are working, done with a failing gate, idle, blocked by a Stop refusal,
-and a host turn with no live run. At 110 columns the meter is gone, at 60 the
-counts are bare figures, and at 40 the state word and `todo` go:
-
-```
-◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 3/7 ■1 ▌ ◐ 2 running · ● 1 done · ■1
-◖ ◆ ATLAS ◗ ◐ working 0:42 ▌ todo 3/7 ■1 ▌ ◐2 ●1 ■1
-◖ ◆ ATLAS ◗ ◐ 0:42 ▌ 3/7 ■1 ▌ ◐2 ●1 ■1
-```
-
-With no colour (`NO_COLOR`) or in ASCII mode there are no fills, and the band
-reads as one dot-joined row. `ATLAS_BAND_RICH=1` draws a tall three-row form when
-the slot has at least three rows, with a phase rail and a todo meter
-(`richBand`):
-
-```
-◖ ◆ ATLAS ◗  ◐ working 0:42   ● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify
-
-todo ▰▰▰▰▰▰▰▱▱▱▱▱▱▱▱▱ 3/7 · 43%         ctx ▰▰▰▰▰▰▱▱▱▱ 62%    agents ◐ 2 running   ◇ 1 queued
-```
-
-At rest, at 80 columns or wider and with room in the slot, rows under the bar show the last run, the
-contract verdicts and the gate checks. No row prints keys: the controls are the
-clickable chips and toggles described under *Idle health* below. Their
-text, from `contracts/band-golden.ts`:
-
-```
- last run  1 worker · 0:42 · 1 failed
- verdicts  1 claim · 1 verified · 1 refuted · 0 open · 0 unchecked
- checks  ● lint  ● test  △ doctor  2/3 green
-```
+With no colour (`NO_COLOR`) or in ASCII mode there are no fills. `ATLAS_BAND_RICH=1`
+draws a taller form when the slot has at least three rows, with a phase rail
+(`richBand`).
 
 **Missing figures.** A figure that is not a plain value is drawn one of three ways, defined once in
 `mod/data/datastate.ts`: `no data yet` when nothing has been read or recorded, `read failed` when the read
@@ -1035,52 +995,23 @@ Worker counts come from one tally (`mod/data/tally.ts`), so the band, the HUD an
 `thinking` worker counts as running on all three.
 
 **Idle health.** An idle session shows what is healthy, with history, instead of an
-empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The band is built
-from fixed-width slots, so the separators do not move between idle, working and done:
+empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The
+band is built from fixed-width slots, so the separators do not move between idle,
+working and done. Its gates chip opens the gates tab and its health chip toggles the
+HEALTH card above the prompt (`BAND_GATES_KEY` and the chip keys in
+`mod/view/band/band-frame.ts`). Below 144 columns the host does not dock the side
+pane at rest, so a two-row idle strip above the band (`mod/view/hud/strip-frame.ts`)
+shows the last run, run count and median, gates, hook p95, context and a spark; a
+click anywhere on it opens the card.
 
-```
-◖ ◆ ATLAS ◗ ◌ idle up 0:13    │  ○ gates armed › │ ▁▁▁▁▅▁▁▁ peak 1 / 5s
-◖ ◆ ATLAS ◗ ● done 6/6        │  ● gates ok ›    │ ▁▁▆█▁▁▁▁ peak 3 / 5s
-```
-
-The head is the state and the uptime (idle) or the stage count (`done 6/6`). The
-`gates` chip opens the gates tab. The spark is the session's events in 8 cells.
-At 110 columns and wider the band also carries `hook p50` and `ctx` slots (a dash
-before data) and sheds them below 110, ctx first. The context figure is the last
-response's input tokens over the model window (the host's `session.measure`), not
-a session total. With the pane closed, a `▸ health` chip opens the HEALTH card above
-the prompt; the card's title (`▾ HEALTH`) and the band's `▾ health` chip close it.
-Below 144 columns the host does not dock the side pane at rest, so a two-row idle
-strip above the band (`mod/view/hud/strip-frame.ts`) shows the last run, run count and
-median, gates, hook p95, context and a spark; a click anywhere on it opens the card.
-
-The status tab, the card and the other tabs draw the same sections from
-`mod/view/hud/status-frame.ts`: NOW (state, stepper `●●◆○○○ 3/6`), ACTIVITY (column chart
-with a y axis, baseline and time axis; the rule names the bucket, `peak 3 / 5s`),
-CONTEXT, RUNS (bars, `N runs · med 0:41 · 1 failed`), GATES (a table with `pass`,
-`deny` and `last` columns) and HOOKS (`n`, `p50` and `last` per hook; the rule says
-`amber>100ms red>500ms`). Tabs with their own content draw it first and the shared
-sections under it; a tab with nothing to show draws its header and one honest line,
-never invented rows. At idle the sections summarise (`○ 4 gates armed · 0 checks
-yet`) instead of tabulating zeros.
-
-History is kept in `.atlas/.run/history.json` (project runtime state, written
-atomically, never under `plugins/`): the last 50 runs, the last 64 latency samples
-per hook, events per minute for the last 60 minutes, the last session's context and
-each gate's counts. A returning project therefore shows its last run, run count and
-median at idle, and the earlier session's activity left of a `│` marker in the
-chart. Anything from an earlier session is labelled `prev`; a missing or corrupt
-file is an empty history. The wordmark pill breathes slowly at idle (2.4 second
-cycle) and stays still under `NO_COLOR`, reduced motion or `TERM=dumb`. A run's
-duration is printed once per view, in RUNS.
-
-![Idle band at 150 columns with the side panel](img/showcase/cc-idle-health-150.png)
-
-![Idle band at 150 columns in a project with history from an earlier session](img/showcase/cc-seeded-idle-150.png)
-
-![Idle band at 110 columns with the side panel docked](img/showcase/cc-idle-health-110.png)
-
-![The HEALTH card open above the prompt](img/showcase/cc-health-open.png)
+The health card and the health tab draw the same sections from the same figures
+(`mod/view/hud/status-frame.ts`, `mod/view/panel/health-tab.ts`), so the band, the
+card and the panel print one number. History is kept in `.atlas/.run/history.json`
+(project runtime state, written atomically, never under `plugins/`): the last 50
+runs and the last 64 latency samples per hook. A returning project therefore shows
+its last run, run count and median at idle; a missing or corrupt file is an empty
+history. The idle band is not pictured here: the earlier idle screenshots showed the
+old layout.
 
 The mods were scored against btop and htop by four Claude models in paired runs; Atlas
 reached a mean of 5.33 in a fresh session and 5.75 with history, btop 7.75, so the
@@ -1103,78 +1034,31 @@ budget with blank rows under the HUD; that left an empty gap between the mod and
 the prompt and is removed.
 `ATLAS_HUD=off` (exactly that value) hides both blocks.
 
-*TODO.* The title carries the done count and a `▰▱` meter (`3/7 ▰▰▰▱▱▱▱▱`, with
-`· ■1` after the count when a row failed). Every row has the same fixed columns:
-glyph, title (it fills, at most 40 cells), state word (8), owner (16, 12 at 110
-columns) and a right-aligned time (5). A queued row shows `-` in the owner and
-time cells. An item owned by the lead, or by no worker, reads `running` while the
-lead's turn is on and the plan has started, and `waiting` if the turn stopped; it
-is never `queued` once work on it began. When the slot has fewer rows than the
-plan, the rows that do not fit are counted on one dim summary row inside the box,
-by state, each with its own glyph (`● 2 done  ◇ 1 queued`). Finished rows go
-first, then queued rows; failed rows hide last, so a failure is never folded into
-the done count. There is no `+N more` on the TODO title or anywhere else in the
-HUD.
+*TODO.* The title carries the done count and a segmented bar (`2/5 · ×1`, the
+`×1` counting failed items). The columns are `ITEM`, `STATE`, `OWNER` and `TIME`,
+with a state glyph before each item (`○` queued, `◐` running, `✓` done, `✗`
+failed). A queued row shows `-` in the owner and time cells. An item owned by the
+lead, or by no worker, reads `running` while the lead's turn is on and the plan has
+started, and `waiting` if the turn stopped; it is never `queued` once work on it
+began. When the slot has fewer rows than the plan, the rows that do not fit are
+counted on one dim summary row inside the box, by state (`● 2 done  ◇ 1 queued`
+in the code's own wording, `mod/view/hud/hud-surface.ts`). Failed rows hide last,
+so a failure is never folded into the done count.
 
-*SUBAGENTS.* A table with the columns `AGENT`, `STATE`, `TIME`, `CALLS`, `FN`
-and `LAST`, one row per agent in dispatch order (the order never changes while the
-block lives):
+*SUBAGENTS.* A table with the columns `AGENT`, `ROLE`, `STATE`, `NOW / RESULT` and
+`TIME`, one row per agent in dispatch order. `STATE` is a spinner and `running`,
+`✓ done` or `✗ failed`. `NOW / RESULT` is the worker's last tool action
+(`read alpha.py`) while it works and its result after (`stopped` for a failed
+worker). `TIME` is measured from the worker's start on the band's clock and freezes
+when the worker ends. The title carries the same tally as the band (`3 running`,
+`✗ 1 failed  ✓ 2 done`).
 
-- `STATE` is a spinner and `running`, `● done` or `■ failed`.
-- `TIME` is measured from the worker's start on the band's clock, so a running
-  worker's TIME and the band's run clock move together. It freezes when the
-  worker ends.
-- `CALLS` is the worker's tool-call count and `FN` the function count its report
-  states; an unknown count reads `-`.
-- `LAST` is the worker's last tool action as verb and file name (`edit gamma.py`),
-  `finished` for a done row with nothing else to say, and `stopped` for a failed
-  one. It is never the dispatch title.
+Rendered from the mod's view code with fixture data, three workers running and
+then after the workers ended with one failed:
 
-The title carries the same tally as the band (`◐ 1 running · 1 failed · 2 done`).
-Below 80 cells the numeric columns shrink to their header widths so `LAST` keeps
-at least 14 cells. From the first running worker, the table always shows its title
-and one row per running worker; finished workers fold first and the column header
-goes before any running row does. When the slot is short, the SUBAGENTS box folds
-to its title and rides the TODO box's closing rule before any running row is
-hidden.
+![TODO and SUBAGENTS boxes with three workers running (render of the mod view code with fixture data)](img/showcase/mod-band-running.png)
 
-The same plan, rendered at 150 columns with an explorer and a runner done, an
-implementer running and a runner failed:
-
-```
-╭─ ◖ ◆ ATLAS ◗ ▸ TODO  2/5 ▰▰▰▱▱▱▱▱ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
-  ● T1 read alpha.py                         done     alpha-explorer    0:22
-  ● T2 read beta.py                          done     beta-explorer     0:22
-▸ ◐ T3 edit gamma.py                         running  gamma-implement…  0:42
-  ◇ T4 combine the reports                   queued   -                    -
-  ◇ T5 run the gates                         queued   -                    -
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ◐ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────────────────────────────────────────────╮
-  AGENT             STATE       TIME  CALLS   FN  LAST
-  alpha-explorer    ● done      0:22      -    -  finished
-  beta-explorer     ● done      0:22      -    -  finished
-  gamma-implement…  ◐ running   0:42      -    -  edit gamma.py
-  delta-runner      ■ failed    0:22      -    -  stopped
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
-
-At 110 columns with a 12-row slot the plan folds to its open rows and the
-summary row, and the table keeps every agent:
-
-```
-╭─ ◖ ◆ ATLAS ◗ ▸ TODO  2/5 ▰▰▰▱▱▱▱▱ ─────────────────────────────────────────────────────────────────────────╮
-▸ ◐ T3 edit gamma.py                         running  gamma-implement…  0:42
-  ◇ T4 combine the reports                   queued   -                    -
-  ● 2 done  ◇ 1 queued
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ◐ 1 running · 1 failed · 2 done ──────────────────────────────────────────────────╮
-  AGENT             STATE       TIME  CALLS   FN  LAST
-  alpha-explorer    ● done      0:22      -    -  finished
-  beta-explorer     ● done      0:22      -    -  finished
-  gamma-implement…  ◐ running   0:42      -    -  edit gamma.py
-  delta-runner      ■ failed    0:22      -    -  stopped
-╰────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
-```
+![TODO and SUBAGENTS boxes after the workers ended, one of them failed (render of the mod view code with fixture data)](img/showcase/mod-band-finished.png)
 
 The selected row is a full-width bar (xterm 236) with the `▸ ` cursor kept. A done
 plan row whose worker was killed reads `closed · worker killed` in the error
@@ -1202,109 +1086,41 @@ and `atlas_doctor.py --fix` sets both env flags and the status line, removes
 with omp's own `todo` tool; when it never calls it, the extension draws a fallback
 TODO tree from the board until the first native todo result.
 
-**The side panel.** The panel is a ribbon (`◖ ◆ ATLAS ◗ ▸ SIDEPANEL`), a tab strip
-of clickable chips with the lit tab filled, and one view under it. The strip names
-four tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/view/panel/panel-tabs.ts:12-16`): health, status,
-gates and channel (team content is in status, core figures in health). Click a chip to open that view; no key hint is
-printed; each tab is its own chip with one cell between chips, and no rule is
-drawn under the lit one. All four chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
-with no prompt yet the status view reads `◌ idle · no prompt yet` and `armed: 4
-gates · 6 hooks · team off`, then ACTIVITY, GATES, HOOKS and RECENT; after a
-run it shows the stepper, CONTEXT, RUNS, GATES and HOOKS tables as described under
-*Idle health*. A footer pinned to the last row reads `atlas <version> · <branch>`
-(the version comes from the plugin's own manifest) with the session cost flush
-right once the host has measured one. The run duration is said once, in RUNS; NOW
-says `ended 17s ago`.
-The panel draws the snapshot as it is, with no hold: the Stop verdict is read on
-every frame beat, and the phase is never `done` while a dispatch row is open or a
-worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
-`contracts/panel-world.ts` at 60 columns:
+**The side panel.** The panel is a ribbon (`◆ ATLAS`, `project · branch`, the version
+flush right), a tab strip of clickable chips with the lit tab filled, and one view
+under it. The strip names four tabs, in this order (`PANEL_TABS` in
+`mod/view/panel/panel-tabs.ts`): `health`, `status`, `gates` and `channel`. Team
+content lives in status and the core figures in health. `gates` carries its denial
+count and `channel` its unread count as badges. A tab answers a click only; no key
+hint is printed. The panel draws the snapshot as it is, with no hold: the Stop
+verdict is read on every frame beat, and the phase is never `done` while a dispatch
+row is open or a worker runs (`currentPhase` in `mod/data/todos.ts`).
 
-```
-◖ ◆ ATLAS ◗ ▸ SIDEPANEL ───────────────────────────────────
+- **health** (`mod/view/panel/health-tab.ts`): SESSION with its state word, the
+  context bar (`27%  339k / 1M`), hook p50 and p95, tools per minute, denials and
+  the age of the last one, then RUNS (the run count, median and p90, a bar chart
+  with failed runs in red) and the last run times.
+- **status** (`mod/view/panel/status-tab.ts`): PHASE with the run's state word and
+  the rail `research theory test validate implement verify`, PLAN with the plan rows
+  and their times, TEAM with one row per agent (role, last action, time), and
+  SESSION (uptime, branch, last run, release).
+- **gates** (`mod/view/panel/gates-tab.ts`): GATES with passed and denied counts and
+  a mark per gate, DENIED with a card per denied gate (the rule, the reason and the
+  fix command), and a TIMELINE with one tick per gate check.
+- **channel** (`mod/view/panel/channel-chat.ts`): the channel name and who is
+  online, the posts and dispatch notes with their times, and at the bottom a
+  composer with recipient chips (`@lead`, one chip per agent).
 
- status   team   channel   gates   core   board
- phase  ◐ research
- gates  ● lint   ● test   △ doctor   2/3 green
- agents ◇ 1 queued  ◐ 1 running  ● 2 done  ■ 1 failed
+Rendered from the mod's own view code with fixture data, a run with three workers,
+one tab per column:
 
- todo   ▰▰▰▱▱▱▱▱ 3/7
-  ● Wire band to host     done            implementer-layout
-  ● Layout grid tiers     done            implementer-layout
-  ● Gate golden tests     done             implementer-gates
-  ◐ Subagents block       running           implementer-band
-  ◇ Gate tests            queued                 runner-land
-  ■ Changelog             failed            implementer-live
-  ▲ Ship board mod        blocked                        you
-```
+![The four side panel tabs: health, status, gates, channel (render of the mod view code with fixture data)](img/showcase/mod-panel-tabs.png)
 
-- **status** (key `r`, the tab id is still `route`): the phase row wears the band's
-  own glyph, word and clock (`phase  ● done 0:29`, `phase  ▲ blocked 0:29`), built
-  from the band's own inputs and the same glyph function (`phaseRow` with
-  `phaseGlyph`, `mod/view/panel/panel-layout.ts`), so the two never differ on one frame; then the numbered phase
-  rail, a row per agent with a 12-cell braille activity line and its time, the
-  gates, an events list of workers starting and finishing (`+0:13  alpha-explorer
-  done`), and the todo rows.
-- **team**: every seat has glyph, role, state word, elapsed time (the lead too)
-  and a 12-cell activity line.
-- **channel**: the channel name with people and unread counts, each post with its
-  own time on the run clock (`+0:13`), a `posts` summary and a `senders` block.
-  With a senders block shown, an empty channel reads `0 messages` under it.
-- **gates**: the Stop gate's checks grouped, each group with an `n/m` count.
-- **core**: the contract verdicts and the `verified n/m` figure
-  (`verifiedFigure`), or `no verdicts, workers or gates yet`.
-- **board** (key `o`): see below.
-
-**The board.** The board is no tab of the strip; the band's board button opens it (`mod/view/panel/panel-tabs.ts:117`, `openBoard` in `mod/host/handlers.ts:162`). The view (`mod/view/board/board-model.ts`, drawn by `mod/view/panel/pane/sidebar.tsx`)
-lists one row per plan item with state and owner, under a title row that counts
-the items and carries the same `▰▱` meter, then a Gantt timeline: one lane per
-agent, the lead's lane first, a bar (`▇`, ended exactly to the clock) in the
-state colour from the agent's start offset, a `┊` gridline every 10 seconds, and a
-caption under each bar (`0:11 · 4 calls`). The lead's lane follows the run: 141
-while it works, 114 when done, 203 with `▲` while blocked. An axis closes the
-chart and ends at the run's total, the figure the band shows. Under it a `recent`
-list and a footer (`● 2 done  ■ 1 failed · total 0:29 · 9 worker calls`). At 57
-columns (a 150-column terminal with the panel docked), five plan rows, a failed
-worker and a finished run:
-
-```
-◖ ◆ ATLAS ◗ ▸ SIDEPANEL ▸ BOARD ───────────────────────
-
- status   team   channel   gates   core   board
-  5 items                                      ▰▰▰▰▰▰▰▰
-
-  ● T1 read alpha.py            done    alpha-explorer
-  ■ T2 read ghost.py            failed  ghost-explorer
-  ● T3 read beta.py             done    beta-explorer
-  ● T4 combine the reports      done    lead
-  ● T5 write the final summary  done    lead
-
- ● lead      ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇
-             0:29 · 3 calls
-
- ● alpha     ┊    ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇       ┊
-                  0:11 · 4 calls
-
- ■ ghost     ┊     ▇▇▇▇▇▇▇▇▇▇▇▇▇▇▇       ┊
-                   0:10 · 2 calls
-
- ● beta      ┊             ┊        ▇▇▇▇▇▇▇▇▇▇
-                                    0:07 · 3 calls
-             ┬─────────────┬─────────────┬───────────┬──
-             0:00          0:10          0:20       0:29
-
-    recent
-    +0:02    alpha-explorer  started
-    +0:03    ghost-explorer  started
-    +0:13    alpha-explorer  done
-    +0:15    beta-explorer   started
-    +0:22    beta-explorer   done
-
-  ● 2 done  ■ 1 failed · total 0:29 · 9 worker calls
-```
-
-A failed worker reads `■ failed` on every tab. A dispatch row that a plan row owns
-folds into that plan row; the rest list under a `dispatches` group.
+**The board.** The board is no tab of the strip. The `toggleTodos` handler opens it
+(`openBoard` in `mod/host/handlers.ts`), and its model is
+`mod/view/board/board-model.ts`: one row per plan item with state and owner, and a
+timeline with one lane per agent. A failed worker reads `failed` on every view. A
+dispatch row that a plan row owns folds into that plan row.
 
 **Transcript cards.** Cards are one row each, `min(56, cols - 4)` cells wide and
 never wrapped (`finishRow` in `mod/view/transcript/cards.tsx`). Each starts with a bar
@@ -1313,14 +1129,8 @@ A worker's finish card shows the state glyph and word, the worker name and, flus
 right, the run time and call count from the worker's SUBAGENTS row (`-` where the
 count is unknown). The run card is placed once per clean run and reads `done`,
 the plan count and worker count, and the band's run time. A blocked card is
-placed once per blocked spell, with a 203 bar, in the band's own words:
+placed once per blocked spell, with a 203 bar, in the band's own words (`blocked · stop refused`).
 
-```
-▌ ◆ ATLAS  ● done  beta-explorer          0:13 · 3 calls
-▌ ◆ ATLAS  ■ failed  ghost-explorer             0:05 · -
-▌ ◆ ATLAS  ● done  5/5 · 3 workers                  1:08
-▌ ◆ ATLAS  ▲ blocked · stop refused                 0:36
-```
 
 A placed card is never removed, replaced or rewritten. The mod, the Stop gate and
 the missing-header toast read the header the same way: the first line, after
@@ -1596,7 +1406,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.33.2
+|-- .claude-plugin/plugin.json   manifest, version 17.34.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
