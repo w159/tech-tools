@@ -1032,6 +1032,23 @@ def _atlas_statusline_command(plugin_root):
     return 'python3 "%s"' % _atlas_statusline_script(plugin_root)
 
 
+def _atlas_home_dir(env, atlas_home=None):
+    return atlas_home or env.get("ATLAS_HOME") or os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+
+
+def _launcher_path(atlas_home):
+    return os.path.join(atlas_home, "bin", "atlas_statusline_launch.py")
+
+
+def _launcher_command(atlas_home):
+    return 'python3 "%s"' % _launcher_path(atlas_home)
+
+
+def _is_launcher_cmd(cfg):
+    cmd = cfg.get("command") if isinstance(cfg, dict) else None
+    return isinstance(cmd, str) and "atlas_statusline_launch.py" in cmd
+
+
 def _same_file(a, b):
     return os.path.realpath(a) == os.path.realpath(b)
 
@@ -1231,7 +1248,7 @@ def _renderer_state(settings_path, proj, env):
 
 
 def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="atlas", version=None,
-                   project_dir=None, omp_agent_dir=None, term_rows=None):
+                   project_dir=None, omp_agent_dir=None, term_rows=None, atlas_home=None):
     """Checks that explain a missing TODO tree, Subagents block, mission control band or
     status line. Every row is warn severity (these are user configuration, not plugin damage) except an unreadable
     settings.json, which is fail: every other display check is blind without it and --fix cannot repair it.
@@ -1240,6 +1257,7 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     root = _display_plugin_root(plugin_root)
     path = settings_path or _claude_settings_path()
     proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
+    ahome = _atlas_home_dir(env, atlas_home)
     rows = []
 
     def add(cid, ok, detail, severity="warn"):
@@ -1313,21 +1331,20 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     else:
         cfg = data.get("statusLine")
         script = _statusline_script_path(cfg)
+        lpath, lcmd = _launcher_path(ahome), _launcher_command(ahome)
         if cfg in (None, {}, ""):
-            add("display-statusline", False, f"statusLine unset in {path}; `atlas_doctor.py --fix` sets it to "
-                f"{_atlas_statusline_command(root)}")
-        elif script and not os.path.isfile(script):
-            add("display-statusline", False, f"statusLine points at missing {script}; `atlas_doctor.py --fix` "
-                f"repoints it to {_atlas_statusline_command(root)}")
-        elif script and not _same_file(script, _atlas_statusline_script(root)):
-            add("display-statusline", False, f"statusLine runs {script}, not this plugin's "
-                f"{_atlas_statusline_script(root)} (another install or an old version); `atlas_doctor.py --fix` "
-                f"repoints it to {_atlas_statusline_command(root)}")
+            add("display-statusline", False, f"statusLine unset in {path}; `atlas_doctor.py --fix` sets it to {lcmd}")
+        elif _is_launcher_cmd(cfg):
+            if os.path.isfile(lpath):
+                add("display-statusline", True, f"statusLine runs the stable launcher {lpath}")
+            else:
+                add("display-statusline", False, f"statusLine runs {lpath} but it is missing; `atlas_doctor.py --fix` writes it")
         elif script:
-            add("display-statusline", True, f"statusLine runs {script}")
+            add("display-statusline", False, f"statusLine runs {script}, a versioned path that breaks when the plugin "
+                f"updates; `atlas_doctor.py --fix` repoints it to {lcmd}")
         else:
             add("display-statusline", False, f"statusLine in {path} is another tool's command; left untouched. "
-                f"To use Atlas's, set it to {_atlas_statusline_command(root)}")
+                f"To use Atlas's, set it to {lcmd}")
 
     # 5. omp todo tool: the omp TODO tree renders only from omp's native `todo` tool
     files = _omp_settings_files(omp_dir, proj)
@@ -1418,7 +1435,8 @@ def _backup_settings(path):
     return bak
 
 
-def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None, omp_agent_dir=None):
+def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None, omp_agent_dir=None,
+                atlas_home=None):
     """--fix only: merge the TodoWrite env vars (TODO_TOOLS=1, TASKS=0) and, when unset or dead, the Atlas statusLine into
     the user settings.json with one atomic write. Never edits unreadable JSON, never overwrites a
     foreign statusLine, removes ATLAS_HUD=off from Claude Code settings env, sets omp todo.enabled true, never touches ATLAS_MOD. Returns a list of lines."""
@@ -1426,6 +1444,7 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
     root = _display_plugin_root(plugin_root)
     path = settings_path or _claude_settings_path()
     proj, omp_dir = _display_dirs(settings_path, env, project_dir, omp_agent_dir)
+    ahome = _atlas_home_dir(env, atlas_home)
     notes = []
     backed = []
 
@@ -1486,19 +1505,24 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
             changed = True
     cfg = data.get("statusLine")
     script = _statusline_script_path(cfg)
-    if os.path.isfile(_atlas_statusline_script(root)) and (
-        cfg in (None, {}, "")
-        or (script and not os.path.isfile(script))
-        or (script and not _same_file(script, _atlas_statusline_script(root)))
-    ):
-        data["statusLine"] = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=_atlas_statusline_command(root), refreshInterval=5)
-        notes.append(f"set statusLine to {_atlas_statusline_command(root)} (refreshInterval 5) in {path}")
-        changed = True
-    elif isinstance(cfg, dict) and script and os.path.isfile(script) and "refreshInterval" not in cfg:
-        # The compact one-row switch needs the line re-run every few seconds, not only after a turn.
-        data["statusLine"] = dict(cfg, refreshInterval=5)
-        notes.append(f"added refreshInterval 5 to statusLine in {path}")
-        changed = True
+    is_launcher = _is_launcher_cmd(cfg)
+    want = _launcher_command(ahome)
+    if os.path.isfile(_atlas_statusline_script(root)) and (cfg in (None, {}, "") or script or is_launcher):
+        try:
+            import atlas_statusline
+
+            atlas_statusline.write_launcher(ahome)
+            if is_launcher and cfg.get("command") == want:
+                new = dict(cfg)
+                new.setdefault("refreshInterval", 5)
+            else:
+                new = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=want, refreshInterval=5)
+            if new != cfg:
+                data["statusLine"] = new
+                notes.append(f"set statusLine to {want} (refreshInterval 5) in {path}")
+                changed = True
+        except Exception as e:
+            notes.append(f"SKIP statusLine launcher: {e}")
     elif cfg not in (None, {}, "") and not script:
         notes.append("statusLine is another tool's command; left untouched")
     if changed:

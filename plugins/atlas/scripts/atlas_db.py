@@ -208,7 +208,7 @@ def init(conn, backfill=True):
     backfill=False: it scans `messages`, and only ingest changes its inputs)."""
     if _schema_current(conn):
         if backfill:
-            backfill_run_kinds(conn)
+            backfill_run_kinds(conn, since=_recent_cutoff())
         return
     conn.executescript(SCHEMA)
     conn.commit()
@@ -307,33 +307,105 @@ def init(conn, backfill=True):
     )  # int literal: pragmas take no params
     conn.commit()
     if backfill:
-        backfill_run_kinds(conn)
+        backfill_run_kinds(conn, since=_recent_cutoff())
 
 
-def backfill_run_kinds(conn):
-    """Classify all existing runs whose session has at least one message row.
-    A run is 'worker' when its session has >=1 total messages but zero
-    non-sidechain (is_sidechain=0) messages. Sessions with no ingested
-    messages are left at the default 'orchestrator' -- absence of data is
-    not evidence of worker status. Idempotent."""
+RECENT_BACKFILL_S = 2 * 86400
+
+
+def _recent_cutoff(now=None):
+    return (time.time() if now is None else now) - RECENT_BACKFILL_S
+
+
+def backfill_run_kinds(conn, since=None):
+    """Classify runs by message thread visibility: 'worker' when the session has
+    messages but none non-sidechain, 'orchestrator' when it has any non-sidechain
+    message. Sessions without messages are left alone. Idempotent. `since`
+    (epoch seconds; runs.started_at is REAL epoch) restricts to runs started at
+    or after it and uses ix_messages_session; None is the full maintenance pass."""
+    if since is None:
+        sub_where, run_where, args = "", "", ()
+    else:
+        sub_where = (
+            " WHERE session_id IN (SELECT session_id FROM runs WHERE started_at >= ?)"
+        )
+        run_where = " AND started_at >= ?"
+        args = (since, since)
     conn.execute(
-        "UPDATE runs SET kind='worker' "
-        "WHERE session_id IN ("
-        "  SELECT session_id FROM messages "
-        "  GROUP BY session_id "
-        "  HAVING COUNT(*) >= 1 "
-        "  AND SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) = 0"
-        ")"
+        "UPDATE runs SET kind='worker' WHERE session_id IN ("
+        "  SELECT session_id FROM messages" + sub_where +
+        "  GROUP BY session_id HAVING COUNT(*) >= 1"
+        "  AND SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) = 0)" + run_where,
+        args,
     )
     conn.execute(
-        "UPDATE runs SET kind='orchestrator' "
-        "WHERE session_id IN ("
-        "  SELECT session_id FROM messages "
-        "  GROUP BY session_id "
-        "  HAVING SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) >= 1"
-        ")"
+        "UPDATE runs SET kind='orchestrator' WHERE session_id IN ("
+        "  SELECT session_id FROM messages" + sub_where +
+        "  GROUP BY session_id"
+        "  HAVING SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) >= 1)" + run_where,
+        args,
     )
     conn.commit()
+
+
+PRUNE_TABLES = ("messages", "tool_calls", "user_prompts", "turn_scores", "signals")
+PRUNE_BATCH = 20000
+
+
+def retention_days(default=90):
+    v = (os.environ.get("ATLAS_DB_RETENTION_DAYS") or "").strip().lower()
+    if not v:
+        return default
+    if v in ("0", "off", "false", "no"):
+        return 0
+    try:
+        return max(0, int(float(v)))
+    except ValueError:
+        return default
+
+
+def prune_old(conn, days):
+    """Delete raw rows older than `days` from the heavy mirror tables, in batches.
+    Summary tables are kept. Returns {table: rows_deleted}; days<=0 is a no-op."""
+    counts = {}
+    if not days or days <= 0:
+        return counts
+    cutoff = time.time() - days * 86400
+    iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(cutoff))
+    have = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for t in PRUNE_TABLES:
+        if t not in have:
+            continue
+        cols = {r[1]: (r[2] or "").upper() for r in conn.execute("PRAGMA table_info(%s)" % t)}
+        if "ts" not in cols:
+            continue
+        if cols["ts"] in ("TEXT", "VARCHAR", "DATETIME"):
+            cond = (
+                "CASE WHEN typeof(ts)='text' AND ts GLOB '[0-9][0-9][0-9][0-9]-*' "
+                "THEN ts < ? ELSE CAST(ts AS REAL) < ? END"
+            )
+            args = (iso, cutoff)
+        else:
+            cond = "ts < ?"
+            args = (cutoff,)
+        n = 0
+        while True:
+            cur = conn.execute(
+                "DELETE FROM %s WHERE rowid IN (SELECT rowid FROM %s "
+                "WHERE ts IS NOT NULL AND %s LIMIT %d)" % (t, t, cond, PRUNE_BATCH),
+                args,
+            )
+            conn.commit()
+            n += cur.rowcount
+            if cur.rowcount < PRUNE_BATCH:
+                break
+        counts[t] = n
+    return counts
+
+
+def vacuum(conn):
+    conn.commit()
+    conn.execute("VACUUM")
 
 
 def not_a_project_root(path):

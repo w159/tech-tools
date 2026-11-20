@@ -1247,6 +1247,51 @@ def update_notice(now=None, popen=None):
         return None
 
 
+MAINT_INTERVAL_S = 24 * 3600
+
+
+def maybe_spawn_maint(root, now=None, popen=None):
+    if os.environ.get("ATLAS_MAINT", "").lower() in ("0", "off", "false", "no"):
+        return False
+    try:
+        now = time.time() if now is None else now
+        try:
+            with open(os.path.join(_atlas_home(), "maint-stamp.json"), encoding="utf-8") as fh:
+                stamp = json.load(fh)
+        except (OSError, ValueError):
+            stamp = {}
+        if not isinstance(stamp, dict):
+            stamp = {}
+        projects = stamp.get("projects") if isinstance(stamp.get("projects"), dict) else {}
+
+        def is_due(last):
+            try:
+                return not 0 <= now - float(last) < MAINT_INTERVAL_S
+            except (TypeError, ValueError):
+                return True
+
+        key = os.path.realpath(root)
+        if not (is_due(stamp.get("db")) or is_due(projects.get(key))):
+            return False
+        import subprocess
+
+        (popen or subprocess.Popen)(
+            [
+                sys.executable,
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "atlas_maint.py"),
+                "--project",
+                key,
+            ],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def main():
     payload = {}
     with contextlib.suppress(Exception):
@@ -1719,6 +1764,8 @@ def main():
             "additionalContext": body,
         },
     }
+    with contextlib.suppress(Exception):  # upkeep is detached and best-effort
+        maybe_spawn_maint(_find_structure_root(payload.get("cwd") or os.getcwd()))
     sys.stdout.write(json.dumps(out))
     sys.exit(0)
 

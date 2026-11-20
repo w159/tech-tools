@@ -277,19 +277,53 @@ def rebuild_index(root: Path) -> Path:
     return idx
 
 
+def _record_index(fdir: Path) -> tuple[dict, dict]:
+    exact, suffixed = {}, {}
+    try:
+        names = sorted(n for n in os.listdir(fdir) if n.endswith(".md"))
+    except OSError:
+        return exact, suffixed
+    for name in names:
+        stem = name[:-3]
+        for m in re.finditer("_", stem):
+            rest = stem[m.end():]
+            exact.setdefault(rest, []).append(fdir / name)
+            for d in re.finditer(r"-(?=[0-9])", rest):
+                suffixed.setdefault(rest[:d.start()], []).append(fdir / name)
+    return exact, suffixed
+
+
 def backfill_findings(root, apply: bool = False) -> dict:
     """Records for every terminal finding already in findings.json that has none.
     Dry-run unless apply. Entries without an id (older batch/claim shape) cannot
     be keyed per id and are counted in `no_id`, not written."""
     root = Path(root)
     findings = load(root.joinpath(*RELPATH))
-    ids = list(dict.fromkeys(e["id"] for e in findings if isinstance(e, dict) and e.get("id")))
-    no_id = sum(1 for e in findings if isinstance(e, dict) and not e.get("id") and e.get("status") in TERMINAL)
+    dicts = [e for e in findings if isinstance(e, dict)]
+    ids = list(dict.fromkeys(e["id"] for e in dicts if e.get("id")))
+    no_id = sum(1 for e in dicts if not e.get("id") and e.get("status") in TERMINAL)
+    terminal = {e["id"] for e in dicts if e.get("id") and e.get("status") in TERMINAL}
+    exact, suffixed = _record_index(root / ".atlas" / "findings")
+    ids_cache: dict = {}
+
+    def _has(fid) -> bool:
+        base = _slug(fid)
+        seen = set()
+        for cand in sorted(set(exact.get(base, ()))) + sorted(set(suffixed.get(base, ()))):
+            if cand in seen:
+                continue
+            seen.add(cand)
+            if cand not in ids_cache:
+                ids_cache[cand] = _record_id(cand)
+            if ids_cache[cand] == str(fid):
+                return True
+        return False
+
     todo, have = [], 0
     for fid in ids:
-        if not any(e.get("id") == fid and e.get("status") in TERMINAL for e in findings if isinstance(e, dict)):
+        if fid not in terminal:
             continue
-        if _find_record(root / ".atlas" / "findings", fid):
+        if _has(fid):
             have += 1
         else:
             todo.append(fid)

@@ -35,8 +35,11 @@ CORE = [
 
 def _run(hook, stdin, env_extra=None, timeout=60):
     home = tempfile.mkdtemp()
+    os.mkdir(os.path.join(home, "claude"))
     env = {
         **os.environ,
+        # empty Claude config dir so fallow_gate never reads the developer's real ~/.claude
+        "CLAUDE_CONFIG_DIR": os.path.join(home, "claude"),
         "ATLAS_HOME": home,
         "ATLAS_DB": os.path.join(home, "atlas.db"),
         "ATLAS_HOOKSTATE_DIR": os.path.join(home, "hookstate"),

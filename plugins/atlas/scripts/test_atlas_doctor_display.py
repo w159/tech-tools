@@ -18,6 +18,7 @@ class DisplayBase(unittest.TestCase):
         self.addCleanup(shutil.rmtree, self.tmp, True)
         self.settings = os.path.join(self.tmp, "settings.json")
         self.root = os.path.join(self.tmp, "plugin")
+        self.ahome = os.path.join(self.tmp, "atlashome")
         for rel in ("hooks", "mod", "scripts"):
             os.makedirs(os.path.join(self.root, rel))
         for rel in ("hooks/hooks.json", "hooks/event_dispatch.py", "mod/register.ts", "scripts/atlas_statusline.py"):
@@ -28,11 +29,11 @@ class DisplayBase(unittest.TestCase):
             json.dump(obj, f) if not isinstance(obj, str) else f.write(obj)
 
     def rows(self, env=None):
-        out = d.display_checks(self.settings, env or {}, self.root)
+        out = d.display_checks(self.settings, env or {}, self.root, atlas_home=self.ahome)
         return {r["check"]: r for r in out}
 
     def fix(self, env=None):
-        return d.fix_display(self.settings, env or {}, self.root)
+        return d.fix_display(self.settings, env or {}, self.root, atlas_home=self.ahome)
 
     def read(self):
         with open(self.settings) as f:
@@ -221,7 +222,8 @@ class StatusLineTest(DisplayBase):
         sl = self.read()["statusLine"]
         self.assertEqual(sl["type"], "command")
         self.assertEqual(sl["refreshInterval"], 5)
-        self.assertEqual(sl["command"], 'python3 "%s"' % os.path.join(self.root, "scripts", "atlas_statusline.py"))
+        self.assertEqual(sl["command"], 'python3 "%s"' % os.path.join(self.ahome, "bin", "atlas_statusline_launch.py"))
+        self.assertTrue(os.path.isfile(os.path.join(self.ahome, "bin", "atlas_statusline_launch.py")))
         self.assertEqual(self.read()["theme"], "dark")
         self.assertTrue(self.rows()["display-statusline"]["ok"])
 
@@ -246,6 +248,44 @@ class StatusLineTest(DisplayBase):
         self.assertFalse(self.rows()["display-statusline"]["ok"])
         self.fix()
         self.assertTrue(self.rows()["display-statusline"]["ok"])
+
+
+class LauncherStatusLineTest(DisplayBase):
+    def launcher(self):
+        return os.path.join(self.ahome, "bin", "atlas_statusline_launch.py")
+
+    def test_launcher_command_ok_when_file_exists_warns_when_missing(self):
+        cmd = 'python3 "%s"' % self.launcher()
+        self.write({"statusLine": {"type": "command", "command": cmd}, "env": dict(BOTH)})
+        self.assertFalse(self.rows()["display-statusline"]["ok"])
+        self.fix()
+        self.assertTrue(os.path.isfile(self.launcher()))
+        self.assertEqual(self.read()["statusLine"]["command"], cmd)
+        self.assertTrue(self.rows()["display-statusline"]["ok"])
+
+    def test_versioned_path_warns_and_fix_points_at_launcher(self):
+        script = os.path.join(self.root, "scripts", "atlas_statusline.py")
+        self.write({"statusLine": {"type": "command", "command": 'python3 "%s"' % script, "padding": 1}})
+        self.assertFalse(self.rows()["display-statusline"]["ok"])
+        self.fix()
+        sl = self.read()["statusLine"]
+        self.assertIn("atlas_statusline_launch.py", sl["command"])
+        self.assertEqual(sl["padding"], 1)
+
+
+class AtlasHomeEnvFallbackTest(DisplayBase):
+    def test_process_atlas_home_used_when_env_dict_lacks_it(self):
+        from unittest import mock
+
+        home = os.path.join(self.tmp, "procHome")
+        real = os.path.join(os.path.expanduser("~"), ".atlas", "bin", "atlas_statusline_launch.py")
+        before = os.path.exists(real) and os.path.getmtime(real)
+        self.write({"theme": "dark"})
+        with mock.patch.dict(os.environ, {"ATLAS_HOME": home}):
+            d.fix_display(self.settings, {}, self.root)
+        self.assertTrue(os.path.isfile(os.path.join(home, "bin", "atlas_statusline_launch.py")))
+        after = os.path.exists(real) and os.path.getmtime(real)
+        self.assertEqual(before, after)
 
 
 class HarnessTest(DisplayBase):

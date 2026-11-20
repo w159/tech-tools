@@ -14288,5 +14288,41 @@
     "verified_at": "2026-11-18T17:09:25+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "perf-fixes-test",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "perf-fixes: tests pass, no ~/.atlas/bin leak, but ruff not clean (2 pre-existing errors in changed files)",
+    "evidence": [
+      "atlas_test.py run --changed HEAD: hooks PASS 9 files, scripts PASS 15 files; ls ~/.atlas/bin absent before/after; ruff: test_fallow_gate.py:432 E731, test_atlas_doctor_hardening.py:132 E741 (both also present at HEAD, lines 429/132)"
+    ],
+    "doc_refs": [],
+    "reproduction": "PATH=$PWD/.atlas/.run/venv/bin:$PATH python3 plugins/atlas/scripts/atlas_test.py run --changed HEAD; ruff check <changed py files>",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-20T13:31:26+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "perf-fixes-test",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "perf-fixes: 24 test files pass, no ~/.atlas/bin leak, no new ruff errors",
+    "evidence": [
+      "atlas_test.py run --changed HEAD: hooks PASS 9 files, scripts PASS 15 files; ls ~/.atlas/bin absent before and after; no unrelated deletions in atlas_env/atlas_finding/atlas_db/fallow_gate diffs; ruff adds no new errors (E731 test_fallow_gate.py:432 and E741 test_atlas_doctor_hardening.py:132 are pre-existing at HEAD, lines 429 and 132)"
+    ],
+    "doc_refs": [],
+    "reproduction": "PATH=$PWD/.atlas/.run/venv/bin:$PATH python3 plugins/atlas/scripts/atlas_test.py run --changed HEAD; ruff check <changed py files>; same ruff on git show HEAD: versions",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T13:31:50+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

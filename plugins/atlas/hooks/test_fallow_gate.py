@@ -22,6 +22,9 @@ import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from unittest import mock
 
+# Isolate from the developer's real ~/.claude (an enabled fallow plugin would make the gate skip).
+os.environ["CLAUDE_CONFIG_DIR"] = __import__("tempfile").mkdtemp()
+
 sys.path.insert(0, os.path.dirname(__file__))
 
 import fallow_gate as fg  # noqa: E402

@@ -728,16 +728,93 @@ def _save(path, obj):
         f.write("\n")
 
 
+LAUNCHER_NAME = "atlas_statusline_launch.py"
+LAUNCHER_SOURCE = r'''#!/usr/bin/env python3
+# Stable atlas statusLine launcher: finds the current atlas install at run time so a plugin
+# update never leaves settings.json pointing at a removed version folder. Fails open.
+import glob
+import json
+import os
+import re
+import runpy
+import sys
+
+
+def _ver(v):
+    return tuple(int(x) for x in re.findall(r"\d+", str(v))[:4])
+
+
+def _find():
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    plugins = os.path.join(cfg, "plugins")
+    best = None
+    try:
+        with open(os.path.join(plugins, "installed_plugins.json"), encoding="utf-8") as f:
+            data = json.load(f)
+        for key, entries in (data.get("plugins") or {}).items():
+            if not key.startswith("atlas@"):
+                continue
+            for e in entries or []:
+                s = os.path.join(str(e.get("installPath") or ""), "scripts", "atlas_statusline.py")
+                if os.path.isfile(s):
+                    c = (_ver(e.get("version", "")), s)
+                    best = c if best is None or c > best else best
+    except Exception:
+        pass
+    if best is None:
+        for s in glob.glob(os.path.join(plugins, "cache", "*", "atlas", "*", "scripts", "atlas_statusline.py")):
+            c = (_ver(os.path.basename(os.path.dirname(os.path.dirname(s)))), s)
+            best = c if best is None or c > best else best
+    return best[1] if best else None
+
+
+def main():
+    try:
+        script = _find()
+        if not script:
+            return
+        sys.argv = [script] + sys.argv[1:]
+        runpy.run_path(script, run_name="__main__")
+    except SystemExit:
+        pass
+    except BaseException:
+        pass
+
+
+main()
+'''
+
+
+def write_launcher(home):
+    """Write the stable launcher to <home>/bin (home = the atlas home dir) only when its
+    content differs; mode 0644. Returns the launcher path."""
+    path = os.path.join(home, "bin", LAUNCHER_NAME)
+    try:
+        with open(path, encoding="utf-8") as f:
+            if f.read() == LAUNCHER_SOURCE:
+                return path
+    except OSError:
+        pass
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = "%s.%d.tmp" % (path, os.getpid())
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write(LAUNCHER_SOURCE)
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, path)
+    return path
+
+
 def install(settings, home):
     prev = os.path.join(home, ".atlas", "statusline.previous.json")
     cfg = _load(settings)
     if not os.path.exists(prev):
         _save(prev, {"statusLine": cfg.get("statusLine")})
+    launcher = write_launcher(os.environ.get("ATLAS_HOME") or os.path.join(home, ".atlas"))
     entry = cfg.get("statusLine")
     entry = dict(entry) if isinstance(entry, dict) else {}  # keep user keys such as padding
     entry.update(
         type="command",
-        command='python3 "%s"' % os.path.abspath(__file__),
+        command='python3 "%s"' % launcher,
         refreshInterval=STATUSLINE_REFRESH_S,
     )
     cfg["statusLine"] = entry

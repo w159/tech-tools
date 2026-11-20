@@ -1,5 +1,38 @@
 # Changelog
 
+## atlas 17.32.0 - 2026-11-20 -- session-start latency, knob precedence, retention, statusline
+
+Measured on the user's machine against atlas 17.31.0 (logs, transcripts, `~/.atlas/atlas.db`); before/after numbers
+from the same data. Evidence: `.atlas/evidence/2026-11-20_perf-fixes/`.
+
+- Fixed, session start: `atlas_doctor.py --hook` 0.91-0.98 s to 0.32-0.44 s, `session_boot.py` 0.48-0.55 s to
+  0.22-0.29 s (warm runs, same project and DB copy).
+  - `atlas_finding.backfill_findings` built the record index once instead of a findings re-scan plus two globs per
+    id: 0.47 s to 0.015 s on 775 findings / 613 records, same result (11 missing).
+  - `atlas_db.init` classifies run kinds only for runs of the last 2 days (`backfill_run_kinds(since=...)`):
+    0.216 s to 0.038 s on 619k messages; the full pass moved to daily upkeep and changed 0 rows after it.
+- Fixed, knob precedence (`scripts/atlas_env.py`): a stale dashboard value in `~/.atlas/settings.json` no longer
+  overrides a newer edit of `~/.claude/settings.json`. On the user's files `ATLAS_DASHBOARD` now resolves to `off`
+  (was `on`, which started the dashboard daemon, ~0.9 s, every session).
+- Added, retention: `atlas_db.prune_old` (default 90 days, `ATLAS_DB_RETENTION_DAYS`) and `scripts/atlas_maint.py`,
+  spawned detached from SessionStart at most once a day (`ATLAS_MAINT=off`). On a copy of the user's DB it removed
+  178k raw rows in 1.4 s; with `--vacuum` the file went 820 MB to 651 MB. `.atlas/.run` cleanup (default 14 days,
+  `ATLAS_RUN_RETENTION_DAYS`) dry-run on this repo: 438 files, 75.6 MB.
+- Fixed, double fallow audit: `hooks/fallow_gate.py` skips when the fallow plugin's own gate is enabled and
+  installed (`ATLAS_FALLOW=force` overrides).
+- Fixed, statusline: `install` and `atlas_doctor.py --fix` use the stable launcher
+  `~/.atlas/bin/atlas_statusline_launch.py`, which resolves the newest installed atlas at run time (38 ms median vs
+  39 ms direct). The doctor now warns on a versioned statusLine path.
+- Not changed: the read-only-Bash and in-process-dispatch denials (198 and ~25 in 7 days). A 40-command sample was
+  all genuine reads or working dispatches, so the gates are doing their job; the cost is the model's first reach
+  per session, not a false positive.
+- Tests: `test_atlas_finding_backfill.py`, `test_atlas_db_retention.py`, `test_atlas_env_freshness.py`,
+  `test_fallow_gate_plugin_defer.py`, `test_atlas_maint.py`, `test_session_boot_maint.py`, plus additions to
+  `test_atlas_statusline.py` and `test_atlas_doctor_display.py`. `test_fallow_gate.py` and `test_atlas_env.py` now
+  isolate `CLAUDE_CONFIG_DIR`.
+- Version 17.31.0 to 17.32.0; marketplace 5.38.0 to 5.39.0. armada and programmer are unchanged. Details:
+  `plugins/atlas/CHANGELOG.md`.
+
 ## atlas 17.31.0 - 2026-11-18
 
 - Fixed, done-claim detector (`hooks/done_claim.py`): the 10 round 5 defects (CI run grouping and newest-run verdict, push ref and sha backing, count backing, per-clause hedges), plus code findings from two outside critics, each with regression tests. Eval data moved to `evals/done_claim/`.

@@ -320,7 +320,19 @@ edit warns, then every 5th, until a `docs/` change clears it.
 | `ATLAS_TRIPWIRE=off` | tripwire drift tiers (nudges) |
 | `ATLAS_MANDATES=off` | recall gate, "Recall first" boot line, ponytail nudge |
 | `ATLAS_DASHBOARD=on` | SessionStart dashboard auto-start; default `off`, so the dashboard starts only when you run `atlas_dashboard.py ensure` or `serve` |
-| `ATLAS_FALLOW=off` | fallow commit/push gate |
+| `ATLAS_FALLOW=off` | fallow commit/push gate; the gate also skips itself when the fallow plugin's own `fallow-gate.sh` is enabled and installed (one audit per commit/push), and `ATLAS_FALLOW=force` runs it anyway |
+| `ATLAS_MAINT=off` | SessionStart's detached daily upkeep (`scripts/atlas_maint.py`): DB retention, full run-kind backfill, `.atlas/.run` cleanup |
+| `ATLAS_DB_RETENTION_DAYS=0` | DB retention; default 90 days of raw `messages`, `tool_calls`, `user_prompts`, `turn_scores`, `signals` rows (summary tables are kept). Reclaim disk with `python3 scripts/atlas_maint.py --force --vacuum` |
+| `ATLAS_RUN_RETENTION_DAYS=0` | `.atlas/.run` cleanup; default 14 days for files in `logs/` and `inbox/` and for whole `crew/<id>/` dirs |
+
+Knob precedence: a value saved from the dashboard lands in both `~/.atlas/settings.json` and
+`~/.claude/settings.json`. Hooks apply the `~/.atlas` store over the inherited environment only when the
+store's saved time is at least as new as `~/.claude/settings.json` (2 s tolerance), so a later hand edit of
+`~/.claude/settings.json` wins over an older dashboard value (`scripts/atlas_env.py`, `apply_store_env`).
+
+Statusline: `atlas_statusline.py install` and `atlas_doctor.py --fix` point `statusLine` at the stable launcher
+`~/.atlas/bin/atlas_statusline_launch.py`, which runs the newest installed atlas's `scripts/atlas_statusline.py`,
+so a plugin update no longer leaves the statusline on an old version folder.
 | `ATLAS_INGEST=off` | session transcript ingest |
 | `ATLAS_CHRONICLE=off` | chronicle facet capture |
 | `ATLAS_MEMORY_CAPTURE=off` | memory capture |
@@ -499,7 +511,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 90 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 91 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -512,6 +524,7 @@ them. The table lists the main entry points, not every module.
 | `omp_transcript.py` | Converts an omp session file to the Claude transcript shape for the bridge. |
 | `omp_runstate.py` | Writes the omp run/dispatch/edit state Claude hooks would have written. |
 | `atlas_doctor.py` | Rollback repair (`--fix`, `--hook`), self-improvement miners (`--mine`, `--list-findings`, `--set-status`, `--baseline`, `--remeasure`), `--json`, `--status`. |
+| `atlas_maint.py` | Daily upkeep, spawned detached from SessionStart: DB retention and full run-kind backfill, `.atlas/.run` cleanup (`--dry-run`, `--vacuum`, `--force`). |
 | `atlas_memory.py` | File-backed memory store. |
 | `atlas_todo.py` | The board and per-worker notes: `list`, `set`, `add`, `scaffold`, `claim`, `complete`, `status`, `remove`, `carry`, `counts`, `note`, `notes`. |
 | `atlas_finding.py` | Appends verdict rows to `.atlas/.run/findings.json` (the verifier's write path). |
@@ -981,7 +994,7 @@ tech-tools/
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 90 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 91 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

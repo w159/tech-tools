@@ -30,7 +30,7 @@ def _home(env_block=None, raw=None):
 
 class ApplyStoreEnv(unittest.TestCase):
     def test_store_value_overrides_inherited(self):
-        env = {"ATLAS_HOME": _home({"ATLAS_X": "off"}), "ATLAS_X": "on"}
+        env = {"ATLAS_HOME": _home({"ATLAS_X": "off"}), "ATLAS_X": "on", "CLAUDE_CONFIG_DIR": tempfile.mkdtemp()}
         atlas_env.apply_store_env(env)
         self.assertEqual(env["ATLAS_X"], "off")
 

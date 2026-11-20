@@ -136,7 +136,7 @@ class StatuslineTest(unittest.TestCase):
         args = ["--settings", settings, "--home", self.tmp]
         self.assertIn("installed", self.run_main(["install"] + args))
         cfg = jload(settings)
-        self.assertIn("atlas_statusline.py", cfg["statusLine"]["command"])
+        self.assertIn("atlas_statusline_launch.py", cfg["statusLine"]["command"])
         self.assertEqual(cfg["theme"], "dark")
         # second install must keep the first saved value
         self.run_main(["install"] + args)
@@ -253,7 +253,7 @@ class StatuslineTest(unittest.TestCase):
         sl_cfg = jload(settings)["statusLine"]
         self.assertEqual(sl_cfg["refreshInterval"], 5)
         self.assertEqual(sl_cfg["padding"], 3)
-        self.assertIn("atlas_statusline.py", sl_cfg["command"])
+        self.assertIn("atlas_statusline_launch.py", sl_cfg["command"])
 
 
     def test_uninstall_message_names_what_happened(self):
@@ -393,3 +393,56 @@ class FallowOffRenderPath(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LauncherTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, True)
+        self.cfg = os.path.join(self.tmp, "claude")
+        self.plugins = os.path.join(self.cfg, "plugins")
+        os.makedirs(self.plugins)
+        self.launcher = sl.write_launcher(os.path.join(self.tmp, "ah"))
+
+    def script(self, root, text='import sys; print("ran", sys.stdin.read().strip())\n'):
+        p = os.path.join(root, "scripts", "atlas_statusline.py")
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "w") as f:
+            f.write(text)
+        return root
+
+    def run_l(self, stdin="hi"):
+        import subprocess
+
+        env = dict(os.environ, CLAUDE_CONFIG_DIR=self.cfg)
+        r = subprocess.run([sys.executable, self.launcher], input=stdin, capture_output=True, text=True, env=env)
+        self.assertEqual(r.returncode, 0)
+        return r.stdout
+
+    def test_write_launcher_idempotent_and_mode(self):
+        before = os.stat(self.launcher).st_mtime_ns
+        self.assertEqual(sl.write_launcher(os.path.join(self.tmp, "ah")), self.launcher)
+        self.assertEqual(os.stat(self.launcher).st_mtime_ns, before)
+        self.assertEqual(os.stat(self.launcher).st_mode & 0o777, 0o644)
+
+    def test_picks_newest_installed_version(self):
+        old = self.script(os.path.join(self.tmp, "v1"), 'print("old")\n')
+        new = self.script(os.path.join(self.tmp, "v2"), 'print("new")\n')
+        with open(os.path.join(self.plugins, "installed_plugins.json"), "w") as f:
+            json.dump({"plugins": {"atlas@tt": [{"version": "1.9.0", "installPath": old}, {"version": "1.10.0", "installPath": new}],
+                                   "other@tt": [{"version": "99.0.0", "installPath": old}]}}, f)
+        self.assertEqual(self.run_l().strip(), "new")
+
+    def test_falls_back_to_cache_glob(self):
+        for v in ("2.0.0", "10.0.0"):
+            self.script(os.path.join(self.plugins, "cache", "mk", "atlas", v), 'print("%s")\n' % v)
+        self.assertEqual(self.run_l().strip(), "10.0.0")
+
+    def test_prints_nothing_when_nothing_installed(self):
+        self.assertEqual(self.run_l(), "")
+
+    def test_passes_stdin_through(self):
+        root = self.script(os.path.join(self.tmp, "v1"))
+        with open(os.path.join(self.plugins, "installed_plugins.json"), "w") as f:
+            json.dump({"plugins": {"atlas@tt": [{"version": "1.0.0", "installPath": root}]}}, f)
+        self.assertEqual(self.run_l("payload").strip(), "ran payload")

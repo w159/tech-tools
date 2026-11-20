@@ -64,6 +64,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-20 | perf-fixes-test | verified | perf-fixes: 24 test files pass, no ~/.atlas/bin leak, no new ruff errors | [2026-11-20_perf-fixes-test.md](2026-11-20_perf-fixes-test.md) |
 | 2026-11-18 | wave2-hooks-dash-secret | rejected | dash: ensure launch URL (token) is injected into SessionStart additionalContext | [2026-11-18_wave2-hooks-dash-secret.md](2026-11-18_wave2-hooks-dash-secret.md) |
 | 2026-11-18 | w2bc-9 | verified | worker brief under 800 bytes with report command and STATUS rule | [2026-11-18_w2bc-9.md](2026-11-18_w2bc-9.md) |
 | 2026-11-18 | w2bc-7 | rejected | no exact router-score pin and no per-agent tool-list table test added; model table and write/edit deny tests pre-exist | [2026-11-18_w2bc-7.md](2026-11-18_w2bc-7.md) |

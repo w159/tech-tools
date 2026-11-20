@@ -9,8 +9,13 @@ with a single stderr notice so skips stay visible.
 
 This is the atlas-shipped form of Option C (local agent gate). It lives in the
 plugin so every atlas install gets the gate without each user running
-`fallow hooks install --target agent`. Prefer this over a second project-level
-fallow-gate.sh; both would double-audit if present.
+`fallow hooks install --target agent`.
+
+Double-audit guard: when the fallow plugin's own gate is active (settings.json
+`enabledPlugins` has a `fallow@...` key set true AND installed_plugins.json has an
+installPath containing `hooks/fallow-gate.sh`), this gate skips silently on the
+commit/push path, since that gate already audits the same command. Any read error
+runs the atlas gate (fail toward the gate). ATLAS_FALLOW=force runs it anyway.
 
 Stdlib only. Requires the fallow CLI on PATH (or a working
 `npx --no-install fallow`). Absent fallow -> silent skip (fail-open). Disable
@@ -151,6 +156,30 @@ def _env_off(name: str) -> bool:
         "no",
         "disabled",
     )
+
+
+def _plugin_gate_active() -> bool:
+    """True when the fallow plugin's own fallow-gate.sh is enabled and installed. Any error -> False."""
+    try:
+        import json
+
+        base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+        with open(os.path.join(base, "settings.json"), encoding="utf-8") as fh:
+            enabled = json.load(fh).get("enabledPlugins") or {}
+        if not any(isinstance(k, str) and k.startswith("fallow@") and v is True for k, v in enabled.items()):
+            return False
+        with open(os.path.join(base, "plugins", "installed_plugins.json"), encoding="utf-8") as fh:
+            plugins = json.load(fh).get("plugins") or {}
+        for key, entries in plugins.items():
+            if not key.startswith("fallow@"):
+                continue
+            for entry in entries:
+                path = entry.get("installPath")
+                if isinstance(path, str) and os.path.isfile(os.path.join(path, "hooks", "fallow-gate.sh")):
+                    return True
+        return False
+    except Exception:  # noqa: BLE001 -- fail toward the gate
+        return False
 
 
 def _command_from(payload: dict[str, object]) -> str:
@@ -339,6 +368,9 @@ def main() -> int:
     command = _command_from(payload)
     if not command or not _is_git_commit_or_push(command):
         return 0
+
+    if os.environ.get("ATLAS_FALLOW", "").strip().lower() != "force" and _plugin_gate_active():
+        return 0  # the fallow plugin's own gate audits this command
 
     resolved = _resolve_runner()
     if resolved is None:

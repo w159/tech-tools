@@ -200,6 +200,13 @@ class DbWritableTest(Tmp):
 
 
 class StatusLineRootTest(Tmp):
+    def setUp(self):
+        super().setUp()
+        self.ahome = os.path.join(self.tmp, "atlashome")
+        patcher = mock.patch.dict(os.environ, {"ATLAS_HOME": self.ahome})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def _setup(self, script_path):
         self.root = os.path.join(self.tmp, "plugin")
         os.makedirs(os.path.join(self.root, "scripts"))
@@ -223,13 +230,23 @@ class StatusLineRootTest(Tmp):
         self._setup(other)
         row = self._row()
         self.assertFalse(row["ok"], row)
-        self.assertIn("not this plugin's", row["detail"])
+        self.assertIn("versioned path", row["detail"])
         d.fix_display(self.settings, {}, self.root)
+        with open(self.settings) as f:
+            self.assertIn("atlas_statusline_launch.py", json.load(f)["statusLine"]["command"])
         self.assertEqual(self._row()["ok"], True)
 
-    def test_this_plugins_script_passes(self):
-        self._setup(os.path.join(self.tmp, "plugin", "scripts", "atlas_statusline.py"))
+    def test_launcher_passes_and_own_versioned_script_warns(self):
+        launcher = os.path.join(self.ahome, "bin", "atlas_statusline_launch.py")
+        os.makedirs(os.path.dirname(launcher))
+        open(launcher, "w").close()
+        self._setup(launcher)
         self.assertTrue(self._row()["ok"])
+        shutil.rmtree(self.root)
+        self._setup(os.path.join(self.tmp, "plugin", "scripts", "atlas_statusline.py"))
+        row = self._row()
+        self.assertFalse(row["ok"], row)
+        self.assertIn("versioned path", row["detail"])
 
 
 class OutputStyleConfigDirTest(Tmp):

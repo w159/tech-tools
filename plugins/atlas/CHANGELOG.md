@@ -1,4 +1,18 @@
 # Changelog
+## 17.32.0 - 2026-11-20
+
+Session-start latency, knob precedence, retention and statusline fixes, measured on real data (evidence: `.atlas/evidence/2026-11-20_perf-fixes/`).
+
+### Changed
+
+- Session start: `atlas_doctor.py --hook` 0.91-0.98 s to 0.32-0.44 s and `session_boot.py` 0.48-0.55 s to 0.22-0.29 s. `atlas_finding.backfill_findings` builds the record index once (0.47 s to 0.015 s, same result); `atlas_db.init` classifies run kinds only for runs of the last 2 days (`backfill_run_kinds(since=...)`), and the full pass moved to daily upkeep.
+- Knob precedence (`scripts/atlas_env.py`): a stale dashboard value in `~/.atlas/settings.json` no longer overrides a newer edit of `~/.claude/settings.json`.
+- Retention: `atlas_db.prune_old` (default 90 days) and the new `scripts/atlas_maint.py`, spawned detached from SessionStart at most once a day, also clean `.atlas/.run` (default 14 days).
+- New env knobs: `ATLAS_DB_RETENTION_DAYS`, `ATLAS_RUN_RETENTION_DAYS`, `ATLAS_MAINT=off`, `ATLAS_FALLOW=force`.
+- `hooks/fallow_gate.py` skips its audit when the fallow plugin's own gate is enabled and installed, which removes the double audit.
+- Statusline: `install` and `atlas_doctor.py --fix` use the stable launcher `~/.atlas/bin/atlas_statusline_launch.py`, which resolves the newest installed atlas at run time; the doctor warns on a versioned statusLine path.
+- Version 17.31.0 to 17.32.0 in both plugin manifests, `.claude-plugin/marketplace.json` (marketplace 5.38.0 to 5.39.0), `README.md` and `plugins/atlas/README.md`.
+
 ## 17.31.0 - 2026-11-18
 
 Round 6 of the done-claim detector (`hooks/done_claim.py`): the 10 defects from round 5 are fixed with regression tests, the detector was scored once on a held-out set, and no done-claim kind blocks. `BLOCKING_KINDS` stays empty, so the verify gate's `block` mode still blocks nothing on a done-claim finding by default; every kind is advisory. Audit: `docs/audits/2026-11-18_atlas-round6.md`. Protocol: `docs/audits/2026-11-18_atlas-round6-preregistration.md` (section 15 holds the amendments).

@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""Atlas slow, rare upkeep: DB retention + run-kind backfill, `.atlas/.run` cleanup.
+
+Usage: atlas_maint.py [--project ROOT] [--dry-run] [--vacuum] [--force]
+Run detached from SessionStart; takes a non-blocking lock, throttled to once per 24 h via
+<ATLAS_HOME>/maint-stamp.json. Prints a JSON summary.
+"""
+
+import argparse
+import json
+import os
+import shutil
+import stat
+import sys
+import time
+
+INTERVAL_S = 24 * 3600
+SWEPT_DIRS = ("logs", "inbox")
+
+
+def atlas_home():
+    return os.environ.get("ATLAS_HOME") or os.path.join(os.path.expanduser("~"), ".atlas")
+
+
+def stamp_path():
+    return os.path.join(atlas_home(), "maint-stamp.json")
+
+
+def load_stamp():
+    try:
+        with open(stamp_path(), encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_stamp(stamp):
+    path = stamp_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(stamp, fh)
+    os.replace(tmp, path)
+
+
+def run_retention_days():
+    raw = (os.environ.get("ATLAS_RUN_RETENTION_DAYS") or "14").strip().lower()
+    if raw in ("off", "false", "no"):
+        return 0
+    try:
+        return max(0, int(float(raw)))
+    except ValueError:
+        return 14
+
+
+def due(last, now):
+    try:
+        return not 0 <= now - float(last) < INTERVAL_S
+    except (TypeError, ValueError):
+        return True
+
+
+def _db_part(dry_run, vacuum):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import atlas_db
+
+    if dry_run:
+        return {"skipped": "dry-run"}
+    conn = atlas_db.connect()
+    try:
+        atlas_db.init(conn)
+        out = {"pruned": atlas_db.prune_old(conn, atlas_db.retention_days())}
+        out["backfilled"] = atlas_db.backfill_run_kinds(conn)
+        if vacuum:
+            atlas_db.vacuum(conn)
+            out["vacuumed"] = True
+        return out
+    finally:
+        conn.close()
+
+
+def _size(path):
+    try:
+        return os.lstat(path).st_size
+    except OSError:
+        return 0
+
+
+def _sweep_files(base, cutoff, dry_run, summary):
+    for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        dirnames[:] = [d for d in dirnames if not os.path.islink(os.path.join(dirpath, d))]
+        for name in filenames:
+            path = os.path.join(dirpath, name)
+            try:
+                st = os.lstat(path)
+                if not stat.S_ISREG(st.st_mode) or st.st_mtime >= cutoff:
+                    continue
+                if not dry_run:
+                    os.remove(path)
+            except OSError:
+                continue
+            summary["files"] += 1
+            summary["bytes"] += st.st_size
+
+
+def _newest_mtime(path):
+    newest = None
+    for dirpath, dirnames, filenames in os.walk(path, followlinks=False):
+        for name in filenames:
+            try:
+                m = os.lstat(os.path.join(dirpath, name)).st_mtime
+                newest = m if newest is None else max(newest, m)
+            except OSError:
+                pass
+    return os.lstat(path).st_mtime if newest is None else newest
+
+
+def clean_project(root, dry_run=False, now=None):
+    """Delete old files in .run/logs, .run/inbox and stale .run/crew/<id> dirs. Returns a summary dict."""
+    now = time.time() if now is None else now
+    real = os.path.realpath(root)
+    if real in (os.sep, os.path.realpath(os.path.expanduser("~"))):
+        return {"refused": "root is HOME or /"}
+    run = os.path.join(real, ".atlas", ".run")
+    if os.path.islink(os.path.join(real, ".atlas")) or os.path.islink(run) or not os.path.isdir(run):
+        return {"refused": "no .atlas/.run"}
+    days = run_retention_days()
+    if not days:
+        return {"skipped": "retention disabled"}
+    cutoff = now - days * 86400
+    summary = {"files": 0, "bytes": 0, "crew_dirs": 0}
+    for sub in SWEPT_DIRS:
+        base = os.path.join(run, sub)
+        if os.path.isdir(base) and not os.path.islink(base):
+            _sweep_files(base, cutoff, dry_run, summary)
+    crew = os.path.join(run, "crew")
+    if os.path.isdir(crew) and not os.path.islink(crew):
+        for name in os.listdir(crew):
+            path = os.path.join(crew, name)
+            try:
+                if os.path.islink(path) or not os.path.isdir(path) or _newest_mtime(path) >= cutoff:
+                    continue
+                freed = 0
+                for dp, _dn, fns in os.walk(path, followlinks=False):
+                    freed += sum(_size(os.path.join(dp, f)) for f in fns)
+                if not dry_run:
+                    shutil.rmtree(path)
+            except OSError:
+                continue
+            summary["crew_dirs"] += 1
+            summary["bytes"] += freed
+    return summary
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--project")
+    ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--vacuum", action="store_true")
+    ap.add_argument("--force", action="store_true")
+    args = ap.parse_args(argv)
+    try:
+        import fcntl
+    except ImportError:
+        print(json.dumps({"skipped": "no fcntl"}))
+        return 0
+    os.makedirs(atlas_home(), exist_ok=True)
+    lock = open(os.path.join(atlas_home(), "maint.lock"), "w")
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        print(json.dumps({"locked": True}))
+        return 0
+    try:
+        now = time.time()
+        stamp = load_stamp()
+        projects = stamp.get("projects") if isinstance(stamp.get("projects"), dict) else {}
+        stamp["projects"] = projects
+        result = {"dry_run": args.dry_run}
+        if args.force or due(stamp.get("db"), now):
+            try:
+                result["db"] = _db_part(args.dry_run, args.vacuum)
+                if not args.dry_run:
+                    stamp["db"] = now
+            except Exception as exc:  # noqa: BLE001
+                result["db"] = {"error": repr(exc)}
+        else:
+            result["db"] = {"skipped": "fresh"}
+        if args.project:
+            key = os.path.realpath(args.project)
+            if args.force or due(projects.get(key), now):
+                result["project"] = clean_project(key, args.dry_run, now)
+                if not args.dry_run and "refused" not in result["project"]:
+                    projects[key] = now
+            else:
+                result["project"] = {"skipped": "fresh"}
+        if not args.dry_run:
+            save_stamp(stamp)
+        print(json.dumps(result))
+        return 0
+    finally:
+        lock.close()
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception:  # noqa: BLE001
+        sys.exit(0)
