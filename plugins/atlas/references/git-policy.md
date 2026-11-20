@@ -32,6 +32,7 @@ Resolution order: built-in defaults < `~/.atlas/git-policy.json` < `<repo>/.atla
 | `cleanup_remote` | `merged` | `merged` (agent-made branches only) or `off` |
 | `auto_clean_hours` | 6 | boot runs a background local clean at most this often |
 | `active_days` | 30 | a branch with a commit this recent counts as in use |
+| `approval_grant_minutes` | 30 | after a person approves a protected-branch commit or push in a prompt and it succeeds, that branch is granted this long so follow-up commits and the push do not prompt again (0 = off; env `ATLAS_GIT_APPROVAL_GRANT_MINUTES`) |
 
 ## Commands
 

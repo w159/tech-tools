@@ -43,6 +43,7 @@ FORMER = (
         "|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write",
         "todo_capture",
     ),
+    ("PostToolUse", "Bash", "git_guard"),  # protected-branch approval grant; same table
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "format_after_edit"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "docs_drift_watch"),
     ("PostToolUse", "Edit|Write|MultiEdit|NotebookEdit", "delegation_prewarn"),

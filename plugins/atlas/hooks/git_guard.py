@@ -408,8 +408,51 @@ def _safe_root(g, cwd):
         return None
 
 
+def _succeeded(resp) -> bool:
+    """Claude Code runs PostToolUse only for a call that finished; the fields are a second check."""
+    if not isinstance(resp, dict):
+        return True
+    if resp.get("is_error") or resp.get("isError") or resp.get("interrupted"):
+        return False
+    code = resp.get("exit_code", resp.get("exitCode"))
+    return code in (None, 0)
+
+
+def grant_after_approval(payload: dict, g=None) -> list:
+    """PostToolUse: a protected commit/push that asked and then succeeded was approved by a person,
+    so grant that branch for approval_grant_minutes (covers the follow-up commit and the push)."""
+    if os.environ.get("ATLAS_GIT_GUARD", "").lower() in ("off", "0", "false"):
+        return []
+    ti = payload.get("tool_input") or {}
+    cmd = ti.get("command") if isinstance(ti, dict) else None
+    if (
+        payload.get("tool_name") != "Bash"
+        or not isinstance(cmd, str)
+        or not re.search(r"\bgit\b.*\b(?:commit|push)\b", cmd)
+        or not _succeeded(payload.get("tool_response"))
+    ):
+        return []
+    if g is None:
+        import atlas_git as g  # noqa: N813
+    cwd = str(payload.get("cwd") or os.getcwd())
+    granted = []
+    for v in _bash_verdicts(cmd, cwd, g):
+        branch = v.get("branch")
+        if v.get("decision") != "ask" or v.get("reason_class") != "protected" or not branch:
+            continue
+        root = _safe_root(g, cwd)
+        minutes = g.load_policy(root)["approval_grant_minutes"]
+        if root is None or minutes <= 0 or g.active_grant(root, branch):
+            continue
+        granted.append(g.add_grant(root, branch, minutes, "approved in a permission prompt"))
+    return granted
+
+
 def main() -> int:
     payload = atlas_hook_guard.load_payload("git_guard")
+    if isinstance(payload, dict) and payload.get("hook_event_name") == "PostToolUse":
+        grant_after_approval(payload)  # run_hook keeps this fail-open
+        return 0
     if (
         not isinstance(payload, dict)
         or payload.get("hook_event_name", "PreToolUse") != "PreToolUse"

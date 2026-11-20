@@ -68,6 +68,8 @@ DEFAULTS: dict = {
     "cleanup_remote": "merged",  # merged (agent-made branches only) | off
     "auto_clean_hours": 6,  # boot runs a background local clean at most this often (0 = never)
     "active_days": 30,  # a branch with a commit this recent counts as "in use"
+    # minutes a protected commit/push stays granted after a person approved it in a prompt (0 = off)
+    "approval_grant_minutes": 30,
 }
 _CHOICES = {
     "on_protected": ("auto", "deny", "ask", "allow"),
@@ -901,6 +903,7 @@ def check_action(
         return {
             "decision": "ask",
             "reason_class": "protected",
+            "branch": ref,  # the PostToolUse hook grants this branch once the approved call succeeds
             "reason": "atlas git policy: this would %s %s (%s). Approve only if you asked for it."
             % (verb, ref, why),
         }

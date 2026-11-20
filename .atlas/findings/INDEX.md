@@ -69,6 +69,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-20 | mod-redesign | verified | Band restyle + motion and side panel health/status/gates/channel chat; suite green, renders match mockups | [2026-11-20_mod-redesign.md](2026-11-20_mod-redesign.md) |
 | 2026-11-20 | mod-redesign-green-suite | rejected | Mod redesign suite not green: 7 fail, mock-* files and .atlas_out.txt remain; no implementation done by verifier | [2026-11-20_mod-redesign-green-suite.md](2026-11-20_mod-redesign-green-suite.md) |
 | 2026-11-20 | mod-clock-stop | verified | Finished crew workers keep a frozen SUBAGENTS clock; ended agents without a finish stamp read - | [2026-11-20_mod-clock-stop.md](2026-11-20_mod-clock-stop.md) |
+| 2026-11-20 | git-guard-approval-grant | verified | Approved protected commit/push grants the branch for 30 min; no repeat prompts | [2026-11-20_git-guard-approval-grant.md](2026-11-20_git-guard-approval-grant.md) |
 | 2026-11-18 | wave2-hooks-dash-secret | rejected | dash: ensure launch URL (token) is injected into SessionStart additionalContext | [2026-11-18_wave2-hooks-dash-secret.md](2026-11-18_wave2-hooks-dash-secret.md) |
 | 2026-11-18 | w2bc-9 | verified | worker brief under 800 bytes with report command and STATUS rule | [2026-11-18_w2bc-9.md](2026-11-18_w2bc-9.md) |
 | 2026-11-18 | w2bc-7 | rejected | no exact router-score pin and no per-agent tool-list table test added; model table and write/edit deny tests pre-exist | [2026-11-18_w2bc-7.md](2026-11-18_w2bc-7.md) |

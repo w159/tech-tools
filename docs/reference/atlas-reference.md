@@ -470,7 +470,7 @@ edit code; fresh agents start without the leader's assumptions. Source:
 
 ## Hooks
 
-Wired in `plugins/atlas/hooks/hooks.json`: 19 hook programs / 24 bindings.
+Wired in `plugins/atlas/hooks/hooks.json`: 19 hook programs / 25 bindings.
 The file holds 15 commands; two are `event_dispatch.py`, which runs 11 hooks
 in-process, so the bindings are the 13 other commands plus those 11. They fire
 on 9 lifecycle events (SessionStart, UserPromptSubmit,
@@ -487,7 +487,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `event_dispatch.py` | PreToolUse, PostToolUse | One process per tool event: runs recall_gate, bash_advisor, git_guard, edit_read_nudge and dispatch_tripwire (Pre), and todo_capture, docs_drift_watch, delegation_prewarn, edit_read_nudge, dispatch_tripwire and the connector watch (Post) in-process, each under its own time slice; a failing hook never stops the next. `fallow_gate.py` and `format_after_edit.py` stay separate. | n/a (each hosted hook keeps its own switch) |
 | `recall_gate.py` | PreToolUse (all) | claude-mem recall gate (see message above). | `ATLAS_MANDATES=off` |
 | `bash_advisor.py` | PreToolUse (Bash) | Warns on catastrophic commands; one ponytail-before-commit nudge per session. Advisory only. | n/a |
-| `git_guard.py` | PreToolUse (Bash, Write, Agent, Task, mcp__*) | Keeps commits and pushes off protected branches while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. Policy: `.atlas/git-policy.json`. | `ATLAS_GIT_GUARD=off` |
+| `git_guard.py` | PreToolUse (Bash, Write, Agent, Task, mcp__*); PostToolUse (Bash) | Keeps commits and pushes off protected branches while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. After a person approves a protected commit or push and it succeeds, the PostToolUse path grants that branch for `approval_grant_minutes` (default 30, 0 = off). Policy: `.atlas/git-policy.json`. | `ATLAS_GIT_GUARD=off` |
 | `edit_read_nudge.py` | PreToolUse (Edit) + PostToolUse (Read, ctx_read) | Nudges when an edit targets a file read only through `ctx_read`. | n/a |
 | `fallow_gate.py` | PreToolUse (Bash) | On `git commit`/`git push`, runs `fallow audit`; denies on `verdict: fail`. Fail-open when the CLI is absent. | `ATLAS_FALLOW=off` |
 | `dispatch_tripwire.py` | PreToolUse + PostToolUse + SubagentStart | Denies covered in [the operating contract](#the-operating-contract); mirrors dispatch state. | `ATLAS_TRIPWIRE_HARD=off`, `ATLAS_TRIPWIRE=off` |
@@ -993,7 +993,7 @@ tech-tools/
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 40 skills
 |  |  |- agents/             # 11 agents
-|  |  |- hooks/              # 19 hook programs / 24 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
+|  |  |- hooks/              # 19 hook programs / 25 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 91 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/

@@ -76,6 +76,7 @@ BINDINGS = {
             "|mcp__mcp_search__work_state_write|mcp__mcp_search_work_state_write",
             8,
         ),
+        ("git_guard", "Bash", 8),
         ("docs_drift_watch", "Edit|Write|MultiEdit|NotebookEdit", 13),
         ("delegation_prewarn", "Edit|Write|MultiEdit|NotebookEdit", 8),
         ("edit_read_nudge", "Read|read|mcp__.*ctx_read", 8),

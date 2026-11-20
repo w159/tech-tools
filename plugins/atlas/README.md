@@ -11,9 +11,9 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.33.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.33.1 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
+| Ships      | 40 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 12 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -833,7 +833,7 @@ fork, so their judgment starts clean.
 
 ## Hooks
 
-19 hook programs / 24 bindings. `hooks/hooks.json` holds 15 commands on 9 events
+19 hook programs / 25 bindings. `hooks/hooks.json` holds 15 commands on 9 events
 (SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStart,
 SubagentStop, SessionEnd, PreCompact); two of them are `event_dispatch.py`, which
 runs the other hooks in-process, and the count of bindings is the 13 other commands
@@ -1596,7 +1596,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.33.0
+|-- .claude-plugin/plugin.json   manifest, version 17.33.1
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

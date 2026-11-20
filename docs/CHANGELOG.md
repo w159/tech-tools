@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.33.1, marketplace 5.40.1 - 2026-11-20 -- one approval per protected-branch release
+
+- Fixed, permission prompts: the git guard asked for each commit and each push on `main` once no other branches
+  were in use (`on_protected` auto resolves to ask), and remembered no approval. An approved, successful protected
+  commit or push now records a grant for that branch for `approval_grant_minutes` (default 30; 0 off), so the push
+  and follow-up commits in the window run without a new prompt. Code: `plugins/atlas/hooks/git_guard.py` (PostToolUse
+  path), `plugins/atlas/scripts/atlas_git.py` (`approval_grant_minutes`), `plugins/atlas/hooks/event_dispatch.py`.
+
 ## atlas 17.33.0, marketplace 5.40.0 - 2026-11-20 -- mod band and side panel redesign, finished-worker clocks stop
 
 - Fixed, crew: `irc check` never installed a worker's staged files when the plan owned a directory or a glob (only

@@ -226,6 +226,64 @@ class ProtectedBranchTests(GuardBase):
         self.assertIsNone(self.kind(p))
 
 
+def post(cmd, cwd, **resp):
+    return dict(bash(cmd, cwd), hook_event_name="PostToolUse", tool_response=resp)
+
+
+class ApprovalGrantTests(GuardBase):
+    def test_approved_commit_grants_the_next_commit_and_the_push(self):
+        import atlas_git
+
+        repo = make_repo(other_branch=False)
+        self.assertEqual(self.kind(bash("git commit -m x", repo)), "ask")
+        self.assertEqual(len(gg.grant_after_approval(post("git commit -m x", repo, stdout="ok"))), 1)
+        self.assertIsNotNone(atlas_git.active_grant(repo, "main"))
+        self.assertIsNone(self.kind(bash("git commit -m y", repo)))
+        self.assertIsNone(self.kind(bash("git push origin main", repo)))
+
+    def test_failed_command_grants_nothing(self):
+        import atlas_git
+
+        repo = make_repo(other_branch=False)
+        for resp in ({"exit_code": 1}, {"is_error": True}, {"interrupted": True}):
+            self.assertEqual(gg.grant_after_approval(post("git commit -m x", repo, **resp)), [])
+        self.assertIsNone(atlas_git.active_grant(repo, "main"))
+
+    def test_zero_minutes_turns_the_feature_off(self):
+        repo = make_repo(other_branch=False)
+        with mock.patch.dict(os.environ, {"ATLAS_GIT_APPROVAL_GRANT_MINUTES": "0"}):
+            self.assertEqual(gg.grant_after_approval(post("git commit -m x", repo)), [])
+        self.assertEqual(self.kind(bash("git commit -m y", repo)), "ask")
+
+    def test_grant_is_per_branch(self):
+        repo = make_repo(other_branch=False)
+        sh(repo, "git", "switch", "-q", "-c", "production")
+        sh(repo, "git", "switch", "-q", "main")
+        gg.grant_after_approval(post("git commit -m x", repo))
+        self.assertIsNone(self.kind(bash("git commit -m y", repo)))
+        sh(repo, "git", "switch", "-q", "production")
+        self.assertEqual(self.kind(bash("git commit -m y", repo)), "ask")
+
+    def test_grant_expires(self):
+        import time
+
+        repo = make_repo(other_branch=False)
+        gg.grant_after_approval(post("git commit -m x", repo))
+        self.assertIsNone(self.kind(bash("git commit -m y", repo)))
+        with mock.patch("time.time", return_value=time.time() + 31 * 60):
+            self.assertEqual(self.kind(bash("git commit -m y", repo)), "ask")
+
+    def test_a_denied_path_and_plain_commands_create_no_grant(self):
+        repo = make_repo()  # feat/x is active, so a commit on main is denied outright
+        self.assertEqual(gg.grant_after_approval(post("git commit -m x", repo)), [])
+        sh(repo, "git", "switch", "-q", "feat/x")
+        self.assertEqual(gg.grant_after_approval(post("git commit -m x", repo)), [])
+
+    def test_hook_main_is_fail_open_on_postooluse(self):
+        with mock.patch.object(gg.atlas_hook_guard, "load_payload", return_value=post("git commit", "/nonexistent")):
+            self.assertEqual(gg.main(), 0)
+
+
 class CapTests(GuardBase):
     def test_new_branch_over_cap_denied_under_cap_allowed(self):
         repo = make_repo()

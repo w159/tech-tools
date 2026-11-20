@@ -75,6 +75,11 @@
         "timeout": 10
       },
       {
+        "script": "git_guard.py",
+        "matcher": "Bash",
+        "timeout": 10
+      },
+      {
         "script": "docs_drift_watch.py",
         "matcher": "Edit|Write|MultiEdit|NotebookEdit",
         "timeout": 15

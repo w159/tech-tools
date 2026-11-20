@@ -1,4 +1,11 @@
 # Changelog
+## 17.33.1 - 2026-11-20
+
+### Fixed
+
+- Repeated permission prompts on protected branches. With `on_protected` = auto and no other branches in use, `hooks/git_guard.py` asked for every commit and every push to `main`, and nothing kept the approval (about 19 prompts on 2026-11-20 against 1 to 4 a day before, once branches were cleaned up). A protected commit or push that the person approved and that succeeded now leaves a time-boxed grant for that branch (PostToolUse Bash, `approval_grant_minutes`, default 30, 0 turns it off; `ATLAS_GIT_APPROVAL_GRANT_MINUTES`), so the push and follow-up commits in that window do not ask again.
+- Version 17.33.0 to 17.33.1 in both plugin manifests, `.claude-plugin/marketplace.json` (marketplace 5.40.0 to 5.40.1), `README.md` and `plugins/atlas/README.md`.
+
 ## 17.33.0 - 2026-11-20
 
 Redesign of the Claude Code mod's band and side panel, plus two fixes (evidence: `.atlas/evidence/2026-11-20_mod-redesign/`, `.atlas/evidence/2026-11-20_mod-clock-stop/`).

@@ -14422,5 +14422,23 @@
     "status": "verified",
     "verified_at": "2026-11-20T16:47:19+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "git-guard-approval-grant",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Approved protected commit/push grants the branch for 30 min; no repeat prompts",
+    "evidence": [
+      "plugins/atlas/hooks/test_git_guard.py"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_git_guard.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T19:22:54+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]
