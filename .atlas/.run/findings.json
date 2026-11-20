@@ -14440,5 +14440,36 @@
     "verified_at": "2026-11-20T19:22:54+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-890e9d-1795202681",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/scripts/test_fix_settings_options.py plugins/atlas/hooks/test_git_guard.py 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_192441_gate-rerun_890e9d.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-20T19:24:41+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "mod-host-load-17-33-2",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Mod loads in the real host: type-only imports fixed, guard test added",
+    "evidence": [
+      "atlas_mod_gate.py --live: PASS 4/4"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T20:12:04+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

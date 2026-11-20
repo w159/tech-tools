@@ -1,5 +1,12 @@
 # Changelog
 
+## atlas 17.33.2, marketplace 5.40.2 - 2026-11-20 -- the mod loads in the host again
+
+- Fixed, release blocker: 17.33.0 and 17.33.1 failed the CI mod gate because the real host could not load the mod
+  (`Export named 'AgentRow' not found`): `plugins/atlas/mod/view/hud/hud-surface.ts` value-imported type-only names
+  from `hud-model.ts`. Fixed with type imports; `plugins/atlas/mod/tree-guards.test.ts` now guards the pattern.
+  Verified: `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live` PASS, `bun test mod omp` 4698 pass.
+
 ## atlas 17.33.1, marketplace 5.40.1 - 2026-11-20 -- one approval per protected-branch release
 
 - Fixed, permission prompts: the git guard asked for each commit and each push on `main` once no other branches

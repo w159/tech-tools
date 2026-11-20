@@ -1,4 +1,11 @@
 # Changelog
+## 17.33.2 - 2026-11-20
+
+### Fixed
+
+- The mod did not load in the Claude Code host in 17.33.0 and 17.33.1 (`SyntaxError: Export named 'AgentRow' not found in module .../mod/view/hud/hud-model.ts`): `mod/view/hud/hud-surface.ts` imported five type-only names as values; bun erases them, the host loader does not. They are type imports now, and `mod/tree-guards.test.ts` fails on any mod file that value-imports a type-only export. `scripts/atlas_mod_gate.py --live --require-live`: PASS.
+- Version 17.33.1 to 17.33.2 in both plugin manifests, `.claude-plugin/marketplace.json` (marketplace 5.40.1 to 5.40.2), `README.md` and `plugins/atlas/README.md`.
+
 ## 17.33.1 - 2026-11-20
 
 ### Fixed

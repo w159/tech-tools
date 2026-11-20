@@ -2,6 +2,7 @@
 // Each scan is paired with a floor on the number of files it saw: a guard that scans an empty or shrunken tree must fail, not pass.
 //   M4  band-frame.ts and status-frame.ts are not a runtime import cycle.
 //   M5  no hex colour literal outside the token file (atlas-ui.ts) and the files that own another palette.
+//   M6  no value import of a name its source module exports only as a type (the host loader does not erase them).
 //   M2  only look.ts (and the token file that defines it) reads the theme from the environment.
 import { expect, test } from 'claude-code/testing';
 import { readFileSync } from 'node:fs';
@@ -76,4 +77,40 @@ test('M2: only look.ts (and the token file that defines it) reads the theme from
     if (/hostEnv\(\)\s*\.\s*(ATLAS_|NO_COLOR|COLORTERM|COLORFGBG|LC_|LANG\b|TERM\b)/.test(src)) stray.push(`${f}: hostEnv() read`);
   }
   expect(stray).toEqual([]);
+});
+
+const VALUE_IMPORT = /^import\s+(?!type\b)\{([^}]*)\}\s+from\s+'(\.[^']*)'/gm;
+
+function resolveImport(all: string[], rel: string, spec: string): string | undefined {
+  const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
+  const base = join('/', dir, spec).slice(1);
+  return ['.ts', '.tsx', '/index.ts', '/index.tsx'].map((e) => base + e).find((c) => all.includes(c));
+}
+
+// Local names a `{ a, b as c, type D }` clause imports as values (inline `type` entries dropped).
+function valueNames(clause: string): string[] {
+  const entries = clause.split(',').map((s) => s.trim()).filter((s) => s && !s.startsWith('type '));
+  return entries.map((raw) => raw.split(/\s+as\s+/)[0]!);
+}
+
+function isTypeOnlyExport(tsrc: string, name: string): boolean {
+  const isType = new RegExp(`export\\s+(?:type|interface)\\s+${name}\\b|export\\s+type\\s*\\{[^}]*\\b${name}\\b[^}]*\\}`).test(tsrc);
+  const isValue = new RegExp(`export\\s+(?:declare\\s+)?(?:const|let|var|function|class|enum|abstract\\s+class)\\s+${name}\\b|export\\s*\\{[^}]*\\b${name}\\b[^}]*\\}`).test(tsrc);
+  return isType && !isValue;
+}
+
+function strayInImport(all: string[], rel: string, m: RegExpMatchArray): string[] {
+  const target = resolveImport(all, rel, m[2]!);
+  const tsrc = target ? readFileSync(join(MOD_ROOT, target), 'utf8') : '';
+  return valueNames(m[1]!).filter((name) => target && isTypeOnlyExport(tsrc, name)).map((name) => `${rel}: ${name} (type-only in ${target})`);
+}
+
+function typeOnlyValueImports(all: string[], rel: string): string[] {
+  const src = readFileSync(join(MOD_ROOT, rel), 'utf8');
+  return [...src.matchAll(VALUE_IMPORT)].flatMap((m) => strayInImport(all, rel, m));
+}
+
+test('M6: no value import of a name its source module exports only as a type', () => {
+  const all = modSources();
+  expect(all.flatMap((rel) => typeOnlyValueImports(all, rel))).toEqual([]);
 });

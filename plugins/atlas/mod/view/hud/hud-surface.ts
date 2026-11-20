@@ -8,7 +8,7 @@ import { cardFrame } from './card-frame';
 import { roleLabel, roleOf } from '../../design/theme';
 import { roleHex } from '../../design/atlas-ui';
 import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, PALETTE5, PALETTES, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from '../../design/atlas-ui';
-import { AgentRow, BlockOpts, KILLED, NONE, REASON_MIN, RULE, STOPPED, SurfaceOpts, Surfaces, TodoRow, bottomRule, detailOf, dimRun, flat, gridWord, isDoubt, isFailedRow, isMerged, markRun, mergedTodos, overflowRow, ownerBase, planWindow, reasonOf, resultOf, t, tallyStates, titleSpinOf, windowRows, actionOutcome, planCount } from './hud-model';
+import { type AgentRow, type BlockOpts, KILLED, NONE, REASON_MIN, RULE, STOPPED, type SurfaceOpts, type Surfaces, type TodoRow, bottomRule, detailOf, dimRun, flat, gridWord, isDoubt, isFailedRow, isMerged, markRun, mergedTodos, overflowRow, ownerBase, planWindow, reasonOf, resultOf, t, tallyStates, titleSpinOf, windowRows, actionOutcome, planCount } from './hud-model';
 import { agentBox, listedAgents, todoBox } from './hud-frame';
 export type { AgentRow, BlockOpts, SurfaceOpts, Surfaces, TodoRow } from './hud-model';
 export { bottomRule, isFailedRow, isMerged, mergedTodos, overflowRow, overflowText, planWindow, reasonOf, resultOf, rowSpinnerGlyph, windowRows } from './hud-model';
