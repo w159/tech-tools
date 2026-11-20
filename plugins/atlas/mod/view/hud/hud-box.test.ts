@@ -27,7 +27,7 @@ describe('SUBAGENTS: the AGENT column keeps a gutter before STATE', () => {
   });
   test('a name that alone overflows the row is cut with a one-cell `…`, the state word still whole after the gutter', () => {
     const row = text(agentRows([agent({ name: 'x'.repeat(90) })], { cols: 80, ui }, full))[2]!;
-    expect(row).toMatch(/x…\s{2,}running/);
+    expect(row).toMatch(/x…\s{2,}\S+\s+running/);
     expect(row).not.toContain('...');
   });
 });
@@ -53,7 +53,7 @@ describe('truncation is `…`, never `...`, in every cell of both blocks', () =>
 });
 
 describe('LAST is never blank or raw (critique 21: `first 3` and an empty cell at 110)', () => {
-  const lasts = (cols: number, rows: AgentRow[]): string[] => text(agentRows(rows, { cols, ui }, full)).slice(2, -1).map((r) => r.trimEnd());
+  const lasts = (cols: number, rows: AgentRow[]): string[] => text(agentRows(rows, { cols, ui }, full)).slice(2, -1).map((r) => r.replace(/\s*│$/, '').trimEnd()); // the cells, without the wall
   test('a text that does not fit whole is cut on a word with `…`, or reads the state word', () => {
     const rows = [
       agent({ name: 'alpha-explorer', state: 'done', tool: 'first 3 lines of the file were returned to the lead' }),
@@ -72,7 +72,9 @@ describe('LAST is never blank or raw (critique 21: `first 3` and an empty cell a
   test('wave 31: a worker with nothing to say reads `-` in RESULT, never the state word again, and a long tool text never widens the row', () => {
     const rows = [agent({ name: 'alpha-explorer', state: 'done', tool: '' }), agent({ name: 'beta-explorer', state: 'running', tool: 'x'.repeat(60) }), agent({ name: 'gamma-explorer', state: 'done', tool: '', fallback: 'read' })];
     const [a, b, c] = lasts(80, rows);
-    for (const l of [a!, b!, c!]) { expect(l.endsWith(' -')).toBe(true); expect(runsCells([{ t: l, tone: 'text' }])).toBeLessThanOrEqual(80); }
+    for (const l of [a!, c!]) { expect(l.endsWith('finished')).toBe(true); expect(runsCells([{ t: l, tone: 'text' }])).toBeLessThanOrEqual(80); } // nothing to say: the honest word, never the state again
+    expect(b!.endsWith('…')).toBe(true); // a long tool text is cut with the one mark and never widens the row
+    expect(runsCells([{ t: b!, tone: 'text' }])).toBeLessThanOrEqual(80);
     expect(b!).not.toContain('running  running');
   });
 });
@@ -90,16 +92,16 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
   test('short of rows (critique 28) the blank goes first, then the column names, then the finished rows fold, then plan rows; every box stays closed and the agent keeps its row', () => {
     const rows = (n: number): string[] => text(fitStack({ todos, agents: [agent()] }, { cols: 110, ui, merge: false }, n));
     const tops = (out: string[]): number => out.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length;
-    const names = (out: string[]): boolean => out.some((r) => /AGENT\s+STATE/.test(r));
-    expect(rows(20)).toHaveLength(9); // title, 3 rows, rule, title, names, 1 agent, rule (wave 31: no blank row)
-    const nine = rows(9); // the blank goes; all three plan rows, the names and both rules stay
+    const names = (out: string[]): boolean => out.some((r) => /AGENT\s+ROLE\s+STATE/.test(r));
+    expect(rows(20)).toHaveLength(10); // title, names, 3 rows, rule, title, names, 1 agent, rule (no blank row)
+    const nine = rows(10); // all three plan rows, both column-name rows and both rules stay
     expect(tops(nine)).toBe(2);
     expect(nine.filter((r) => r === edge)).toHaveLength(2);
     expect(nine.filter((r) => /T\d item/.test(r))).toHaveLength(3);
     expect(nine.filter((r) => r === '')).toEqual([]);
     expect(names(nine)).toBe(true);
     expect(nine[0]).not.toMatch(/done/);
-    const eight = rows(8); // the column names go before a plan row folds; the boxes stay closed
+    const eight = rows(9); // the column names go before a plan row folds; the boxes stay closed
     expect(tops(eight)).toBe(2);
     expect(eight.filter((r) => r === edge)).toHaveLength(2);
     expect(names(eight)).toBe(false);
@@ -109,9 +111,9 @@ describe('the boxes at 110: a closing rule and a blank between the blocks', () =
     expect(seven[0]).toMatch(/1\/3/); // wave 37: the folded count is the figure itself, never `· 1 done` beside it
     expect(seven[0]).not.toMatch(/done/);
     expect(seven.filter((r) => /T[23] item/.test(r))).toHaveLength(1); // state 38: the finished row rides the one summary row, which takes a slot
-    expect(seven.some((r) => /^ {2}● 1 done/.test(r))).toBe(true);
+    expect(seven.some((r) => /^│ {2}✓ 1 done/.test(r))).toBe(true);
     const six = rows(6); // then plan rows are cut, and the title says so, in one wording at every width
-    expect(six.some((r) => /\+\d+ more|● \d+ done|◇ \d+ queued/.test(r)), six.join('\n')).toBe(true); // the rest is counted on the title or the summary row
+    expect(six.some((r) => /\+\d+ more|✓ \d+ done|○ \d+ queued/.test(r)), six.join('\n')).toBe(true); // the rest is counted on the title or the summary row
     expect(tops(six)).toBe(2);
     const four = rows(4); // the agent keeps its row and its closed box; the plan box goes whole
     expect(tops(four)).toBe(1);
@@ -126,7 +128,7 @@ describe('a SUBAGENTS row on the first snapshot that names a worker', () => {
   test('an open dispatch row with no listed worker draws a queued row before the squad or an event lists it', () => {
     const rows = hud([dispatch('alpha-explorer')]);
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
-    expect(rows.find((r) => r.includes('alpha-explorer'))).toMatch(/◇ alpha-explorer\s+queued/);
+    expect(rows.find((r) => r.includes('alpha-explorer'))).toMatch(/○ alpha-explorer\s+\S+\s+queued/);
   });
   test('it never doubles a listed worker (by name, host key or retry), never names lead, and a finished dispatch row names nobody', () => {
     const listed: HudAgent = { name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', since: 0 };
@@ -141,12 +143,12 @@ describe('a SUBAGENTS row on the first snapshot that names a worker', () => {
   test('the row replaces itself with the real worker the moment the squad lists it (one row, not two)', () => {
     const rows = hud([dispatch('alpha-explorer')], [{ name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', since: 0, model: 'haiku' }]);
     expect(rows.filter((r) => r.includes('alpha-explorer'))).toHaveLength(1);
-    expect(rows.find((r) => r.includes('alpha-explorer'))).toMatch(/◐ alpha-explorer\s+running/);
+    expect(rows.find((r) => r.includes('alpha-explorer'))).toMatch(/◐ alpha-explorer\s+\S+\s+running/);
   });
 });
 
 describe('the done flash is the disc stepping from bright to ok on a SUBAGENTS row too', () => {
-  test('no ring pop at any beat; the glyph is ● throughout and its colour ends on the done tone', () => {
+  test('no ring pop at any beat; the glyph is ✓ throughout and its colour ends on the done tone', () => {
     const row = (state: 'running' | 'done'): AgentRow => agent({ key: 'agent:a', state });
     const mo = new Motion(true);
     mo.observe('agents', [{ key: 'agent:a', state: 'running' }], 0);
@@ -155,7 +157,7 @@ describe('the done flash is the disc stepping from bright to ok on a SUBAGENTS r
       const r = agentRows([row('done')], { cols: 110, ui, motion: mo.ctx(now)! }, full)[2]!;
       return r[2]!.t;
     });
-    expect(glyphs).toEqual(['●', '●', '●', '●']);
+    expect(glyphs).toEqual(['✓', '✓', '✓', '✓']);
     const rest = agentRows([row('done')], { cols: 110, ui, motion: mo.ctx(1000 + MOTION_MS)! }, full)[2]!;
     expect(rest[2]!.tone).toBe('ok');
   });

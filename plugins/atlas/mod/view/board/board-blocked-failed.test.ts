@@ -60,7 +60,7 @@ const lanes = (t: string[]): string[] => t.filter((l) => /▇/.test(l));
 const bars = (n: Node): Array<{ t: string; color?: string }> => texts(n).filter((x) => /^▇+/.test(x.t));
 const axisOf = (t: string[]): { end: string; ticks: number } => { const at = t.findIndex((l) => /┬/.test(l)); return { end: t[at + 1]!.match(/\d+:\d\d/g)!.at(-1)!, ticks: (t[at]!.match(/┬/g) ?? []).length }; };
 
-describe('step 5: the board while blocked (stoprun-150-1: the lead lane green `●` under a blocked band; ghost lane without a glyph)', () => {
+describe('step 5: the board while blocked (stoprun-150-1: the lead lane green `✓` under a blocked band; ghost lane without a glyph)', () => {
   const blocked: Run = { kind: 'blocked', secs: 29, startMs: NOW - 29000 };
   for (const [cols, rows] of [[57, 45], [38, 41]] as const) {
     test(`${cols === 57 ? 150 : 110} cols: the lead lane is 203 with the blocked glyph while the run is blocked`, () => {
@@ -70,11 +70,11 @@ describe('step 5: the board while blocked (stoprun-150-1: the lead lane green `�
       const t = textOf(n).split('\n');
       expect(lanes(t)[0]).toMatch(/^ ▲ lead\s/);
     });
-    test(`${cols === 57 ? 150 : 110} cols: every lane carries its state glyph, the failed worker's \`■\` included`, () => {
+    test(`${cols === 57 ? 150 : 110} cols: every lane carries its state glyph, the failed worker's \`✗\` included`, () => {
       forgetPhases();
       const t = render(stop(), 'board', cols, rows, blocked);
-      for (const l of lanes(t)) expect(l).toMatch(/^ [●■▲◆◇▰]/);
-      expect(lanes(t).some((l) => /^ ■ ghost/.test(l))).toBe(true);
+      for (const l of lanes(t)) expect(l).toMatch(/^ [✓✗▲◆○▰]/);
+      expect(lanes(t).some((l) => /^ ✗ ghost/.test(l))).toBe(true);
     });
     test(`${cols === 57 ? 150 : 110} cols: the axis end equals the run total, ticks every 10 s inside it`, () => {
       forgetPhases();
@@ -98,7 +98,7 @@ describe('step 5: the board while blocked (stoprun-150-1: the lead lane green `�
     const agents = [{ name: 'lead', state: 'blocked' as const, secs: 29, startMs: 0, endMs: 29_000, total: true }, { name: 'ghost-explorer', state: 'failed' as const, secs: 20, startMs: 0, endMs: 20_000 }];
     for (const cols of [38, 57, 100]) {
       const t = boardText(boardTimeline(agents, { cols, ui, runSecs: 29, quiet: new Set(['ghost-explorer']) }));
-      expect(lanes(t).every((l) => /^ [▲■]/.test(l))).toBe(true);
+      expect(lanes(t).every((l) => /^ [▲✗]/.test(l))).toBe(true);
       expect(t.at(-1)!.match(/\d+:\d\d/g)!.at(-1)).toBe('0:29');
     }
   });

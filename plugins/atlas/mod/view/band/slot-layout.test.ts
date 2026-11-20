@@ -23,8 +23,8 @@ const input = (n: number): HudInput => ({ todos: ownTodos(PLAN), agents: ['alpha
 const draw = (n: number, cols: number, maxRows: number): string[] => hudLines(input(n), { merge: false, cols, maxRows, ui, rich: false, now: 0 }).map((r) => runsString(r).trimEnd());
 const todoRowsOf = (rows: string[]): string[] => rows.filter((t) => /T\d\b/.test(t));
 
-/** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
-const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
+/** State 38: the rows a plan block leaves out behind its one summary row (`✓ 3 done  ◇ 2 queued`). */
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^│ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*│$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
 
 describe('layout28 item 1: the TODO box shrinks first and every agent row stays (critique 28)', () => {
   // 150x45 gives a 12-row slot (11 for the HUD under the band row), 110x40 a 10-row slot (9 for the HUD).
@@ -34,8 +34,8 @@ describe('layout28 item 1: the TODO box shrinks first and every agent row stays 
       const text = out.join('\n');
       expect(out.length).toBeLessThanOrEqual(rows);
       expect(out.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
-      expect(out.filter((l) => /-explorer\s+running/.test(l))).toHaveLength(3);
-      const shown = todoRowsOf(out).filter((l) => /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(l)).length;
+      expect(out.filter((l) => /^[│▌] \S \w+-explorer\s+(?:\S+\s+)?running/.test(l))).toHaveLength(3);
+      const shown = todoRowsOf(out).filter((l) => /^[│▌] [◐◓◑◒○✓✗▲◉] T\d/.test(l)).length;
       expect(shown + Number(/\+(\d+) more/.exec(out[0]!)?.[1] ?? 0) + summaryCount(out)).toBe(5);
       expect(text).not.toContain('not shown');
       expect(text).toContain('SUBAGENTS');
@@ -45,7 +45,7 @@ describe('layout28 item 1: the TODO box shrinks first and every agent row stays 
     for (const cols of [150, 110]) {
       const out = draw(3, cols, 14);
       for (const k of ['T1', 'T2', 'T3', 'T4', 'T5']) expect(out.join('\n')).toContain(k);
-      expect(out.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+      expect(out.some((l) => /AGENT\s+ROLE\s+STATE/.test(l))).toBe(true);
     }
   });
   test('a fold reads `+N more` at every width, never `N more todo not shown`', () => {

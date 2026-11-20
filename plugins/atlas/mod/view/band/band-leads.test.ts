@@ -10,7 +10,7 @@ const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
 const SPIN_MARK = /[◐◓◑◒]/;
 const model = (over: Partial<MissionModel> = {}): MissionModel => ({ cols: 150, maxRows: 1, tick: 0, project: 'p', phases: PHASES, phase: 'build', done: 3, total: 7, workers: [], checks: null, ui, ...over });
 const head = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).trimEnd();
-const lead = (m: MissionModel): string => head(m).replace(/^◖ ◆ ATLAS ◗\s+/, '');
+const lead = (m: MissionModel): string => head(m).replace(/^ ◆ ATLAS \s+/, '');
 const live: MissionWorker[] = [{ name: 'impl-a', state: 'running', secs: 4, tool: 'Read', target: 'a.ts' }];
 
 describe('round 3 A1: rows and the band lead turn the same circle quarters', () => {
@@ -56,7 +56,7 @@ describe('round 3 A2: the band lead has four states', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols} columns: working, done, idle and blocked each lead with their glyph and word`, () => {
       expect(lead(model({ cols, busy: true, turnSecs: 36, workers: live }))).toMatch(/^[◐◓◑◒] working 0:36/);
-      expect(lead(model({ cols, phase: 'done', done: 5, total: 5, ranSecs: 62 }))).toMatch(/^● done · 1:02/);
+      expect(lead(model({ cols, phase: 'done', done: 5, total: 5, ranSecs: 62 }))).toMatch(/^✓ done · 1:02/);
       expect(lead(model({ cols, phase: 'research', done: 0, total: 0 }))).toMatch(/^○ idle/);
       expect(lead(model({ cols, blocked: true, openDispatchTitle: 'T2 read x', openDispatch: 1 } as Partial<MissionModel>))).toMatch(/^▲ blocked · /);
     });
@@ -78,18 +78,18 @@ describe('round 3 A2: the band lead has four states', () => {
     const idle = lead(model({ phase: 'research', done: 0, total: 0, checks }));
     expect(idle).toMatch(/^○ idle\b.* · △ 1 gate to check/);
     const done = lead(model({ cols: 110, phase: 'done', done: 7, total: 7, ranSecs: 42, checks }));
-    expect(done).toMatch(/^● done · 0:42 · todo 7\/7 · △ 1 gate to check/);
-    expect(head(model({ busy: true, workers: live, checks }))).not.toMatch(/^◖ ◆ ATLAS ◗\s+▲/);
+    expect(done).toMatch(/^✓ done · 0:42 · todo 7\/7 · △ 1 gate to check/);
+    expect(head(model({ busy: true, workers: live, checks }))).not.toMatch(/^ ◆ ATLAS \s+▲/);
   });
 });
 
 describe('round 3 A2: a closed failure is a dim record, not a red mark', () => {
   const failed: MissionWorker[] = [{ name: 'a-explorer', state: 'failed', secs: 9 }];
-  test('wave 31: one failure word, `■ 1 failed`, whether the dispatch row is open or closed; never `failed`, never the done disc', () => {
-    expect(head(model({ workers: failed }))).toContain('■ 1 failed');
+  test('wave 31: one failure word, `✗ 1 failed`, whether the dispatch row is open or closed; never `failed`, never the done disc', () => {
+    expect(head(model({ workers: failed }))).toContain('✗ 1 failed');
     const t = head(model({ workers: failed, closed: 1 }));
-    expect(t).toContain('■ 1 failed');
-    expect(t).not.toContain('● 1 failed');
+    expect(t).toContain('✗ 1 failed');
+    expect(t).not.toContain('✓ 1 failed');
     const tone = bandLines(model({ workers: failed, closed: 1 }))[0]!.runs.find((x) => /1 failed/.test(x.t))?.tone;
     expect(['bad', 'text']).toContain(tone); // 203; the latte panel falls back to text when 203 misses WCAG
   });
@@ -117,13 +117,10 @@ describe('round 3 A2: the Stop hook\'s own write flips the band', () => {
 });
 
 describe('round 3 A4: the brand chip is a solid pill', () => {
-  test('caps in accent on the default background; ` ◆ ` and the letters are ink on an accent fill; the literal text is unchanged', () => {
+  test('one pill, no caps: ` ◆ ATLAS ` is ink on an accent fill; the literal text is unchanged', () => {
     const runs = wordmark(ui);
-    expect(runsText(runs)).toBe('◖ ◆ ATLAS ◗');
-    expect(runs[0]).toMatchObject({ t: '◖', tone: 'accent' });
-    expect(runs.at(-1)).toMatchObject({ t: '◗', tone: 'accent' });
-    expect(runs[0]!.bg).toBeUndefined();
-    const body = runs.slice(1, -1);
+    expect(runsText(runs)).toBe(' ◆ ATLAS ');
+    const body = runs;
     expect(body.every((x) => x.bg === 'accent' && x.bold === true && x.tone !== 'accent')).toBe(true);
   });
   test('the pill stays solid: no letter is a hole, working or not, reduced motion or not (the inverted letter read as a stray cursor)', () => {
@@ -136,7 +133,7 @@ describe('round 3 A4: the brand chip is a solid pill', () => {
 });
 
 describe('round 3 A5: the band lists its workers in the scorer\'s row shape', () => {
-  const scorer = /^\s*([◐◓◑◒◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py: band worker row
+  const scorer = /^\s*([◐◓◑◒○✗▲◉✓])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py: band worker row
   const workers: MissionWorker[] = [
     { name: 'impl-a', state: 'running', secs: 42, tool: 'Read', target: 'runs.ts:17', role: 'implementer' },
     { name: 'impl-b', state: 'failed', secs: 95, tool: 'Edit', role: 'implementer' },

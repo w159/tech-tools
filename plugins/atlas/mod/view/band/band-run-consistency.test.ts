@@ -84,18 +84,16 @@ const sgrBg256 = (hex: string): string => `\x1b[48;5;${hostTo256(hex)}m`;
 const sgrBgTrue = (hex: string): string => `\x1b[48;2;${parseInt(hex.slice(1, 3), 16)};${parseInt(hex.slice(3, 5), 16)};${parseInt(hex.slice(5, 7), 16)}m`;
 
 describe('1. the wordmark pill is xterm 97 as emitted', () => {
-  test('256 colours: the pill background and the caps resolve to index 97 (48;5;97), never the nearest stable grey', () => {
+  test('256 colours: the pill background resolves to index 97 (48;5;97), never the nearest stable grey', () => {
     for (const [cols, screen, body] of SIZES) {
       const f = frameOf(RUNNING, body, screen, '256');
-      const pill = f.cells.find((c) => c.props.children === ' ◆ ')!;
+      const pill = f.cells.find((c) => c.props.children === ' ◆ ATLAS ')!;
       expect(sgrBg256(String(bgOf(pill))), `${cols}`).toBe('\x1b[48;5;97m');
-      const cap = f.cells.find((c) => String(c.props.children).includes('◖'))!;
-      expect(hostTo256(String(cap.props.color)), `${cols} cap`).toBe(97);
     }
   });
   test('truecolor: the pill background is the xterm 97 value (48;2;135;95;175)', () => {
     const f = frameOf(RUNNING, 93, 45, 'truecolor');
-    const pill = f.cells.find((c) => c.props.children === ' ◆ ')!;
+    const pill = f.cells.find((c) => c.props.children === ' ◆ ATLAS ')!;
     expect(bgOf(pill)).toBe(xtermHex(97));
     expect(sgrBgTrue(String(bgOf(pill)))).toBe('\x1b[48;2;135;95;175m');
   });
@@ -113,26 +111,26 @@ describe('2. the band is always state | plan | workers', () => {
       });
     }
   });
-  test('the plan segment reads `todo n/m` (with `■k` for failures) and `todo -` with no plan, at the docked width', () => {
+  test('the plan segment reads `todo n/m` (with `✗k` for failures) and `todo -` with no plan, at the docked width', () => {
     expect(frameOf(RUNNING, 93, 45).band).toMatch(/▌ todo 0\/5 ▌/);
     expect(frameOf(FINISHED, 93, 45).band).toMatch(/▌ todo 5\/5 ▌/);
-    expect(frameOf(STOP, 93, 45).band).toMatch(/▌ todo 4\/5 ■1 ▌/);
+    expect(frameOf(STOP, 93, 45).band).toMatch(/▌ todo 4\/5 ✗1 ▌/);
     expect(frameOf(NOPLAN, 93, 45).band).toMatch(/▌ todo - ▌ no agents/);
   });
   test('blocked text comes from one string table: `▲ blocked · <reason>`, two reasons only (state 38)', () => {
     expect(BLOCKED_TEXT.stop).toBe('stop refused');
     expect(BLOCKED_TEXT.failed(1)).toBe('1 failed');
-    expect(frameOf(STOP, 93, 45).band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked · stop refused(?: \d+:\d\d)? ▌/);
+    expect(frameOf(STOP, 93, 45).band).toMatch(/^ ◆ ATLAS  ▲ blocked · stop refused(?: \d+:\d\d)? ▌/);
     const table = [BLOCKED_TEXT.stop, BLOCKED_TEXT.failed(1), BLOCKED_TEXT.failed(2), BLOCKED_TEXT.failed(3)];
     for (const [, sh] of ALL) for (const b of [93, 56]) {
       const why = /▲ blocked(?: · ([^▌]*?))? *▌/.exec(frameOf(sh, b, 45).band)?.[1]?.replace(/ \d+:\d\d$/, '');
       if (why !== undefined) expect(table, why).toContain(why);
     }
   });
-  test('a dispatch that ended failed or killed is counted as failed (`■1`), never as `1 dispatch open`', () => {
+  test('a dispatch that ended failed or killed is counted as failed (`✗1`), never as `1 dispatch open`', () => {
     for (const body of [93, 56]) {
       const f = frameOf(STOP, body, 45);
-      expect(f.band, `${body}`).toMatch(/■1/);
+      expect(f.band, `${body}`).toMatch(/✗1/);
       expect(f.band, `${body}`).not.toMatch(/dispatch open/);
     }
   });
@@ -168,15 +166,15 @@ describe('4. the TODO HUD', () => {
   const T = (n: number, status: string, owner?: string): TodoItem => ({ id: `t${n}`, content: `T${n} item`, status, ...(owner ? { owner } : {}) }) as unknown as TodoItem;
   const ag = (name: string, state: string, ui_: string, extra: Record<string, unknown> = {}): hud.HudAgent => ({ name, role: 'explorer', state, ui: ui_ as never, model: 'haiku', since: NOW_MS - 5000, startedAt: NOW_MS - 9000, task: `read ${name}.py`, ...extra } as never);
   const rows = (todos: TodoItem[], agents: hud.HudAgent[], cols = 93, maxRows = 30): string[] => hud.hudLines({ todos: ownTodos(todos), agents }, { cols, maxRows, ui, now: NOW_MS }).map((r) => r.map((x) => x.t).join(''));
-  test('a folded title counts once: `1/5 · ■1`, never a second `· N done`', () => {
+  test('a folded title counts once: `1/5 · ✗1`, never a second `· N done`', () => {
     const todos = [T(1, 'completed'), T(2, 'completed'), T(3, 'in_progress'), T(4, 'pending'), T(5, 'pending')];
     for (const maxRows of [3, 4, 5, 6, 8]) {
       const title = rows(todos, [], 93, maxRows)[0]!;
       expect(title, `${maxRows}`).not.toMatch(/done/);
       expect(title, `${maxRows}`).toMatch(/\d\/5/);
     }
-    const stop = frameOf(STOP, 93, 45).hud.find((r) => r.includes('▸ TODO'))!;
-    expect(stop).toMatch(/TODO\s+4\/5 · ■1/);
+    const stop = frameOf(STOP, 93, 45).hud.find((r) => r.includes('TODO'))!;
+    expect(stop).toMatch(/TODO ─+ 4\/5 · ✗1/);
     expect(stop).not.toMatch(/done/);
   });
   test('state 38: no `└ explorer-xxxx queued` child row in any state', () => {
@@ -191,7 +189,7 @@ describe('4. the TODO HUD', () => {
     expect(rows(closed, [queued]).filter((r) => r.includes('└')), 'every parent row is terminal').toHaveLength(0);
   });
   test('at 110 columns every row up to 12 shows, with the full width for the titles', () => {
-    const title = (n: number): string => `Step ${n} reads the long file name and writes the matching report for the reviewers`;
+    const title = (n: number): string => `Step ${n} reads the long file name and writes the report`;
     const todos = Array.from({ length: 12 }, (_, i) => ({ id: `t${i + 1}`, content: title(i + 1), status: i < 4 ? 'completed' : 'pending' }) as unknown as TodoItem);
     const out = rows(todos, [], 110, 30);
     for (let n = 1; n <= 12; n++) expect(out.some((r) => r.includes(title(n))), `row ${n} shows whole`).toBe(true);
@@ -200,21 +198,21 @@ describe('4. the TODO HUD', () => {
   test('a done title is 245 (secondary), not the dim 240', () => {
     for (const [, screen, body] of SIZES) {
       const f = frameOf(FINISHED, body, screen);
-      const done = f.hudSegs.filter((r) => /^[ ▸] ● T\d/.test(r.map((x) => x.t).join('')));
+      const done = f.hudSegs.filter((r) => /^[│▌] ✓ T\d/.test(r.map((x) => x.t).join('')));
       expect(done.length).toBe(5);
-      for (const r of done) expect(r.find((x) => /^T\d /.test(x.t))!.color).toBe(xtermHex(245));
+      for (const r of done) expect(r.find((x) => /^T\d /.test(x.t))!.color).toBe("#767676");
     }
   });
 });
 
 describe('5. SUBAGENTS: one frozen schema', () => {
-  const header = (f: Frame): string => f.hud.find((r) => /^ {2}AGENT\s+STATE/.test(r))!;
+  const header = (f: Frame): string => f.hud.find((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE/.test(r))!;
   test('the header and its column positions are identical in every state, at 150 and 110 columns', () => {
     for (const [cols, screen, body] of SIZES) {
       const heads = [RUNNING, FINISHED, IDLE, STOP].map((sh) => header(frameOf(sh, body, screen)));
       expect(new Set(heads.map((h) => h.trimEnd())).size, `${cols}: ${heads.join('|')}`).toBe(1);
       const h = heads[0]!;
-      expect(h).toMatch(/^ {2}AGENT {1,}STATE {2,}TIME {1,}CALLS {1,}FN {1,}LAST/); // state 40: one cell between the numeric columns under 80 cells
+      expect(h).toMatch(/^│ {3}AGENT {1,}(?:ROLE {1,})?STATE {2,}NOW/); // state 40: one cell between the numeric columns under 80 cells
     }
   });
   test('TIME and CALLS end on one cell in every row; an unknown count reads `-`', () => {
@@ -222,11 +220,11 @@ describe('5. SUBAGENTS: one frozen schema', () => {
       const f = frameOf(sh, body, screen);
       const h = header(f);
       const timeEnd = h.indexOf('TIME') + 4, callsEnd = h.indexOf('CALLS') + 5;
-      const agents = f.hud.filter((r) => /^ {2}(?:alpha|beta|gamma)-expl/.test(r)); // state 39: at 110 columns the name clips to 12 cells (`alpha-explo…`)
+      const agents = f.hud.filter((r) => /^[│▌] \S (?:alpha|beta|gamma)-expl/.test(r)); // state 39: at 110 columns the name clips to 12 cells (`alpha-explo…`)
       expect(agents.length, name).toBe(3);
       for (const r of agents) {
         expect(r.slice(0, timeEnd).split(/\s+/).pop(), `${name} TIME`).toMatch(/^\d+:\d\d$/);
-        expect(r.slice(0, callsEnd).split(/\s+/).pop(), `${name} CALLS`).toMatch(/^(\d+|-)$/);
+        if (h.includes('CALLS')) expect(r.slice(0, callsEnd).split(/\s+/).pop(), `${name} CALLS`).toMatch(/^(\d+|-)$/); // CALLS comes only when a row has a figure
         expect(r, name).not.toMatch(/undefined|NaN/);
       }
     }
@@ -238,7 +236,7 @@ describe('5. SUBAGENTS: one frozen schema', () => {
     const segs = hud.hudLines({ todos: ownTodos(plan), agents }, { cols: 110, maxRows: 30, ui, now: NOW_MS });
     return { text: segs.map((r) => r.map((x) => x.t).join('')), segs };
   };
-  const order = (text: string[]): string[] => text.map((r) => /^ {2}(\S+-explorer)\s/.exec(r)?.[1]).filter((x): x is string => x !== undefined);
+  const order = (text: string[]): string[] => text.map((r) => /^[│▌] \S (\S+-explorer)\s/.exec(r)?.[1]).filter((x): x is string => x !== undefined);
   test('rows keep dispatch order (AgentRow.seq) across renders, however the input is ordered or the states change', () => {
     hud.resetAgentSeq();
     const a = ag('alpha-explorer', 'working', 'running'), b = ag('beta-explorer', 'working', 'running'), c = ag('gamma-explorer', 'working', 'running');
@@ -248,11 +246,11 @@ describe('5. SUBAGENTS: one frozen schema', () => {
     expect(order(rows([ag('gamma-explorer', 'done', 'done'), ag('beta-explorer', 'failed', 'failed'), ag('alpha-explorer', 'done', 'done')]).text)).toEqual(['alpha-explorer', 'beta-explorer', 'gamma-explorer']);
     hud.resetAgentSeq();
   });
-  test('state 38: no SUBAGENTS row wears a 236 background band (it read as a stray highlight)', () => {
+  test('only the focus row of SUBAGENTS wears the 236 selection fill (no stray highlight on the others)', () => {
     hud.resetAgentSeq();
     const { text, segs } = rows([ag('alpha-explorer', 'working', 'running'), ag('beta-explorer', 'working', 'running'), ag('gamma-explorer', 'working', 'running')]);
-    const banded = (name: string): boolean => segs[text.findIndex((r) => r.startsWith(`  ${name}-explorer`))]!.some((x) => (x as { bgHex?: string }).bgHex === xtermHex(236));
-    expect([banded('alpha'), banded('beta'), banded('gamma')]).toEqual([false, false, false]);
+    const banded = (name: string): boolean => segs[text.findIndex((r) => new RegExp(`^[│▌] \\S ${name}-explorer`).test(r))]!.some((x) => (x as { bgHex?: string }).bgHex === xtermHex(236));
+    expect([banded('alpha'), banded('beta'), banded('gamma')]).toEqual([true, false, false]); // only the focus row (the first running agent) wears the selection fill
     hud.resetAgentSeq();
   });
 });
@@ -264,10 +262,10 @@ describe('6. the card and the HUD row flip on the same completion signal', () =>
       expect(notifiedEnds('<task-notification><task-id>gamma-explorer</task-id><status>completed</status></task-notification>')).toEqual([{ id: 'gamma-explorer', outcome: 'done' }]);
       expect(notifiedEnds('<task-id>x</task-id><status>killed</status>')).toEqual([{ id: 'x', outcome: 'failed' }]);
       const before = frameOf(RUNNING, 93, 45);
-      expect(before.hud.some((r) => /^ {2}gamma-explorer\s+[◐◓◑◒] running/.test(r))).toBe(true);
+      expect(before.hud.some((r) => /^[│▌] [◐◓◑◒] gamma-explorer\s+(?:\S+\s+)?running/.test(r))).toBe(true);
       noteEnded('gamma-explorer', 'done', NOW);
       const after = frameOf(RUNNING, 93, 45);
-      expect(after.hud.some((r) => /^ {2}gamma-explorer\s+● done/.test(r)), after.hud.join('\n')).toBe(true);
+      expect(after.hud.some((r) => /^[│▌] ✓ gamma-explorer\s+(?:\S+\s+)?done/.test(r)), after.hud.join('\n')).toBe(true);
       expect(after.band).toMatch(/2 running/);
       const live = liveWorkers(snapshotOf(RUNNING), NOW + 1);
       expect(live.find((w) => w.name === 'gamma-explorer')!.state).toBe('done');

@@ -116,20 +116,20 @@ describe('contrast', () => {
 describe('state vocabulary', () => {
   test('six lowercase words, each one glyph, one ASCII mark and one token', () => {
     expect([...UI_STATES]).toEqual(['queued', 'running', 'done', 'failed', 'blocked', 'waiting']);
-    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('◇◐●■▲◉');
+    expect(UI_STATES.map((s) => STATE_GLYPHS[s]).join('')).toBe('○◐✓✗▲◉');
     expect(UI_STATES.map((s) => STATE_ASCII[s]).join('')).toBe('o|*x#?');
     expect(new Set(UI_STATES.map((s) => STATE_GLYPHS[s])).size).toBe(6); // failed is the solid square, blocked the boxed one (critique 17 A2): no two states share a mark
     expect(STATE_TOKEN).toEqual({ queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' });
     for (const s of UI_STATES) expect(s).toMatch(/^[a-z]+$/);
   });
   test('stateRun: token colour, text where under 3:1 or in ASCII; running takes the spinner frame', () => {
-    expect(stateRun('failed', mocha)).toEqual({ t: '■', tone: 'bad' });
-    expect(stateRun('done', latte)).toEqual({ t: '●', tone: 'text' });
+    expect(stateRun('failed', mocha)).toEqual({ t: '✗', tone: 'bad' });
+    expect(stateRun('done', latte)).toEqual({ t: '✓', tone: 'text' });
     expect(stateRun('running', mocha, 1).t).toBe('◓');
     expect(stateRun('running', ascii, 1)).toEqual({ t: '/', tone: 'text' });
     expect(stateRun('blocked', ascii)).toEqual({ t: '#', tone: 'text' });
     expect(stateGlyph('queued', ascii)).toBe('o');
-    expect(runsString(countRuns('failed', 1, mocha))).toBe('■ 1 failed');
+    expect(runsString(countRuns('failed', 1, mocha))).toBe('✗ 1 failed');
   });
   test('chips are the state words in capitals, one fixed width', () => {
     for (const s of UI_STATES) {
@@ -165,14 +165,14 @@ describe('brand capsule, ribbon, rail', () => {
     expect(a).toMatch(/^\[ATLAS\] > TODO -+ 3\/7 +$/);
     expect(a).toHaveLength(40);
   });
-  test('rail: numbered phases, ● done, ▸ active, ◇ ahead; all done when active = length', () => {
+  test('rail: numbered phases, ✓ done, ▸ active, ○ ahead; all done when active = length', () => {
     const phases = world.phases.map((p) => p.id as string);
-    expect(runsString(rail(phases, 1, mocha))).toBe('● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build  ──  ◇ 4 verify');
-    expect(runsString(rail(phases, 4, mocha))).toBe('● 1 plan  ──  ● 2 research  ──  ● 3 build  ──  ● 4 verify');
+    expect(runsString(rail(phases, 1, mocha))).toBe('✓ 1 plan  ──  ▸ 2 research  ──  ○ 3 build  ──  ○ 4 verify');
+    expect(runsString(rail(phases, 4, mocha))).toBe('✓ 1 plan  ──  ✓ 2 research  ──  ✓ 3 build  ──  ✓ 4 verify');
     expect(runsString(rail(phases, 0, ascii))).toBe('> 1 plan  --  o 2 research  --  o 3 build  --  o 4 verify');
     const active = rail(phases, 1, mocha).filter((x) => x.bold);
     expect(active.map((x) => x.t)).toEqual(['▸ ', '2 research']);
-    expect(rail(phases, 1, latte)[0]!.tone).toBe('text'); // Latte ● falls back to text
+    expect(rail(phases, 1, latte)[0]!.tone).toBe('text'); // Latte ✓ falls back to text
   });
 });
 

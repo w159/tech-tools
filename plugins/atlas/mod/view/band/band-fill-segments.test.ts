@@ -43,18 +43,18 @@ const model = (kind: Kind, columns: number, health: object = {}): BandModel => (
 } as BandModel);
 const BLOCK = /[▁▂▃▄▅▆▇█]/g;
 const BAND_FILL = healthStripBg(ui);
-/** The runs after the wordmark's `◗` (the band's own segments). */
-const afterCap = (runs: Run[]): Run[] => { let seen = false; return runs.filter((x) => { const was = seen; if (x.t.includes('◗')) seen = true; return was; }); };
+/** The runs after the wordmark pill (the band's own segments). */
+const afterCap = (runs: Run[]): Run[] => { let seen = false; return runs.filter((x) => { const was = seen; if (x.t.includes('ATLAS')) seen = true; return was; }); };
 
 describe('E8/E10: static segments on the band fill, two chips (v1 frame spec)', () => {
   for (const cols of [150, 110, 93]) for (const k of KINDS) {
-    test(`${k} at ${cols}: every run after the wordmark sits on the band fill except the gates and health chips`, () => {
+    test(`${k} at ${cols}: every run after the wordmark sits on the band fill except the health chip`, () => {
       const rs = afterCap(bandRuns(model(k, cols), true));
-      const fills = new Set(rs.filter((x) => !x.press && x.t.trim() !== '').map((x) => x.bgHex));
+      const fills = new Set(rs.filter((x) => !String(x.press).startsWith('band:health') && x.t.trim() !== '').map((x) => x.bgHex));
       expect([...fills]).toEqual([BAND_FILL]);
       const chips = rs.filter((x) => x.press);
       expect(new Set(chips.map((x) => String(x.press).split('#')[0]))).toEqual(new Set(['band:gates', 'band:health']));
-      for (const c of chips) expect(c.bgHex).not.toBe(BAND_FILL);
+      for (const c of chips) if (String(c.press).startsWith('band:health')) expect(c.bgHex).not.toBe(BAND_FILL); // the gates pill is text on the band fill; the health chip is the one raised chip
       expect(chips.map((x) => x.t).join('')).toContain(' ▸ health ');
     });
     test(`${k} at ${cols}: the static segments are divided by \`│\` and no raised plan tile is drawn`, () => {
@@ -78,15 +78,15 @@ describe('E10: the state slot (v1 frame spec: a fixed 17-cell head, the same in 
   });
   test('done head: green glyph on the normal band fill, never the saturated slab', () => {
     const rs = afterCap(bandRuns(model('done', 150), true));
-    const dot = rs.find((x) => x.t.includes('●'))!;
+    const dot = rs.find((x) => x.t.includes('✓'))!;
     expect(dot).toBeDefined();
     expect(dot.bgHex).toBe(BAND_FILL);
     for (const x of rs) expect(x.bgHex).not.toBe(PALETTES.mocha.ok);
-    expect(first(model('done', 150))).toMatch(/● done 6\/6 · ended 1s/);
+    expect(first(model('done', 150))).toMatch(/✓ done 6\/6 ▰▰▰▰▰▰ · ended 1s/);
   });
   test('working head sits on the band fill with the spinner in the accent', () => {
     const rs = afterCap(bandRuns(model('working', 150), true));
-    const spin = rs.find((x) => /^[◐◓◑◒]/.test(x.t.trim()))!;
+    const spin = rs.find((x) => /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/.test(x.t.trim()))!;
     expect(spin.bgHex).toBe(BAND_FILL);
     for (const x of rs) expect(x.bgHex).not.toBe(PALETTES.mocha.accent);
   });
@@ -95,8 +95,8 @@ describe('E10: the state slot (v1 frame spec: a fixed 17-cell head, the same in 
 describe('E10: the band spark is eighth blocks', () => {
   for (const k of KINDS) test(`${k} at 150: an 8-cell block spark with a \`▁\` baseline, the peak \`peak N / Ns\`, no braille`, () => {
     const row = first(model(k, 150));
-    expect(row).not.toMatch(/[⠀-⣿]/);
-    expect(row).toMatch(/[▁▂▃▄▅▆▇█]{8} peak \d+ \/ \d+s/);
+    expect(row).not.toMatch(/tools [⠀-⣿]/);
+    expect(row).toMatch(/tools [▁▂▃▄▅▆▇█]{8} +\d+\/m/);
     const rs = afterCap(bandRuns(model(k, 150), true));
     expect(rs.some((x) => /^▁+$/.test(x.t))).toBe(true);
   });
@@ -107,19 +107,19 @@ describe('E10: a narrow band (110 columns with the side pane open) keeps the hea
     test(`${k} at ${cols}: head, gates, >= 4 block cells or the count, no ticker, within ${cols}`, () => {
       const row = first(model(k, cols));
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
-      expect(row).toMatch(/◌ idle|[◐◓◑◒] |● done/);
-      expect(row).toMatch(/[●○] gates (ok|armed)/);
+      expect(row).toMatch(/◌ idle|[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] |✓ done/);
+      expect(row).toMatch(/[✓○] gates (ok|armed)/);
       expect(row).not.toContain('session started');
       expect(cols >= 63 ? /[▁▂▃▄▅▆▇█]{8}/.test(row) : true).toBe(true);
     });
   }
   test('the extras give way before the spark and the head go', () => {
     const at = (c: number) => first(model('working', c));
-    expect(at(110)).toMatch(/ctx +6%/);
-    expect(at(96)).not.toMatch(/ctx +6%/);
-    expect(at(96)).toMatch(/peak \d+ \/ \d+s/);
+    expect(at(125)).toMatch(/ctx [━]+ +6%/);
+    expect(at(96)).not.toMatch(/ctx/);
+    expect(at(96)).toMatch(/tools [▁-█]{8} +\d+\/m/);
     expect(at(86)).toMatch(/implement 5\/6/);
-    expect(at(86)).toMatch(/peak \d+ \/ \d+s/);
+    expect(at(86)).toMatch(/tools [▁-█]{8} +\d+\/m/);
   });
 });
 

@@ -353,7 +353,7 @@ describe('Y1c: one age per state', () => {
 
   test('band: working has no clock of its own (the host prints elapsed), idle keeps `up` only (AA2)', () => {
     const working = band('working', full(3));
-    expect(working).toMatch(/◐ test 3\/6/);
+    expect(working).toMatch(/[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] test 3\/6/); // the ribbon's head is a braille spinner
     expect(working).not.toMatch(/\bended\b|\b\d+:\d\d\b/);
     expect(band('idle', full(3))).toMatch(/up 6:40/);
     expect(band('idle', full(3))).not.toMatch(/last \d/);

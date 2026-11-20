@@ -30,24 +30,24 @@ describe('motion-demo frames', () => {
       const frames = Object.keys(files).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => files[n]!);
       expect(new Set(frames).size).toBeGreaterThanOrEqual(2);
       const row = lastRow;
-      expect(row(frames[0]!)).toContain('●'); // critique 21: the flash is the disc itself stepping from bright to ok
+      expect(row(frames[0]!)).toContain('✓'); // the flash is the mark itself, bold on a green-tinted fill
       for (const f of frames) expect(/[◌◍]/.test(row(f))).toBe(false); // never a dotted ring: it reads empty
-      for (const f of frames) expect(['◇', '◆'].some((g) => row(f).includes(g))).toBe(false); // queued and the capsule keep their glyphs
+      for (const f of frames) expect(['○'].some((g) => row(f).includes(g))).toBe(false); // queued keeps its glyph
       expect(frames.at(-1)).not.toBe(files[`${s}-99-done.ans`]);
-      expect(plain(files[`${s}-99-done.ans`]!)).toContain('●');
+      expect(plain(files[`${s}-99-done.ans`]!)).toContain('✓');
       expect(plain(files[`${s}-00-running.ans`]!)).toMatch(/[◐◐]/);
     }
   });
-  test('wave 31: the fade is a staircase - 231 for one step, 151 held for 600 ms (two identical beats by design), none equal to the rest, in 24-bit and 256 colours', () => {
+  test('the finish flash: a strong green fill, a light one, then the settle held for the last two beats (identical by design), none equal to the rest, in 24-bit and 256 colours', () => {
     for (const color of ['truecolor', '256'] as const) {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       for (const s of ['todo', 'agent']) {
         const steps = Object.keys(all).filter((n) => n.startsWith(`${s}-`) && /-t\d{4}ms\.ans$/.test(n)).sort().map((n) => all[n]!);
         const rest = all[`${s}-99-done.ans`]!;
         expect(steps).toHaveLength(MOTION_MS / MOTION_STEP_MS);
-        expect([color, s, steps[1] === steps[0]]).toEqual([color, s, false]); // 231 then 151
-        expect([color, s, steps[2] === steps[1]]).toEqual([color, s, true]); // 151 is held (the 400 ms capture sees it)
-        expect([color, s, steps[3] === steps[2]]).toEqual([color, s, false]); // the last beat drops the weight, the colour stays
+        expect([color, s, steps[1] === steps[0]]).toEqual([color, s, false]); // the strong tint, then the light one
+        expect([color, s, steps[2] === steps[1]]).toEqual([color, s, false]); // then the fill is gone and the text settles
+        expect([color, s, steps[3] === steps[2]]).toEqual([color, s, true]); // the settle is held (the 600 ms capture sees it)
         expect([color, s, steps.includes(rest)]).toEqual([color, s, false]);
       }
     }
@@ -63,13 +63,13 @@ describe('motion-demo frames', () => {
     m.observe('hud-todo', hudMotionItems(at('working'), { now: 0 }).todos, 0);
     m.observe('hud-todo', hudMotionItems(at('done'), { now: 1000 }).todos, 1000);
     for (const dt of [0, 200, 400, 600]) {
-      const rows = hudLines(at('done'), { cols: 100, maxRows: 20, ui: ui256, tick: 0, now: 1000 + dt, motion: m.ctx(1000 + dt)! }).filter((r) => r.some((x) => x.t === 'returned'));
+      const rows = hudLines(at('done'), { cols: 100, maxRows: 20, ui: ui256, tick: 0, now: 1000 + dt, motion: m.ctx(1000 + dt)! }).filter((r) => r.some((x) => x.t.trim() === 'returned'));
       expect(rows).toHaveLength(2);
       for (const r of rows) {
         expect([dt, r.some((x) => x.t === '◃')]).toEqual([dt, false]); // the scorer counts `◃` as unknown
-        expect([dt, r.some((x) => x.t === '●')]).toEqual([dt, false]); // never the green done disc (critique 27)
+        expect([dt, r.some((x) => x.t === '✓')]).toEqual([dt, false]); // never the green done mark (critique 27)
         expect([dt, r.some((x) => x.t === '◉')]).toEqual([dt, true]); // the neutral hand-back mark the scorer reads
-        const w = r.find((x) => x.t === 'returned')!;
+        const w = r.find((x) => x.t.trim() === 'returned')!;
         expect([dt, w.fg === fitHex(PALETTES[ui256.theme].text, ui256.theme)]).toEqual([dt, false]); // and the word is never the plain body tone
       }
     }
@@ -94,7 +94,7 @@ describe('the demo draws what the live HUD draws', () => {
   const live = (surface: 'todo' | 'agent', now: number): string => {
     const rows = paintHud(demoInput(surface, 'done', now), { cols: 100, maxRows: 20, ui: mocha, tick: 0, now });
     // biome-ignore lint/suspicious/noControlCharactersInRegex: SGR
-    const at = rows.findIndex((l) => /^╭.*▸ SUBAGENTS/.test(l.replace(/\x1b\[[0-9;]*m/g, '')));
+    const at = rows.findIndex((l) => /^(╭─|──) SUBAGENTS /.test(l.replace(/\x1b\[[0-9;]*m/g, '')));
     return `${(at > 0 ? rows.slice(0, at) : rows).join('\n')}\n`;
   };
   test('the resting done frame is the live builder output byte for byte, strike included', () => {
@@ -133,9 +133,9 @@ describe('critique 14: the 600 ms frame is still the ramp', () => {
       const all = demoFrames(100, MOTION_STEP_MS, color);
       for (const s of ['todo', 'agent']) {
         const at = (ms: number): string => all[`${s}-${String(ms / MOTION_STEP_MS + 1).padStart(2, '0')}-t${String(ms).padStart(4, '0')}ms.ans`]!;
-        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]); // wave 31: 151 is held to 800 ms, so a 0.6 s capture still sees the fade
-        expect([color, s, at(600) === at(400)]).toEqual([color, s, false]); // the weight falls on the last beat
-        expect([color, s, at(400) === at(200)]).toEqual([color, s, true]); // 151 is held
+        expect([color, s, at(600) === all[`${s}-99-done.ans`]]).toEqual([color, s, false]); // the settle is held to 800 ms, so a 0.6 s capture still sees it
+        expect([color, s, at(600) === at(400)]).toEqual([color, s, true]); // the settle is held for two beats
+        expect([color, s, at(400) === at(200)]).toEqual([color, s, false]); // the light fill is gone by 400 ms
       }
     }
   });
@@ -147,7 +147,7 @@ describe('critique 11 C1: the ramp is held long enough to be seen', () => {
     expect(MOTION_MS).toBeGreaterThanOrEqual(600);
     expect(MOTION_MS / MOTION_STEP_MS).toBeGreaterThanOrEqual(3);
   });
-  test('the default demo (one frame per held step) is 231, a held 151 and the weightless last beat, none at rest, in truecolor and 256 colours', () => {
+  test('the default demo (one frame per held step) is a strong fill, a light fill and a held settle, none at rest, in truecolor and 256 colours', () => {
     for (const color of ['truecolor', '256'] as const) {
       const f = demoFrames(100, undefined, color);
       for (const s of ['todo', 'agent']) {

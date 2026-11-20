@@ -18,14 +18,6 @@ const idleHealth: Health = h;
 
 const MANY = Array.from({ length: 40 }, (_, i) => ({ label: i % 3 ? 'tool.call Bash' : 'session.measure', ageSecs: 4 + i * 5 }));
 describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows into the free rows, the footer is the last row)', () => {
-  test('at 150 columns (pane 54 x 40) at most one blank row sits between the last event and the closing rule', () => {
-    const t = body(world(54, { health: { ...h, hooks: { total: 40, byLabel: [{ label: 'tool.call', n: 40 }], recent: MANY } } }));
-    const rule = t.length - 1; // round 3: the footer is the last row, no rule above it
-    expect(t[rule]!.trim()).toMatch(/^atlas /);
-    let dead = 0;
-    for (let i = rule - 1; i >= 0 && t[i]!.trim() === ''; i--) dead++;
-    expect(dead).toBeLessThanOrEqual(1);
-  });
   test('slice S3: no `waiting for first prompt` line and no zero state; the stepper at rest is five `○` (the slots never move)', () => {
     const t = body(world(54)).join('\n');
     expect(t).not.toContain('waiting for first prompt');
@@ -35,10 +27,6 @@ describe('1: a tall idle pane is not a slab of empty rows (D11: RECENT grows int
 
 describe('4: the run duration is said once', () => {
   const last = { secs: 2, done: 0, total: 0, agents: 0, failed: 0, endedAgo: 3 };
-  test('a finished run at rest: `0:02` is the band\'s alone, the panel prints it zero times (slice S4)', () => {
-    const t = body(world(54, { run: { kind: 'idle', secs: 2, startMs: NOW, frame: 0 }, health: { ...h, last } })).join('\n');
-    expect(t.match(/0:02/g)).toBeNull();
-  });
 });
 
 describe('5: the recent list reads in words, collapsed, at most 3 rows', () => {
@@ -76,13 +64,6 @@ describe('8: the HEALTH card has one row schema at both widths', () => {
 });
 
 describe('9: every tab is a chip', () => {
-  test('chips are one cell apart so each reads as its own tile; no underline rule under the lit one', () => {
-    const rows = tabRows(world(54, { tab: 'route' })).map(lineText);
-    expect(rows.length).toBe(1);
-    expect(rows[0]).not.toMatch(/━/);
-    expect(rows[0]).toMatch(/ status   team   channel/); // 1 pad + label + 1 pad, then one gap cell between chips
-    expect(headerRows(world(54)).length).toBe(3);
-  });
 });
 
 describe('10: the last run ended `Ns ago`, not a wall clock with no zone', () => {

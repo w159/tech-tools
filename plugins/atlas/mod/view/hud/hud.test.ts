@@ -4,11 +4,11 @@
 import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../../../contracts/band-world';
 import { worldHudAgents, worldPhases, worldPlan as worldPlanOf } from '../../../contracts/hud-world';
-import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from '../../../contracts/hud-golden';
+import { hud_stack_120, hud_subagents_120, hud_subagents_120_rich, hud_subagents_80, hud_todo_120, hud_todo_120_rich, hud_todo_40, hud_todo_80 } from '../../../contracts/hud-golden';
 import type { TodoItem } from '../../contract';
 import type { Ui } from '../../design/atlas-ui';
 import { PALETTES } from '../../design/atlas-ui';
-import { agentModel, agentName, lastAction, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
+import { agentModel, agentName, elapsedOf, lastAction, displayName, hudAgents, hudBudget, hudCompactRows, hudLines, hudListsAgents, hudRows, isRunning, shortModel, todoModel, type HudAgent, type HudInput } from './hud';
 import { computeCounts, routeCounts } from '../../data/todos';
 import { effectiveRows, inlineBelowRows } from '../../register';
 import type { Segment } from '../../design/runs';
@@ -29,32 +29,32 @@ const phases = worldPhases();
 
 // Round 3 (critique 21): every title rule already runs to the last cell (mod/view/hud/hud-surface.ts titleRow) with the count and meter inside it, and a `╰───╯` rule closes the block, so the goldens are the rows as drawn.
 const edge = (rows: readonly string[]): string[] => [...rows];
-/** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
-const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
+/** State 38: the rows a plan block leaves out behind its one summary row (`✓ 3 done  ○ 2 queued`). */
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { if (!/^│ {2}\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)(?: {2}\S (\d+) (?:more )?\w+)*\s*│$/.test(r)) return n; return n + [...r.matchAll(/\S (\d+) (?:more )?(?:done|queued|running|failed|blocked|waiting)/g)].reduce((k, m) => k + Number(m[1]), 0); }, 0);
 
 describe('hud goldens through the Claude Code adapter (rev 4)', () => {
   test('TODO at 120, 120 rich, 80, 60 and 40 equals the design goldens', () => {
     const input: HudInput = { todos: worldPlan(), agents: [], phases };
-    expect(trimmed(hudRows(input, view(120)))).toEqual(edge(todo_120));
-    expect(trimmed(hudRows(input, view(120, true)))).toEqual(edge(todo_120_rich));
-    expect(trimmed(hudRows(input, view(80)))).toEqual(edge(todo_80));
-    expect(trimmed(hudRows(input, view(40)))).toEqual(edge(todo_40));
-    expect(trimmed(hudRows(input, view(60))).slice(1, -1)).toEqual(todo_40.slice(1, -1)); // the rows are the 40 form; the closing rule is 60 wide
+    expect(trimmed(hudRows(input, view(120)))).toEqual(edge(hud_todo_120));
+    expect(trimmed(hudRows(input, view(120, true)))).toEqual(edge(hud_todo_120_rich));
+    expect(trimmed(hudRows(input, view(80)))).toEqual(edge(hud_todo_80));
+    expect(trimmed(hudRows(input, view(40)))).toEqual(edge(hud_todo_40));
+    expect(trimmed(hudRows(input, view(60))).slice(1, -1)).toHaveLength(hud_todo_40.length - 2); // the same rows as the 40 form; the box is 60 wide
   });
   test('SUBAGENTS at 120, 120 rich and 80 equals the design goldens; 60 and 40 draw the block too', () => {
     const block = (cols: number, rich = false): string[] => {
       const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents(), phases }, view(cols, rich)));
       return rows.slice(rows.findIndex((l) => l.includes('SUBAGENTS')));
     };
-    expect(block(120)).toEqual([...subagents_120]);
-    expect(block(120, true)).toEqual([...subagents_120_rich]);
-    expect(block(80)).toEqual([...subagents_80]);
-    for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).toContain('▸ SUBAGENTS');
+    expect(block(120)).toEqual([...hud_subagents_120]);
+    expect(block(120, true)).toEqual([...hud_subagents_120_rich]);
+    expect(block(80)).toEqual([...hud_subagents_80]);
+    for (const cols of [60, 40]) expect(trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))).join('\n')).toContain('SUBAGENTS');
     expect(hudRows({ todos: [], agents: worldAgents() }, view(60))).not.toEqual([]);
   });
   test('both blocks stack as the TODO golden then the SUBAGENTS golden, no blank row between', () => {
     const rows = trimmed(hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120)));
-    expect(rows).toEqual([...edge(todo_120), ...subagents_120]); // wave 31: no blank row between the boxes
+    expect(rows).toEqual([...hud_stack_120]); // wave 31: no blank row between the boxes
   });
   test('every row is padded to the width and none is wider', () => {
     for (const cols of [120, 80, 60, 40]) for (const r of hudRows({ todos: worldPlan(), agents: worldAgents() }, view(cols))) expect(textWidth(text(r))).toBe(cols);
@@ -97,15 +97,15 @@ describe('L1: a completed plan row is shown as completed', () => {
     const rows = hudRows({ todos: plan, agents: [] }, view(120));
     const row = rows.find((r) => text(r).includes('Trace the failure'))!;
     expect(row).toBeDefined();
-    expect(text(row)).toMatch(/^ {2}● Trace the failure +done/);
-    expect(row.find((s) => s.t === 'Trace the failure')?.strike).toBeUndefined();
-    expect(row.find((s) => s.t === 'Trace the failure')?.color).toBe(PALETTES.mocha.muted);
-    expect(row.find((s) => s.t === '●')?.color).toBe(PALETTES.mocha.ok);
+    expect(text(row)).toMatch(/^│ ✓ Trace the failure +done/);
+    expect(row.find((s) => s.t.trim() === 'Trace the failure')?.strike).toBeUndefined();
+    expect(row.find((s) => s.t.trim() === 'Trace the failure')?.color).toBe('#767676'); // the quiet label of a finished row: a step under the secondary grey, still legible
+    expect(row.find((s) => s.t === '✓')?.color).toBe(PALETTES.mocha.ok);
   });
   test('when every row is done they all show, and the header says so', () => {
     const rows = trimmed(hudRows({ todos: plan.map((t) => ({ ...t, status: 'completed' })), agents: [] }, view(120)));
     expect(rows[0]).toContain('3/3');
-    expect(rows.filter((l) => l.includes('done') && l.includes('●'))).toHaveLength(3);
+    expect(rows.filter((l) => l.includes('done') && l.includes('✓'))).toHaveLength(3);
   });
   test('a plan row that completes appears in the next render with state done', () => {
     const before = todoModel(plan, 0);
@@ -128,8 +128,8 @@ describe('L2: the plan is not cut to "N more todos not shown"', () => {
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => /Step \d+/.test(l)).length;
       const hidden = Number(/\+(\d+) more/.exec(rows.join('\n'))?.[1] ?? 0) + summaryCount(rows);
-      const shownDone = rows.filter((l) => /● Step \d+/.test(l)).length;
-      const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows[0] ?? '')?.[1] ?? 0) - shownDone); // critique 17 B4 / wave 37: finished rows fold into the figure's numerator, every open row stays
+      const shownDone = rows.filter((l) => /✓ Step \d+/.test(l)).length;
+      const folded = hidden > 0 ? 0 : Math.max(0, Number(/ (\d+)\/12 /.exec(rows[0] ?? '')?.[1] ?? 0) - shownDone); // critique 17 B4 / wave 37: finished rows fold into the figure's numerator, every open row stays
       if (rows.length > 1) expect(shown + hidden + folded).toBe(12);
     }
   });
@@ -164,7 +164,8 @@ describe('L11: agents are named', () => {
     const squad = [{ name: 'explorer-3fa9c1', persona: 'explorer', state: 'running', source: 'task', task: 'alpha-explorer: read alpha.py' }] as never;
     const agents = hudAgents(live, squad);
     const rows = trimmed(hudRows({ todos: [{ ...todo('t1', 'T1 read alpha.py', 'in_progress'), owner: 'explorer-3fa9c1' }], agents }, view(120)));
-    expect(rows.join('\n')).toMatch(/▸ ◐ alpha-explorer +running +\S* *T1 /);
+    expect(rows.join('\n')).toMatch(/▌ ◐ T1 read alpha\.py +running +alpha-explorer/); // the renamed agent owns T1: the plan row names it in OWNER
+    expect(rows.join('\n')).toMatch(/◐ alpha-explorer +explorer +running/); // and its own row carries the display name
   });
   test('hudAgents carries the name through, and the block shows it', () => {
     const live = [{ name: 'a6839f49ee72a2b14', role: 'explorer', state: 'working', tool: 'Read', lastTool: null, since: 0, startedAt: 0, target: 'mod/view/hud/hud.ts', detail: null, lastLine: '', calls: [], scope: null }] as never;
@@ -183,7 +184,7 @@ describe('the Subagents block is back on Claude Code', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [running] }, view(120)));
     expect(rows[0]).toContain('SUBAGENTS');
     expect(rows[0]).toContain('1 running');
-    expect(rows[2]).toMatch(/^▸ ◐ impl-hud +running +- +- +-$/); // wave 31: AGENT STATE TASK LAST RESULT: no plan row (a dash), no start time (a dash), no count (a dash)
+    expect(rows[2]).toMatch(/^▌ ◐ impl-hud +implementer +running +read hud\.ts:12 +│$/); // AGENT ROLE STATE NOW / RESULT: no start time and no count, so no TIME, CALLS or FN column
   });
   test('with nothing running the finished agents stay (critique 17 B3: the block outlives a clean finish)', () => {
     expect(trimmed(hudRows({ todos: [], agents: [{ ...running, state: 'done' }] }, view(120)))[0]).toContain('SUBAGENTS');
@@ -195,14 +196,14 @@ describe('the Subagents block is back on Claude Code', () => {
     const recent = at(2_000);
     expect(recent[0]).toContain('SUBAGENTS');
     expect(recent[0]).toContain('3 done');
-    expect(recent.filter((l) => /^[ ▸] ● /.test(l))).toHaveLength(3);
-    expect(at(3_600_000).filter((l) => /^[ ▸] ● /.test(l))).toHaveLength(3);
+    expect(recent.filter((l) => /^[│▌] ✓ /.test(l))).toHaveLength(3);
+    expect(at(3_600_000).filter((l) => /^[│▌] ✓ /.test(l))).toHaveLength(3);
   });
   test('with nothing running, a failed agent stays however long ago it failed', () => {
     const failed: HudAgent = { ...running, name: 'a-bad', state: 'failed', ui: 'failed', since: 100_000 - 60_000 };
     const rows = trimmed(hudRows({ todos: [], agents: [failed] }, { ...view(120), now: 100_000 }));
     expect(rows[0]).toContain('SUBAGENTS');
-    expect(rows.filter((l) => /^[ ▸] ■ a-bad/.test(l))).toHaveLength(1);
+    expect(rows.filter((l) => /^[│▌] ✗ a-bad/.test(l))).toHaveLength(1);
   });
   test('LAST is the agent\'s last tool and target, not its free-text report (critique 8: three rows read the same posting step)', () => {
     const done = (name: string, lastTool: string, target: string | null, detail: string, lastLine: string): HudAgent => ({ name, role: 'explorer', state: 'done', ui: 'done', tool: null, lastTool, target, detail, lastLine });
@@ -213,13 +214,13 @@ describe('the Subagents block is back on Claude Code', () => {
     const rows = trimmed(hudRows({ todos: [], agents: [{ ...running, name: 'a-done', state: 'done', lastLine: '9 of 9 steps' }, running] }, view(120)));
     expect(rows[0]).toContain('1 running');
     expect(rows[0]).toContain('1 done');
-    expect(rows.filter((l) => /^[ ▸] [◐●] /.test(l))).toHaveLength(2);
+    expect(rows.filter((l) => /^[│▌] [◐✓] /.test(l))).toHaveLength(2);
     expect(rows[2]).toContain('a-done'); // critique 11 A3: one stable order (start order without tasks), the state is the row's word, not its place
     expect(rows[3]).toContain('impl-hud');
   });
   test('the T column is the position of the plan row the agent owns', () => {
     const plan = [todo('a', 'First', 'completed'), todo('b', 'Second', 'in_progress', { owner: 'impl-hud' })];
-    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/impl-hud +running +T2 .*-\s*$/m);
+    expect(trimmed(hudRows({ todos: plan, agents: [running] }, view(120))).join('\n')).toMatch(/Second +running +impl-hud/);
   });
   test('shortModel drops the provider and claude- prefix and guesses nothing', () => {
     expect(shortModel('anthropic/claude-sonnet-5')).toBe('sonnet-5');
@@ -229,12 +230,12 @@ describe('the Subagents block is back on Claude Code', () => {
 });
 
 describe('R5: no hardcoded check mark, bullet or ellipsis', () => {
-  test('no ✓ • … ☐ ☑ ⏳ in any state', () => {
+  test('no • … ☐ ☑ ⏳ in any state (the done mark ✓ is the one state glyph, from STATE_GLYPHS)', () => {
     const everything = hudRows({ todos: worldPlan(), agents: worldAgents() }, view(120, true)).concat(hudRows({ todos: Array.from({ length: 40 }, (_, i) => todo(`x${i}`, `Item ${i}`, 'pending')), agents: worldAgents() }, view(120, false, 8)));
-    expect(lines(everything).join('')).not.toMatch(/[✓•…☐☑⏳]/);
+    expect(lines(everything).join('')).not.toMatch(/[•…☐☑⏳]/);
   });
-  test('done rows use the state glyph ●', () => {
-    expect(trimmed(hudRows({ todos: [todo('a', 'x', 'completed')], agents: [] }, view(120))).join('\n')).toContain('● x');
+  test('done rows use the state glyph ✓', () => {
+    expect(trimmed(hudRows({ todos: [todo('a', 'x', 'completed')], agents: [] }, view(120))).join('\n')).toContain('✓ x');
   });
 });
 
@@ -269,8 +270,8 @@ describe('hud row budget', () => {
     expect(hudLines({ todos: [], agents: [] }, view(120))).toEqual([]);
   });
   test('hudCompactRows is the least the HUD keeps; hudBudget gives a running agent at least 2 rows', () => {
-    expect(hudCompactRows({ todos: plan, agents })).toBe(7 + 7); // state 39: the overflow row is one dim summary row; round 5: both closing rules stay; TODO ribbon, 5 rows and its rule (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents, the overflow row and its rule
-    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 7 + 6 + 1))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
+    expect(hudCompactRows({ todos: plan, agents })).toBe(8 + 7); // state 39: the overflow row is one dim summary row; round 5: both closing rules stay; TODO ribbon, 5 rows and its rule (a plan of five shows whole); Subagents ribbon, the column names (critique 18: part of the floor), 2 agents, the overflow row and its rule
+    expect(trimmed(hudRows({ todos: plan, agents }, view(120, false, 8 + 7))).join('\n')).toContain('AGENT'); // one row beyond the floor: the blank returns beside the column names
     for (let maxRows = 2; maxRows <= 20; maxRows++) expect(hudBudget(maxRows, 7, 7, true)).toBeGreaterThanOrEqual(2);
     expect(hudBudget(1, 7, 7, true)).toBe(1);
     expect(hudBudget(2, 7)).toBe(2);
@@ -389,8 +390,9 @@ describe('hud fixes (round 3): canonical name, task text, finished wave', () => 
     const agents = hudAgents([lw('alpha-explorer', 'working')], [sq('alpha-explorer', 'alpha-explorer: read alpha.py')]);
     const plan = [{ id: 'p1', content: 'T1 read alpha.py (alpha-explorer)', status: 'in_progress', owner: 'alpha-explorer' }] as never;
     const rows = hudLines({ todos: plan, agents }, { merge: false, cols: 120, maxRows: 10, ui, now: 0 }).map((r) => r.map((x) => x.t).join(''));
-    const row = rows.find((r) => /^[▸ ] [◐◓◑◒] alpha-explorer/.test(r))!;
-    expect(row).toMatch(/\sT1\b/); // the plan item id leads the TASK cell (wave 31: the free width then carries its text)
+    const row = rows.find((r) => /^[│▌] [◐◓◑◒] T1 /.test(r))!;
+    expect(row).toMatch(/running +alpha-explorer\b/); // the plan item names its agent in OWNER, and only there: the agent row has no TASK cell
+    expect(rows.some((r) => /^[│▌] [◐◓◑◒] alpha-explorer/.test(r))).toBe(true);
   });
   test('a retry owns the item its first run owned: TASK reads T3 for `beta-explorer #2` (critique 19 B2: it read `read beta.py`)', () => {
     const plan = [1, 2, 3].map((n) => ({ id: `p${n}`, content: `T${n} step ${n}`, status: n === 3 ? 'in_progress' : 'completed', owner: n === 3 ? 'beta-explorer' : `x${n}-explorer` })) as never;
@@ -426,5 +428,18 @@ describe('live 6b7f637d: a shell call is never the LAST column text (critique 13
   });
   test('other tools keep `tool target`', () => {
     expect(lastAction({ tool: 'Read', target: 'alpha.py', detail: null, lastTool: null, lastLine: '' })).toBe('read alpha.py');
+  });
+});
+
+describe('elapsedOf: a finished worker shows its frozen run time', () => {
+  const START = 1_700_000_000_000;
+  test('done with no finish stamp after its start reads `-`, not a ticking clock', () => {
+    expect(elapsedOf({ state: 'done', since: START, startedAt: START }, 'done', START + 90_000)).toBe('-');
+  });
+  test('done with a finish stamp keeps the same clock as `now` advances', () => {
+    const a = { state: 'done', since: START + 65_000, startedAt: START } as const;
+    const first = elapsedOf(a, 'done', START + 70_000);
+    expect(first).not.toBe('-');
+    expect(elapsedOf(a, 'done', START + 600_000)).toBe(first);
   });
 });

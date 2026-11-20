@@ -72,7 +72,7 @@ function frameOf(sh: Shape, cols: number, screen: number, extra: Partial<BandMod
 const RUNNING: Shape = { working: true, agents: NAMES.map((name) => ({ name, squad: 'running', mood: 'working', tool: 'Read' })), plan: ['in_progress', 'in_progress', 'in_progress', 'pending', 'pending'] };
 const FINISHED: Shape = { working: false, rest: 2, agents: NAMES.map((name) => ({ name, squad: 'finished', mood: 'done' })), plan: ['completed', 'completed', 'completed', 'completed', 'completed'] };
 const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }], gates: runstate.stopRefusal([], 'Done claimed too early: 1 open dispatch row.') as unknown as unknown[] };
-const titleOf = (hud: readonly string[]): string => hud.find((r) => r.includes('▸ SUBAGENTS')) ?? '';
+const titleOf = (hud: readonly string[]): string => hud.find((r) => r.includes('SUBAGENTS')) ?? '';
 const countsOf = (s: string): string => [...s.matchAll(/(\d+) (running|blocked|failed|waiting|queued|done)/g)].map((m) => `${m[1]} ${m[2]}`).join(' · ');
 
 describe('step 1: the band worker segment counts workers, from the same function as the SUBAGENTS title', () => {
@@ -90,11 +90,11 @@ describe('step 1: the band worker segment counts workers, from the same function
     expect(countsOf(titleOf(f.hud))).toBe('3 done');
     expect(f.band).toMatch(/3 done/);
   });
-  test('a killed worker is `1 failed` on the title and `■1` or `1 failed` on the band', () => {
+  test('a killed worker is `1 failed` on the title and `✗1` or `1 failed` on the band', () => {
     const f = frameOf(STOP, 93, 45);
     expect(countsOf(titleOf(f.hud))).toBe('1 failed · 2 done');
     expect(f.band).toMatch(/2 done/);
-    expect(f.band).toMatch(/■1|1 failed/);
+    expect(f.band).toMatch(/✗1|1 failed/);
   });
 });
 
@@ -127,7 +127,7 @@ describe('step 2: one blocked wording, `stop refused` or `N failed`, on the band
     const sh: Shape = { ...RUNNING, agents: [RUNNING.agents[0]!, RUNNING.agents[1]!, { name: NAMES[2]!, squad: 'failed', mood: 'failed' }] };
     const f = frameOf(sh, 93, 45);
     expect(countsOf(titleOf(f.hud))).toContain('1 failed');
-    expect(f.band).toMatch(/■1|1 failed/);
+    expect(f.band).toMatch(/✗1|1 failed/);
   });
 });
 
@@ -183,23 +183,23 @@ describe('step 4: the run card flips with the band and prints the band\'s final 
 });
 
 describe('step 5: workerFacts drives both the SUBAGENTS row and the worker card', () => {
-  const rowOf = (f: Frame, name: string): string => f.hud.find((r) => new RegExp(`^ {2}${name}\\s`).test(r)) ?? '';
+  const rowOf = (f: Frame, name: string): string => f.hud.find((r) => new RegExp(`^[│▌] \\S ${name}\\s`).test(r)) ?? "";
   test('the table notes its TIME and CALLS cells; the card prints exactly those', () => {
     resetWorkerFacts();
     const f = frameOf(FINISHED, 93, 45);
     const row = rowOf(f, 'alpha-explorer');
-    const m = /alpha-explorer\s+● done\s+(\d+:\d\d)\s+(\d+|-)\s/.exec(row);
+    const m = /alpha-explorer\s+\S+\s+done\s+.*?\s(\d+|-)\s+(\d+:\d\d)\s+│$/.exec(row); // the row ends CALLS then TIME
     expect(m, f.hud.join('\n')).not.toBeNull();
-    expect(workerFacts('alpha-explorer')).toEqual({ time: m![1]!, calls: m![2]! });
+    expect(workerFacts('alpha-explorer')).toEqual({ time: m![2]!, calls: m![1]! });
     const card = flat(notificationTree('alpha-explorer', 'explorer', 'finished · 9:59', false, ui, false, { cols: 70, calls: 9 }));
-    expect(card).toContain(`${m![1]!} · ${m![2]!} calls`); // the card's own 9:59 and 9 calls give way to the row's cells
+    expect(card).toContain(`${m![2]!} · ${m![1]!} calls`); // the card's own 9:59 and 9 calls give way to the row's cells
     expect(card).not.toContain('9:59');
   });
   test('a worker whose row cell is `-` has `-` on its card, and only then', () => {
     resetWorkerFacts();
     const sh: Shape = { ...FINISHED, agents: FINISHED.agents.map((a, i) => (i === 1 ? { ...a, noCalls: true } : a)) };
     const f = frameOf(sh, 93, 45);
-    expect(rowOf(f, 'beta-explorer')).toMatch(/beta-explorer\s+● done\s+\d+:\d\d\s+-\s/);
+    expect(rowOf(f, 'beta-explorer')).toMatch(/beta-explorer\s+\S+\s+done\s+.*?\s-\s+\d+:\d\d\s+│$/);
     expect(workerFacts('beta-explorer')!.calls).toBe('-');
     expect(flat(notificationTree('beta-explorer', 'explorer', 'finished · 0:15', false, ui, false, { cols: 70, calls: 4 }))).toMatch(/\d:\d\d · -/);
     expect(workerFacts('alpha-explorer')!.calls).toBe('3');
@@ -223,21 +223,21 @@ describe('step 6: SUBAGENTS FN and LAST', () => {
   });
   test('a finished row with a count: FN is the count and LAST is the last tool action, not the count again', () => {
     const f = frameOf({ ...FINISHED, agents: FINISHED.agents.map((a) => ({ ...a, tool: null })), dispatch: [] }, 150, 45);
-    const rows = f.hud.filter((r) => /^ {2}\w+-explorer\s+● done/.test(r));
+    const rows = f.hud.filter((r) => /^[│▌] ✓ \w+-explorer\s+\S+\s+done/.test(r));
     expect(rows).toHaveLength(3);
     for (const r of rows) expect(r).not.toMatch(/(\d+) functions?\s*$|\s(\d+) (\d+) functions?/);
   });
   test('at 110 columns LAST has the width that is left: AGENT gives up two cells first', () => {
     const f = frameOf(FINISHED, 56, 40);
-    const head = f.hud.find((l) => /AGENT\s+STATE/.test(l))!;
+    const head = f.hud.find((l) => /AGENT\s+(?:ROLE\s+)?STATE/.test(l))!;
     expect(head, f.hud.join('\n')).toBeDefined();
-    expect(head.indexOf('LAST')).toBe(2 + 12 + 1 + 9 + 1 + 5 + 1 + 5 + 1 + 3 + 1); // state 40: under 80 cells the numeric columns take their header's width and the gaps are one cell; AGENT is 12 here, so LAST keeps 14 cells
+    expect(head.lastIndexOf("│") - head.indexOf("NOW")).toBeGreaterThanOrEqual(14); // under 80 cells NOW / RESULT keeps 14 cells (ROLE goes first)
   });
-  test('no SUBAGENTS row wears a 236 background band', () => {
+  test('only the focus row of SUBAGENTS wears the 236 selection band', () => {
     const f = frameOf(RUNNING, 93, 45);
-    const at = f.hud.findIndex((r) => r.includes('▸ SUBAGENTS'));
+    const at = f.hud.findIndex((r) => r.includes('SUBAGENTS'));
     expect(at).toBeGreaterThan(0);
-    for (const segs of f.hudSegs.slice(at)) expect(segs.some((x) => x.bgHex === xtermHex(236))).toBe(false);
+    expect(f.hudSegs.slice(at).filter((segs) => segs.some((x) => (x as { bg?: string }).bg === xtermHex(236))).length).toBe(1); // only the focus row wears the selection fill
   });
 });
 
@@ -247,13 +247,13 @@ describe('step 7: the HUD never hides a running row', () => {
     const rows: R[] = [{ state: 'done' }, { state: 'running' }, { state: 'running' }, { state: 'queued' }, { state: 'queued' }, { state: 'done' }];
     const w = planWindow(rows, 3, NOW, false, ui);
     expect(w.shown.filter((r) => r.state === 'running')).toHaveLength(2);
-    expect(w.summary).toBe('● 2 done  ◇ 2 queued');
+    expect(w.summary).toBe('✓ 2 done  ○ 2 queued');
     expect(w.hiddenOpen).toBe(0);
   });
-  test('the summary is one row and nothing else counts the rest: `● 3 done  ◇ 1 queued`', () => {
+  test('the summary is one row and nothing else counts the rest: `✓ 3 done  ○ 1 queued`', () => {
     const plan: TodoItem[] = ['completed', 'completed', 'completed', 'in_progress', 'pending', 'pending'].map((st, i) => ({ id: `t${i}`, content: `T${i + 1} step ${i}`, status: st }) as TodoItem);
     const lines = hudLines({ todos: ownTodos(plan), agents: [] }, { cols: 93, maxRows: 5, ui, now: NOW, merge: false }).map(runsString);
-    expect(lines.some((l) => /^ {2}● 3 done {2}◇ 1 queued$/.test(l.trimEnd())), lines.join('\n')).toBe(true);
+    expect(lines.some((l) => /^│ {2}✓ 3 done {2}○ 1 queued\s*│$/.test(l.trimEnd())), lines.join('\n')).toBe(true);
     expect(lines.some((l) => /T4 step 3/.test(l))).toBe(true); // the running row
   });
   test('no `└ explorer-xxxx queued` child row, in any state', () => {
@@ -267,7 +267,7 @@ describe('step 7: the HUD never hides a running row', () => {
     const agents = [{ name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', since: NOW - 2000, startedAt: NOW - 5000 } as HudAgent];
     const lines = hudLines({ todos, agents }, { cols: 93, maxRows: 20, ui, now: NOW, merge: true }).map(runsString);
     const q = lines.find((l) => /T2 combine/.test(l))!;
-    expect(q.trimEnd(), lines.join('\n')).toMatch(/queued\s+-\s+-$/); // state 39: the fixed grid, owner `-` then time `-`
+    expect(q.trimEnd(), lines.join('\n')).toMatch(/queued\s+-\s+-\s+│$/); // state 39: the fixed grid, owner `-` then time `-`
   });
   test('the finished row that vanished with no `+N` (live-150-1 f0045) is now a summary row', () => {
     const plan: TodoItem[] = [
@@ -277,7 +277,7 @@ describe('step 7: the HUD never hides a running row', () => {
     const agents = ['alpha', 'beta', 'gamma'].map((n, i) => ({ name: `${n}-explorer`, role: 'explorer', state: n === 'beta' ? 'finished' : 'working', ui: n === 'beta' ? 'done' : 'running', since: NOW - 2000, startedAt: NOW - 8000 - i * 1000 }) as HudAgent);
     const lines = hudLines({ todos: ownTodos(plan), agents }, { cols: 93, maxRows: 11, ui, now: NOW, merge: true }).map(runsString);
     const rowsDrawn = lines.filter((l) => /\bT[1-5] /.test(l)).length;
-    const summary = lines.find((l) => /^ {2}● \d+ done/.test(l));
+    const summary = lines.find((l) => /^│ {2}✓ \d+ done/.test(l));
     expect(rowsDrawn === 5 || summary !== undefined, lines.join('\n')).toBe(true);
     expect(lines.filter((l) => /T[13] read (alpha|gamma)\.py/.test(l))).toHaveLength(2); // both running rows stay
   });
@@ -312,11 +312,11 @@ describe('follow-up B: the 110-column HUD keeps every running plan row', () => {
       expect(hud.filter((l) => /T[123] read (alpha|beta|gamma)\.py/.test(l)), hud.join('\n')).toHaveLength(3);
       expect(hud.some((l) => /\+\d+ more/.test(l) && /TODO/.test(l)), hud.join('\n')).toBe(false);
       expect(hud.some((l) => /SUBAGENTS/.test(l) && /3 running/.test(l)), hud.join('\n')).toBe(true);
-      expect(hud.some((l) => /^\s+alpha-explorer\s+\S+ running/.test(l)), hud.join('\n')).toBe(false); // the table gave way, not a running plan row
+      expect(hud.some((l) => /^[│▌] \S alpha-explorer\s+\S+\s+running/.test(l)), hud.join('\n')).toBe(false); // the table gave way, not a running plan row
     });
   }
   test('with room for both, SUBAGENTS keeps its table (screen 40)', () => {
     const hud = frameOf(RUNNING, 110, 40).hud.map((l) => l.trimEnd());
-    expect(hud.filter((l) => /^\s+\w+-explorer\s+\S+ running/.test(l))).toHaveLength(3);
+    expect(hud.filter((l) => /^[│▌] \S \w+-explorer\s+\S+\s+running/.test(l))).toHaveLength(3);
   });
 });

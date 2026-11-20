@@ -16,8 +16,8 @@ const running: HudInput = { todos: ownTodos(PLAN), agents: ['alpha-explorer', 'b
 const settled: HudInput = { todos: ownTodos(PLAN.map((t) => ({ ...t, status: 'completed' }))), agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((n) => agent(n, 'done')) };
 const draw = (input: HudInput, cols: number, maxRows: number) => hudLines(input, { cols, maxRows, ui, rich: false, merge: false, now: Date.now() }).map(runsString); // hudCompactRows reads the wall clock: so does the draw
 
-const AGENT_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] \S+-explorer\b/;
-const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] /;
+const AGENT_ROW = /^[│▌] [◐◓◑◒○✓✗▲◉] \S+-explorer\b/;
+const PLAN_ROW = /^[│▌] [◐◓◑◒○✓✗▲◉] T[1-5] /;
 const closed = (hud: string[]): boolean => hud.filter((r) => r.startsWith('╭─ ') && r.endsWith('╮')).length === 2 && hud.filter((r) => r.startsWith('╰') && r.endsWith('╯')).length === 2;
 
 /** What register.ts draws for a slot: the HUD at the slot cap, then the gap row, and the rows the band keeps. */
@@ -36,7 +36,7 @@ describe('A3: the SUBAGENTS column header and the blank before the band', () => 
         test(`${cols} columns, ${name}, ${budget} rows: header kept, one blank after the agents, the band keeps a row`, () => {
           const { hud, gap, band } = slot(input, cols, budget, isRunning);
           const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
-          expect(hud[at + 1]).toMatch(/AGENT\s+STATE/); // the column names sit under the ribbon
+          expect(hud[at + 1]).toMatch(/AGENT\s+ROLE\s+STATE/); // the column names sit under the ribbon
           expect(hud.filter((r) => AGENT_ROW.test(r))).toHaveLength(3); // every agent keeps its row
           expect(closed(hud)).toBe(true);
           expect(hud[at - 1]!.startsWith('╰')).toBe(true); // wave 31: no blank between the plan and the agents; the SUBAGENTS box starts under the TODO rule
@@ -64,14 +64,14 @@ describe('A3: the SUBAGENTS column header and the blank before the band', () => 
     expect(closed(hud)).toBe(true);
     expect(hud.filter((r) => AGENT_ROW.test(r))).toHaveLength(3);
     expect(hud[0]!).not.toMatch(/\+\d+ more/); // state 39: one summary row inside the box, never the title
-    const summary = hud.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
+    const summary = hud.find((r) => /^│ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
     expect(hud.filter((r) => PLAN_ROW.test(r)).length + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5);
     expect(hud.length).toBeLessThanOrEqual(10);
     expect(hudGapRows(true, 10, 11)).toBe(0);
   });
   test('the HUD asks for every row it has (hudWantRows) and gets it whenever the band keeps its title row and the blank under the agents: no `N more todos not shown` beside spare rows (critique 23, live-150-1 f0060:24)', () => {
     const want = hudWantRows(running, 150, Date.now());
-    expect(want).toBe(13); // five plan rows and three agents with the names and both closing rules (wave 31: no blank between the boxes)
+    expect(want).toBe(14); // five plan rows and three agents with both boxes titles, column names and closing rules (no blank between the boxes)
     for (const cols of [150, 110]) {
       for (const budget of [14, 15, 16, 17, 18, 24]) {
         const { hud, gap, band } = slot(running, cols, budget, true);

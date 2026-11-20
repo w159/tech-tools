@@ -38,7 +38,7 @@ describe('256-colour ease', () => {
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'done' }], 1000);
-    const resting: Run[] = [{ t: '●', tone: 'ok' }, { t: ' ', tone: 'text' }, { t: 'wire the gate', tone: 'sub', strike: true }, { t: 'tests green', tone: 'muted' }];
+    const resting: Run[] = [{ t: '✓', tone: 'ok' }, { t: ' ', tone: 'text' }, { t: 'wire the gate', tone: 'sub', strike: true }, { t: 'tests green', tone: 'muted' }];
     for (const word of ['wire the gate', 'tests green']) {
       const seen: string[] = [];
       let boldOff = false;
@@ -73,7 +73,7 @@ describe('256-colour ease', () => {
     const m = new Motion(true);
     m.observe('todo', [{ key: 'todo:a', state: 'running' }], 0);
     m.observe('todo', [{ key: 'todo:a', state: 'done' }], 1000);
-    const f = animateRow([{ t: '●', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1000), ui);
+    const f = animateRow([{ t: '✓', tone: 'text' }, { t: ' wire', tone: 'text' }], 'todo:a', 'done', m.ctx(1000), ui);
     expect(runsString(f)[0]).toBe(POP_UNICODE[0]);
   });
 });

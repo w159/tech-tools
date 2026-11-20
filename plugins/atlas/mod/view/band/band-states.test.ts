@@ -17,7 +17,7 @@ describe('A2: working', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols} columns: spinner, the word working and the elapsed clock lead, in that order`, () => {
     const t = head(model({ cols, busy: true, turnSecs: 42 }));
-    expect(t).toMatch(new RegExp(`ATLAS ◗ +${SPIN} working 0:42`));
+    expect(t).toMatch(new RegExp(`ATLAS +${SPIN} working 0:42`));
     });
   }
   test('the spinner moves with the tick and the clock counts with turnSecs', () => {
@@ -43,9 +43,9 @@ describe('A2: idle, done and needs-you', () => {
     expect(t).not.toMatch(new RegExp(SPIN));
     expect(t).not.toMatch(/\d:\d\d/);
   });
-  test('done reads `● done · clock · todo n/m`: how long the run took, then the plan figure once', () => {
+  test('done reads `✓ done · clock · todo n/m`: how long the run took, then the plan figure once', () => {
     const t = head(model({ phase: 'done', done: 7, total: 7, ranSecs: 70, cols: 110 }));
-    expect(t).toContain('● done · 1:10 · todo 7/7');
+    expect(t).toContain('✓ done · 1:10 · todo 7/7');
     expect(t.match(/7\/7/g)).toHaveLength(1);
     expect(t).not.toMatch(new RegExp(SPIN));
   });
@@ -76,8 +76,8 @@ describe('A2: the band never says something runs without a spinner beside it', (
 describe('A3: the wordmark sweep and the reduced-motion off switch', () => {
   const litLetter = (m: MissionModel): number => {
     const runs = bandLines(m)[0]!.runs;
-    const at = runs.findIndex((x) => x.t === 'A');
-    return [...WORDMARK].findIndex((_, i) => runs[at + i]!.bg === 'panel');
+    const pill = runs.find((x) => x.t === ' ◆ ATLAS ')!; // the pill is one solid run: a lit letter would be a hole in it
+    return pill.bg === 'panel' ? 0 : -1;
   };
   test('round 3: no letter of ATLAS is ever a hole in the pill (the inverted-letter shimmer read as a stray cursor); the chip is solid at every tick', () => {
     const lit = [0, 1, 2, 3, 4, 5, 6, 7, 8].map((tick) => litLetter(model({ busy: true, tick })));

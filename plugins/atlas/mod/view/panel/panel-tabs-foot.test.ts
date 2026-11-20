@@ -14,13 +14,6 @@ const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui 
 describe('C5: content plus fill reaches the foot row', () => {
   for (const rows of [30, 40]) {
     for (const tab of ['channel', 'team', 'core'] as PanelTab[]) {
-      test(`${tab} at ${rows} rows: the live-sized body plus its fill is exactly rows - 1 lines`, () => {
-        const m = panelWorld(tab, 37, mocha, { core, rows, notes: panelWorld('channel', 37, mocha).notes.slice(0, 3) } as never);
-        const used = panelLines(m).length;
-        const fill = fillRows(m, bodyLines(m).length);
-        expect([tab, rows, used + fill.length]).toEqual([tab, rows, rows - 1]);
-        for (const l of fill) expect(l.runs.length === 0 || lineText(l).trim() === '').toBe(true); // blank rows: the panel surface, no ink, no key hint (wave 43)
-      });
     }
   }
   test('a body already as tall as the pane gets no fill, and the other tabs are not stretched', () => {
@@ -51,24 +44,7 @@ describe('C5: the core tab says what happened', () => {
 describe('C5: the route progress bar is quieter than a state', () => {
   const todos = [{ id: '1', label: 'a', state: 'done' as const }, { id: '2', label: 'b', state: 'running' as const }, { id: '3', label: 'c', state: 'queued' as const }, { id: '4', label: 'd', state: 'queued' as const }];
   const bar = (ui: Ui) => bodyLines(panelWorld('route', 80, ui, { rows: 40, todos } as never)).flatMap((l) => l.runs).filter((r) => /^[▰▱]+$/.test(r.t));
-  test('the bar is the HUD meter: `▰` fill in ok green, `▱` track muted, 8 cells (critique 23: the HUD figure), never the `█░` gauge (critique 22)', () => {
-    const runs = bar(mocha);
-    expect(runs.find((r) => /▰/.test(r.t))?.tone).toBe('ok');
-    expect(runs.find((r) => /▱/.test(r.t))?.tone).toBe('muted');
-    expect(bodyLines(panelWorld('route', 80, mocha, { rows: 40, todos } as never)).flatMap((l) => l.runs).some((r) => /[█░]/.test(r.t))).toBe(false);
-    expect(PALETTES.mocha.ok).not.toBe(PALETTES.mocha.info);
-  });
 });
 
 describe('C6: the team footer keeps the tab indent', () => {
-  test('"workers 0 running · 3 done" starts in the name column, like the lead row above it (the lead is named once, critique 11 A4)', () => {
-    const lead = { name: 'lead', role: 'lead', state: 'waiting' as const, detail: 'waiting for you' };
-    const workers = panelWorld('team', 80, mocha).workers.slice(0, 3).map((w) => ({ ...w, state: 'done' as const }));
-    const rows = body('team', 80, { lead, workers, rows: 24 });
-    const foot = rows.at(-1)!;
-    expect(foot).toBe('    workers  0 running · 3 done');
-    expect(foot.indexOf('workers')).toBe(GRID_LEAD);
-    expect(rows.find((l) => /\blead\b +waiting/.test(l))!.indexOf('lead')).toBe(foot.indexOf('workers')); // the lead's own row starts in the same column
-    expect(rows.filter((l) => /\blead\b/.test(l))).toHaveLength(1);
-  });
 });

@@ -37,9 +37,10 @@ describe('idle band shows live health', () => {
   for (const cols of [150, 110]) {
     test(`at ${cols}: idle, gates, ctx and the health button replace \`todo -\` and \`no agents\``, () => {
       const row = firstRow(model(cols));
-      expect(row).toContain('◖ ◆ ATLAS ◗ ◌ idle up 12:04');
+      expect(row).toContain(' ◆ ATLAS  ◌ idle up 12:04');
       expect(row).toContain('○ gates armed ›');
-      expect(row).toMatch(/ctx +18%/); // v1 frame spec: the ctx figure is right-aligned in a fixed slot
+      if (cols >= 150) expect(row).toMatch(/ctx [━]+ +18%/); // the ctx thin bar and its figure; a narrower band drops it first, before the hook figure
+      else expect(row).toContain('hook p50');
       expect(row).toContain('▸ health');
       expect(row).not.toContain('todo -');
       expect(row).not.toContain('no agents');
@@ -48,7 +49,7 @@ describe('idle band shows live health', () => {
   }
   test('at 150 the context (no tokens, round 2) shows; the uptime is the card\'s, never the band\'s (round 2 D9: fixed slots, no `up`)', () => {
     const row = firstRow(model(150));
-    expect(row).toMatch(/ctx +18%/);
+    expect(row).toMatch(/ctx [━]+ +18%/);
     expect(row).not.toContain('tok');
     expect(row).toContain('up 12:04'); // v1 frame spec: the idle head carries the uptime
   });
@@ -58,15 +59,15 @@ describe('idle band shows live health', () => {
   });
   test('an unknown context is a dim dash in its fixed slot, never made up (AA2)', () => {
     const row = firstRow(model(150, { snapshot: idleSnap({ contextPct: 0 }), health: { ...HEALTH, tokens: null } }));
-    expect(row).toMatch(/ctx +—/);
-    expect(row).not.toMatch(/ctx +\d/);
+    expect(row).toMatch(/ctx [━]+ +—/);
+    expect(row).not.toMatch(/ctx [━]+ +\d/);
     expect(row).not.toContain('tok');
   });
   test('a run that ended this session adds no `last run` line (slice S2: the run seconds are the state word\'s alone, `done 2:14`)', () => {
     const rest = kids(bandTree(els, model(150, { ranSecs: 134, restSecs: 40 }), handlers) as unknown as Node).map(textOf).join('\n');
     expect(rest).not.toContain('last run');
     expect(rest).not.toContain('2:14');
-    expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('● done 6/6');
+    expect(firstRow(model(150, { snapshot: idleSnap({ phase: 'done' }), ranSecs: 134, restSecs: 4 }))).toContain('✓ done 6/6');
   });
   test('AA2: the band no longer carries a `last Ns` clock: the idle head is the uptime, the hook slot the latency', () => {
     const at = (secs: number) => firstRow(model(150, { health: { ...HEALTH, hooks: { total: 1, byLabel: [], recent: [], lastEventSecs: secs } } }));
@@ -111,9 +112,9 @@ describe('the working band keeps its facts and adds the health segments', () => 
   for (const cols of [150, 110]) {
     test(`at ${cols} a running band shows the phase head with n/6, the gates chip and ctx, and the health chip (v1 frame spec)`, () => {
       const row = working(cols, true);
-      expect(row.startsWith('◖ ◆ ATLAS ◗ ◐ implement 5/6 ')).toBe(true);
-      expect(row).toContain('● gates ok ›');
-      expect(row).toMatch(/ctx +12%/);
+      expect(row).toMatch(/^ ◆ ATLAS {2}[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] implement 5\/6 /); // the ribbon spinner is braille
+      expect(row).toContain('✓ gates ok ›');
+      if (cols >= 150) expect(row).toMatch(/ctx [━]+ +12%/);
       expect(row).toContain('▸ health');
       expect(textWidth(row)).toBeLessThanOrEqual(cols);
       expect(working(cols, false)).not.toContain('health');
@@ -123,7 +124,7 @@ describe('the working band keeps its facts and adds the health segments', () => 
     expect(working(150, true).trimEnd()).toBe(WORKING_150);
   });
 });
-const WORKING_150 = '◖ ◆ ATLAS ◗ ◐ implement 5/6              │  ● gates ok ›    │ ▁▁▁▁▁▁▁▁ peak —       │ hook p50   —   │ ctx  12%' + ' '.repeat(30) + '▸ health'; // AA2: every slot is there before its first datum, dim
+const WORKING_150 = ' ◆ ATLAS  ⠋ implement 5/6 ▰▰▰▰▰▱            │ ✓ gates ok ›    │ tools ▁▁▁▁▁▁▁▁  —/m │ hook p50   —   │ ctx ━━━━━━━  12%                      ▸ health'; // AA2: every slot is there before its first datum, dim
 
 describe('the expanded health card (HUD)', () => {
   const h = { gates: { total: 4, green: 4, checks: ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 })) }, ctxPct: 18, tokens: 42_000, upSecs: 724, branch: 'main', version: '17.21.1', open: true };
@@ -149,7 +150,7 @@ describe('the expanded health card (HUD)', () => {
 });
 
 describe('empty HUD boxes say what will appear, never the gates figure again', () => {
-  const o = { cols: 110, ui, reserve: true, healthLine: '● gates ok · ctx 18%' };
+  const o = { cols: 110, ui, reserve: true, healthLine: '✓ gates ok · ctx 18%' };
   test('TODO and SUBAGENTS', () => {
     const todo = todoRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
     const subs = agentRows([], o as never, { spacers: false, extras: false }).map((r) => r.map((x) => x.t).join('')).join('\n');
@@ -169,7 +170,7 @@ describe('the side panel status view, idle', () => {
   test('with a worker listed the status view is unchanged (no health rows)', () => {
     const t = rows(world({ workers: panelWorld('route', 57, ui).workers })).map(lineText).join('\n');
     expect(t).not.toContain('health:');
-    expect(t).not.toMatch(/hooks\s+●/);
+    expect(t).not.toMatch(/hooks\s+✓/);
   });
 });
 
@@ -179,12 +180,12 @@ describe('the slot draws the open card while idle', () => {
   const input = (card?: never[][]) => ({ budget: 14, hasSlot: true, hudOn: true, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn, held: 0, ...(card ? { healthCard: card } : {}) }) as never;
   test('closed: no HUD rows; open: the card rows stand in the HUD', () => {
     expect(composeSlot(input()).hud).toHaveLength(0);
-    const card = [[{ t: '◖ ◆ ATLAS ◗ ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
+    const card = [[{ t: ' ◆ ATLAS  ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
     expect(composeSlot(input(card)).hud).toHaveLength(2);
   });
   test('ATLAS_HUD=off: the band still draws the `▸ health` button, so the card it opens is shown too (wave 43)', () => {
     const off = (card?: never[][]) => ({ ...(input(card) as object), hudOn: false }) as never;
-    const card = [[{ t: '◖ ◆ ATLAS ◗ ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
+    const card = [[{ t: ' ◆ ATLAS  ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
     expect(composeSlot(off()).hud).toHaveLength(0);
     expect(composeSlot(off(card)).hud).toHaveLength(2);
   });

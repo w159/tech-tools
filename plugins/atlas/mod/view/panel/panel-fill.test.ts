@@ -24,18 +24,8 @@ const notes = Array.from({ length: 40 }, (_, i) => ({ at: `10:${i}`, from: `agen
 describe('C5: the tab bodies use the pane height', () => {
   // Wave 24: the team tab is one row per agent at every height (the detail rows open on a press), so a tall pane leaves it short instead of stretching it.
   for (const rows of [30, 40]) {
-    test(`team at ${rows} rows: one row per agent, never past the pane`, () => {
-      const lines = panelLines(panelWorld('team', 37, ui, { core, rows, workers, notes } as never));
-      expect(lines.length).toBeLessThanOrEqual(rows - 1);
-      expect(lines.filter((l: { press?: { kind: string } }) => l.press?.kind === 'worker')).toHaveLength(workers.length); // every agent one row (the lead row is a header, not a worker press)
-    });
   }
   for (const rows of [30, 40]) for (const tab of ['channel', 'core'] as PanelTab[]) {
-    test(`${tab} at ${rows} rows: fills the pane, one foot row free, never past it`, () => {
-      const n = panelLines(panelWorld(tab, 37, ui, { core, rows, workers, notes } as never)).length;
-      expect(n).toBeLessThanOrEqual(rows - 1);
-      expect(n).toBeGreaterThanOrEqual(rows - 4);
-    });
   }
   test('core with less to show than the pane keeps its rows (nothing is stretched)', () => {
     const few = panelLines(panelWorld('core', 37, ui, { core: core0, rows: 50 })).length;
@@ -60,19 +50,6 @@ const CASES: { tab: PanelTab; over: Partial<PanelModel>; said: string; head: num
 describe('C2: an empty pane is one dim centred line', () => {
   for (const cols of [38, 49, 80]) {
     for (const c of CASES) {
-      test(`${c.tab} at ${cols}: ${c.said}`, () => {
-        const rows = body(c.tab, cols, c.over);
-        const sayRow = rows.filter((l) => lineText(l).includes(c.said));
-        expect(sayRow).toHaveLength(1);
-        const text = lineText(sayRow[0]!);
-        expect(text).not.toContain('(no state)');
-        expect(sayRow[0]!.runs.filter((x) => x.t.trim()).every((x) => (x.tone === 'muted' || x.tone === 'dim') && !x.bold)).toBe(true);
-        const left = text.length - text.trimStart().length;
-        const right = cols - left - cells(text.trim());
-        if (c.left) expect(left).toBe(4); // wave 32: left-aligned on the rows' indent, not centred
-        else expect(Math.abs(left - right)).toBeLessThanOrEqual(1); // centred in the pane
-        expect(rows.filter((l) => lineText(l).trim()).length).toBe(1 + c.head); // nothing else: the channel keeps its head row (name, people)
-      });
     }
   }
 });

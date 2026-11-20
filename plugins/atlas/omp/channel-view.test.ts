@@ -14,7 +14,7 @@ const CHAN = "repo@main/lead-abc";
 const plain = (ls?: string[]) => (ls ?? []).join("\n").replace(/\x1b\[[0-9;]*m/g, "");
 /** A lane row: state chip, glyph, then the worker name. */
 /** A worker row: its status mark (spinner, hollow dot, tick or cross) then the name. */
-const lane = (name: string) => new RegExp(`[\u25d0\u25d3\u25d1\u25d2\u25c7\u25c9\u25a0\u25cf] ${name}\\s`);
+const lane = (name: string) => new RegExp(`[\u25d0\u25d3\u25d1\u25d2\u25c7\u25c9\u25a0\u25cf\u25cb\u2713\u2717] ${name}\\s`);
 
 function fixture() {
 	const root = mkdtempSync(join(tmpdir(), "chan-view-"));
@@ -323,11 +323,11 @@ const ESCAPE_OK = /^(?:\x1b\[[0-9;]*m|[^\x1b])*$/; // every ESC starts a complet
 test("panel: the band, workers in words, the newest message and the checks footer", () => {
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
-	expect(p[0]).toMatch(/^◖ ◆ ATLAS ◗ {2}[◐◓◑◒] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[◐◓◑◒] 2 running +$/);
+	expect(p[0]).toMatch(/^ ◆ ATLAS  {2}[◐◓◑◒] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[◐◓◑◒] 2 running +$/);
 	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
 	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/);
 	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);
-	expect(p[4]).toMatch(/^ ◇ verifier-ui +queued +0:12 $/);
+	expect(p[4]).toMatch(/^ [◇○] verifier-ui +queued +0:12 $/);
 	expect(p[5]).toBe(" ".repeat(120));
 	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
 	expect(p[7]).toBe(" checks  △ routing  0/1 green".padEnd(120)); // groups with no lines yet are not shown
@@ -366,7 +366,7 @@ test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers int
 test("panel idle: the band reads idle and the last run follows, the whole thing is two rows", () => {
 	const idle = renderPanel(model({ workers: [], phase: "done", idle: { workers: 3, secs: 70, failed: 0 }, gates: [], elapsedSecs: undefined }));
 	expect(idle).toHaveLength(2);
-	expect(plain([idle[0]!])).toMatch(/^◖ ◆ ATLAS ◗ {2}● done · 1:10 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 +$/);
+	expect(plain([idle[0]!])).toMatch(/^ ◆ ATLAS {3}✓ done · 1:10 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 +$/);
 	expect(plain([idle[1]!])).toMatch(/^ last run {2}3 workers · 1:10 · all ok +$/);
 	const failed = plain(renderPanel(model({ workers: [], idle: { workers: 2, secs: 9, failed: 1 }, gates: [] })));
 	expect(failed).toContain("last run  2 workers · 0:09 · 1 failed");
@@ -381,7 +381,7 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 test("panel at 60 columns is the band alone", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
 	expect(p).toHaveLength(1);
-	expect(p[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ◓ working 2:41 · todo 5/9 · ◓ 2 running");
+	expect(p[0]!.trim()).toBe("◆ ATLAS  ◓ working 2:41 · todo 5/9 · ◓ 2 running");
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
@@ -533,22 +533,22 @@ test("rail phase: active todo phase, else the latest ATLAS header phase of the c
 		handlers.message_end?.forEach(h => h({ message: { role: "assistant", content: [{ type: "text", text }] } }, ctx));
 	const railOf = () => plain([calls.at(-1)![0]!]);
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	say("ATLAS | ⛭ implement 1/3 | running the team\nbody");
 	say("no header on this follow-up message");
 	say("ATLAS | x verify | sub", { cwd: root, agent: { kind: "sub" } }); // a sub's header never moves the lead's rail
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn: the old header no longer counts
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	writeFileSync(join(root, ".atlas", ".run", "todos.json"), JSON.stringify({ version: 1, items: [{ status: "in_progress", phase: "test" }] }));
 	say("ATLAS | ⛭ verify | x");
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/); // critique 15 B1: the header chip outranks the active todo
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/); // critique 15 B1: the header chip outranks the active todo
 	handlers.before_agent_start?.forEach(h => h({}, main)); // next turn, no header yet: the active todo decides
 	view.open(ui, { channel: CHAN, members: ["w1"], cwd: root });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	view.stop();
 });
 
@@ -791,11 +791,11 @@ test("gates: the session id (or '-') reaches the cache; reported groups become t
 	open();
 	expect(refreshes.at(-1)).toEqual(["-", f.root]);
 	read = [group(false), group(true)];
-	expect(open("sess-9")).toMatch(/checks {2}◇ completion/); // an unmet line with no refused Stop is pending
+	expect(open("sess-9")).toMatch(/checks {2}[◇○] completion/); // an unmet line with no refused Stop is pending
 	read = [{ id: "completion", title: "Completion", lines: [{ id: "l", label: "x", ok: false }, { id: "stop-verdict", label: "Last Stop blocked", ok: true, detail: "Todos drained" }] }, group(true)];
 	expect(open("sess-9")).toMatch(/checks {2}△ completion/); // a refused Stop for the session: the unmet line warns
 	read = [group(true)];
-	expect(open("sess-9")).toMatch(/checks {2}● completion/);
+	expect(open("sess-9")).toMatch(/checks {2}[●✓] completion/);
 });
 
 test("stopping while a linger is pending cancels it; stopping an idle view cancels nothing", () => {
@@ -841,11 +841,11 @@ test("only the lead's assistant text pins the rail: user messages and non-text c
 	send({ role: "assistant", content: "ATLAS | ⛭ verify | plain string content" });
 	send({ role: "assistant", content: [{ type: "tool_use", text: "ATLAS | ⛭ verify | x" }] });
 	send(null);
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	send({ role: "assistant", content: header });
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	send({ role: "assistant", content: [{ type: "text", text: "ATLAS | ⛭ bogus-phase | x" }] }); // not a rail phase: ignored
-	expect(railOf()).toMatch(/ATLAS ◗ {2}[◐◓◑◒] working 0:00 {3}todo/);
+	expect(railOf()).toMatch(/ATLAS {3}[◐◓◑◒] working 0:00 {3}todo/);
 	view.stop();
 });
 

@@ -114,7 +114,7 @@ describe('B4: one warning mark and one layout at every width', () => {
     // fix1728: the unmet completion line waits for Stop: the band head says no denial and the checks row draws the queued mark, never the warning
     const pend = rows(done(), gates, 150, core(0));
     expect(pend[0]).not.toContain('denied');
-    expect(glyphsOf(pend, ' checks ')).toContain('◇ completion');
+    expect(glyphsOf(pend, ' checks ')).toContain('○ completion');
     expect(glyphsOf(pend, ' checks ')).not.toContain('△ completion');
     const real = [grp('completion', false), grp('tripwire', false), grp('routing', true), grp('header', false)]; // a call denied in the current run: a real failure
     const out = rows(done(), real, 150, core(0));

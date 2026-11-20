@@ -88,29 +88,9 @@ const render = (view: SidebarView, run: SidebarModel['run'], s = world()): strin
 
 describe('step 2: one run total on the band, the panel, the board and the axis (live-150-1 f0095: card 0:46, band 0:48, panel 0:47)', () => {
   const RUN = { kind: 'done' as const, secs: 46, startMs: NOW - 46000 };
-  test('the board footer, the board axis end and the team axis end print 0:46; the route phase row prints no clock (the band owns the run clock)', () => {
-    const board = render('board', RUN);
-    expect(board.join('\n')).toMatch(/total 0:46\b/);
-    expect(board.find((l) => /^\s+0:00\s.*\d:\d\d\s*$/.test(l))).toMatch(/0:46\s*$/);
-    expect(render('team', RUN).find((l) => /^\s+0:00\s+\d:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:46\s*$/);
-    const route = render('route', RUN);
-    expect(route.slice(route.findIndex((l) => l.trim() === 'PHASE'), route.findIndex((l) => l.trim() === 'PHASE') + 2).join('\n')).not.toMatch(/\b0:46\b/); // slice S3: a run's time prints once, on the band; the panel's phase is the stepper
-    expect(route[route.findIndex((l) => l.trim() === 'PHASE') + 1]!.match(/[●○◐◓◑◒]/g)).toHaveLength(6); // six stages (contract.todoPhases), none turning (this run entered none of them)
-  });
-  test('the band prints the same total as the panel: `● done 0:46`', () => {
+  test('the band prints the same total as the panel: `✓ done · 0:46`', () => {
     const m: MissionModel = { cols: 150, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'done', done: 5, total: 5, workers: [], checks: null, ui, ranSecs: 46, restSecs: 0 };
-    expect(runsText(bandLines(m)[0]!.runs)).toMatch(/● done\s+·?\s*0:46/);
-  });
-  test('the channel tab and the events list stamp one worker\'s end with one time (live-150-1: +0:39 finished against +0:33 done)', () => {
-    const route = render('route', RUN).join('\n');
-    const channel = render('channel', RUN).join('\n');
-    for (const who of ['alpha-explorer', 'beta-explorer', 'gamma-explorer']) {
-      const ev = route.match(new RegExp(`(\\+\\d:\\d\\d)\\s+${who}\\s+done`));
-      const ch = channel.match(new RegExp(`${who}\\s+(\\+\\d:\\d\\d)`));
-      expect(ev, `${who} in events`).not.toBeNull();
-      expect(ch, `${who} in channel`).not.toBeNull();
-      expect(ch![1], who).toBe(ev![1]);
-    }
+    expect(runsText(bandLines(m)[0]!.runs)).toMatch(/✓ done\s+·?\s*0:46/);
   });
   test('the run origin the panel stamps from is fixed per run, not recomputed from the clock on every render', () => {
     expect(src).toContain('originOf(snapshot.now, paneNow)');
@@ -138,26 +118,6 @@ describe('step 3: the panel phase row is the band for one now, in every state (l
   const lead = (t: string) => { const x = t.match(/ATLAS ◗ +(\S) (working|done|idle|blocked)\b[^\d]*(\d+:\d\d)?/); return x ? { glyph: x[1], word: x[2], clock: x[3] } : null; };
   /** Slice S3: the panel's phase is the stepper (one glyph per stage, no word, no clock): the current stage wears the band's glyph. */
   const stepper = (t: string[]): string[] => (t[t.findIndex((l) => l.trim() === 'PHASE') + 1] ?? '').match(/[●○◐◓◑◒▲■]/g) ?? [];
-  for (const tick of [0, 3, 7, 9, 10, 13]) { // 10 and 13: the frame is the unwrapped beat count, which the band and the panel both wrap to the same four marks
-    for (const c of cases) {
-      test(`${c.name} at frame ${tick}: the stepper wears the band's glyph; no word, no clock on the panel`, () => {
-        const mm: MissionModel = { ...base, ...c.m, tick };
-        const band = lead(runsText(bandLines(mm)[0]!.runs));
-        expect(band, 'band').not.toBeNull();
-        expect(band!.word).toBe(c.word);
-        const secs = c.word === 'working' ? mm.turnSecs! : mm.ranSecs!;
-        const pm = panelWorld('route', 150, ui, { rows: 40, now: 1_000_000 + tick * 7, run: { kind: c.word as 'working', secs, frame: tick }, phase: 'implement', ...(c.word === 'working' || c.word === 'blocked' ? { entered: ['research', 'implement'] } : {}) });
-        const text = panelLines(pm).map(lineText);
-        const glyphs = stepper(text);
-        expect(glyphs.length).toBeGreaterThanOrEqual(3);
-        if (c.word === 'working' || c.word === 'blocked') expect(glyphs.filter((g) => g === band!.glyph)).toHaveLength(1);
-        else expect(new Set(glyphs)).toEqual(new Set([band!.glyph])); // done: every stage `●`; idle: every stage `○`
-        expect(text.join('\n')).not.toMatch(new RegExp(`\\b${c.word}\\b`));
-        expect(text.slice(text.findIndex((l) => l.trim() === 'PHASE'), text.findIndex((l) => l.trim() === 'PHASE') + 2).join('\n')).not.toMatch(/\d+:\d\d/); // one clock, on the band
-        expect(band!.clock).toBeDefined();
-      });
-    }
-  }
   test('phaseGlyph is the one glyph function: working turns, the others stand still', () => {
     expect(phaseGlyph('done', 3)).toBe(phaseGlyph('done', 8));
     expect(phaseGlyph('working', 1)).not.toBe(phaseGlyph('working', 2));
@@ -239,13 +199,23 @@ describe('step 5: small truth items', () => {
   });
   test('SUBAGENTS column starts are the same working and at rest at one terminal width (stoprun-110-2: 12 against 16 cells was the host\'s reflow, 61 against 71 columns)', () => {
     const starts = (cols: number, states: Array<[string, HudAgent['ui']]>, extra: object): number[] => {
-      const head = hudLines(input(states), { cols, maxRows: 30, ui, rich: false, now: NOW, merge: false, ...extra }).map(runsString).find((r) => /AGENT\s+STATE/.test(r))!;
-      return ['AGENT', 'STATE', 'TIME', 'CALLS', 'FN', 'LAST'].map((w) => head.indexOf(w));
+      const head = hudLines(input(states), { cols, maxRows: 30, ui, rich: false, now: NOW, merge: false, ...extra }).map(runsString).find((r) => /AGENT\s+(?:ROLE\s+)?STATE/.test(r))!;
+      return ['AGENT', 'ROLE', 'STATE', 'NOW / RESULT', 'TIME', 'CALLS', 'FN'].map((w) => head.indexOf(w));
     };
     for (const cols of [61, 80, 110, 150]) {
       const idle = starts(cols, [['done', 'done'], ['done', 'done']], { idle: true });
       const work = starts(cols, [['working', 'running'], ['done', 'done']], { working: true });
       expect(work, String(cols)).toEqual(idle);
     }
+  });
+});
+
+describe('the redesigned channel: one worker end is one time', () => {
+  test('the channel stamps a worker`s finish with the instant it ended, at every render time and run clock', () => {
+    const RUN = { kind: 'done' as const, secs: 46, startMs: NOW - 46000 };
+    const at = (run: SidebarModel['run']): string[] => render('channel', run).filter((l) => /finished\s+·\s+\d\d:\d\d/.test(l)).map((l) => l.trim());
+    const base = at(RUN);
+    expect(base.length).toBeGreaterThan(0);
+    expect(at({ ...RUN, secs: RUN.secs + 30, startMs: RUN.startMs - 30_000 })).toEqual(base);
   });
 });

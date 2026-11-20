@@ -52,26 +52,6 @@ describe('AA1: every surface reads the figures from metricsOf, once', () => {
     const snap = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6, now: NOW });
     return text(bandRuns({ snapshot: snap, live: [], gates: [], columns: cols, tick: 0, maxRows: 12, ui, health: { ...h, ...(panel ? { panel: true } : { button: true }) } } as BandModel, true));
   };
-  test('the activity peak and its bucket read the same in the band, the panel, the card, the strip and the tabs', () => {
-    expect(m.peakText).toMatch(/^peak \d+ \/ \d+(\.\d)?[sm]$/);
-    expect(band(145, false)).toContain(m.peakText);
-    expect(panelRows(world('route', 55, h)).join('\n')).toContain(m.peakText);
-    expect(rowsOfCard(h, 145).join('\n')).toContain(m.peakText);
-    expect(healthStripRows(h, { cols: 100, ui }).map(text).join('\n')).toContain(m.peakText);
-    expect(tabText(tabFrame(tabIn('team', 48, { health: h }))).join('\n')).toContain(m.peakText);
-  });
-  test('the hook p50, the context percent and the newest run read the same on every surface that draws them', () => {
-    expect(band(145, false)).toMatch(/hook p50 +7ms/);
-    expect(band(145, false)).toMatch(/ctx +6%/);
-    const status = panelRows(world('route', 55, h)).join('\n');
-    expect(status).toContain('6%');
-    expect(status).toMatch(/HOOKS .*p50 7ms/);
-    expect(status).toContain(`last run ${m.run!.text}`);
-    expect(rowsOfCard(h, 145).join('\n')).toContain('6%');
-    expect(rowsOfCard(h, 145).join('\n')).toMatch(/p50 7ms/);
-    expect(healthStripRows(h, { cols: 100, ui }).map(text).join('\n')).toMatch(/hooks p50 7ms · ctx 6%/);
-    expect(healthStripRows(h, { cols: 100, ui }).map(text).join('\n')).toContain('last run 0:03 failed');
-  });
 });
 
 // ---- AA2: fixed geometry --------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -105,13 +85,6 @@ describe('AA2: the band is slots of one width each', () => {
     }
     expect([...bandAt('idle', 145, false, { pulse: undefined }).match(/[▁-█]+/)![0]]).toHaveLength(8); // no pulse: the same 8 dim cells
   });
-  test('from 110 columns `hook p50` and `ctx` are always there, a dim dash before their data', () => {
-    for (const cols of [145, 110]) {
-      const row = bandAt('idle', cols, false, { hooks: { total: 0, byLabel: [], recent: [] }, ctxPct: undefined, pulse: { events: [], ctx: [], runs: [] } });
-      expect(row, String(cols)).toMatch(/hook p50 +—/);
-      expect(row, String(cols)).toMatch(/ctx +—/);
-    }
-  });
   test('below 110 columns ctx is shed first, then hook', () => {
     expect(bandAt('working', 109, false)).not.toContain('ctx');
     expect(bandAt('working', 109, false)).toContain('hook p50');
@@ -119,11 +92,6 @@ describe('AA2: the band is slots of one width each', () => {
     expect(bandAt('working', 89, true)).toContain('hook p50');
     expect(bandAt('working', 70, false)).not.toContain('hook p50');
     for (const cols of [145, 109, 89, 70, 55, 44]) expect(textWidth(bandAt('working', cols, cols < 100))).toBeLessThanOrEqual(cols);
-  });
-  test('no interior holes in the state slot: the detail closes up after the head', () => {
-    expect(bandAt('done', 145, false)).toMatch(/● done 6\/6 · ended 12s +│/);
-    expect(bandAt('working', 145, false, { hooks: { total: 1, byLabel: [], recent: [], runTool: 'Bash' } })).toMatch(/implement 5\/6 · Bash +│/);
-    expect(bandAt('idle', 145, false)).toMatch(/◌ idle up 5:00 +│/);
   });
   test('the card caps its tables at 48 cells and every section rule spans exactly its column', () => {
     const tail = (rows: string[], sec: string): number[] => rows.flatMap((r) => { const at = r.indexOf(`── ${sec} `); return at >= 0 ? [textWidth(r.slice(at).trimEnd())] : []; });
@@ -211,28 +179,6 @@ describe('AA4: idle GATES and HOOKS summarise; earlier sessions read as `prev`',
 
 describe('AA5: one strip, one order, at every width', () => {
   const labels = (cols: number): string[] => stripLayout(cols).rows.flat().map((t) => t.label);
-  test('at 110 columns (the 47-cell pane) all six tabs are on one row with the short labels, in the 150 order', () => {
-    expect(labels(47)).toEqual(['status', 'team', 'chan', 'gates', 'core', 'board']);
-    expect(stripLayout(47).more).toBe(false);
-    expect(labels(48)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
-    expect(labels(57)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']);
-    const row = tabRows(world('route', 47, health())).map(lineText);
-    expect(row).toHaveLength(1);
-    expect(row[0]!.trim().split(/\s+/)).toEqual(['status', 'team', 'chan', 'gates', 'core', 'board']);
-  });
-  test('no more / back chip and no swapped tab at the live pane widths; the lit tab never changes the strip', () => {
-    for (const cols of [47, 48, 57]) for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
-      const row = tabRows(world(tab, cols, health())).map(lineText).join('\n');
-      expect(row).not.toMatch(/more|back/);
-      expect(row.trim().split(/\s+/)).toHaveLength(6);
-    }
-    for (const cols of [30, 38, 44]) { const order = stripLayout(cols, 'route').rows.flat().map((t) => t.id); for (const tab of ['team', 'core', 'board']) expect(stripLayout(cols, tab).rows.flat().map((t) => t.id)).toEqual(order); }
-  });
-  test('the header always names the active tab', () => {
-    for (const [tab, name] of [['route', 'status'], ['team', 'team'], ['channel', 'channel'], ['gates', 'gates'], ['core', 'core']] as const) {
-      expect(panelRows(world(tab, 47, health()))[0]).toContain(`SIDEPANEL · ${name}`);
-    }
-  });
 });
 
 // ---- AA6: one control idiom ----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -241,12 +187,6 @@ const tabIn = (t: TabId, cols: number, o: Partial<TabIn> = {}): TabIn => ({ tab:
 const filled = (r: readonly Run[]): Run[] => r.filter((x) => x.bgHex !== undefined);
 
 describe('AA6: every clickable is the same raised chip', () => {
-  test('tab chips and the band chips wear the raised fill and carry a press', () => {
-    const tabs = tabRows(world('route', 48, health()));
-    for (const l of tabs) for (const x of l.runs.filter((y) => y.t.trim() !== '')) expect(x.bgHex !== undefined || x.bg === 'accent', x.t).toBe(true); // raised, or the lit one filled
-    const row = bandRuns({ snapshot: busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6, now: NOW }), live: [], gates: [], columns: 145, tick: 0, maxRows: 12, ui, health: { ...health(), button: true } } as BandModel, true);
-    for (const w of ['gates', 'health']) { const chip = row.filter((x) => x.t.includes(w) && x.press !== undefined); expect(chip.length, w).toBeGreaterThan(0); expect(chip.every((x) => x.bgHex !== undefined), w).toBe(true); }
-  });
   test('an expandable gate row is a chip with the caret inside its fill; the card title and `+N more ›` are chips too', () => {
     const lines = tabFrame(tabIn('gates', 48, { kind: 'working' }));
     const g = lines.find((l) => l.press?.kind === 'flip' && /[▸▾]/.test(text(l.runs)))!;
@@ -271,20 +211,29 @@ describe('AA6: every clickable is the same raised chip', () => {
 describe('AA7: each tab owns its sections', () => {
   const sections = (tab: PanelTab, over: Record<string, unknown> = {}): string[] => panelRows(world(tab, 48, health(), 49, over)).flatMap((l) => [...l.matchAll(/── ([A-Z]+) /g)].map((m) => m[1]!));
   const recent = { notes: [{ at: '10:01', ms: NOW - 5000, from: 'lead', text: 'start' }] };
-  test('RECENT lives in status and channel only', () => {
-    expect(sections('route')).toContain('RECENT');
-    expect(sections('channel', recent)).toContain('RECENT');
-    for (const tab of ['team', 'gates', 'core'] as const) expect(sections(tab), tab).not.toContain('RECENT');
+});
+
+describe('AA1 (redesigned health tab): the band and the health tab read the same figures', () => {
+  const h = health();
+  const m = metricsOf(h);
+  const bandText = (): string => {
+    const snap = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6, now: NOW });
+    return text(bandRuns({ snapshot: snap, live: [], gates: [], columns: 145, tick: 0, maxRows: 12, ui, health: { ...h, button: true } } as BandModel, true));
+  };
+  test('the hook p50, the context percent and the newest run read the same on the band and the health tab', () => {
+    expect(bandText()).toMatch(/hook p50 +7ms/);
+    expect(bandText()).toMatch(/ctx +\S+ +6%/);
+    const tab = panelRows(world('core', 62, h)).join('\n');
+    expect(tab).toMatch(/hook p50 +7ms/);
+    expect(tab).toMatch(/context +\S+ +6%/);
+    expect(tab).toContain(`✗ ${m.run!.text}`); // the newest run, failed, in the one m:ss text
   });
-  test('core is routing data only: no GATES table and no HOOKS; gates owns GATES and HOOKS', () => {
-    expect(sections('core')).not.toContain('GATES');
-    expect(sections('core')).not.toContain('HOOKS');
-    const g = sections('gates');
-    expect(g).toContain('GATES');
-    expect(g).toContain('HOOKS');
-  });
-  test('status stays the overview: ACTIVITY, CONTEXT, RUNS, GATES, HOOKS', () => {
-    const s = sections('route');
-    for (const name of ['ACTIVITY', 'CONTEXT', 'RUNS', 'GATES', 'HOOKS']) expect(s).toContain(name);
+  test('the tool rate reads the same: the band `n/m` slot and the health tools/min row', () => {
+    const events = [...new Array<number>(20).fill(0), 0, 0, 1, 3, 0, 2, 5, 1];
+    const hh = health({ pulse: { events, ctx: [], runs: [], stamps: undefined } as never });
+    const snap = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6, now: NOW });
+    const band = text(bandRuns({ snapshot: snap, live: [], gates: [], columns: 145, tick: 0, maxRows: 12, ui, health: { ...hh, button: true } } as BandModel, true));
+    expect(band).toMatch(/tools \S+ +8\/m/);
+    expect(panelRows(world('core', 62, hh)).join('\n')).toMatch(/tools\/min +8 +peak \d+/);
   });
 });

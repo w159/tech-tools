@@ -40,9 +40,9 @@ describe('B1: LAST is an outcome only', () => {
     const plan: TodoItem[] = [{ id: 'p1', content: 'T1 read beta.py (beta-explorer)', status: 'completed', owner: 'beta-explorer' } as unknown as TodoItem];
     const lastCol = (cols: number): string => {
       const rows = hudLines({ todos: [...plan, dispatch('beta-explorer', BETA)], agents: [agent('beta-explorer')] }, { merge: false, cols, maxRows: 12, ui, now: NOW }).map(runsString);
-      return rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] beta-explorer\b/.test(r))!;
+      return rows.find((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] beta-explorer\b/.test(r))!;
     };
-    for (const cols of [61, 150]) expect([cols, lastCol(cols)]).toEqual([cols, expect.stringContaining('1 fn')]);
+    for (const cols of [61, 150]) expect([cols, lastCol(cols)]).toEqual([cols, expect.stringMatching(/\s1\s+│$/)]);
     for (const cols of [61, 150]) expect(lastCol(cols)).not.toContain('1 found');
   });
 });
@@ -52,36 +52,35 @@ describe('B2: one grid across frames', () => {
   const ag = (name: string, state: string, over: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state, ui: state as never, model: 'haiku', since: NOW - 1000, ...over });
   const at = (row: string, word: string): number => row.indexOf(word);
   const frame = (agents: HudAgent[], cols = 150): string[] => hudLines({ todos: plan(), agents }, { merge: false, cols, maxRows: 30, ui, now: NOW }).map(runsString);
-  test('TASK, LAST and RESULT start at the same columns in f0093 (a done LAST error text) and f0104 (a retry running toolsearch)', () => {
+  test('AGENT, ROLE, STATE and NOW start at the same columns in f0093 (a done LAST error text) and f0104 (a retry running toolsearch)', () => {
     const f0093 = frame([ag('alpha-explorer', 'working', { ui: 'running', tool: 'Read', target: 'alpha.py' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'done', { lastTool: 'ToolSearch', lastLine: 'No matching deferred tools found.' })]);
     const f0104 = frame([ag('alpha-explorer', 'done', { lastTool: 'Read' }), ag('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), ag('beta-explorer', 'failed', { lastTool: 'Read', target: 'beta.py' }),
       ag('beta-explorer #2', 'working', { ui: 'running', tool: 'ToolSearch', target: 'select:x', task: 'beta-explorer: read beta.py' })]);
-    const headOf = (rows: string[]): string => rows.find((r) => /AGENT\s+STATE/.test(r))!;
+    const headOf = (rows: string[]): string => rows.find((r) => /AGENT\s+ROLE\s+STATE/.test(r))!;
     const [h1, h2] = [headOf(f0093), headOf(f0104)];
-    for (const w of ['STATE', 'TASK', 'LAST', 'RESULT']) expect([w, at(h2, w)]).toEqual([w, at(h1, w)]);
+    for (const w of ['AGENT', 'ROLE', 'STATE', 'NOW']) expect([w, at(h2, w)]).toEqual([w, at(h1, w)]); // the grid is fixed per width: it does not reflow between frames
   });
-  test('a retry owns the item: TASK reads `T3`, LAST its clock and RESULT starts a gap after it (never `read beta.py report returned`)', () => {
+  test('a retry owns the item: the plan row T3 names `beta-explorer #2` in OWNER, the agent row says what it does (never `read beta.py report returned`)', () => {
     const rows = frame([ag('beta-explorer', 'failed', { lastTool: 'Read' }), ag('beta-explorer #2', 'working', { ui: 'running', tool: 'ToolSearch', target: 'select:x', task: 'beta-explorer: read beta.py' })]);
-    const retry = rows.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] beta-explorer #2/.test(r))!;
-    expect(retry).toMatch(/\bT3\b/);
-    expect(retry).not.toContain('report returned'); // wave 31: TASK takes the free width, so the plan id may be followed by its title
-    const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
-    expect(retry.trimEnd().endsWith('-')).toBe(true); // RESULT is a count or `-`
-    expect(retry.indexOf('-', head.indexOf('LAST'))).toBe(head.indexOf('LAST'));
-    expect(retry.indexOf('T3')).toBe(head.indexOf('TASK'));
+    const retry = rows.find((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] beta-explorer #2/.test(r))!;
+    expect(rows.find((r) => /T3 step 3/.test(r))).toMatch(/running\s+beta-explorer #2/);
+    expect(retry).not.toContain('report returned');
+    expect(retry).toMatch(/running\s+working/); // loading tools is no step of the task: no outcome, no action
   });
   test('agentModel gives both runs of an item its id', () => {
     const rows = agentModel([ag('beta-explorer', 'failed', { lastTool: 'Read' }), ag('beta-explorer #2', 'working', { tool: 'Read' })], plan());
     expect(rows.map((r) => r.tasks)).toEqual([[3], [3]]);
   });
-  test('wave 31: the grid is the same at every width: no MODEL column, LAST and RESULT keep their distance', () => {
+  test('the grid is the same at every width: no MODEL column, the same column order and the same cells from the left', () => {
+    const seen = new Set<string>();
     for (const cols of [100, 120, 150]) {
       const rows = frame([ag('alpha-explorer', 'done', { lastTool: 'Read' }), ag('beta-explorer', 'done', { lastTool: 'Read' })], cols);
-      const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
+      const head = rows.find((r) => /AGENT\s+ROLE\s+STATE/.test(r))!;
       expect([cols, head.includes('MODEL')]).toEqual([cols, false]);
-      expect([cols, head.indexOf('RESULT') - head.indexOf('LAST')]).toEqual([cols, 8]);
-      expect([cols, head.indexOf('TASK') < head.indexOf('LAST')]).toEqual([cols, true]);
+      expect([cols, head.indexOf('ROLE') < head.indexOf('STATE') && head.indexOf('STATE') < head.indexOf('NOW')]).toEqual([cols, true]);
+      seen.add([head.indexOf('AGENT'), head.indexOf('ROLE'), head.indexOf('STATE'), head.indexOf('NOW')].join(','));
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
     }
+    expect(seen.size).toBe(1); // 100, 120 and 150 columns lay the same columns out from the left
   });
 });

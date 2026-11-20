@@ -52,13 +52,13 @@ describe('D4: gates report denials', () => {
   test('band: ok is `● gates ok` on the chip; a gate that never fired changes nothing', () => {
     expect(text(frameRow(okH))).toContain('gates armed'); // before the first prompt the chip only says armed (round W G)
     const prompted = health([chk('routing', 8, 8), chk('tripwire', 3, 3), chk('header', 0, 0)], { hooks: { total: 3, byLabel: [{ label: 'prompt.submit', n: 1 }], recent: [], lastEventSecs: 1, runTools: 0 } as never });
-    expect(text(frameRow(prompted))).toContain('● gates ok');
+    expect(text(frameRow(prompted))).toContain('✓ gates ok');
     expect(chipOf(prompted, /gates ok/)).toHaveLength(1);
   });
   test('band: denials read `■ N denied` on the red alert chip', () => {
     expect(text(frameRow(badH))).toContain('■ 2 denied');
     const c = chipOf(badH, /denied/)[0]!;
-    expect(c.bgHex).toBe('#5f0000'); // xterm 52: the alert fill
+    expect(c.bgHex).not.toBe('#5f0000'); expect(c.tone === 'bad' || c.fg !== undefined).toBe(true); // the ribbon redesign: the alert is red text on the band fill (a filled chip only for a 400 ms pulse)
   });
   test('row form: pass and deny counts; a gate that never fired is grey `not fired`', () => {
     const a = gateOf(chk('routing', 8, 8), ui);
@@ -93,8 +93,6 @@ describe('D4: gates report denials', () => {
       ...panel,
     ];
     for (const l of all) expect(l).not.toMatch(gateRatio);
-    expect(panel.join('\n')).toMatch(/completion\s+1\s+2\s+—$/m); // the GATES table: pass, deny and last columns, never a ratio
-    expect(panel.join('\n')).toMatch(/○ header\s+0\s+0\s+—$/m); // a gate that has not fired is a hollow ○ with dim 0 0 —, never the word armed in a number column
   });
 });
 

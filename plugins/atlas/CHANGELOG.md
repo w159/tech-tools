@@ -1,4 +1,21 @@
 # Changelog
+## 17.33.0 - 2026-11-20
+
+Redesign of the Claude Code mod's band and side panel, plus two fixes (evidence: `.atlas/evidence/2026-11-20_mod-redesign/`, `.atlas/evidence/2026-11-20_mod-clock-stop/`).
+
+### Changed
+
+- Band above the prompt, same layout: box titles without the ATLAS breadcrumb, counts and a segmented bar on the top rule, one shared column grid with a dim header row, right-aligned TIME, `…` with a 2-cell gutter, empty columns dropped, NOW / RESULT and ACT columns in SUBAGENTS, accent focus row, dim done rows, red failed rows (`mod/view/hud/hud-frame.ts`). State glyphs: `✓` done, `○` queued, `✗` failed.
+- Motion (`mod/motion/rows.ts`): running-row spinner and label sweep, fade-in, green flash and settle on finish, progress cell fill, ribbon sparkline scroll and denial pulse.
+- Side panel tabs are `health`, `status`, `gates`, `channel`; team, core and board left the strip. The channel tab is a chat with grouped sender headers, centred system lines, right-aligned bubbles for the user, a bordered input and `@name` recipient chips (`mod/view/panel/{health-tab,status-tab,gates-tab,channel-chat,tab-kit}.ts`).
+
+### Fixed
+
+- SUBAGENTS TIME of a finished crew worker no longer keeps counting: crew rows carry pid/exit file stamps (`mod/data/crew.ts`), and an ended agent without a finish stamp reads `-` (`mod/view/hud/hud.ts` `elapsedOf`).
+- `irc check` installs a crew worker's staged files when the worker owns a directory or a glob, not only an exact path (`scripts/atlas_irc.py` `install_staged`).
+- Status tab: a plan row over a failed worker reads failed, never green `done`/`closed`; phase `done` lights every stage; a title-only owner that failed reads failed; TEAM names are not cut at 24 cells. Channel: a closure note for a failed item carries `✗`.
+- Version 17.32.0 to 17.33.0 in both plugin manifests, `.claude-plugin/marketplace.json` (marketplace 5.39.0 to 5.40.0), `README.md` and `plugins/atlas/README.md`.
+
 ## 17.32.0 - 2026-11-20
 
 Session-start latency, knob precedence, retention and statusline fixes, measured on real data (evidence: `.atlas/evidence/2026-11-20_perf-fixes/`).

@@ -178,3 +178,12 @@ export const stampOf = (m: PanelModel, n: PanelNote, ageW = 0): string => {
 };
 /** A post's age beside its time: `20s`. The Claude pane (`m.run`) draws the time relative to the run and no age column. */
 export const ageOfNote = (m: PanelModel, n: PanelNote): string => (n.ms !== undefined && m.now !== undefined ? ageWord(m.now - n.ms) : '');
+/** Where the run stands on the phase rail: the run kind (a finished plan at rest is `done`), the phases it entered, the lit phase's index and the last entered one's. */
+export function phaseStand(m: Pick<PanelModel, 'todos' | 'run' | 'entered' | 'phases' | 'phase'>) {
+  const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done'); // a finished plan at rest is the end of the run: the strip shows where the run got to, not a lit `research`
+  const kind = m.run?.kind === 'idle' && finished ? 'done' : m.run?.kind ?? 'working';
+  const seen = m.entered ? new Set(m.entered) : null;
+  const litAt = m.phases.indexOf(m.phase);
+  const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
+  return { kind, seen, litAt, lastEntered };
+}

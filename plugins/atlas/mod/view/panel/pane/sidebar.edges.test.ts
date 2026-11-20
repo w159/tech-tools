@@ -1,5 +1,5 @@
 // Edge pins for mod/view/panel/pane/sidebar.tsx (surviving mutants of the 553a9bce run): the pane width floor, the box flags that keep the pane from
-// shrinking, the rule drawn under the lit tab's row only, and the blank row under the strip from 100 columns.
+// shrinking, the accent segment of the rule drawn under the lit tab's chip only, and the body starting right under the rule.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../../live_fixture';
@@ -19,7 +19,7 @@ const textOf = (n: Node): string => (n.kind === 'Text' ? String(n.props.children
 const tree = (columns: number, view: SidebarModel['ui']['view'] = 'team'): Node =>
   sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows: 40 }, on) as unknown as Node;
 const isTabsRow = (n: Node): boolean => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs');
-const VIEWS = ['route', 'team', 'channel', 'gates', 'core'] as const;
+const VIEWS = ['core', 'route', 'gates', 'channel'] as const;
 
 describe('pane box', () => {
   test('the width is the columns less the border, but never under 10', () => {
@@ -39,14 +39,16 @@ describe('pane box', () => {
   });
 });
 
-describe('no rule under the lit tab (idle polish 3: the lit chip is the filled one)', () => {
-  test('no strip row is followed by a rule box, at every width and for every view; exactly one tab Button is lit per view', () => {
+describe('the rule under the strip (the lit chip is the filled one, its rule segment the accent)', () => {
+  test('one strip row at every width and for every view; exactly one tab Button is lit per view; one accent segment on the rule row right under the strip', () => {
     let wrapped = 0;
-    for (const columns of [12, 16, 20, 24, 30, 40, 70]) for (const view of VIEWS) {
+    for (const columns of [20, 24, 30, 40, 70]) for (const view of VIEWS) {
       const c = kids(tree(columns, view));
       const rowIdx = c.map((n, i) => (isTabsRow(n) ? i : -1)).filter((i) => i >= 0);
       if (rowIdx.length > 1) wrapped++;
-      expect([columns, view, c.some((n) => /━/.test(textOf(n)))]).toEqual([columns, view, false]);
+      const rule = c[rowIdx.at(-1)! + 1]!;
+      expect([columns, view, (textOf(rule).match(/━+/g) ?? []).length]).toEqual([columns, view, 1]);
+      expect([columns, view, c.filter((n) => !isTabsRow(n) && n !== rule).some((n) => /━/.test(textOf(n)))]).toEqual([columns, view, false]); // no other row carries a heavy rule
       const btns = rowIdx.flatMap((i) => all(c[i]!)).filter((n) => n.kind === 'Button');
       const own = btns.filter((n) => n.props.key === `tab:${view}`).length;
       expect([columns, view, own + (own === 0 && btns.some((n) => n.props.key === 'tab:more') ? 1 : 0)]).toEqual([columns, view, 1]); // a lit tab folded behind \`more ›\` is that chip
@@ -55,17 +57,14 @@ describe('no rule under the lit tab (idle polish 3: the lit chip is the filled o
   });
 });
 
-describe('the blank row under the strip', () => {
-  test('there from 100 columns of pane width (101 host columns), not before', () => {
-    const after = (columns: number): string => {
+describe('the body starts right under the rule', () => {
+  test('no blank row between the rule and the first body row, at any width (the header is four rows)', () => {
+    for (const columns of [60, 100, 101, 102, 150]) {
       const c = kids(tree(columns));
-      let last = c.map((n, i) => (isTabsRow(n) ? i : -1)).filter((i) => i >= 0).at(-1)!;
-      if (c[last + 1] && !isTabsRow(c[last + 1]!) && c[last + 1]!.props.key === undefined && textOf(c[last + 1]!).includes('━')) last++;
-      return textOf(c[last + 1]!);
-    };
-    expect(after(100)).not.toBe(' '); // pane width 99
-    expect(after(101)).toBe(' '); // pane width 100
-    expect(after(102)).toBe(' ');
+      const last = c.map((n, i) => (isTabsRow(n) ? i : -1)).filter((i) => i >= 0).at(-1)!;
+      expect(textOf(c[last + 1]!)).toMatch(/^ [─━]+$/); // the rule
+      expect(textOf(c[last + 2]!).trim()).toMatch(/^PHASE/); // the status body's first row
+    }
   });
 });
 

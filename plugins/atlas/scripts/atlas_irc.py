@@ -33,6 +33,7 @@ from __future__ import annotations
 import argparse
 import ast
 import fcntl
+import fnmatch
 import importlib.util
 import json
 import os
@@ -1128,10 +1129,15 @@ def install_staged(stage, root, owns) -> list:
     their stage dir (a shell heredoc write is refused by Claude Code's Bash safety check) and `irc check`
     installs the result before it runs the unit check."""
     done = []
-    for p in owns or []:
-        s, o = Path(stage) / p, Path(root) / p
+    owns = list(owns or [])
+    if not owns or not Path(stage).is_dir():
+        return done
+    # An owned entry may be a file, a glob or a directory: same match rule as hooks/crew_worker.py.
+    for s in sorted(Path(stage).rglob("*")):
+        p = s.relative_to(stage).as_posix()
+        o = Path(root) / p
         try:
-            if not s.is_file():
+            if not (s.is_file() and any(p == w or fnmatch.fnmatch(p, w) or p.startswith(w + "/") for w in owns)):
                 continue
             if o.exists() and s.stat().st_mtime_ns <= o.stat().st_mtime_ns:
                 continue

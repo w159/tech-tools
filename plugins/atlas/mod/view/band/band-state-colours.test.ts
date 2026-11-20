@@ -75,7 +75,7 @@ const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents
 // Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 240, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
   ['working', RUNNING, 'accent', '[◐◓◑◒] working 0:42', true],
-  ['done', FINISHED, 'ok', '● done 1:12', false],
+  ['done', FINISHED, 'ok', '✓ done 1:12', false],
   ['idle', IDLE, 'muted', '○ idle · 1:12', false],
   ['blocked', STOP, 'bad', '▲ blocked', true],
 ];
@@ -106,12 +106,12 @@ describe('1. state colours: 179 is the gates chip only', () => {
         expect(fills[1], `${name}: the slab after the pill`).toBe(hex);
       }
     });
-    test(`${cols} columns: done reads a bold dark \`● done 1:12\` on the 114 slab; idle a 245 \`○ idle · 1:12\` on the 236 slab`, () => {
+    test(`${cols} columns: done reads a bold dark \`✓ done 1:12\` on the 114 slab; idle a 245 \`○ idle · 1:12\` on the 236 slab`, () => {
       const done = bandRuns(frameOf(FINISHED, body, screen).model);
       const word = done.find((x) => x.t.includes('done') && x.bgHex === ok)!;
       expect(word.bold, 'done is bold').toBe(true);
       expect(word.tone, 'done is dark ink').toBe('ink');
-      expect(done.filter((x) => x.bgHex === ok).map((x) => x.t).join('')).toMatch(/^ ?● done 1:12 ?$/);
+      expect(done.filter((x) => x.bgHex === ok).map((x) => x.t).join('')).toMatch(/^ ?✓ done 1:12 ?$/);
       const idle = bandRuns(frameOf(IDLE, body, screen).model);
       expect(idle.filter((x) => x.bgHex === xtermHex(240)).map((x) => x.t).join('')).toMatch(/^ ?○ idle · 1:12 ?$/);
       expect(idle.find((x) => x.t.includes('idle') && x.bgHex === xtermHex(240))!.tone).toBe('text'); // wave 37: 252 ink on the 240 slab
@@ -183,24 +183,24 @@ describe('3. blocked is debounced: only on the host Stop event, or after two con
 });
 
 describe('4. the TODO HUD: one state per failed row, one count, one anchored child', () => {
-  const titleSegs = (f: Frame): Segment[] => f.hudSegs[f.hud.findIndex((r) => r.includes('▸ TODO'))]!;
+  const titleSegs = (f: Frame): Segment[] => f.hudSegs[f.hud.findIndex((r) => r.includes('TODO'))]!;
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: the stop run reads \`4/5 · ■1\`; the meter is 114 cells for the done rows plus one 203 cell per failed row`, () => {
       const f = frameOf(STOP, body, screen);
-      const title = f.hud.find((r) => r.includes('▸ TODO'))!;
-      expect(title).toMatch(/TODO\s+4\/5 · ■1/);
+      const title = f.hud.find((r) => r.includes('TODO'))!;
+      expect(title).toMatch(/TODO ─+ 4\/5 · ✗1/);
       const cellsOf = titleSegs(f).filter((x) => /^[▰▱]+$/.test(x.t));
       expect(cellsOf.some((x) => x.t.includes('▰') && x.color === ok), 'done cells in 114').toBe(true);
       expect(cellsOf.filter((x) => x.color === bad).map((x) => x.t).join('')).toBe('▰');
     });
-    test(`${cols} columns: the band count is the title count, and a failed row is \`■\` in 203, never a green \`●\``, () => {
+    test(`${cols} columns: the band count is the title count, and a failed row is \`■\` in 203, never a green \`✓\``, () => {
       const f = frameOf(STOP, body, screen);
-      expect(f.band).toMatch(/(todo )?4\/5 ■1/);
-      const at = f.hud.findIndex((r) => /^[ ▸] [■●◇◐◓◑◒] T3/.test(r));
-      expect(f.hud[at]).toMatch(/^[ ▸] ■ T3/);
-      expect(f.hudSegs[at]!.find((x) => x.t === '■')?.color).toBe(bad);
-      expect(f.hud.filter((x) => /^[ ▸] ● T3/.test(x)), 'T3 is never a green disc').toHaveLength(0);
-      expect(f.hud.filter((x) => /^[ ▸] ● T\d/.test(x)).map((x) => /T(\d)/.exec(x)![1]), 'the green discs are the completed rows').toEqual(['1', '2', '4', '5']);
+      expect(f.band).toMatch(/(todo )?4\/5 ✗1/);
+      const at = f.hud.findIndex((r) => /^[│▌] [✗✓○◐◓◑◒] T3/.test(r));
+      expect(f.hud[at]).toMatch(/^[│▌] ✗ T3/);
+      expect(f.hudSegs[at]!.find((x) => x.t === '✗')?.color).toBe(bad);
+      expect(f.hud.filter((x) => /^[│▌] ✓ T3/.test(x)), 'T3 is never a green mark').toHaveLength(0);
+      expect(f.hud.filter((x) => /^[│▌] ✓ T\d/.test(x)).map((x) => /T(\d)/.exec(x)![1]), 'the green discs are the completed rows').toEqual(['1', '2', '4', '5']);
     });
     test(`${cols} columns: a row the lead owns shows \`lead\` in 245 where an agent's name would be`, () => {
       const lead: Shape = { ...RUNNING, plan: ['in_progress', 'in_progress', 'in_progress', 'in_progress', 'pending'] };
@@ -225,39 +225,39 @@ describe('4. the TODO HUD: one state per failed row, one count, one anchored chi
 });
 
 describe('5. SUBAGENTS is a full-width table in every state', () => {
-  const nameAt = (n: string, body: number): string => (body < 80 && n.length > 12 ? `${n.slice(0, 11)}…` : n); // state 39: at 110 columns AGENT is 12 cells (LAST keeps 14)
-  const tableOf = (f: Frame): string[] => { const at = f.hud.findIndex((r) => r.includes('▸ SUBAGENTS')); return f.hud.slice(at); };
+  const nameAt = (n: string, _body: number): string => n; // the redesigned grid keeps a whole name at every width the table shows
+  const tableOf = (f: Frame): string[] => { const at = f.hud.findIndex((r) => r.includes('SUBAGENTS')); return f.hud.slice(at); };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: running, done and failed all draw a title, bold 245 headers AGENT STATE TIME, one row per agent in dispatch order, a closing rule`, () => {
+    test(`${cols} columns: running, done and failed all draw a title, bold 245 dim headers AGENT ROLE STATE NOW TIME, one row per agent in dispatch order, a closing rule`, () => {
       for (const sh of [RUNNING, FINISHED, STOP]) {
         const f = frameOf(sh, body, screen);
         const t = tableOf(f);
-        expect(t[0]).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS /);
-        expect(t[1]).toMatch(/^ {2}AGENT\s+STATE\s+TIME\b/);
+        expect(t[0]).toMatch(/^╭─ SUBAGENTS /);
+        expect(t[1]).toMatch(/^│ {3}AGENT\s+(ROLE\s+)?STATE\s+NOW\b/);
         expect(t.at(-1)).toMatch(/^╰─+╯$/);
         const h = f.hudSegs[f.hud.indexOf(t[1]!)]!.find((x) => x.t.includes('AGENT'))!;
-        expect([h.color, h.bold]).toEqual([sub, true]);
-        expect(t.slice(2, -1).map((r) => r.trim().split(/\s+/)[0]!)).toEqual(NAMES.map((n) => nameAt(n, body)));
+        expect([h.color, h.bold]).toEqual(['#767676', undefined]); // the dim column names
+        expect(t.slice(2, -1).map((r) => r.replace(/^[│▌]\s*\S\s+/, '').trim().split(/\s+/)[0]!)).toEqual(NAMES.map((n) => nameAt(n, body)));
       }
     });
-    test(`${cols} columns: STATE is a 141 spinner and \`running\`, \`● done\` in 114, \`■ failed\` in 203; TIME is a clock; no row is a bare list of times`, () => {
+    test(`${cols} columns: STATE is a 141 spinner and \`running\`, \`✓ done\` in 114, \`■ failed\` in 203; TIME is a clock; no row is a bare list of times`, () => {
       const run = frameOf(RUNNING, body, screen);
-      const rr = run.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s[◐◓◑◒] running\s+\d+:\d\d/.test(r));
+      const rr = run.hud.findIndex((r) => new RegExp(`^[│▌] [◐◓◑◒] ${nameAt('alpha-explorer', body)}`).test(r) && /\srunning\s+.*\d+:\d\d/.test(r));
       expect(rr).toBeGreaterThan(0);
       expect(run.hudSegs[rr]!.find((x) => SPIN_MARK.test(x.t) && x.t.trim().length === 1)?.color).toBe(PALETTES.mocha.accent);
       const stop = frameOf(STOP, body, screen);
-      const ds = stop.hud.findIndex((r) => r.startsWith(`  ${nameAt('alpha-explorer', body)}`) && /\s● done/.test(r));
-      expect(stop.hudSegs[ds]!.find((x) => x.t === '●')?.color).toBe(ok);
-      const fs = stop.hud.findIndex((r) => r.startsWith(`  ${nameAt('gamma-explorer', body)}`) && /\s■ failed/.test(r));
-      expect(stop.hudSegs[fs]!.find((x) => x.t === '■')?.color).toBe(bad);
+      const ds = stop.hud.findIndex((r) => new RegExp(`^[│▌] ✓ ${nameAt('alpha-explorer', body)}`).test(r) && /\sdone/.test(r));
+      expect(stop.hudSegs[ds]!.find((x) => x.t === '✓')?.color).toBe(ok);
+      const fs = stop.hud.findIndex((r) => new RegExp(`^[│▌] ✗ ${nameAt('gamma-explorer', body)}`).test(r) && /\sfailed/.test(r));
+      expect(stop.hudSegs[fs]!.find((x) => x.t === '✗')?.color).toBe(bad);
       for (const f of [run, stop, frameOf(FINISHED, body, screen)]) for (const r of f.hud) expect(r, 'never a bare list of clocks').not.toMatch(/^[\s│]*(?:\d+:\d\d\s+)+\d+:\d\d\s*$/);
     });
   }
   test('TIME is a right-aligned column and the frozen header always carries FN (`-` for an unknown count)', () => {
     const f = frameOf(RUNNING, 93, 45);
-    const head = f.hud.find((r) => /^ {2}AGENT\s+STATE\s+TIME/.test(r))!;
-    expect(head).toMatch(/AGENT {2,}STATE {2,}TIME {2,}CALLS {2,}FN {2,}LAST/); // wave 37: one header in every state and width
-    const rows = f.hud.filter((r) => /^ {2}\S+-explorer\s+[◐◓◑◒] running/.test(r));
+    const head = f.hud.find((r) => /^│ {3}AGENT\s/.test(r))!;
+    expect(head).toMatch(/AGENT {2,}ROLE {2,}STATE {2,}NOW( \/ RESULT)? {2,}(?:\S+ +)*TIME/); // one header in every state and width: CALLS and FN come only when a row has a figure
+    const rows = f.hud.filter((r) => /^[│▌] [◐◓◑◒] \S+-explorer\s+(?:\S+\s+)?running/.test(r));
     expect(rows).toHaveLength(3);
     const ends = rows.map((r) => /\d+:\d\d/.exec(r)!).map((m) => m.index + m[0].length);
     expect(new Set(ends).size, 'the TIME column ends on one cell').toBe(1);
@@ -267,8 +267,8 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
     for (const maxRows of [9, 10, 12, 16]) {
       const rows = hud.hudLines({ todos: ownTodos(PLAN.map((c, i) => ({ id: `t${i + 1}`, content: c, status: 'pending' }) as unknown as TodoItem)), agents: ags }, { cols: 93, maxRows, ui, now: 5_000_000 }).map((r) => r.map((x) => x.t).join(''));
       expect(rows.length, `${maxRows}`).toBeLessThanOrEqual(maxRows);
-      const shown = rows.filter((r) => /^ {2}\S+-explorer\s+[◐◓◑◒] running/.test(r)).length;
-      const more = Number(rows.map((r) => /^ {2}\S+ (\d+) more running/.exec(r)).find((m) => m)?.[1] ?? 0);
+      const shown = rows.filter((r) => /^[│▌] [◐◓◑◒] \S+-explorer\s+(?:\S+\s+)?running/.test(r)).length;
+      const more = Number(rows.map((r) => /^│ {2}\S (\d+) more running/.exec(r)).find((m) => m)?.[1] ?? 0);
       expect(shown + more, `${maxRows}: every agent is a row or counted`).toBe(5);
     }
   });
@@ -276,7 +276,7 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
 
 describe('6. the strip tab reads `status` (wave 43: no key is bound)', () => {
   test('the first band button', () => {
-    expect(BAND_BUTTONS[0]).toMatchObject({ id: 'route', label: 'status' });
+    expect(BAND_BUTTONS[1]).toMatchObject({ id: 'route', label: 'status' }); // the strip's second tab (the first is `health`)
     expect(BAND_BUTTONS.some((b) => 'key' in b)).toBe(false);
   });
 });

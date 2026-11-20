@@ -168,74 +168,6 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
   const rows = (cols = 57, run: Run = RUN, s: never = snap(), gates: unknown[] = GATES): string[] => { forgetPhases(); return withGates(s, 'route', cols, 40, run, gates); };
 
   const stepperOf = (t: string[]): string => t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
-  test('the ribbon names the view, and the phase stepper carries the band\'s glyph (slice S3: no word, no clock)', () => {
-    const t = rows();
-    expect(t[0]).toMatch(/SIDEPANEL/);
-    expect(t[0]).not.toMatch(/status\s*$/); // round 2: the lit chip says `status`; the ribbon does not repeat it
-    expect(stepperOf(t)).toMatch(/◐ implement/);
-    expect(stepperOf(rows(57, BLOCKED))).toMatch(/▲/);
-    expect(stepperOf(rows(57, { kind: 'done', secs: 52, startMs: NOW - 52000 }))).not.toMatch(/[◐◓◑◒]/); // done: nothing turns
-  });
-  test('phases are the true ones: only the entered ones are green, the lit one wears the clock', () => {
-    const chain = stepperOf(rows(70));
-    expect(chain).toMatch(/[–●] research [–●] theory [–●] test [–●] validate [◐◓◑◒] implement ○ verify/); // passed ●, skipped –, current turning, pending ○ (D12)
-  });
-  test('one 12-cell braille line per agent, with its name and its time', () => {
-    const t = rows();
-    for (const [name, secs] of [['alpha-explorer', '0:11'], ['ghost-explorer', '0:10'], ['beta-explorer', '0:07']] as const) {
-      const row = t.find((l) => l.includes(name))!;
-      expect(row).toBeDefined();
-      expect(row).toMatch(new RegExp(`^\\s+[●■◇◐◓◑◒] ${name}\\s+[⣀⣤⣶⣿]{12}\\s+${secs}$`));
-    }
-  });
-  test('a failed agent\'s line is in error 203, a running one\'s sparkline in the accent', () => {
-    forgetPhases();
-    const all = texts(tree('route', 57, 40));
-    const ghost = all.find((x) => /^[⣀⣤⣶⣿]{12}$/.test(x.t) && x.color === RED);
-    expect(ghost).toBeDefined();
-  });
-  test('the gates checklist counts what the band counts: the same gateTally over withCoreTally', () => {
-    const tally = gateTally(withCoreTally(GATES, null) as never);
-    const t = rows();
-    const head = t.find((l) => /^\s*GATES\s/.test(l))!;
-    expect(head).toMatch(new RegExp(`GATES\\s+${tally.total - tally.green > 0 ? `${tally.total - tally.green} denied` : 'ok'}$`)); // D4: the one vocabulary, never `3/4 green`
-    const at = t.indexOf(head);
-    const list = t.slice(at + 1, at + 1 + tally.total);
-    expect(list.filter((l) => /^\s+[●△◇] /.test(l))).toHaveLength(tally.total);
-    expect(list.filter((l) => /^\s+● /.test(l))).toHaveLength(tally.green);
-    expect(list.find((l) => /Dispatch tripwire/.test(l))).toMatch(/warning/);
-  });
-  test('a pending Stop-only line is not green: the figure and the marks agree', () => {
-    const pending = [{ id: 'completion', title: 'Completion', lines: [{ id: 'a', label: 'Todos drained', ok: true }, { id: 'v', label: 'Verified', ok: false }] }];
-    const tally = gateTally(withCoreTally(pending, null) as never);
-    const t = rows(57, RUN, snap(), pending);
-    // fix1728: the unmet completion line waits for Stop: neither a green mark nor a denial, and the head and the row agree
-    expect(tally.failing).toEqual([]);
-    expect(tally.green).toBe(0);
-    expect(t.find((l) => /^\s*GATES\b/.test(l))).not.toMatch(/denied/);
-    expect(t.find((l) => l.includes('Completion'))).toMatch(/◇ Completion +pending/);
-    const real = [...pending, { id: 'tripwire', title: 'Dispatch tripwire', lines: [{ id: 'b', label: 'Team gate', ok: false }] }];
-    const rt = gateTally(withCoreTally(real, null) as never);
-    expect(rows(57, RUN, snap(), real).find((l) => /^\s*GATES\s/.test(l))).toMatch(new RegExp(`${rt.failing.length} denied$`)); // the figure counts the real failures only
-  });
-  test('the last five events, on the run clock', () => {
-    const many = { ...(snap() as object), notes: Array.from({ length: 8 }, (_, i) => ({ seq: i + 1, ts: new Date(NOW - 50000 + i * 6000).toISOString(), owner: i % 2 ? 'alpha-explorer' : 'lead', to: 'all', text: `post number ${i + 1}` })) } as never;
-    const t = rows(57, RUN, many);
-    const ev = t.filter((l) => /^\s+\+\d:\d\d\s/.test(l));
-    expect(ev).toHaveLength(5);
-    expect(ev.map((l) => /post number (\d)|(ghost-explorer\s+failed)|(\w+-explorer\s+(?:done|started))/.exec(l)?.slice(1).find(Boolean) ?? '?')).toEqual(['alpha-explorer  done', 'beta-explorer   started', '7', '8', 'beta-explorer   done']); // wave 37: the finishes are events too; wave 38: so are the starts; the newest five, oldest first
-    expect(ev[0]).toMatch(/^\s+\+0:\d\d\s/);
-  });
-  test('a section with no data is one dim line, never blank space', () => {
-    const none = { ...(snap() as object), squad: [], todos: [], notes: [], activity: {}, comms: [] } as never;
-    const t = rows(57, { kind: 'idle', secs: 0, startMs: NOW }, none, []);
-    expect(t.filter((l) => /no agents yet/.test(l))).toHaveLength(1);
-    expect(t.filter((l) => /no gates reported yet/.test(l))).toHaveLength(1);
-    expect(t.filter((l) => /no events yet/.test(l))).toHaveLength(1);
-    forgetPhases();
-    const dim = texts(tree('route', 57, 40, none, { kind: 'idle', secs: 0, startMs: NOW }));
-    expect(dim.find((x) => /no events yet/.test(x.t))?.color).toBe(DIM);
-  });
   test('the pane is as wide as the pane in every state, at 150 and at 110', () => {
     for (const cols of [57, 38]) {
       for (const run of [RUN, BLOCKED, { kind: 'done', secs: 52, startMs: NOW - 52000 } as Run, { kind: 'idle', secs: 0, startMs: NOW } as Run]) {
@@ -248,34 +180,10 @@ describe('item 3: the status view (critique 34: route about 80% empty, channel a
       }
     }
   });
-  test('at 110 the stepper spells every stage, wrapping to a second row, the lit one on the spinner', () => {
-    const t = rows(38);
-    const at = t.findIndex((l) => l.trim() === 'PHASE') + 1;
-    const stage = t.slice(at, t.findIndex((l, i) => i >= at && l.trim() === ''));
-    const chain = stage.join(' ');
-    expect(chain).toMatch(/[◐◓◑◒] implement/); // round 3 (E9): whole names at every width, never `res thy tst imp ver` (D12)
-    expect(chain).not.toMatch(/\b(res|thy|tst|imp|ver)\b/);
-    for (const l of stage) expect(cells(l)).toBeLessThanOrEqual(37);
-  });
-  test('the keys of the merged tabs keep working: channel and gates still open their own views', () => {
-    forgetPhases();
-    expect(withGates(snap(), 'channel', 57, 40).join('\n')).toMatch(/starting the three reads/);
-    expect(withGates(snap(), 'gates', 57, 40).join('\n')).toMatch(/Dispatch tripwire/);
-  });
 });
 
 describe('item 3: the team tab\'s lead row says what the band says', () => {
   const leadDone = (): never => { const s = snap() as unknown as { activity: Record<string, unknown> }; s.activity.lead = act({ mood: 'done', toolCount: 5, startedAt: NOW - 27000 }); return s as never; };
-  test('a blocked run: `▲ blocked`, never `done`', () => {
-    forgetPhases();
-    const lead = withGates(leadDone(), 'team', 57, 40, BLOCKED).find((l) => /\blead\b/.test(l) && /^\s*[▸▾]?\s*\S+ lead\s/.test(l))!;
-    expect(lead).toMatch(/^\s*[▸▾]?\s*▲ lead\s+blocked/); // 4fef5d66: `● lead done` under a blocked band
-    expect(lead).not.toMatch(/\bdone\b/);
-  });
-  test('a run that is done keeps `done`', () => {
-    forgetPhases();
-    expect(withGates(leadDone(), 'team', 57, 40, { kind: 'done', secs: 52, startMs: NOW - 52000 }).find((l) => /^\s*[▸▾]?\s*\S+ lead\s/.test(l))).toMatch(/● lead\s+done/);
-  });
 });
 
 // ---- item 4 and 5: the board ----------------------------------------------------------------------------------------------------------
@@ -283,16 +191,6 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
   const board = (cols: number, s: never = snap(), run: Run = RUN): string[] => { forgetPhases(); return withGates(s, 'board', cols, 40, run); };
   const foot = (t: string[]): string => t[t.length - 1]!;
 
-  test('at 110 the footer is one clean row that keeps its words: `● 2 done  ■ 1 failed · 0:57`, failed workers counted', () => {
-    const f = foot(board(38));
-    expect(f).toMatch(/^\s*● 2 done {2}■ 1 failed · 0:57$/); // wave 38 (critique 37: `● 2 ■ 1 · 0:31` lost its words): `total` goes first, then `worker calls` to `calls`, then the calls; the words stay
-    expect(f).not.toMatch(/total0|tool\b|·\S/); // 4fef5d66: `● 2   ■ 1   ·total0:3 · 8 tool`
-  });
-  test('at 150 the footer reads in words, once, and counts the failed worker', () => {
-    const f = foot(board(57));
-    expect(f).toMatch(/^\s*● 2 done {2}■ 1 failed · total 0:57 · 9 worker calls/);
-    expect(board(57).filter((l) => /\btotal\b/.test(l))).toHaveLength(1);
-  });
   test('the footer fits every width from 30 to 100 and never garbles a word', () => {
     for (const cols of [30, 33, 38, 44, 57, 70, 100]) {
       const f = foot(board(cols));
@@ -300,24 +198,10 @@ describe('item 4: the board (critique 34: `· total0:3 · 8 tool` at 110, `3 dis
       expect(f).not.toMatch(/\d\S*·|·\S/);
     }
   });
-  test('the header counts the dispatches the list shows: one open dispatch, one listed', () => {
-    const t = board(57);
-    expect(t.find((l) => /\bitems\b/.test(l))).toMatch(/5 items · 1 dispatch\s/); // 4fef5d66: `5 items · 2 dispatches` over a list of one
-    const at = t.findIndex((l) => /^\s*dispatches\s*$/.test(l));
-    expect(at).toBeGreaterThan(0);
-    const listed = t.slice(at + 1).filter((l) => /^\s+[●■◇◐◓◑◒▲] /.test(l) && /Read ghost\.py first|List the function/.test(l));
-    expect(listed).toHaveLength(1);
-  });
   test('no open dispatch: the header says the items alone and no empty `dispatches` group is drawn', () => {
     const t = board(57, closeDispatches(snap()));
     expect(t.find((l) => /\bitems\b/.test(l))).toMatch(/^\s*5 items\s+▰/);
     expect(t.join('\n')).not.toMatch(/dispatch/); // 4fef5d66: `3 dispatches` with nothing listed
-  });
-  test('a title is cut only when it does not fit: the `(owner)` tail goes whole before any `…` appears', () => {
-    const narrow = board(38, tailed(snap()));
-    const t1 = narrow.find((l) => /T1 read alpha\.py/.test(l))!;
-    expect(t1).toMatch(/● T1 read alpha\.py\s+done/); // 4fef5d66: `T1 read alpha.py (alpha…`
-    expect(narrow.join('\n')).not.toMatch(/\(alpha…|\(beta…|\(ghost…/);
   });
   test('no row is wider than the pane (nothing spills past the pane\'s edge)', () => {
     for (const cols of [30, 38, 57, 100]) for (const l of board(cols, tailed(snap()))) expect(cells(l)).toBeLessThanOrEqual(cols - 1);

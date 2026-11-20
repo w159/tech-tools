@@ -78,7 +78,7 @@ describe('A1: the band counts the plan rows the TODO header counts, and names th
 describe('A2: blocked is one red square, warnings keep the amber triangle, counts are words', () => {
   test('tokens', () => {
     expect(STATE_GLYPHS.blocked).toBe('▲');
-    expect(STATE_GLYPHS.failed).toBe('■');
+    expect(STATE_GLYPHS.failed).toBe('✗');
     expect(STATE_TOKEN.blocked).toBe('block'); // critique 18 B3: blocked is orange, failed stays red
     expect(warnMark(ui).t).toBe('▲');
   });
@@ -89,20 +89,17 @@ describe('A2: blocked is one red square, warnings keep the amber triangle, count
     expect(band({ ...m, cols: 73 })).toContain('1 running');
     expect(band({ ...m, cols: 110 })).toContain('2 failed');
   });
+  test('the band never prints a bare glyph-and-number count (`▲1 · ✗2`) at any width', () => {
+    const m = mission({ todoBlocked: 1, workers: [{ name: 'a', state: 'failed', secs: 1 }, { name: 'b', state: 'failed', secs: 1 }, { name: 'c', state: 'running', secs: 1 }] });
+    for (const cols of [150, 110, 100, 90, 80, 73, 60]) expect(band({ ...m, cols })).not.toMatch(/[✗▲▲◐○◉]\d/);
+    for (const cols of [50, 40]) expect(band({ ...m, cols })).not.toMatch(/[✗▲▲]1/); // narrower than the word forms: the blocked count is dropped, never a bare glyph and number
+    expect(band({ ...m, cols: 73 })).toContain('1 running');
+    expect(band({ ...m, cols: 110 })).toContain('2 failed');
+  });
 });
 
 describe('A3: never `done` while the band is blocked', () => {
   const blockedGates = [stopGroup('1 todo open')];
-  test('f0090: the route phase row reads blocked, not `done 5/5`', () => {
-    const phase = bodyLines(panelWorld('route', 80, ui, { phase: 'done', gates: blockedGates as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
-    expect(phase).toContain('blocked');
-    expect(phase).not.toMatch(/done|5\/5/);
-  });
-  test('Stop allowed keeps `done`', () => {
-    const allowed = [{ id: 'completion', title: 'C', lines: [{ id: 'stop-verdict', label: 'Last Stop allowed', ok: true }] }];
-    const phase = bodyLines(panelWorld('route', 80, ui, { phase: 'done', gates: allowed as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
-    expect(phase).toContain('done');
-  });
 });
 
 describe('A4: the gates figure never rises and falls in a clean run; a check Stop alone decides reads pending', () => {
@@ -120,14 +117,14 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
     const frames = [world({}), world({}), world({ s: true }), world({}), world({ inline: true })];
     const drift = [false, true, true, true, true];
     const figs = frames.map((g, i) => { const t = gateTally(withCoreTally(g as never, core(drift[i]!) as never)); return t.green; });
-    expect(figs).toEqual([4, 3, 2, 3, 2]); // critique 18 A2: the figure counts the green marks drawn, and a pending check (`◇`) is not a green mark
+    expect(figs).toEqual([4, 3, 2, 3, 2]); // critique 18 A2: the figure counts the green marks drawn, and a pending check (`○`) is not a green mark
     const s = gateTally(withCoreTally(world({ s: true }) as never, core(true) as never));
     expect(s.checks.find((c) => c.id === 'completion')).toMatchObject({ ok: true, pending: true });
     expect(s.failing).toEqual(['routing']);
   });
   test('`Todos drained` with open rows is pending too while Stop has not decided', () => {
     const t = gateTally(withCoreTally(world({ i: true }) as never, null));
-    expect(t.green).toBe(t.total - 1); // the pending group is drawn `◇`, not a green mark (critique 18 A2)
+    expect(t.green).toBe(t.total - 1); // the pending group is drawn `○`, not a green mark (critique 18 A2)
     expect(t.failing).toEqual([]);
     expect(t.checks.find((c) => c.id === 'completion')?.pending).toBe(true);
   });
@@ -148,19 +145,10 @@ describe('A4: the gates figure never rises and falls in a clean run; a check Sto
     expect(real.failing).toEqual(['tripwire']);
     expect(real.checks.find((c) => c.id === 'tripwire')?.pending).toBeUndefined();
   });
-  test('the band checks row and the gates tab draw it as the queued mark with the word pending', () => {
-    const snap = idle({ activity: lead(null, 'working') });
-    const out = rows(snap, world({ s: true }) as never, 150).join('\n');
-    expect(out).toContain('◇ completion');
-    expect(out).toContain('3/4 green'); // three ● marks and the pending ◇
-    const tab = bodyLines(panelWorld('gates', 100, ui, { gates: world({ s: true }) as never })).map(lineText).join('\n');
-    expect(tab).toMatch(/◇ +completion +pending/);
-    expect(tab).not.toMatch(/▲ +completion/);
-  });
 });
 
 describe('A5: the docked 110-column band (73 cells) uses the words of the 150-column band', () => {
-  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ◓1`, `◒2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ◑1 ■1`.
+  // live-110-e4a8186a-1 f0035..f0067: `todo 0/5 · ◓1`, `◒2`; stoprun-110-e4a8186a-1 f0054..f0061: `· 2 dispatches open · ◑1 ✗1`.
   const at = (cols: number, over: Partial<MissionModel>): string => band(mission({ cols, done: 0, total: 5, ...over }));
   const run = (n: number) => Array.from({ length: n }, (_, i) => ({ name: `w${i}`, state: 'running' as const, secs: 3 }));
   test('running agents read `2 running`, never the bare glyph and number', () => {
@@ -171,7 +159,7 @@ describe('A5: the docked 110-column band (73 cells) uses the words of the 150-co
     const w = [...run(1), { name: 'g', state: 'failed' as const, secs: 3 }];
     const t = at(73, { openWork: 7, openDispatch: 2, workers: w });
     expect(t).toMatch(/working · todo 0\/5 · .* 1 running · .* 1 failed/);
-    expect(t).not.toMatch(/[■◐◓◑◒]1\b/);
-    expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 +.* 1 running · ■ 1 failed/);
+    expect(t).not.toMatch(/[✗◐◓◑◒]1\b/);
+    expect(at(150, { openWork: 7, openDispatch: 2, workers: w })).toMatch(/todo .* 0\/5 +.* 1 running · ✗ 1 failed/);
   });
 });

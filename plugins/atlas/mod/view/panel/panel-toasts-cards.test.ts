@@ -77,12 +77,6 @@ describe('wave 31 item 1: a toast or finish card is one clean row (critique 29: 
     const w = (name: string): number => cells(rowsOfCard(notificationTree(name, 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!);
     expect(new Set([w('a'), w('beta-explorer'), w('a-very-long-worker-name-that-needs-cutting-down-to-size')]).size).toBe(1);
   });
-  test('the row reads `▌ ◆ ATLAS  ● done  beta-explorer ... 0:13` (wave 32: `explorer finished` is gone, so the scorer regex no longer applies)', () => {
-    const t = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
-    expect(t).toMatch(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\d+:\d\d/);
-    expect(t.trimEnd()).toMatch(/0:13 · -$/); // wave 37: a card with no count ends in the calls column's dash
-    expect(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/.exec(t)!.slice(1, 4)).toEqual(['●', 'done', 'beta-explorer']);
-  });
   test('a long name is cut with an ellipsis (`~` in ASCII) before anything else, and the row stays one row', () => {
     const long = 'a-very-long-worker-name-that-needs-cutting-down-to-size';
     const t = rowsOfCard(notificationTree(long, 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
@@ -119,10 +113,6 @@ describe('wave 31 item 2 (slice S3: the stepper): the panel phase is the band\'s
   test('working: one spinner on the current stage', () => {
     expect(glyphs({ kind: 'working' }).filter((g) => '◐◓◑◒'.includes(g))).toHaveLength(1);
   });
-  test('done: no stage is turning and no word is printed', () => {
-    expect(glyphs({ kind: 'done' }).every((g) => g === '●' || g === '○')).toBe(true);
-    expect(stepper({ kind: 'done' })).not.toMatch(/done|working|idle|blocked/);
-  });
   test('idle: nothing turns (a finished plan at rest reads its stages done, as the band does)', () => {
     expect(glyphs({ kind: 'idle' }).every((g) => g === '○' || g === '●')).toBe(true);
   });
@@ -134,41 +124,18 @@ describe('wave 31 item 2 (slice S3: the stepper): the panel phase is the band\'s
     expect(marks[0]).toMatch(/[◐◓◑◒]/);
     expect(marks.slice(1)).toEqual(['none', 'none', '▲']);
   });
-  test('the glyph wears the band tones: 141 spinner, 114 done, dim pending, 203 blocked', () => {
-    const tone = (kind: Run['kind'], glyph: RegExp): string | undefined => {
-      forgetRefusals();
-      const lines = bodyLines(panelModelOf(model('route', 66, 45, { kind }), ui, 65));
-      const row = lines[lines.findIndex((l) => lineText(l).trim() === 'PHASE') + 1]!;
-      return row.runs.find((x) => glyph.test(x.t))?.tone;
-    };
-    expect([tone('working', /[◐◓◑◒]/), tone('done', /●/), tone('idle', /○/), tone('blocked', /▲/)]).toEqual(['accent', 'ok', 'dim', 'block']);
-  });
 });
 
 describe('wave 31 item 3: the channel tab times are the run clock and the pane is filled (critique 29: `01:30:26`, a `0s` column, 80% blank)', () => {
   const rows = body('channel', 65, 45, { kind: 'working', secs: 28, startMs: NOW - 28000 });
-  test('each post carries `+m:ss` seconds from the run start', () => {
-    const text = rows.join('\n');
-    expect(text).toMatch(/\+0:08\b/);
-    expect(text).toMatch(/\+0:23\b/);
-    expect(text).not.toMatch(/\b\d\d:\d\d:\d\d\b/);
-  });
   test('there is no `0s` age column', () => {
     expect(rows.filter((l) => /\b\d+s\s*$/.test(l))).toHaveLength(0);
-  });
-  test('the pane carries the counts per kind; the `last by sender` block is gone (wave 33)', () => {
-    const text = rows.join('\n');
-    expect(text).toMatch(/\d+ posts/);
-    expect(text).not.toMatch(/last by sender/);
   });
 });
 
 describe('wave 31 item 4: the team tab histogram carries the band total (wave 32 dropped its `scale` legend)', () => {
   test('there is no `scale` legend row', () => {
     expect(body('team', 65, 45, { kind: 'working', secs: 28 }).join('\n')).not.toMatch(/\bscale\b/);
-  });
-  test('the total is the band run clock', () => {
-    expect(body('team', 65, 45, { kind: 'working', secs: 61 }).join('\n')).toMatch(/total\s+1:01/);
   });
 });
 
@@ -191,11 +158,6 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
     expect(labels.at(-1)!).toBe(20); // 0:11 rounded up to the next 10 s
     expect(t.at(-2)!.match(/┬/g)).toHaveLength(3); // 0:00, 0:10, 0:20
   });
-  test('the failed word is on the plan row and in the footer count (wave 35) and no full-width rule runs under it', () => {
-    const out = render('board', 65, 45, { kind: 'working', secs: 28 });
-    expect(out.filter((l) => /\bfailed\b/.test(l))).toHaveLength(2);
-    expect(out.filter((l) => /^\s*[━─]{40,}\s*$/.test(l))).toHaveLength(0);
-  });
   test('the sparkline rows say `N calls`', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 }).join('\n');
     expect(out).toMatch(/\d+ calls/);
@@ -205,12 +167,21 @@ describe('wave 31 item 5: the board has a ticked axis, N calls labels and rows i
 describe('wave 31 item 6: one failure word', () => {
   test('the card says `failed` (wave 33), never `killed`', () => {
     const card = rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:06', true, ui, false, { cols: 110 }))[0]!;
-    expect(card).toMatch(/■\s+failed/);
+    expect(card).toMatch(/✗\s+failed/);
     expect(card).not.toMatch(/killed/);
   });
   test('the board says `failed` (wave 33), never `killed`', () => {
     const out = render('board', 65, 45, { kind: 'working', secs: 28 }).join('\n');
-    expect(out).toMatch(/■ [^\n]*\bfailed\b/);
+    expect(out).toMatch(/✗ [^\n]*\bfailed\b/);
     expect(out).not.toMatch(/\bkilled\b/);
+  });
+});
+
+describe('the redesigned finish card row', () => {
+  test('the row reads `▌ ◆ ATLAS  ✓ done  beta-explorer ... 0:13`: state glyph, word, name, then the clock', () => {
+    const t = rowsOfCard(notificationTree('beta-explorer', 'explorer', 'finished · 0:13', false, ui, false, { cols: 110 }))[0]!;
+    expect(t).toMatch(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)\s{2,}\d+:\d\d/);
+    expect(t.trimEnd()).toMatch(/0:13 · -$/); // a card with no count ends in the calls column's dash
+    expect(/▌\s*◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/.exec(t)!.slice(1, 4)).toEqual(['✓', 'done', 'beta-explorer']);
   });
 });

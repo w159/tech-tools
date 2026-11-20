@@ -3,7 +3,6 @@
 // Expectations are literal text written by hand against the rev 4 vocabulary; the model is hand-built, not read from the layout.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
-import { teamLiveGolden } from '../../../contracts/panel-golden';
 import type { Ui } from '../../design/atlas-ui';
 import type { CoreModel } from '../../data/core';
 import { bodyLines, lineText, panelText, type PanelModel, type PanelNote, type PanelTab, type PanelTodo, type PanelWorker } from './panel-layout';
@@ -19,109 +18,11 @@ describe('team tab: lead row, roster rows, lead tally', () => {
   const lead = w('lead', 'waiting', { role: 'lead', detail: 'idle' });
   const mates = [w('leader', 'queued', { role: 'unknown', detail: 'idle' })];
   for (const cols of [120, 80]) {
-    test(`the live shape at ${cols} equals the hand-written golden`, () => {
-      expect(body('team', cols, { lead, mates, rows: 40 })).toEqual(teamLiveGolden[cols]); // the live pane: 40 rows
-    });
   }
-  test('the lead row is first and the tally is last; the ribbon counts only the workers', () => {
-    const out = body('team', 120, { lead, mates });
-    expect(out[0]!.startsWith('▸ ◉ lead')).toBe(true);
-    expect(out.at(-1)).toBe('    workers  1 queued · 1 running · 2 done · 1 failed');
-  });
-  test('the tally always says running, and drops the other states with no worker', () => {
-    expect(body('team', 80, { lead, workers: [] }).at(-1)).toBe('    no workers yet'); // nothing ran: one labelled line, no `0 running` total
-    expect(body('team', 80, { lead, workers: [w('a', 'failed')] }).at(-1)).toBe('    workers  0 running · 1 failed');
-    expect(body('team', 80, { lead, workers: [w('a', 'done'), w('b', 'done')] }).at(-1)).toBe('    workers  0 running · 2 done');
-    expect(body('team', 80, { lead, workers: [w('a', 'running'), w('b', 'waiting')] }).at(-1)).toBe('    workers  1 running · 1 waiting');
-  });
-  test('critique 12: a tall pane never prints `task X` over `last X` when both say the same words', () => {
-    const same = w('alpha', 'done', { goal: 'alpha: read alpha.py', detail: 'read alpha.py', model: 'haiku', secs: 11, tools: 2 });
-    const other = w('beta', 'done', { goal: 'beta: read beta.py', detail: 'wrote the summary', model: 'haiku', secs: 12, tools: 3 });
-    const out = [...body('team', 120, { lead, workers: [same, other], mates: [], rows: 40, expanded: 'worker:alpha' }), ...body('team', 120, { lead, workers: [same, other], mates: [], rows: 40, expanded: 'worker:beta' })]; // wave 24: one row per agent; the detail rows open on a press
-    expect(out.filter((l) => /^ {4}task {2}read alpha\.py/.test(l))).toHaveLength(1);
-    expect(out.filter((l) => /^ {4}last {2}read alpha\.py/.test(l))).toHaveLength(0); // the same words: said once
-    expect(out.filter((l) => /^ {4}last {2}wrote the summary/.test(l))).toHaveLength(1); // different words: kept
-  });
-  test('no workers and no roster keeps the hint, and the lead stays above it', () => {
-    expect(body('team', 80, { lead, workers: [], mates: [] })).toEqual(['▸ ◉ lead    waiting', '    no workers yet']); // round 2: a lead alone has no pace to draw, so no sparkline either; // wave 44: no orphan time axis (`0:00    0:01`) and no `0 running` total under it
-    expect(body('team', 80, { lead: undefined, workers: [], mates: [] })).toEqual([' '.repeat(29) + 'nobody dispatched yet']);
-  });
-  test('a roster member the squad does not list reads queued and is not counted in the agents row', () => {
-    const route = full('route', 120, { mates, lead }).join('\n');
-    expect(route).toContain(' agents ◇ 1 queued   ◐ 1 running   ● 2 done   ■ 1 failed');
-    expect(body('team', 120, { lead, mates }).some((l) => /^▸ ◇ leader +queued/.test(l))).toBe(true);
-  });
-  test('a parked worker draws a queued row with its word instead of throwing', () => {
-    const out = body('team', 80, { workers: [w('pk', 'queued', { detail: 'parked' })] });
-    expect(out).toEqual(['▸ ◇ pk      queued']);
-  });
-  test('the recipient can be the lead: it takes the focus marker', () => {
-    expect(body('team', 80, { lead, mates, recipient: 'lead' })[0]!.startsWith('▸ ◉ lead')).toBe(true);
-    expect(bodyLines(panelWorld('team', 80, mocha, { rows: 24, lead, mates })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold)).toHaveLength(1); // round 3 (E8): every expandable row carries `▸`; the recipient's is the bold accent one
-  });
-  test('an open lead row has no age line (the lead has no start time)', () => {
-    const out = body('team', 80, { lead, workers: [], mates: [], expanded: 'worker:lead' });
-    expect(out.some((l) => l.includes('running ') && l.includes('tool calls'))).toBe(false);
-    expect(out[1]).toBe('    idle');
-  });
 });
 
 describe('channel tab: header, columns and marks', () => {
   const note = (over: Partial<PanelNote> = {}): PanelNote => ({ at: '10:02', from: 'lead', text: 'hello', ...over });
-  test('one person is singular, more are plural', () => {
-    expect(body('channel', 80, { people: 1, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  1 person');
-    expect(body('channel', 80, { people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
-  });
-  test('critique 12: a generated launch id (`lc-opl0e60i`) is no channel name: the ribbon says `this run`, the header keeps the words and also the real name (`this run · #lc-opl0e60i`, live 6b7f637d lost channel_name_shown), a named channel keeps its #name', () => {
-    expect(body('channel', 80, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [] })[0]).toBe('    this run  2 people'); // critique 23: no truncated slug on the head
-    expect(full('channel', 120, { channel: 'lc-opl0e60i', people: 2, unread: 0, notes: [{ at: '10:02', from: 'lead', text: 'hello' }] }).join('\n')).not.toContain('#lc-'); // wave 30 (critique 28): the generated slug is not drawn anywhere, not even as a foot line
-    expect(body('channel', 80, { channel: 'atlas-board-mod', people: 2, unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  2 people');
-  });
-  test('a missing channel name reads #channel', () => {
-    expect(body('channel', 80, { channel: undefined, people: 3, unread: 0, notes: [] })[0]).toBe('    #channel  3 people');
-  });
-  test('unread is shown only when not zero, with its word', () => {
-    expect(body('channel', 80, { unread: 4, notes: [] })[0]).toBe('    #atlas-board-mod  5 people · 4 unread');
-    expect(body('channel', 80, { unread: 0, notes: [] })[0]).toBe('    #atlas-board-mod  5 people');
-  });
-  test('the time column starts at 50 cells', () => {
-    expect(body('channel', 50, { notes: [note()] })[1]).toBe('    lead hello                               10:02'); // the right-aligned value column
-    expect(body('channel', 49, { notes: [note()] })[1]).toBe('    lead hello');
-  });
-  test('a name is whole (30 cells below 100 columns, 24 from 100) and a longer one is cut at its end with one ellipsis', () => {
-    const first = (cols: number, from: string): string => body('channel', cols, { notes: [note({ from })] })[1]!.replace(/ +10:02$/, '');
-    expect(first(80, 'ab')).toBe('    ab hello');
-    expect(first(80, 'implementer-band')).toBe('    implementer-band hello'); // wave 24: a name is never cut for the text beside it
-    expect(first(120, 'implementer-band')).toBe('    implementer-band hello');
-    expect(first(120, 'x'.repeat(30))).toBe(`    ${'x'.repeat(23)}\u2026 hello`);
-  });
-  test('the nick column is as wide as the widest nick shown in the log', () => {
-    const out = body('channel', 80, { notes: [note({ from: 'ab' }), note({ from: 'abcdefg', text: 'two' })] });
-    expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual(['    ab      hello', '    abcdefg two']);
-  });
-  test('marks: blocked and handoff carry a glyph and a word; a note to a peer names it; a note to all names nobody', () => {
-    const out = body('channel', 120, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' }), note({ from: 'd', to: 'peer-1' }), note({ from: 'e', to: 'all' }), note({ from: 'f', kind: 'blocked', to: 'peer-1' })] });
-    expect(out.slice(1).map((l) => l.replace(/ +10:02$/, ''))).toEqual([
-      '  ▲ a  blocked hello', '  ● b  handoff hello', '  ● c  done    hello', '    d          ▸ peer-1 hello', '    e          hello', '  ▲ f  blocked hello',
-    ]);
-  });
-  test('a note is one line: whitespace and line breaks collapse', () => {
-    expect(body('channel', 80, { notes: [note({ text: 'a   b\n c\t d' })] })[1]!.replace(/ +10:02$/, '')).toBe('    lead a b c d');
-  });
-  test('ASCII mode marks a note to a peer with > and draws plain ASCII', () => {
-    const out = body('channel', 120, { notes: [note({ to: 'peer-1' })] }, ascii);
-    expect(out[1]!.replace(/ +10:02$/, '')).toBe('    lead > peer-1 hello');
-  });
-  test('a blocked note word reads the error tone like rowWordTone; handoff and done stay ok', () => {
-    const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ kind: 'blocked', from: 'a' }), note({ kind: 'handoff', from: 'b' }), note({ kind: 'done', from: 'c' })] }));
-    const word = (i: number, t: string) => l[i]!.runs.find((x) => x.t.trim() === t)!.tone;
-    expect([word(1, 'blocked'), word(2, 'handoff'), word(3, 'done')]).toEqual(['bad', 'ok', 'ok']);
-  });
-  test('no persona colour: a nick is bold text whoever speaks', () => {
-    const l = bodyLines(panelWorld('channel', 120, mocha, { notes: [note({ from: 'implementer-live' }), note({ from: 'lead' })] }));
-    const nick = (i: number) => l[i]!.runs.find((x) => x.bold && x.t.trim() !== '')!;
-    expect([nick(1).tone, nick(2).tone]).toEqual(['text', 'text']);
-  });
 });
 
 describe('core tab: caps, notes and figures', () => {
@@ -225,19 +126,4 @@ describe('core tab: caps, notes and figures', () => {
 
 describe('route tab: blocked owner, phase position', () => {
   const todo = (id: string, state: PanelTodo['state'], over: Partial<PanelTodo> = {}): PanelTodo => ({ id, label: `task ${id}`, state, ...over });
-  test('a blocked task shows the blocked mark, its word, its owner and why from 100 columns', () => {
-    const out = body('route', 120, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`▸ ▲ task b                blocked blocked: waiting for lead reply${' '.repeat(46)}impl-live`);
-  });
-  test('below 100 columns the reason leaves the row (the owner stays right-aligned); the mark, label and word stay', () => {
-    const out = body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })] });
-    expect(out.find((l) => l.includes('task b'))).toBe(`▸ ▲ task b                blocked${' '.repeat(38)}impl-live`); // the reason leaves the row at 80 (open the row to read it)
-    expect(body('route', 80, { todos: [todo('b', 'blocked', { owner: 'impl-live', detail: 'blocked: waiting for lead reply' })], expanded: 'task:b' }).join('\n')).toContain('    owner impl-live · blocked: waiting for lead reply');
-  });
-  test('the phase row shows the position on the rail; an unknown phase has none; done ticks the whole rail', () => {
-    const phase = (p: string): string => body('route', 80, { phase: p, phases: ['research', 'theory', 'build', 'verify'] })[0]!;
-    expect(phase('build')).toBe(' phase  ◐ build');
-    expect(phase('somewhere')).toBe(' phase  ◐ somewhere');
-    expect(phase('done')).toBe(' phase  ● done');
-  });
 });

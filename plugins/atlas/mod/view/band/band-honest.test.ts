@@ -28,7 +28,7 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
     for (const cols of [150, 120, 110, 93, 80, 70, 62]) {
       test(`${name} at ${cols} columns keeps the capsule and the todo figure, inside the width`, () => {
         const t = head(model({ cols, ...over }));
-        expect(t).toContain('◖ ◆ ATLAS ◗');
+        expect(t).toContain(' ◆ ATLAS ');
         expect(t).toMatch(TODO_FIGURE);
         expect(cells(t)).toBeLessThanOrEqual(cols);
         expect(t).toMatch(/\d\/\d/);
@@ -36,9 +36,9 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
     }
   }
   test('the four leads are what the brief says, at 110 columns', () => {
-    const lead = (over: Partial<MissionModel>): string => head(model({ cols: 110, ...over })).replace(/^◖ ◆ ATLAS ◗\s+/, '');
+    const lead = (over: Partial<MissionModel>): string => head(model({ cols: 110, ...over })).replace(/^ ◆ ATLAS \s+/, '');
     expect(lead(STATES.working!)).toMatch(/^[◐◓◑◒] working 0:42 · todo 3\/5 · ◐ 2 running/);
-    expect(lead(STATES.done!)).toMatch(/^● done · 1:08 · todo 5\/5/);
+    expect(lead(STATES.done!)).toMatch(/^✓ done · 1:08 · todo 5\/5/);
     expect(lead(STATES.idle!)).toMatch(/^○ idle · last run 1:08 · todo 5\/5/);
     expect(lead(STATES.blocked!)).toMatch(/^▲ blocked · stop refused · todo 3\/5/); // state 38: two reasons only, `stop refused` or `N failed`
   });
@@ -46,7 +46,7 @@ describe('step 1: `todo N/M` survives every width in every state', () => {
     const t = head(model({ cols: 110, ...STATES.done! }));
     expect(t.match(/5\/5/g)).toHaveLength(1);
     expect(t).toMatch(/· △ 2 gates to check/);
-    for (const over of Object.values(STATES)) expect(head(model({ cols: 150, ...over }))).not.toMatch(/^◖ ◆ ATLAS ◗\s+△/);
+    for (const over of Object.values(STATES)) expect(head(model({ cols: 150, ...over }))).not.toMatch(/^ ◆ ATLAS \s+△/);
   });
   test('the blocked reason agrees with the todo: it names the open task and the plan figure is the plan\'s own', () => {
     const t = head(model({ cols: 110, ...STATES.blocked! }));
@@ -60,9 +60,9 @@ describe('scorer markers: the band line matches the scorer\'s todo regex in ever
   const SCORER = /\btodo\b\D*?(\d+)\s*(?:of|\/)\s*(\d+)/;
   for (const [name, over] of Object.entries(STATES)) {
     for (const cols of [80, 110, 150]) {
-      test(`${name} at ${cols}: ribbon \`◖ ◆ ATLAS ◗\` leads and the scorer regex reads the plan figure`, () => {
+      test(`${name} at ${cols}: ribbon \` ◆ ATLAS \` leads and the scorer regex reads the plan figure`, () => {
         const t = head(model({ cols, ...over }));
-        expect(t.startsWith('◖ ◆ ATLAS ◗')).toBe(true);
+        expect(t.startsWith(' ◆ ATLAS ')).toBe(true);
         const m = SCORER.exec(t);
         expect(m).not.toBeNull();
         expect([Number(m![1]), Number(m![2])]).toEqual([over.done ?? 3, over.total ?? 5]);

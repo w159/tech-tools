@@ -43,7 +43,7 @@ function tableRow(snap: LiveSnapshot): string {
   const agents = hudAgents(live, snap.squad, queuedMembers(snap));
   const hudIn: HudInput = { todos: ownTodos(snap.todos ?? [], snap.sessionId), agents, root: snap.root, phases: hudPhases(snap, null) };
   const plan = composeSlot({ budget: 20, hasSlot: true, hudOn: true, runOn: true, columns: 93, hudView: { cols: 93, tick: 3, ui, rich: false, now: snap.now }, running: agents.some(isRunning), agentsListed: true, orchestrated: true, now: snap.now, hudIn, bandIn: (_h: unknown, maxRows: number | undefined) => ({ snapshot: snap, live, gates: [], working: false, workSecs: 42, ranSecs: 72, columns: 93, tick: 3, ui, rich: false, maxRows, lastPhase: null, core: null }) as never, held: 0 } as never);
-  return plan.hud.map((r) => r.map((x) => x.t).join('')).find((r) => /^ {2}alpha-explorer\s/.test(r)) ?? '';
+  return plan.hud.map((r) => r.map((x) => x.t).join('')).find((r) => /^[│▌] \S alpha-explorer\s/.test(r)) ?? '';
 }
 
 describe('CALLS column and finish card share one count', () => {
@@ -60,7 +60,7 @@ describe('CALLS column and finish card share one count', () => {
     expect(row, 'the table row for the finished worker').not.toBe('');
     expect(row.split(/\s+/)).toContain(String(CALLS.length));
   });
-  test('no calls seen: the card prints no count and the table cell stays `-`', () => {
+  test('no calls seen: the card prints no count and the table draws no count cell', () => {
     resetWorkerFacts();
     const prev = snapshot('running', undefined);
     const next = snapshot('finished', undefined);
@@ -69,6 +69,7 @@ describe('CALLS column and finish card share one count', () => {
     expect(flat(notificationTree(fw[0]!.name, fw[0]!.role, 'finished · 0:14', false, ui, false, { cols: 60, calls: fw[0]!.calls }))).not.toMatch(/calls?\b/);
     const row = tableRow(next);
     expect(row).not.toBe('');
-    expect(row.trimEnd().split(/\s+/).at(-3)).toBe('-'); // the CALLS cell: CALLS, FN, then LAST (state 39: LAST is never blank, it reads finished here)
+    expect(row.split(/\s+/).filter((t) => /^\d+$/.test(t))).toEqual([]); // redesign: a column with no figure in any row is dropped, so no count is drawn at all
+    expect(row.trimEnd().split(/\s+/).at(-3)).toBe('finished'); // the NOW / RESULT cell is never blank: it reads finished here, then the TIME cell
   });
 });

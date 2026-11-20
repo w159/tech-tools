@@ -36,24 +36,23 @@ const byKey = (root: Node, key: string): Node => {
 };
 
 describe('band footer buttons', () => {
-  test('route team channel gates core board are chip Buttons with no hotkey', () => {
+  test('health status gates channel are chip Buttons with no hotkey', () => {
     const t = band();
-    expect(['route', 'team', 'channel', 'gates', 'board'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual([undefined, undefined, undefined, undefined, undefined]);
+    expect(['core', 'route', 'gates', 'channel'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual([undefined, undefined, undefined, undefined]);
     expect(hotkeys(t)).toEqual([]);
     expect(kids(byKey(t, 'band:route'))[0]!.props.children).toBe(' status ');
   });
   test('pressing a button opens that pane view, or toggles the board', () => {
     const t = band();
-    for (const k of ['route', 'team', 'channel', 'gates', 'core']) byKey(t, `band:${k}`).props.onPress();
-    byKey(t, 'band:board').props.onPress();
-    expect(calls).toEqual(['open:route', 'open:team', 'open:channel', 'open:gates', 'open:core', 'board']);
+    for (const k of ['core', 'route', 'gates', 'channel']) byKey(t, `band:${k}`).props.onPress();
+    expect(calls).toEqual(['open:core', 'open:route', 'open:gates', 'open:channel']);
   });
-  test('the buttons are the side panel strip: route, team, channel, gates, core, board (change 9: the same set and order on both hosts)', () => {
-    expect(buttons(band()).map((b) => b.props.label)).toEqual(['status', 'team', 'channel', 'gates', 'core', 'board']); // wave 36: the first tab reads status; its key and view stay r / route
+  test('the buttons are the side panel strip: health, status, gates, channel (change 9: the same set and order on both hosts)', () => {
+    expect(buttons(band()).map((b) => b.props.label)).toEqual(['health', 'status', 'gates', 'channel']); // the redesigned strip: four tabs (the board is reached through its view, not a tab)
   });
   test('keys show only while idle at 80+ columns: they survive 80, drop at 79 and with no handlers', () => {
-    expect(buttons(band(80)).length).toBe(6);
-    expect(buttons(band(90)).length).toBe(6);
+    expect(buttons(band(80)).length).toBe(4);
+    expect(buttons(band(90)).length).toBe(4);
     expect(buttons(band(79)).length).toBe(0);
     expect(buttons(band(160, null)).length).toBe(0);
   });
@@ -71,7 +70,7 @@ describe('band footer buttons', () => {
       expect(textOf(checksRow)).toContain('checks  △ tripwire');
       expect(buttons(checksRow)).toHaveLength(0);
       expect(textOf(keysRow)).not.toContain('checks');
-      expect(buttons(keysRow)).toHaveLength(6);
+      expect(buttons(keysRow)).toHaveLength(4);
       const width = (row: Node): number => kids(row).reduce((n, k) => n + (k.kind === 'Button' ? chipW(k) : [...String(k.props.children ?? '')].length), 0);
       expect([columns, width(checksRow)]).toEqual([columns, columns]);
       expect([columns, width(keysRow)]).toEqual([columns, columns]);
@@ -89,7 +88,7 @@ describe('band footer buttons', () => {
   test('the chips sit one cell apart (each its own tile) and end one cell before the edge', () => {
     const t = bandTree(els, { snapshot: busySnap({ squad: [], activity: {}, comms: [] }), live: [], gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
     const row = kids(kids(t).at(-1)!);
-    expect(textOf(kids(t).at(-1)!).endsWith(' status   team   channel   gates   core   board  ')).toBe(true);
+    expect(textOf(kids(t).at(-1)!).endsWith(' health   status   gates   channel  ')).toBe(true);
     expect(row.at(-1)!.props.children).toBe(' ');
   });
   test('no hotkey is bound on any band button', () => {
@@ -132,7 +131,7 @@ describe('mutation kills (round 2): idle means no worker is still going; a given
     return bandTree(els, { snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
   };
   test('a band whose only worker has failed is idle: the key buttons show; with a worker running they do not', () => {
-    expect(buttons(only('failed'))).toHaveLength(6);
+    expect(buttons(only('failed'))).toHaveLength(4);
     expect(buttons(only('running'))).toHaveLength(0);
   });
   test('missionTree paints in the model\'s own theme, not the environment\'s', async () => {

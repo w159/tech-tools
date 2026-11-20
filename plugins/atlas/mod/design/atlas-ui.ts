@@ -258,10 +258,10 @@ export function inkFor(fill: Token, theme: ThemeName, mode: ColorMode = 'truecol
 /** Every non-ASCII character the primitives draw (capsule, states, spinner, rail, gauge, spark, rules, middle dot). theme.test.ts checks
  * each is one cell wide and present in DejaVu Sans Mono (mod/fixtures/dejavu-sans-mono-glyphs.ts); keep this a single-line literal,
  * mod/fixtures/check_glyph_cmap.py reads it. */
-export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉△━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱';
+export const ATLAS_GLYPHS = '◖◗◆▸◇◐◓◑◒●■▣▲◉△━─░█▏▎▍▌▋▊▉▁▂▃▄▅▆▇·◌◍◃○▰▱\u2713✗│╭╮╰╯';
 
 /** Characters that are marks and rules, not words: they need 3:1, everything else 4.5:1. */
-const NON_TEXT = new Set([...'┌┐└┘╭╮╰╯│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
+const NON_TEXT = new Set([...'✗┌┐└┘╭╮╰╯│━─░█▏▎▍▌▋▊▉◖◗▸◆◐◓◑◒⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏◉◇●■▣▲△▁▂▃▄▅▆▇◌◍◃○▰▱', DONE_GLYPH]);
 export const runKind = (t: string): 'text' | 'glyph' => (t.trim() && [...t.trim()].every((c) => NON_TEXT.has(c)) ? 'glyph' : 'text');
 
 // ---- state vocabulary -----------------------------------------------------------------------
@@ -271,7 +271,7 @@ export type UiState = 'queued' | 'running' | 'done' | 'failed' | 'blocked' | 'wa
 export const UI_STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 /** The one order states are counted and ranked in on every surface (band, HUD, board): attention first, finished last. */
 export const COUNT_ORDER: readonly UiState[] = ['running', 'blocked', 'failed', 'waiting', 'queued', 'done'];
-export const STATE_GLYPHS: Record<UiState, string> = { queued: '◇', running: '◐', done: '●', failed: '■', blocked: '▲', waiting: '◉' }; // round 3: only the marks the capture scorer maps on rows (running is the first frame of the circle-quarter spinner, blocked the triangle, failed the solid square)
+export const STATE_GLYPHS: Record<UiState, string> = { queued: '○', running: '◐', done: '\u2713', failed: '✗', blocked: '▲', waiting: '◉' }; // round 3: only the marks the capture scorer maps on rows (running is the first frame of the circle-quarter spinner, blocked the triangle, failed the solid square)
 export const STATE_ASCII: Record<UiState, string> = { queued: 'o', running: '|', done: '*', failed: 'x', blocked: '#', waiting: '?' };
 export const STATE_TOKEN: Record<UiState, Token> = { queued: 'muted', running: 'run', done: 'ok', failed: 'bad', blocked: 'block', waiting: 'info' }; // round 3: one colour per state; blocked and failed share the error red (the glyph and the word tell them apart)
 
@@ -447,8 +447,7 @@ export const sweepIndex = (frame: number): number => ((Math.floor(frame / 2) % W
 export function wordmark(ui: Ui, _lit?: number): Run[] {
   if (ui.ascii) return [{ t: '[ATLAS]', tone: 'text' }];
   const ink = inkFor('accent', ui.theme, ui.color);
-  const on = (t: string, tone: Tone): Run => ({ t, tone, bg: 'accent', bold: true });
-  return [{ t: '◖', tone: 'accent' }, { ...on(' ◆ ', ink), chip: true }, ...[...WORDMARK].map((c): Run => on(c, ink)), on(' ', ink), { t: '◗', tone: 'accent' }];
+  return [{ t: ' ◆ ATLAS ', tone: ink, bg: 'accent', bold: true, chip: true }];
 }
 
 /** A section title with a thin rule to the right edge, exactly `cols` cells: the title bold in body text, then the rule in the 236 neutral, `right` (dim) after it. ASCII: `-`. */
@@ -550,17 +549,17 @@ export function gridPlan(cols: number, o: { names: readonly string[]; word?: num
 
 // ---- phase rail ------------------------------------------------------------------------------------
 
-/** `● 1 plan  ──  ▸ 2 research  ──  ◇ 3 build`. `active` is the 0-based lit phase; `phases.length` reads as every phase done. */
+/** `✓ 1 plan  ──  ▸ 2 research  ──  ○ 3 build`. `active` is the 0-based lit phase; `phases.length` reads as every phase done. */
 export function rail(phases: readonly string[], active: number, ui: Ui): Run[] {
   const sep: Run = ui.ascii ? { t: '  --  ', tone: 'muted' } : { t: '  ──  ', tone: 'line' };
   return phases.flatMap((id, i): Run[] => {
     const label = `${i + 1} ${id}`;
     const part: Run[] =
       i < active
-        ? [{ t: ui.ascii ? '* ' : '● ', tone: ui.ascii ? 'text' : glyphTone('ok', ui.theme) }, { t: label, tone: 'sub' }]
+        ? [{ t: `${stateGlyph('done', ui)} `, tone: ui.ascii ? 'text' : glyphTone('ok', ui.theme) }, { t: label, tone: 'sub' }]
         : i === active
           ? [{ t: ui.ascii ? '> ' : '▸ ', tone: ui.ascii ? 'text' : 'accent', bold: true }, { t: label, tone: 'text', bold: true }]
-          : [{ t: ui.ascii ? 'o ' : '◇ ', tone: 'muted' }, { t: label, tone: 'muted' }];
+          : [{ t: `${stateGlyph('queued', ui)} `, tone: 'muted' }, { t: label, tone: 'muted' }];
     return i < phases.length - 1 ? [...part, sep] : part;
   });
 }

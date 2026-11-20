@@ -32,15 +32,15 @@ describe('sidebar board tab', () => {
     expect(shown(board(many, { rows: 11 }))).toBe(4);
     expect(shown(board(many, { rows: 40 }))).toBe(12);
   });
-  test('critique 15 B5 (L19, round W M): the panel ribbon reads `▸ SIDEPANEL · board` beside the capsule like every other tab, and no second BOARD title row follows', () => {
+  test('critique 15 B5 (L19, round W M): the board shows the same ATLAS header as every other view, with no tab lit, and no second BOARD title row follows', () => {
     const rows = board(many);
     expect(rows[0]).toContain('ATLAS');
-    expect(rows[0]).toContain('▸ SIDEPANEL · board');
+    expect(rows[2]).toMatch(/health +status +gates +channel/); expect(rows[3]).not.toContain('━'); // the board is no tab of the strip: no chip is lit over it
     expect(rows[0]).not.toContain('12 items'); // the count is said once, by the summary row (critique 22)
     expect(rows.join('\n').match(/12 items/g)!.length).toBe(1);
-    expect(rows[0]).toContain('SIDEPANEL · board'); // C1: the strip names no keys, so the ribbon is always the breadcrumb the capture scorer reads as the pane (live_capture.py :546)
+    expect(rows[0]).toContain('◆ ATLAS'); // the one header, the same on every view
     expect(rows.join('\n').match(/BOARD/g)).toBeNull(); // no second BOARD title row
-    expect(board(many, { ui: { recipient: null, expanded: null, draft: '', view: 'route' } as never }).join('\n')).toContain('SIDEPANEL');
+    expect(board(many, { ui: { recipient: null, expanded: null, draft: '', view: 'route' } as never }).join('\n')).toContain('ATLAS');
   });
   test('the board lists the snapshot todos, and none reads one dim line', () => {
     expect(shown(board(many))).toBe(12);

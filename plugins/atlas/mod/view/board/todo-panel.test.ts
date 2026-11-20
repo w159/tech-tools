@@ -42,7 +42,7 @@ describe('slot rows', () => {
     const palette = new Set([...Object.values(PALETTES.mocha), ...Object.values(PALETTE5), toneHex('dim', 'mocha')]); // the rev 5 meter's dim track is a PALETTE5 token
     for (const r of rows) for (const s of r) for (const c of [s.color, s.bg]) if (c) expect([c, palette.has(c)]).toEqual([c, true]);
     const done = rows[1]!;
-    expect(done.find((s) => s.t === '●')).toMatchObject({ color: PALETTES.mocha.ok });
+    expect(done.find((s) => s.t === '✓')).toMatchObject({ color: PALETTES.mocha.ok });
     expect(done.find((s) => s.t === 'Wire band to host')).toMatchObject({ color: PALETTES.mocha.sub });
     expect(done.some((s) => s.strike)).toBe(false); // critique 22: a done row is dim, never struck through
     expect(done.find((s) => s.t.trim() === 'DONE')).toMatchObject({ bg: PALETTES.mocha.ok, bold: true });
@@ -50,7 +50,7 @@ describe('slot rows', () => {
   });
   test('Latte: done falls back to text colour (the ok glyph is under 3:1 on the Latte panel)', () => {
     const done = todoRows(worldItems(), o(120, { ui: latte }))[1]!;
-    expect(done.find((s) => s.t === '●')).toMatchObject({ color: PALETTES.latte.text });
+    expect(done.find((s) => s.t === '✓')).toMatchObject({ color: PALETTES.latte.text });
     expect(done.every((s) => s.bg === PALETTES.latte.panel)).toBe(true);
   });
   test('NO_COLOR keeps bold and sets no colour at all', () => {
@@ -62,7 +62,7 @@ describe('slot rows', () => {
   test('rows keep todo order, with the per-subagent dispatch rows after the plan', () => {
     const rows = todoRows([{ content: 'sub', status: 'pending', origin: 'dispatch' }, { content: 'plan', status: 'pending' }], o(120));
     expect(text(rows[0]!)).toStartWith('ITEM');
-    expect([text(rows[1]!), text(rows[2]!)].map((r) => r.slice(0, 10).trim())).toEqual(['◇ plan', '◇ sub']);
+    expect([text(rows[1]!), text(rows[2]!)].map((r) => r.slice(0, 10).trim())).toEqual(['○ plan', '○ sub']);
   });
 });
 

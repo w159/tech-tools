@@ -42,14 +42,16 @@ function openStore(): LiveSnapshot {
 const hudRows = (s: LiveSnapshot, cols: number): string[] =>
   hudLines({ todos: s.todos, agents: hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)), root: s.root, phases: hudPhases(s) }, { cols, maxRows: 60, ui, now: s.now, settled: true }).map((r) => r.map((x) => x.t).join('').trimEnd());
 
-/** `label head -> state word` for each plan row, read from the printed rows. */
-function wordsOf(rows: readonly string[], s: LiveSnapshot): Record<string, string> {
+const GLYPH_WORD: Record<string, string> = { '◐': 'running', '◓': 'running', '◑': 'running', '◒': 'running', '○': 'queued', '✓': 'done', '✗': 'failed', '▲': 'blocked', '◉': 'waiting' };
+/** `label head -> state word` for each plan row, read from the printed rows (`byGlyph`: from the mark, for a surface with no word column). */
+function wordsOf(rows: readonly string[], s: LiveSnapshot, byGlyph = false): Record<string, string> {
   const out: Record<string, string> = {};
   for (const t of s.todos) {
     const head = t.content.replace(/^\s*\[[^\]]+\]\s*/, '').slice(0, 14);
     const row = rows.find((r) => r.includes(head));
     const m = row ? new RegExp(`(${WORDS})`).exec(row.slice(row.indexOf(head) + head.length)) : null;
-    out[head] = m ? m[1]! : 'absent';
+    const g = row ? /(\S) $/.exec(row.slice(0, row.indexOf(head)))?.[1] : undefined; // the status tab draws no state word on a plan row: the glyph before the label is the state
+    out[head] = byGlyph ? (g && GLYPH_WORD[g]) || 'absent' : m ? m[1]! : 'absent';
   }
   return out;
 }
@@ -58,7 +60,7 @@ describe('HUD TODO block and the route tab agree row by row', () => {
   test('a handed-back owner reads `done` on both (the settled rule), not `queued`', () => {
     const s = openStore();
     const hud = wordsOf(hudRows(s, 120), s);
-    const route = wordsOf(panelText(panelModelOf(worldSidebar('route', 119, s), ui, 119)), s);
+    const route = wordsOf(panelText(panelModelOf(worldSidebar('route', 119, s), ui, 119)), s, true);
     const hudWords = Object.fromEntries(Object.entries(hud).map(([k, v]) => [k, v === 'absent' ? 'done' : v])); // the settled block draws no word on a done row
     expect(route).toEqual(hudWords);
     expect(Object.values(hud)).not.toContain('returned');

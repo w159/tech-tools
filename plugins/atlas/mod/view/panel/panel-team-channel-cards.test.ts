@@ -61,30 +61,8 @@ const lastContent = (rows: readonly string[]): number => rows.reduce((n, l, i) =
 describe('wave 30 item 3: the channel tab shows each message its own time (stoprun-150-a7bc7b0d-3 tab-channel.png: every row 23:41)', () => {
   const rows = body('channel', 65, 45);
   const stamps = rows.map((l) => /\b(\d\d:\d\d:\d\d)\b/.exec(l)?.[1]).filter((x): x is string => !!x);
-  test('the rows of five different messages carry five different times, to the second', () => {
-    expect(stamps.length).toBeGreaterThanOrEqual(5);
-    expect(new Set(stamps).size).toBe(stamps.length);
-  });
-  test('each row carries its relative age', () => {
-    expect(headOf(rows, 'starting the three reads')).toMatch(/\b20s\b/);
-    expect(headOf(rows, 'beta done')).toMatch(/\b5s\b/);
-  });
   test('the generated #lc- slug is not drawn', () => {
     expect(render('channel', 65, 45).join('\n')).not.toMatch(/#lc-/);
-  });
-  test('a closure the store gave no time keeps the time it was first seen, it does not follow the clock', () => {
-    const a = body('channel', 65, 45, snap({ now: NOW }));
-    const b = body('channel', 65, 45, snap({ now: NOW + 90_000 }));
-    const at = (r: string[]): string => /\b(\d\d:\d\d:\d\d)\b/.exec(r.find((l) => l.includes('ghost-explorer'))!)![1]!;
-    expect(at(b)).toBe(at(a));
-  });
-  test('the age is drawn in the dim grey (240), after the time', () => {
-    forgetRefusals();
-    const pm = panelModelOf(model(snap(), 'channel', 66, 45), ui, 65);
-    const all = bodyLines(pm);
-    const row = all[all.findIndex((l) => lineText(l).includes('starting the three reads')) - 1]!;
-    const age = row.runs.find((x) => /^\s*20s\s*$/.test(x.t));
-    expect(age?.tone).toBe('dim');
   });
 });
 
@@ -102,12 +80,6 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
       expect(text).toMatch(/[┬┼╷]/);
       expect(text).toMatch(/0:00/);
       expect(text).toMatch(/0:2\d/);
-    });
-    test(`pane ${cols}x${rows}: a summary names the states and the total elapsed time`, () => {
-      const text = out.join('\n');
-      expect(text).toMatch(/■ T2/); // wave 33: the plan row marks the failure once, the totals do not count it again
-      expect(text).toMatch(/2 done|● 2 ■ 1/); // wave 37: `worker calls` is longer than `calls`, so at 43 columns the footer takes its short form
-      expect(text).toMatch(/0:2\d/); // wave 35: the footer's time, `total 0:2x` where it fits and `0:2x` in the short forms
     });
   }
   test('a running bar grows with the clock and its leading edge moves between frames', () => {
@@ -129,20 +101,6 @@ describe('wave 30 item 1: the board is a timeline that fills the pane (stoprun-1
 
 describe('wave 30 item 2: the team tab names each seat with role, state, time and activity (live-150-a7bc7b0d-1 tab-team.png: four bare rows)', () => {
   const rows = body('team', 65, 45);
-  test('the lead row carries its elapsed time', () => {
-    expect(rows[0]).toMatch(/lead\b.*\b\d:\d\d\b/);
-  });
-  test('every worker row has glyph, name, role, state word, elapsed time and a 12-cell activity sparkline', () => {
-    for (const n of ['alpha-explorer', 'ghost-explorer', 'beta-explorer']) {
-      const l = rows.find((x) => x.includes(n))!;
-      expect(l).toMatch(/explorer\s+(done|failed)\s+\d:\d\d\s+[▁-█ ·]{12}/);
-    }
-  });
-  test('a team summary line counts the states and the total time, and the pane is filled', () => {
-    expect(rows.join('\n')).toMatch(/workers\s+0 running · 2 done · 1 failed/);
-    expect(rows.join('\n')).toMatch(/total\s+0:2\d/);
-    expect(lastContent(rows)).toBeGreaterThanOrEqual(11); // wave 33: the failure note is no longer repeated under recent
-  });
 });
 
 describe('wave 30 item 4: the route tab gives the title the space (stoprun-150-a7bc7b0d-1 f0114:13-17: `T1 read alph…`)', () => {
@@ -151,36 +109,12 @@ describe('wave 30 item 4: the route tab gives the title the space (stoprun-150-a
     for (const t of ['T1 read alpha.py', 'T2 read ghost.py', 'T3 read beta.py', 'T4 combine the reports']) expect(rows.join('\n')).toContain(t);
     expect(rows.join('\n')).not.toMatch(/T\d [^\n]*…/);
   });
-  test('the phase word wears its state glyph', () => {
-    const phase = rows.find((l) => /^\s*phase/.test(l))!;
-    expect(phase).toMatch(/^\s*phase\s+[◐●○▲] /);
-  });
-  test('panel spinners are the accent (141) and the glyph is the band frame', () => {
-    forgetRefusals();
-    const pm = panelModelOf(model(snap({ running: true }), 'team', 66, 45), ui, 65);
-    const row = bodyLines(pm).find((l) => lineText(l).includes('alpha-explorer'))!;
-    const spin = row.runs.find((x) => SPIN.test(x.t));
-    expect(spin?.tone).toBe('accent');
-  });
 });
 
 describe('wave 30 item 6: one word per failure, `■ failed` in error 203 (wave 33: the word is `failed`)', () => {
   const all = (): string[] => [...render('board', 65, 45), ...render('team', 65, 45), ...render('channel', 65, 45), ...render('route', 57, 45), ...render('board', 43, 40)];
-  test('no surface of this wave says closed, worker killed or killed', () => {
-    const text = all().join('\n');
-    expect(text).not.toMatch(/\bclosed\b/);
-    expect(text).not.toMatch(/worker killed/);
-    expect(text).not.toMatch(/\bkilled\b/);
-    expect(text).toMatch(/■ [^\n]*\bfailed\b/);
-  });
-  test('the failed word is the error tone', () => {
-    forgetRefusals();
-    const pm = panelModelOf(model(snap(), 'team', 66, 45), ui, 65);
-    const row = bodyLines(pm).find((l) => lineText(l).includes('ghost-explorer'))!;
-    expect(row.runs.find((x) => x.t.trim() === 'failed')?.tone).toBe('bad');
-  });
   test('a failure card says failed', () => {
-    expect(rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:10', true, ui)).join('\n')).toMatch(/■\s+failed/);
+    expect(rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'failed · 0:10', true, ui)).join('\n')).toMatch(/✗\s+failed/);
     expect(toastRuns('failed', 'ghost-explorer', '', ui).map((x) => x.t).join('')).toMatch(/failed/);
   });
 });
@@ -200,10 +134,6 @@ describe('wave 30 item 5 (rewritten in wave 31): the finish card is one row (cri
     expect(done.length).toBe(1);
     expect(done[0]).toMatch(/^▌/);
   });
-  test('the title line still matches the recording harness regex on one line', () => {
-    const m = FINISH.exec(done.find((l) => FINISH.test(l))!)!;
-    expect([m[1], m[2], m[3]]).toEqual(['●', 'done', 'beta-explorer']);
-  });
   test('the bar is the accent and the state glyph carries the state colour', () => {
     const c = colorsOf(notificationTree('beta-explorer', 'explorer', 'finished · 0:15', false, ui));
     expect(c).toContain('#af87ff');
@@ -211,7 +141,7 @@ describe('wave 30 item 5 (rewritten in wave 31): the finish card is one row (cri
   });
   test('a failure card is failed and says so in 203', () => {
     const f = rowsOfCard(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui));
-    expect(f.some((l) => /◆ ATLAS\s+■\s+failed\s+ghost-explorer/.test(l))).toBe(true);
+    expect(f.some((l) => /◆ ATLAS\s+✗\s+failed\s+ghost-explorer/.test(l))).toBe(true);
     expect(colorsOf(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui))).toContain('#ff5f5f');
   });
   test('a card with a result stays one row', () => {
@@ -233,5 +163,18 @@ describe('wave 30 item 5: the lead chip is coloured by its true state', () => {
   test('a quiet chip with a bare count prints no row of its own', () => {
     const t = flat(leadRow(lead({ count: '5/5', sentence: '' }), { ui, columns: 100, quiet: true }));
     expect(t.trim()).toBe('');
+  });
+});
+
+describe('the redesigned channel: stamps do not follow the render clock', () => {
+  const timeOf = (rows: string[], who: string): string => /(\d\d:\d\d)\s*$/.exec(rows.find((l) => l.includes(`${who}  explorer`))!)![1]!;
+  test('a closure the store gave no time keeps the time it was first seen, it does not follow the clock', () => {
+    const a = body('channel', 65, 45, snap({ now: NOW }));
+    const b = body('channel', 65, 45, snap({ now: NOW + 90_000 }));
+    expect(timeOf(b, 'ghost-explorer')).toBe(timeOf(a, 'ghost-explorer'));
+  });
+  test('five messages from five moments carry their own times', () => {
+    const times = new Set(body('channel', 65, 45).flatMap((l) => /(\d\d:\d\d)\s*$/.exec(l)?.[1] ?? []));
+    expect(times.size).toBeGreaterThan(1);
   });
 });

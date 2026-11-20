@@ -1,5 +1,5 @@
 // hud110: at 110 columns the docked side pane leaves the transcript about 61 cells. The HUD used to draw no SUBAGENTS block below 80 columns
-// (tier 'min'), so live-110 frames showed the TODO box and the band but no `▸ SUBAGENTS` title while an agent ran (workers_any_surface 0.0).
+// (tier 'min'), so live-110 frames showed the TODO box and the band but no `SUBAGENTS` title while an agent ran (workers_any_surface 0.0).
 // The block now shows at every width: its ribbon, the column names and a row per agent, with the counts giving way before the row overflows.
 import { describe, expect, test } from 'claude-code/testing';
 import { runsString, type Ui } from '../../design/atlas-ui';
@@ -28,16 +28,16 @@ describe('SUBAGENTS block at 61 transcript cells (110 columns with the pane dock
     for (const budget of [12, 14, 18, 27]) {
       test(`${n} running, ${budget} rows: the title and one row per agent show, every row fits 61 cells`, () => {
         const hud = hudAt(n, budget);
-        expect(hud.some((r) => r.includes('▸ SUBAGENTS'))).toBe(true);
+        expect(hud.some((r) => r.includes('SUBAGENTS'))).toBe(true);
         // State 39: the rows a box leaves out are counted on one summary row inside it, which costs a row; where the slot cannot hold the plan rows, that row and the table, SUBAGENTS folds to its one title row and its tally
         // (`◒ 3 run`) while every running plan row keeps its place (wave 38). At 61 cells AGENT is 12 cells wide, so a name ends in `…` and LAST keeps 14.
-        const table = hud.some((r) => /AGENT\s+STATE/.test(r) || /^╭─.*▸ SUBAGENTS/.test(r)); // state 40: a tight slot drops the column names before a running worker's row: the table is its own box (`╭─ … SUBAGENTS`), not the plan's closing rule
+        const table = hud.some((r) => /AGENT\s+ROLE\s+STATE/.test(r) || /^╭─.*SUBAGENTS/.test(r)); // state 40: a tight slot drops the column names before a running worker's row: the table is its own box (`╭─ … SUBAGENTS`), not the plan's closing rule
         for (const name of NAMES.slice(0, n)) {
           const short = name.slice(0, 11);
-          if (table) expect(hud.filter((r) => r.trimStart().startsWith(short) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)
+          if (table) expect(hud.filter((r) => new RegExp(`^[│▌] \\S ${short}`).test(r) && /running/.test(r))).toHaveLength(1); // wave 36: the table row (the plan row only names its owner at the end)
           else expect(hud.filter((r) => r.includes(short) && /running/.test(r))).toHaveLength(1);
         }
-        if (!table) expect(hud.find((r) => r.includes('▸ SUBAGENTS'))).toContain(`${n} run`);
+        if (!table) expect(hud.find((r) => r.includes('SUBAGENTS'))).toContain(`${n} run`);
         for (const r of hud) expect(textWidth(r)).toBe(COLS);
       });
     }

@@ -105,7 +105,7 @@ describe('step 2: uniform cards (critique 36: beta without a count beside gamma 
   test('a failed card has the column too', () => {
     resetWorkerFacts();
     const card = flat(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui, false, { cols: 80 }));
-    expect(card).toMatch(/■ failed {2}ghost-explorer\s+0:06 · -$/);
+    expect(card).toMatch(/✗ failed {2}ghost-explorer\s+0:06 · -$/);
     expect(flat(notificationTree('ghost-explorer', 'explorer', 'killed · 6s', true, ui, false, { cols: 80, calls: 2 }))).toMatch(/0:06 · 2 calls$/);
   });
 });
@@ -127,24 +127,6 @@ describe('step 3: the run card clock (critique 36: card 0:42, band 0:43)', () =>
 });
 
 describe('step 4: events (critique 36: `no events yet · 0 messages` after three agents finished)', () => {
-  test('a worker that finished is an event, and the empty line is gone', () => {
-    forgetPhases();
-    const t = render('route', 57, 41);
-    expect(t.join('\n')).not.toMatch(/no events yet/);
-    const ev = t.filter((l) => /^\s+\+\d:\d\d\s/.test(l));
-    expect(ev.some((l) => /alpha-explorer\s+done/.test(l))).toBe(true);
-    expect(ev.some((l) => /beta-explorer\s+done/.test(l))).toBe(true);
-    expect(ev.some((l) => /ghost-explorer\s+failed/.test(l))).toBe(true);
-    expect(t.find((l) => /^\s+\d+ messages?\s*$/.test(l))).toMatch(/^\s+1 message\s*$/); // the channel's own count stays the channel's: the one failure post, not the finishes
-  });
-  test('an event keeps the stamp it was first drawn with (critique 36: +0:20, +0:19, +0:18 across frames)', () => {
-    forgetPhases();
-    const stamps = (run: Run): string[] => render('route', 57, 41, snap(), run).filter((l) => /^\s+\+\d:\d\d\s/.test(l)).map((l) => l.trim());
-    const first = stamps({ kind: 'working', secs: 57, startMs: NOW - 57000 });
-    expect(first.length).toBeGreaterThan(0);
-    // The band's run start is the snapshot clock less the elapsed time: once the run stops counting it moves on with every frame.
-    for (const drift of [1000, 2000, 3000]) expect(stamps({ kind: 'working', secs: 57, startMs: NOW - 57000 + drift })).toEqual(first);
-  });
 });
 
 describe('step 5: the board meter and header (critique 36: all green over a failed T2, `2 dispatches` over one row)', () => {
@@ -198,15 +180,6 @@ describe('step 6: the 110 board (critique 36: beta\'s bar missing, axis 0:30 und
     expect(t).not.toMatch(/\((lead|\w+-explorer)\)/);
     expect(t).toMatch(/T5 write the final/); // the pane's room still cuts a 26-cell title (`…`), but never on the suffix
   });
-  test('the footer and the team total both say worker calls, and agree', () => {
-    const foot = board(57, 41).at(-1)!;
-    const n = /(\d+) worker calls/.exec(foot)?.[1];
-    expect(n).toBeDefined();
-    forgetPhases();
-    const team = render('team', 57, 41, snap(), run36).find((l) => /^\s+total\s/.test(l)) ?? '';
-    expect(/(\d+) worker calls/.exec(team)?.[1]).toBe(n);
-    expect(n).toBe('9'); // 4 + 2 + 3: the lead's own ten are not in it, and the label says so
-  });
 });
 
 describe('step 7: the live board leaves no blank band above the footer (critique 36: ~25%)', () => {
@@ -219,5 +192,15 @@ describe('step 7: the live board leaves no blank band above the footer (critique
     const foot = t.findLastIndex((l) => /\d+ done/.test(l));
     expect(foot).toBeGreaterThan(0);
     expect(t.slice(foot + 1).every((l) => l.trim() === '')).toBe(true);
+  });
+});
+
+describe('the redesigned channel: an event keeps the stamp it was first drawn with (critique 36)', () => {
+  test('a run origin that moves with every frame never moves a system line or a message time', () => {
+    forgetPhases();
+    const stamps = (run: Run): string[] => render('channel', 57, 41, snap(), run).filter((l) => /\d\d:\d\d\s*$/.test(l)).map((l) => l.trim());
+    const first = stamps({ kind: 'working', secs: 57, startMs: NOW - 57000 });
+    expect(first.length).toBeGreaterThan(0);
+    for (const drift of [1000, 2000, 3000]) expect(stamps({ kind: 'working', secs: 57, startMs: NOW - 57000 + drift })).toEqual(first);
   });
 });

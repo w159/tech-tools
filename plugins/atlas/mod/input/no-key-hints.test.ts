@@ -62,9 +62,9 @@ describe('no printed key hints', () => {
       noHints([...fillRows(m, 3), ...headerRows(m), ...panelLines(m)].map(lineText), `layout ${tab}`);
     }
   });
-  test('the message field placeholder is `message`', () => {
-    const input = all(pane(150, 'team', true)).find((x) => x.kind === 'Input')!;
-    expect(input.props.placeholder).toBe('message');
+  test('the message field placeholder names the lead and the @name idiom', () => {
+    const input = all(pane(150, 'channel', true)).find((x) => x.kind === 'Input')!;
+    expect(input.props.placeholder).toBe('Message the lead, or @name an agent');
   });
   test('no Button binds a hotkey', () => {
     for (const t of [bandOf(150, false), pane(150, 'team', true), pane(110, 'route', false), pane(60, 'gates', true)]) for (const b of buttons(t)) expect(b.props.hotkey, String(b.props.key)).toBeUndefined();
@@ -78,10 +78,10 @@ describe('every Button looks clickable', () => {
     expect(texts.length, String(b.props.key)).toBeGreaterThan(0);
     for (const t of texts) expect(t.props.hover, `${b.props.key} hover`).toBeDefined();
     const first = texts[0]!.props;
-    const chip = /^(band|tab):/.test(String(b.props.key)); // round 3 (E8): the `▸ health` button is a chip too, the band's only one
+    const chip = /^(band|tab|to):/.test(String(b.props.key)); // round 3 (E8): the `▸ health` button is a chip too, the band's only one
     const later = /#[1-9]\d*$/.test(String(b.props.key)); // a multi-piece chip (`band:gates#0..2`): only its first piece opens with the chip's leading cell
     if (chip && later) expect(first.bold === true, `${b.props.key} bold`).toBe(true);
-    else if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ \S.* $/); expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); }
+    else if (chip) { expect(String(first.children), String(b.props.key)).toMatch(/^ ?\S.* $/); if (String(b.props.key).startsWith('band:')) expect(first.bold === true || first.inverse === true, `${b.props.key} bold`).toBe(true); } // a tab or @name chip: the lit one is filled and bold (below), the others sit in the sub tone
     else expect(String(first.children), String(b.props.key)).toMatch(CHEVRON);
   };
   for (const cols of [150, 110]) {
@@ -93,7 +93,7 @@ describe('every Button looks clickable', () => {
   }
   test('the lit tab is a filled chip, the others are not', () => {
     const strip = buttons(pane(150, 'gates', true)).filter((b) => String(b.props.key).startsWith('tab:'));
-    expect(strip.length).toBe(6);
+    expect(strip.length).toBe(4);
     const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle (the accent fill; inverse with no colour)
     const lit = strip.filter((b) => all(b).some((x) => x.kind === 'Text' && x.props.inverse === litStyle.inverse && x.props.backgroundColor === litStyle.backgroundColor));
     expect(lit.map((b) => b.props.key)).toEqual(['tab:gates']);
@@ -127,18 +127,18 @@ describe('c: no key hint is drawn anywhere in the side panel (wave 43)', () => {
 });
 
 describe('c: every tab is a click chip and pressing it acts (no key is bound)', () => {
-  test('the panel strip has six chips without a hotkey and each press reaches its handler', () => {
+  test('the panel strip has four chips without a hotkey and each press reaches its handler', () => {
     const t = pane(130);
     const chips = all(t).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
-    expect(chips).toHaveLength(6);
-    expect(chips.map((b) => b.props.hotkey)).toEqual(Array(6).fill(undefined));
-    expect(PANEL_TABS.map((p) => p.id)).toEqual(['route', 'team', 'channel', 'gates', 'core']);
+    expect(chips).toHaveLength(4);
+    expect(chips.map((b) => b.props.hotkey)).toEqual(Array(4).fill(undefined));
+    expect(PANEL_TABS.map((p) => p.id)).toEqual(['core', 'route', 'gates', 'channel']);
     calls.length = 0;
     for (const b of chips) b.props.onPress();
-    expect(calls.sort()).toEqual(['board', 'view:channel', 'view:core', 'view:gates', 'view:route', 'view:team']);
+    expect(calls.sort()).toEqual(['view:channel', 'view:core', 'view:gates', 'view:route']);
   });
   test('the chips stay on a 56-column strip and on a 36-column one, still without a hotkey', () => {
-    for (const [cols, count] of [[56, 6], [36, 3 + 1]] as const) { // 36: three tab chips and the `more ›` chip (D14)
+    for (const [cols, count] of [[56, 4], [36, 2 + 1]] as const) { // 36: two tab chips and the `more ›` chip (D14)
       const chips = all(pane(cols)).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
       expect(chips, `${cols}`).toHaveLength(count);
       expect(chips.every((b) => b.props.hotkey === undefined)).toBe(true);

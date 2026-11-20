@@ -84,26 +84,6 @@ const rowOf = (t: string[], re: RegExp): string => t.find((l) => re.test(l)) ?? 
 const glyphWord = (l: string): string => `${/[●■▲◇◐◓◑◒]/.exec(l)?.[0] ?? ''} ${/\b(done|failed|blocked|killed|queued|running)\b/.exec(l)?.[1] ?? ''}`;
 
 describe('step 1: one state per item at every width (critique 35: T2 `● done` at 150 and `▲ blocked` at 110 over a failed worker)', () => {
-  test('a blocked row whose worker failed is `■ failed` at 150 and at 110', () => {
-    for (const cols of [57, 38]) {
-      const t2 = rowOf(board(cols, tailed(snap())), /T2 read ghost/);
-      expect([cols, glyphWord(t2)]).toEqual([cols, '■ failed']); // 28d53608 at 110: `▲ blocked`
-    }
-  });
-  test('the error colour: the glyph and the word of that row are 203', () => {
-    for (const cols of [57, 38]) {
-      forgetPhases();
-      const all = texts(tree('board', cols, 41, tailed(snap())));
-      expect(all.find((x) => x.t.includes('■') && x.color === RED)).toBeDefined();
-      expect(all.find((x) => /^failed\s*$/.test(x.t) && x.color === RED)).toBeDefined();
-    }
-  });
-  test('a row the lead closed over the dead worker reads the same at both widths, never the green `done`', () => {
-    const closed = withStatus(tailed(snap()), '2', 'completed');
-    const [a, b] = [57, 38].map((cols) => rowOf(board(cols, closed), /T2 read ghost/));
-    expect(glyphWord(a!)).toBe(glyphWord(b!));
-    expect(a).toMatch(/^\s*■ /); // 28d53608 at 150: `● done` in 114
-  });
   test('an item the lead holds says `lead` in the secondary grey 245 in the owner column', () => {
     const short = ({ ...(snap() as object), todos: (snap() as unknown as { todos: { content: string }[] }).todos.map((t, i) => ({ ...t, content: /^T\d/.test(t.content) ? t.content.replace(/^(T\d) .*/, '$1 go') : 'dispatch row' })) }) as never;
     const t = board(57, short);
@@ -115,11 +95,6 @@ describe('step 1: one state per item at every width (critique 35: T2 `● done` 
 });
 
 describe('step 2: the 110 board (critique 35: titles cut to `(alpha…`, an axis that stopped at 0:15 under a 0:26 bar)', () => {
-  test('no title is cut at 110 and the `(agent)` suffix is gone', () => {
-    const t = board(38, tailed(snap()));
-    expect(t.join('\n')).not.toMatch(/\(alpha|\(beta|\(ghost|…\)/);
-    expect(rowOf(t, /T1 read alpha/)).toMatch(/● T1 read alpha\.py\s+done/);
-  });
   test('the axis runs one tick past the longest bar and its labels cover the whole span', () => {
     const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 26, startMs: 0, endMs: 26_000 }, { name: 'ghost-explorer', state: 'failed' as const, secs: 10, startMs: 1_000, endMs: 11_000 }];
     for (const cols of [38, 57, 100]) {
@@ -144,11 +119,6 @@ const flat = (n: unknown): string => (typeof n === 'string' ? n : n && typeof n 
 describe('step 3: one clock (critique 35: board 0:31, team axis 0:34, footers 0:08 and 0:31, band 0:39)', () => {
   const BAND: Run = { kind: 'working', secs: 39, startMs: NOW - 39000 };
   const withBand = (view: SidebarView): string[] => { forgetPhases(); return withGates(snap(), view, 57, 41, BAND); };
-  test('the board total, the team axis end and the phase clock all print the band\'s seconds', () => {
-    expect(withBand('board').at(-1)).toMatch(/total 0:39\b/);
-    expect(withBand('team').find((l) => /^\s+0:00\s+0:\d\d\s*$/.test(l))).toMatch(/0:00\s+0:39\s*$/); // 28d53608: 0:34
-    expect(withBand('route').join('\n')).not.toMatch(/phase.*\d:\d\d/); // slice S3: the stepper carries no clock; the run's seconds are the band's alone
-  });
   test('the closing footer prints no run time (the band\'s clock is the one) and no partial `+N done` beside a band clock', () => {
     const s = { ...(snap('done') as object), counts: { done: 5, total: 5, byPhase: {} }, squad: [], activity: {} } as never;
     const own = flat(durationTree(s, { durationMs: 8000 }, { turnStart: NOW - 8000, runStart: NOW - 8000, done: 1 }, NOW, ui));
@@ -173,7 +143,7 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
     const ids: string[] = [];
     await placeFinished(engine(ids), runningAt(NOW - 1000), cleanAt(NOW));
     const card = flat(placedTree(ids.find((i) => i.startsWith('done-run'))!, ui));
-    expect(card).toMatch(/^▌ ◆ ATLAS\s+● done\s+5\/5 · 2 workers$/);
+    expect(card).toMatch(/^▌ ◆ ATLAS\s+✓ done\s+5\/5 · 2 workers$/);
     expect(card.match(/done/g)).toHaveLength(1); // 28d53608: `done  run  5/5 done · 3 workers`
     forgetPlaced();
   });
@@ -225,43 +195,26 @@ describe('step 4: one done line (critique 35: `▌ done complete` under the run 
 describe('step 5: the status view (critique 35: `events · no events yet` over a board that listed `+0:19 ghost-explorer failed`)', () => {
   const rows = (s: never = snap(), run: Run = RUN, gates: unknown[] = GATES): string[] => { forgetPhases(); return withGates(s, 'route', 57, 41, run, gates); };
   const noPosts = (): never => ({ ...(snap() as object), notes: [] }) as never;
-  test('events are the board\'s recent list, the failure row included, stamped on the run clock', () => {
-    const t = rows(noPosts());
-    const ev = t.slice(t.findIndex((l) => /^\s*events\s*$/.test(l)) + 1).filter((l) => /^\s+\+\d:\d\d\s/.test(l));
-    expect(ev.length).toBeGreaterThan(0);
-    expect(ev.join('\n')).toMatch(/\+0:\d\d\s+ghost-explorer\s+failed/);
-    expect(t.join('\n')).not.toMatch(/no events yet/); // 28d53608
-  });
-  test('the last five events, never more', () => {
-    const many = { ...(snap() as object), notes: Array.from({ length: 9 }, (_, i) => ({ seq: i + 1, ts: new Date(NOW - 50000 + i * 4000).toISOString(), owner: 'lead', to: 'all', text: `post number ${i + 1}` })) } as never;
-    const t = rows(many);
-    expect(t.slice(t.findIndex((l) => /^\s*events\s*$/.test(l)) + 1).filter((l) => /^\s+\+\d:\d\d\s/.test(l))).toHaveLength(5);
-  });
-  test('a gate that fails never reads as a passing sentence beside `warning`', () => {
-    const gates = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'c', label: 'Dispatches followed the plan', ok: false }] }, { id: 'completion', title: 'Completion', lines: [{ id: 'a', label: 'Todos drained', ok: true }] }];
-    const row = rows(snap(), RUN, gates).find((l) => /Tool routing/.test(l))!;
-    expect(row).toMatch(/warning/);
-    expect(row).not.toMatch(/warning\s+Dispatches followed the plan/); // 28d53608
-    expect(row).toMatch(/not met: Dispatches/);
-    const fixed = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'c', label: 'Dispatches followed the plan', ok: false, fix: 'dispatch through the planned team' }] }];
-    expect(rows(snap(), RUN, fixed).find((l) => /Tool routing/.test(l))).toMatch(/warning\s+dispatch through/);
-  });
-  test('an empty channel is a ribbon and a dim skeleton, and the status view says `0 messages`', () => {
-    const none = { ...(snap() as object), squad: [], todos: [], notes: [], activity: {}, comms: [], members: [] } as never;
-    expect(rows(none, { kind: 'idle', secs: 0, startMs: NOW }).filter((l) => /^\s*0 messages\s*$/.test(l))).toHaveLength(1);
-    forgetPhases();
-    const ch = withGates(none, 'channel', 57, 41, RUN);
-    expect(ch.filter((l) => /0 messages/.test(l))).toHaveLength(1); // round 3 (E12): the ribbon carries the live fact, a dim skeleton follows
-    forgetPhases();
-    expect(texts(tree('channel', 57, 41, none)).find((x) => /···/.test(x.t))?.color).toBe(DIM);
-  });
-  test('the pane keeps one width in every state and its rules are the 236 grey', () => {
-    for (const run of [RUN, { kind: 'blocked', secs: 20, startMs: NOW - 20000 } as Run, { kind: 'done', secs: 52, startMs: NOW - 52000 } as Run, { kind: 'idle', secs: 0, startMs: NOW } as Run]) {
-      forgetPhases();
-      const root = tree('route', 57, 41, snap(), run);
-      expect(root.props.width).toBe(56);
-      for (const x of texts(root).filter((y) => /^─{3,}$/.test(y.t))) expect(x.color).toBe('#303030');
-    }
-  });
 });
 noteRunSecs(undefined);
+
+describe('one state per item at every width (redesigned status tab: critique 35, a plan row over a failed worker)', () => {
+  const planRow = (cols: number, s: never): { text: string; runs: { t: string; tone: string }[] } => {
+    forgetRefusals(); forgetBandFrame();
+    const line = bodyLines(panelModelOf(model(s, 'route', cols + 1, 41, RUN), ui, cols)).find((l) => /T2 read ghost/.test(lineText(l)))!;
+    return { text: lineText(line), runs: line.runs };
+  };
+  test('a blocked row whose worker failed is `✗` at every width, never `▲ blocked`', () => {
+    for (const cols of [57, 38, 110]) expect([cols, planRow(cols, snap()).text.trimStart().slice(0, 4)]).toEqual([cols, '▸ ✗ ']);
+  });
+  test('the error colour: the glyph and the title of that row are the error tone', () => {
+    const { runs } = planRow(57, snap());
+    expect(runs.find((x) => x.t.includes('✗'))?.tone).toBe('bad');
+    expect(runs.find((x) => x.t.includes('T2 read ghost'))?.tone).toBe('bad');
+  });
+  test('the plan says `failed` for it and the team tally counts the failed worker once', () => {
+    const rows = body('route', 57, 41, snap());
+    expect(rows.find((l) => l.includes(' TEAM'))).toMatch(/✓ 2 done +✗ 1 failed/);
+    expect(rows.filter((l) => /✗ ghost-explorer/.test(l))).toHaveLength(1);
+  });
+});

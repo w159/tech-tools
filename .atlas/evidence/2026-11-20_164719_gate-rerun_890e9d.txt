@@ -1,0 +1,14 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas
+command: cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas && bun test mod 2>&1 | tail -4
+exit: 0
+seconds: 13.62
+--- output tail ---
+bun test v1.4.2 (744846f84)
+
+ 3868 pass
+ 31 skip
+ 0 fail
+ 68024 expect() calls
+Ran 3899 tests across 237 files. [13.61s]
+

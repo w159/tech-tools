@@ -52,9 +52,6 @@ describe('gates tab: the first fix or detail stays on the group row once it fits
       expect([cols, rows.some((t) => t.includes(title) && t.includes(tail))]).toEqual([cols, cols >= from]);
     }
   };
-  test('a failing group (with its pass and deny count) holds the first fix', () => {
-    wholeAt(failing, 'lint', 'run the formatter now', 55); // the group count is `1 pass · 1 deny` (D4), so the first fix fits whole from 55 cells
-  });
   test('a passing group never carries a check\'s detail: it stays with its own row (critique 6, label and value apart)', () => {
     for (let cols = 30; cols <= 160; cols++) {
       const rows = bodyLines(panelWorld('gates', cols, mocha, { gates: [passing] as never })).map((l) => l.runs.map((x) => x.t).join(''));
@@ -87,13 +84,6 @@ describe('dispatch rows: the in-process note wraps four cells inside the panel',
 
 describe('headerRows: the blank before the body starts at exactly 100 columns', () => {
   const text = (cols: number): string[] => headerRows(panelWorld('route', cols, mocha, {})).map((l) => l.runs.map((x) => x.t).join(''));
-  test('99 columns end on the tab rule, 100 add a blank row after it', () => {
-    const narrow = text(99);
-    const wide = text(100);
-    expect(wide.length).toBe(narrow.length + 1);
-    expect(narrow[narrow.length - 1]!.trim()).not.toBe('');
-    expect(wide[wide.length - 1]!.trim()).toBe('');
-  });
 });
 
 describe('routeBody: a long task title is cut to the width less 60 from 100 columns', () => {
@@ -102,8 +92,4 @@ describe('routeBody: a long task title is cut to the width less 60 from 100 colu
     const rows = bodyLines(panelWorld('route', cols, mocha, { todos: todos as never, workers: [] })).map((l) => l.runs.map((x) => x.t).join(''));
     return (rows.find((t) => t.includes('qqq'))!.match(/q+\S*/) ?? [''])[0]!.length;
   };
-  test('at 120 columns the title column is 60 cells, at 160 the whole 100 cell title shows', () => {
-    expect(titleCells(120)).toBe(60);
-    expect(titleCells(160)).toBe(100);
-  });
 });

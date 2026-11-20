@@ -272,7 +272,7 @@ function addMissingActivity(activity: Record<string, ActivityEntry>, i: DeriveIn
   for (const s of i.squad) {
     if (activity[s.name] !== undefined) continue;
     const e = squadOnlyEntry(s, i.now);
-    activity[s.name] = ENDED.has(e.mood) ? { ...e, since: memoSince(memo, s.name, i.now) } : e; // an ended pane worker's finish is stamped once, so its run time stops
+    activity[s.name] = ENDED.has(e.mood) ? { ...e, since: s.endedAt ?? memoSince(memo, s.name, i.now) } : e; // an ended pane worker's finish: its own end stamp, else stamped once when first seen, so its run time stops
   }
   activity[LEAD] ??= blank(i.now);
 }

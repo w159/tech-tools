@@ -45,7 +45,8 @@ function todosOf(s: LiveSnapshot, workers: readonly PanelWorker[]): PanelTodo[] 
   const rows = s.todos.length ? ownPlan(s.todos, s.sessionId) : s.todoGroups.flatMap((g) => g.items);
   const owners = ownerStatesOf(hudAgents(liveWorkers(s, s.now), s.squad, queuedMembers(s)));
   return rows.map((it): PanelTodo => {
-    const owner = it.owner ?? undefined;
+    // G3: a row naming its worker only in the title (`T1 read a.py (alpha-explorer)`, owner null) is that worker's row, as in the HUD (todoModel `inferred`).
+    const owner = it.owner ?? [...owners.keys()].find((n) => it.content.includes(`(${n})`)) ?? undefined;
     const w = owner ? workers.find((x) => x.name === owner) : undefined;
     const oc = owner ? ownerOutcome(owners, owner) : undefined; // the owner's latest instance (`beta-explorer #2`): the same state as the HUD and the board (critique 19 A3)
     const ruled = todoState(it.status, oc?.state, oc?.retried); // the one rule (data/todos todoState) over the HUD's owner map: a failed owner fails the item, a waiting one blocks it
@@ -148,7 +149,7 @@ export function panelModelOf(m: SidebarModel, ui: Ui = lookUi(), cols: number = 
   // The closure is a post too (wave 24): a plan row the lead closed over a failed worker reads `T2 dispatch closed after Stop refusal · ghost-explorer`, whole names, from the lead.
   const stop = gateTally(m.gates).stop;
   const todos = todosOf(s, workers);
-  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} failed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'done' }));
+  const closures: ChannelNote[] = todos.filter((t) => t.state === 'done' && t.word === DONE_DOUBT && t.owner).map((t) => ({ ts: '', seq: 0, owner: 'lead', to: 'all', text: `${/^T\d+\b/i.exec(t.label)?.[0] ?? 'row'} failed${stop?.blocked ? ' after Stop refusal' : ''} · ${t.owner}`, channel: s.channel ?? '', kind: 'failed' })); // the closure of a failed item is a failure: red ✗, never the green done check
   const sc = <T extends string | null | undefined>(t: T): T => (typeof t === 'string' ? (scrub(t) as T) : t);
   const gates: PanelGate[] = m.gates.map((g) => ({ id: g.id, title: sc(g.title), error: sc(g.error), lines: g.lines.map((l) => ({ id: l.id, label: sc(l.label), ok: l.ok, detail: sc(l.detail), fix: sc(l.fix) })) }));
   return {

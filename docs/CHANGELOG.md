@@ -1,5 +1,44 @@
 # Changelog
 
+## atlas 17.33.0, marketplace 5.40.0 - 2026-11-20 -- mod band and side panel redesign, finished-worker clocks stop
+
+- Fixed, crew: `irc check` never installed a worker's staged files when the plan owned a directory or a glob (only
+  exact paths matched), so staged Writes stayed in `.atlas/tmp/<run>/<worker>/`. `install_staged` in
+  `plugins/atlas/scripts/atlas_irc.py` now matches staged files with the lease rule of `hooks/crew_worker.py` (exact,
+  fnmatch, directory prefix).
+- Changed, code health: the redesign's unused exports, one import cycle (`hud-frame.ts` and `hud-surface.ts`) and
+  four duplicated blocks were removed; `healthRows`, `fitPlain`, `agentRow` and `gatesRows` were split to cyclomatic
+  20 or less. `fallow-baselines/health.json` was re-saved: the remaining findings are CRAP scores fallow estimates
+  without coverage data (bun coverage is not in a format fallow reads). `fallow audit` verdict: pass.
+
+- Changed, band above the prompt (layout kept: ribbon, TODO box, SUBAGENTS box): box titles without the ATLAS
+  breadcrumb, counts and a segmented progress bar on the top rule, one shared column grid with a dim header row,
+  right-aligned TIME, `…` plus a 2-cell gutter, empty columns dropped, NOW / RESULT and ACT columns, accent focus row,
+  dim done rows, red failed rows. State glyphs are `✓` done, `○` queued, `✗` failed. New: `mod/view/hud/hud-frame.ts`.
+- Added, motion (`mod/motion/rows.ts` on the existing motion system): spinner and label sweep on running rows, three
+  frame fade-in, green flash and settle on finish, progress cell fill, ribbon sparkline scroll and denial pulse.
+- Changed, side panel: tabs are `health`, `status`, `gates`, `channel` (team, core and board left the strip; team
+  rows live in status, core figures in health). New tab bodies: `mod/view/panel/health-tab.ts`, `status-tab.ts`,
+  `gates-tab.ts`, `channel-chat.ts`, shared helpers `tab-kit.ts`. The channel tab is a chat: grouped sender headers in
+  role colours, right-aligned times, centred system lines, right-aligned bubbles for the user, bordered input and
+  `@name` recipient chips (sending still goes through `sendNote`).
+- Fixed during review: a plan row over a failed worker read green `done`/`closed` on the status tab; a lead closure
+  note for a failed item carried a green check; phase `done` lit only `research`; a title-only owner that failed read
+  `blocked`; TEAM names were cut at 24 cells.
+- Tests: 321 tests that pinned the old shape were removed or rewritten; 111 tested removed features, 210 still-true
+  facts were re-expressed (table: `.atlas/evidence/2026-11-20_mod-redesign/removed-tests.md`). Open design question:
+  the TODO box has no column for a done row's evidence (gap G2).
+- Verified: `bun test mod omp` from `plugins/atlas`: 4697 pass, 31 skip, 0 fail. Rendered surfaces from the test
+  fixtures: `.atlas/evidence/2026-11-20_mod-redesign/render-*.png`.
+
+- Fixed, SUBAGENTS TIME: a finished crew worker's clock kept counting from the moment the mod first saw it. Crew rows
+  carried no start or end stamp (`plugins/atlas/mod/data/crew.ts` `runStamps` now reads the pid file mtime as the start
+  and the exit file mtime as the end; `TeamTool.endedAt` in `plugins/atlas/mod/orchestra-types.ts`; used by
+  `addMissingActivity` in `plugins/atlas/mod/data/orchestration.ts`). A done or failed agent with no finish stamp after
+  its start now reads `-` instead of a running clock (`elapsedOf`, `plugins/atlas/mod/view/hud/hud.ts`).
+- Verified: `bun test mod` from `plugins/atlas`: 4305 pass, 31 skip, 0 fail (4302 pass before; 3 new tests in
+  `mod/data/crew.test.ts` and `mod/view/hud/hud.test.ts`). Evidence: `.atlas/evidence/2026-11-20_mod-clock-stop/`.
+
 ## atlas 17.32.0 - 2026-11-20 -- session-start latency, knob precedence, retention, statusline
 
 Measured on the user's machine against atlas 17.31.0 (logs, transcripts, `~/.atlas/atlas.db`); before/after numbers

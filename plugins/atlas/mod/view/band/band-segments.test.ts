@@ -34,7 +34,7 @@ const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const handlers = { openView: () => undefined, toggleTodos: () => undefined };
 const NAMES = ['alpha', 'beta', 'gamma'].map((n) => `${n}-explorer`);
 /** State 39: at 110 columns (a 56-cell body) AGENT is 12 cells, so a longer name ends in `…`. */
-const nameAt = (n: string, body: number): string => (body < 80 && n.length > 12 ? `${n.slice(0, 11)}…` : n);
+const nameAt = (n: string, _body: number): string => n; // the redesigned grid keeps a whole name at every width the table shows
 const PLAN = ['T1 read alpha.py', 'T2 read beta.py', 'T3 read gamma.py', 'T4 combine the reports', 'T5 write the summary'];
 const SPIN_MARK = /[◐◓◑◒]/;
 const PUA = /[\uE000-\uF8FF]/;
@@ -77,7 +77,7 @@ const STOP: Shape = { ...FINISHED, agents: [FINISHED.agents[0]!, FINISHED.agents
 // Wave 36: the pill is its own darker fill (97), then the state slab: working 141, done 114, idle 236, blocked 203.
 const STATES: [string, Shape, string, string, boolean][] = [
   ['working', RUNNING, 'accent', '[◐◓◑◒] working 0:42', true],
-  ['done', FINISHED, 'ok', '● done 1:12', true],
+  ['done', FINISHED, 'ok', '✓ done 1:12', true],
   ['idle', IDLE, 'muted', '○ idle · 1:12', true],
   ['blocked', STOP, 'bad', '▲ blocked', true],
 ];
@@ -88,7 +88,7 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
     for (const [name, sh, token, lead, workers] of STATES) {
       test(`${cols} columns, ${name}: the state fill is ${token}, the plan 237 and the workers 235; the lead text keeps the marker`, () => {
         const f = frameOf(sh, body, screen);
-        expect(f.band).toMatch(new RegExp(`^◖ ◆ ATLAS ◗ ${lead}`));
+        expect(f.band).toMatch(new RegExp(`^ ◆ ATLAS  ${lead}`));
         expect(f.band).toMatch(/▌ (?:todo )?\d\/5/);
         expect(f.band).not.toMatch(PUA);
         const runs = bandRuns(f.model);
@@ -114,9 +114,9 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
   test('256 colours keep the seams; NO_COLOR/dumb and ASCII degrade to the dot-joined text with no seams; ASCII has no block glyph', () => {
     const base = { maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'research', done: 2, total: 5, openWork: 3, openDispatch: 0, todoBlocked: 0, checks: [], bar: true, workers: [], busy: true, turnSecs: 42, cols: 93 } as const;
     const text = (u: Ui): string => bandLines({ ...base, ui: u } as never)[0]!.runs.map((x) => x.t).join('');
-    expect(text({ theme: 'mocha', ascii: false, color: 'none' })).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:42 · todo 2\/5/);
+    expect(text({ theme: 'mocha', ascii: false, color: 'none' })).toMatch(/^ ◆ ATLAS  [◐◓◑◒] working 0:42 · todo 2\/5/);
     expect(text({ theme: 'mocha', ascii: true, color: 'truecolor' })).toMatch(/^\[ATLAS\] \| working 0:42 · todo 2\/5/);
-    expect(text({ theme: 'mocha', ascii: false, color: '256' })).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] working 0:42 ▌ todo 2\/5/);
+    expect(text({ theme: 'mocha', ascii: false, color: '256' })).toMatch(/^ ◆ ATLAS  [◐◓◑◒] working 0:42 ▌ todo 2\/5/);
     for (const color of ['256', 'none'] as const) expect(text({ theme: 'mocha', ascii: false, color })).not.toMatch(PUA);
   });
   test('256 colours keep the stable palette fills (141 / 237 / 235), never an RGB approximation (the pill 97 first)', () => {
@@ -127,7 +127,7 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
   test('a narrow bar keeps all three segments and the clock; the state word is the first thing to give way (wave 37)', () => {
     for (let body = 93; body >= 34; body--) {
       const f = frameOf(RUNNING, body, 45);
-      expect(f.band, `${body}`).toMatch(/^◖ ◆ ATLAS ◗ [◐◓◑◒] (working )?0:42 ▌ (todo )?\d\/5 ▌ [◐◓◑◒]/);
+      expect(f.band, `${body}`).toMatch(/^ ◆ ATLAS  [◐◓◑◒] (working )?0:42 ▌ (todo )?\d\/5 ▌ [◐◓◑◒]/);
       expect([...f.band].filter((c) => c === '▌'), `${body}`).toHaveLength(2);
     }
     expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [◐◓◑◒] 3 running/);
@@ -152,7 +152,7 @@ describe('3. one clock: the band always shows the elapsed time while working, re
 });
 
 describe('4. one count: the band `todo n/m` is the TODO HUD title figure', () => {
-  const figures = (f: Frame): [string, string] => [/(?:todo )?(\d)\/5/.exec(f.band)?.[1] ?? '?', /▸ TODO\s+(\d)\/5/.exec(f.hud.join('\n'))?.[1] ?? '?'];
+  const figures = (f: Frame): [string, string] => [/(?:todo )?(\d)\/5/.exec(f.band)?.[1] ?? '?', /TODO ─+ (\d)\/5/.exec(f.hud.join('\n'))?.[1] ?? '?'];
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: the stop run (a worker died under a plan row marked completed) reads the same figure in the band and the HUD title`, () => {
       const [band, hud] = figures(frameOf(STOP, body, screen));
@@ -162,7 +162,7 @@ describe('4. one count: the band `todo n/m` is the TODO HUD title figure', () =>
     test(`${cols} columns: a stale host tally never decides the band's figure (critique 34: \`todo 0/5\` beside \`TODO 1/5\`)`, () => {
       const lagging: Shape = { ...RUNNING, agents: [{ name: NAMES[0]!, squad: 'finished', mood: 'done' }, RUNNING.agents[1]!, RUNNING.agents[2]!], plan: ['completed', 'in_progress', 'in_progress', 'pending', 'pending'], countsDone: 0 };
       const [band, hud] = figures(frameOf(lagging, body, screen));
-      expect(hud).toBe('1');
+      expect(hud).toBe('1'); // the row-derived figure: T1 completed, the stale host tally (0) decides nothing
       expect(band).toBe('1');
     });
     test(`${cols} columns: every shape agrees, working, done and idle`, () => {
@@ -174,20 +174,20 @@ describe('4. one count: the band `todo n/m` is the TODO HUD title figure', () =>
   }
 });
 
-describe('5. one state per item: a row whose worker died is `■ failed` from the first frame', () => {
+describe('5. one state per item: a row whose worker died is `✗ failed` from the first frame', () => {
   const dead: Shape = { working: true, agents: [{ name: NAMES[0]!, squad: 'running', mood: 'working', tool: 'Read' }, { name: NAMES[1]!, squad: 'failed', mood: 'failed' }, { name: NAMES[2]!, squad: 'running', mood: 'working', tool: 'Read' }], plan: ['in_progress', 'in_progress', 'in_progress', 'pending', 'pending'] };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: T2 (its worker failed) reads \`■ ... failed\` in 203, not running, queued or done`, () => {
+    test(`${cols} columns: T2 (its worker failed) reads \`✗ ... failed\` in 203, not running, queued or done`, () => {
       const f = frameOf(dead, body, screen);
       const at = f.hud.findIndex((r) => /T2 /.test(r));
-      expect(f.hud[at]).toMatch(/■ T2 .*failed/);
-      const glyph = f.hudSegs[at]!.find((x) => x.t === '■');
+      expect(f.hud[at]).toMatch(/✗ T2 .*failed/);
+      const glyph = f.hudSegs[at]!.find((x) => x.t === '✗');
       expect(glyph?.color).toBe(PALETTES.mocha.bad);
     });
     test(`${cols} columns: a pending row with no worker is queued, never a green disc`, () => {
       const f = frameOf(RUNNING, body, screen);
       const row = f.hud.find((r) => /T4 /.test(r))!;
-      expect(row).toMatch(/◇ T4/);
+      expect(row).toMatch(/○ T4/);
       expect(row).not.toMatch(/● T4/);
     });
   }
@@ -197,40 +197,39 @@ describe('6. SUBAGENTS: one rule while they run, a k9s-style table once they hav
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: while agents run the same titled table shows, header row included (wave 36)`, () => {
       const f = frameOf(RUNNING, body, screen);
-      const marks = f.hud.filter((r) => r.includes('◖ ◆ ATLAS ◗ ▸ SUBAGENTS'));
+      const marks = f.hud.filter((r) => r.includes('SUBAGENTS'));
       expect(marks).toHaveLength(1);
-      expect(marks[0]).toMatch(/^╭.*[◐◓◑◒] 3 running/);
-      expect(f.hud.some((r) => /^\s+AGENT\s+STATE\s+TIME/.test(r)), 'wave 36: the table header shows while they run too').toBe(true);
+      expect(marks[0]).toMatch(/^╭.*● 3 running/);
+      expect(f.hud.some((r) => /^│\s+AGENT\s+(ROLE\s+)?STATE\s+NOW/.test(r)), 'wave 36: the table header shows while they run too').toBe(true);
     });
     test(`${cols} columns: at done the table is AGENT STATE TIME, one row per agent with the name, the state and the clock`, () => {
       const f = frameOf(FINISHED, body, screen);
-      const head = f.hud.findIndex((r) => /^\s+AGENT\s+STATE\s+TIME/.test(r));
+      const head = f.hud.findIndex((r) => /^│\s+AGENT\s+(ROLE\s+)?STATE\s+NOW( \/ RESULT)?\s+(?:\S+\s+)*TIME/.test(r));
       expect(head).toBeGreaterThan(0);
-      expect(f.hud[head - 1]).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done/);
+      expect(f.hud[head - 1]).toMatch(/^╭─ SUBAGENTS ─+ ✓ 3 done/);
       const header = f.hudSegs[head]!.find((x) => x.t.includes('AGENT'))!;
-      expect(header.color).toBe(xtermHex(245));
+      expect(header.color).toBe('#767676'); // the dim column names
       NAMES.forEach((n, i) => {
         const row = f.hud[head + 1 + i]!;
-        expect(row, n).toMatch(new RegExp(`^ {2}${nameAt(n, body)}\\s+● done\\s+\\d+:\\d\\d`));
+        expect(row, n).toMatch(new RegExp(`^│ ✓ ${nameAt(n, body)}\\s+(?:\\S+\\s+)?done\\s+.*\\d+:\\d\\d`));
       });
     });
-    test(`${cols} columns: a failed agent's row is \`■\` in 203`, () => {
+    test(`${cols} columns: a failed agent's row is \`✗\` in 203`, () => {
       const f = frameOf(STOP, body, screen);
-      const at = f.hud.findIndex((r) => r.startsWith(`  ${nameAt('gamma-explorer', body)}`) && /\s■ failed/.test(r));
+      const at = f.hud.findIndex((r) => new RegExp(`^[│▌] ✗ ${nameAt('gamma-explorer', body)}`).test(r) && /\sfailed/.test(r));
       expect(at).toBeGreaterThan(0);
       const segs = f.hudSegs[at]!;
-      expect(segs.find((x) => x.t === '■')?.color).toBe(PALETTES.mocha.bad);
-      expect(segs.find((x) => x.t.includes(nameAt('gamma-explorer', body)))?.color).toBe(PALETTES.mocha.bad);
-      expect(segs.find((x) => x.t === 'failed')?.color).toBe(PALETTES.mocha.bad);
+      expect(segs.find((x) => x.t === '✗')?.color).toBe(PALETTES.mocha.bad);
+      expect(segs.find((x) => x.t.trim() === 'failed')?.color).toBe(PALETTES.mocha.bad); // the glyph, the word and the result are red; the name keeps its quiet tone
     });
   }
   test('at 110 columns the narrow table keeps the names and the times', () => {
     const f = frameOf(FINISHED, 56, 40);
-    for (const n of NAMES) expect(f.hud.join('\n')).toMatch(new RegExp(`${nameAt(n, 56)}\\s+(?:● done\\s+)?\\d+:\\d\\d`));
+    for (const n of NAMES) expect(f.hud.join('\n')).toMatch(new RegExp(`${nameAt(n, 56)}\\s+.*\\d+:\\d\\d`));
   });
   test('the TODO HUD rows for the same input are unchanged by the table (the table is a separate box under the closed plan box)', () => {
     const f = frameOf(FINISHED, 93, 45);
-    expect(f.hud[0]).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ TODO /);
+    expect(f.hud[0]).toMatch(/^╭─ TODO /);
     expect(f.hud.filter((r) => /^╰/.test(r))).toHaveLength(2);
   });
 });
@@ -241,6 +240,6 @@ describe('4b. one count: the band takes its figure from hud.ts planProgress, the
     const snapshot = snapshotOf(STOP);
     const live = liveWorkers(snapshot, snapshot.now);
     const p = hud.planProgress(ownTodos(snapshot.todos ?? [], snapshot.sessionId), live, snapshot.squad, queuedMembers(snapshot), snapshot.now);
-    expect(`${p.done}`).toBe(/▸ TODO\s+(\d)\/5/.exec(f.hud.join('\n'))?.[1]);
+    expect(`${p.done}`).toBe(/TODO ─+ (\d)\/5/.exec(f.hud.join('\n'))?.[1]);
   });
 });

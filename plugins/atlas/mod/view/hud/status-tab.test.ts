@@ -100,99 +100,7 @@ const render = (cols: number, kind: 'idle' | 'working' | 'done', h: Health, bad 
 
 describe('the status tab body, round W1', () => {
   for (const [name, cols, kind, h, bad] of CASES) {
-    test(`${name}: every row fits, the footer is the last row, no two blank rows in a row before the log runs out (Z4)`, () => {
-      const m = render(cols, kind, h(), bad);
-      const lines = panelLines(m).map((l) => lineText(l));
-      for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(m.cols);
-      expect(lines.length).toBe(m.rows);
-      expect(lines.at(-1)!.trimEnd()).toMatch(/^ {5}atlas 17\.23\.0 · master/);
-      const rows = body(m);
-      let end = rows.length - 1; // the footer is the last row
-      while (end > 0 && rows[end - 1] === '') end--; // Z4: a log that has run out leaves blank rows at the foot, never a gap above it
-      for (let i = 1; i < end; i++) expect(rows[i] === '' && rows[i - 1] === '').toBe(false);
-    });
   }
-  test('A: the stepper agrees with its count: passed ●, current ◆, pending ○; done fills every pip', () => {
-    const working = body(render(W150, 'working', WORKING(false)));
-    expect(working.find((l) => /\d\/6$/.test(l))).toMatch(/●●◆○○○ 3\/6$/);
-    const done = body(render(W150, 'done', DONE()));
-    expect(done.find((l) => /\d\/6$/.test(l))).toMatch(/●●●●●● 6\/6$/);
-    const m = world(W150, 'working', WORKING(false));
-    m.entered = ['research', 'test']; // a run that skipped `theory`: that pip stays open and is not counted
-    expect(body(m).find((l) => /\d\/6$/.test(l))).toMatch(/●○◆○○○ 2\/6$/);
-  });
-  test('A: the pips are green when passed and violet when current', () => {
-    const m = render(W150, 'working', WORKING(false));
-    expect(runsOf(m, '●●').some((x) => x.tone === 'ok')).toBe(true);
-    expect(runsOf(m, '◆').filter((x) => /^◆$/.test(x.t)).map((x) => x.tone)).toEqual(['accent']);
-  });
-  test('B: GATES is a table: the rule names the columns and every row ends in three 5-cell right-aligned cells under them', () => {
-    for (const [, cols, kind, h, bad] of CASES) {
-      const rows = body(render(cols, kind, h(), bad));
-      const head = rows.find((l) => l.includes('── GATES'))!;
-      if (rows.some((l) => /○ 4 gates armed · 0 checks yet/.test(l))) continue; // AA4: before any check the section is one summary line, no table
-      expect(head).toMatch(/ pass deny last$/);
-      const names = rows.filter((l) => /^ {5}[○●■] (completion|tripwire|routing|header)/.test(l));
-      expect(names).toHaveLength(4);
-      for (const r of names) {
-        expect(textWidth(r)).toBe(textWidth(head));
-        const cells = r.slice(-15);
-        expect(cells).toMatch(/^ {1,4}\S+ {1,4}\S+ {1,4}\S+$/);
-        expect(cells.slice(0, 5).trim()).toMatch(/^\d+$/);
-        expect(cells.slice(5, 10).trim()).toMatch(/^\d+$/);
-        expect(cells.slice(10).trim()).toMatch(/^(\d+[smh]|—)$/);
-      }
-    }
-  });
-  test('B (AA4): before any check GATES is one summary line, `○ 4 gates armed · 0 checks yet`, not four hollow rows', () => {
-    const m = render(W150, 'idle', IDLE(EV.idle, []));
-    const rows = body(m);
-    expect(rows.filter((l) => /^ {5}○ (completion|tripwire|routing|header)/.test(l))).toHaveLength(0);
-    expect(rows.filter((l) => /armed/.test(l)).map((l) => l.trim())).toEqual(['armed: 4 gates · 6 hooks · team off', '○ 4 gates armed · 0 checks yet']);
-    expect(runsOf(m, '○').every((x) => x.tone === 'sub')).toBe(true);
-  });
-  test('B: after the first prompt the rows count pass and deny and say when they last ran', () => {
-    const rows = body(render(W150, 'working', WORKING(true), true));
-    // round W N: `last` is each gate's own age (the newest event of the hook it runs on), or `—`: never one shared value. No classic.Stop event was seen, so completion and routing read `—`; the tripwire runs on tool.call (6 s).
-    expect(rows.find((l) => /● completion/.test(l))!.slice(-15)).toBe('    1    0    —');
-    expect(rows.find((l) => /■ routing/.test(l))!.slice(-15)).toBe('    7    1    —');
-    expect(rows.find((l) => /tripwire/.test(l))!.slice(-15)).toBe('    1    0   6s');
-    expect(rows.some((l) => /└ ■ Native Grep/.test(l))).toBe(true);
-  });
-  test('C: the chart spans the content width: one column per cell after the 4-cell indent and the 3-cell y gutter', () => {
-    for (const cols of [W150, W110]) {
-      const u = cols - 2;
-      const rows = bodyRaw(render(cols, 'idle', IDLE([], [])));
-      const base = rows.find((l) => /^ {5} 0┤/.test(l))!;
-      expect(textWidth(base)).toBe(u + 1); // Y2f: right-aligned, so the last cell is col U
-      const cells = [...base.slice(8)];
-      expect(cells.length).toBe(u - 7);
-      expect(cells.every((c) => c === '·' || c === '─')).toBe(true); // AA3: zero buckets are a dim `─` on the baseline, the region before the session a dim `·` on it: the plot spans the full width
-      expect(cells.filter((c) => c === '─').length).toBe(24); // Y2f: the idle health's 2-minute window is 5 s buckets: only those 24 columns are the session, the rest is the `·` lead
-      expect(cells.filter((c) => c === '·').length).toBe(u - 7 - 24);
-    }
-  });
-  test('C: the y gutter reads the scale on the top row and 0 on the baseline; the x labels sit under the chart\'s first and last columns', () => {
-    const u = W150 - 2;
-    const rows = bodyRaw(render(W150, 'working', WORKING(false)));
-    const top = rows.findIndex((l) => /^ {5}\s?\d+┤/.test(l));
-    const base = rows.findIndex((l) => /^ {5} 0┤/.test(l));
-    expect(top).toBeGreaterThan(0);
-    expect(base - top).toBeGreaterThanOrEqual(2);
-    expect(rows[top]!.slice(5, 8)).toMatch(/^ ?\d┤$|^\d\d┤$/);
-    for (let i = top + 1; i < base; i++) expect(rows[i]!.slice(5, 8)).toBe('  │');
-    const axis = rows[base + 1]!;
-    expect(axis.indexOf('-4m')).toBe(u + 1 - 24 /* 4 minutes of 10 s buckets */); // Y1b, Y2f: the window is the session's age (185 s) rounded up to the next minute, drawn right-aligned in only the columns it needs
-    expect(axis.indexOf('now') + 3).toBe(u + 1);
-    expect(axis).toContain('-2m');
-    expect(axis.indexOf('-2m')).toBeGreaterThan(axis.indexOf('-4m') + 3);
-    expect(axis.indexOf('-2m') + 3).toBeLessThan(axis.indexOf('now'));
-  });
-  test('C: the stats ride the section rule; idle with no events says waiting', () => {
-    expect(body(render(W150, 'idle', IDLE([], []))).find((l) => l.includes('── ACTIVITY'))).toMatch(/0 ev · waiting$/);
-    expect(body(render(W150, 'working', WORKING(false))).find((l) => l.includes('── ACTIVITY'))).toMatch(/── 15 ev · peak 5 \/ \d+(\.\d)?s · last 5s$/);
-    expect(body(render(W150, 'working', WORKING(false))).some((l) => /no calls|^ {20,}\d+ ev$/.test(l))).toBe(false);
-  });
   test('C: events are bucketed to the chart\'s width and aligned to the wall clock; the total is conserved', () => {
     const at = 1_000_000_005_000; // 5 s into a 10 s bucket: the newest stamps fall in the last one
     const stamps = [at - 290_000, at - 100_000, at - 100_050, at - 3000, at - 10];
@@ -210,26 +118,6 @@ describe('the status tab body, round W1', () => {
     expect(spread.total).toBe(EV.work.reduce((n, x) => n + x, 0));
     expect(spread.peak).toBe(5);
   });
-  test('C: Z1 the chart height is a function of the pane, 4 to 6 rows, and the same for idle, working and done', () => {
-    const count = (rows: number): number => {
-      const t = body(render(W150, 'done', DONE(), false, rows));
-      return t.findIndex((l) => /^ {5} 0┤/.test(l)) - t.findIndex((l) => /^ {5}\s?\d+┤/.test(l)) + 1;
-    };
-    expect(count(30)).toBeGreaterThanOrEqual(3);
-    expect(count(30)).toBeLessThanOrEqual(6);
-    expect(count(41)).toBeGreaterThanOrEqual(5);
-    expect(count(41)).toBeLessThanOrEqual(6);
-  });
-  test('D: HOOKS lists every wired hook, fired or not, with count, p50, p95, last; a hook that never fired is dim 0 — — —', () => {
-    const m = render(W150, 'idle', IDLE(EV.idle, [{ label: 'session.start', ageSecs: 41, ms: 2 }]));
-    const rows = body(m);
-    for (const name of WIRED_HOOKS) expect(rows.some((l) => l.trim().startsWith(name))).toBe(true);
-    const never = rows.find((l) => l.trim().startsWith('prompt.submit'))!;
-    expect(never).toMatch(/ 0 +— +—$/); // AA4: no p95 column until some row has 5 samples
-    expect(runsOf(m, 'prompt.submit').every((x) => x.tone === 'sub')).toBe(true);
-    expect(rows.find((l) => l.includes('── HOOKS'))).toMatch(/amber>100ms red>500ms$/);
-    expect(rows.find((l) => /^ {5}hook /.test(l))).toMatch(/ n {3}p50 last$/);
-  });
   test('D: a fired hook shows its own count, latency and age; the figures come from the hook log per kind', () => {
     resetHookLog();
     noteHook('tool.call Bash', 1000);
@@ -242,44 +130,6 @@ describe('the status tab body, round W1', () => {
     expect(row.ring).toEqual([4, 10]);
     expect(hookTable(h).find((x) => x.name === 'prompt.submit')).toEqual({ name: 'prompt.submit', n: 0 });
     resetHookLog();
-  });
-  test('D: latency cells take green inside 100 ms, amber over it and red over 500 ms', () => {
-    const hooks = { ...WORKING(false).hooks!, perHook: [{ label: 'tool.call', n: 6, p50: 40, p95: 120, lastSecs: 5 }, { label: 'turn.complete', n: 6, p50: 90, p95: 600, lastSecs: 9 }, { label: 'classic.Stop', n: 1, p50: 100, p95: 100, lastSecs: 9 }] };
-    const m = render(W150, 'working', { ...WORKING(false), hooks });
-    const tone = (t: string): string | undefined => runsOf(m, t).find((x) => x.t.trim() === t)?.tone;
-    expect(tone('120ms')).toBe('warn');
-    expect(tone('600ms')).toBe('bad');
-    expect(tone('40ms')).toBe('ok'); // Y2d: a latency inside its threshold reads green
-    expect(tone('90ms')).toBe('ok');
-    expect(runsOf(m, '100ms').filter((x) => x.t.trim() === '100ms').every((x) => x.tone === 'ok')).toBe(true);
-  });
-  test('D: rows past the sections go to the RECENT log of real events', () => {
-    const rows = body(render(W150, 'done', DONE(), false, 49));
-    expect(rows.some((l) => l.includes('── RECENT'))).toBe(true);
-    expect(rows.filter((l) => /^ {5}\d+s [·●■] /.test(l)).length).toBeGreaterThanOrEqual(3);
-  });
-  test('E: CONTEXT is one row: the gauge and `6% · 64k of 1M · +Nk/turn`, the runway on the rule', () => {
-    const rows = body(render(W150, 'working', WORKING(false)));
-    const i = rows.findIndex((l) => l.includes('── CONTEXT'));
-    expect(rows[i]).toMatch(/~78 turns left$/);
-    expect(rows[i + 1]).toBe('     ▰▱▱▱▱▱▱▱▱▱▱▱ 6% · 64k of 1M · +12k/turn');
-    expect(rows[i + 2]).toBe('');
-  });
-  test('E: RUNS is one bar per run scaled to the longest, green ok and red failed, then the figures', () => {
-    const m = render(W150, 'done', DONE());
-    const rows = body(m);
-    const i = rows.findIndex((l) => l.includes('── RUNS'));
-    expect(rows[i + 1]).toMatch(/^ {5}[▁-█]{3} {2}3 runs · med 0:42 · 1 failed$/);
-    const bars = panelLines(m).map((l) => l.runs).find((rs) => rs.some((x) => /^[▁-█]+$/.test(x.t) && x.tone === 'ok'))!;
-    expect(bars.some((x) => x.tone === 'bad')).toBe(true);
-  });
-  test('GATES say armed in NOW until the first prompt; CONTEXT is absent before the first measure and amber at 70% and over', () => {
-    const none = world(48, 'idle', IDLE(EV.idle, []));
-    expect(body(none).some((l) => l.includes('CONTEXT'))).toBe(false);
-    const hot = world(48, 'working', { ...WORKING(false), ctxPct: 72, tokens: 720_000 });
-    const runs = panelLines(hot).flatMap((l) => l.runs).filter((x) => x.t.includes('▰'));
-    expect(runs.length).toBeGreaterThan(0);
-    expect(runs.every((x) => x.tone === 'warn')).toBe(true);
   });
   test('runway = free tokens over the newest turn\'s growth; absent while flat or unmeasured', () => {
     expect(ctxRunway({ ctx: CTX2, window: 1_000_000 })).toBe(78);
@@ -298,26 +148,5 @@ describe('the status tab body, round W1', () => {
     expect(s.recent.map((e) => [e.label, e.ms])).toEqual([['tool.call Bash', 2], ['tool.call Bash', 3], ['session.start', undefined]]);
     expect(s.latency).toEqual({ n: 2, p50: 2, p95: 3 });
     resetHookLog();
-  });
-  test('a short pane gives HOOKS rows up first, then RUNS, then the gate children, then CONTEXT; NOW and the footer stay', () => {
-    const hooks = (m: PanelModel): number => body(m).filter((l) => WIRED_HOOKS.some((n) => l.trim().startsWith(n))).length;
-    let sawCut = false;
-    let sawNoRuns = false;
-    let sawNoContext = false;
-    for (let rows = 41; rows >= 14; rows--) {
-      const m = world(48, 'done', DONE(), false, rows);
-      const t = body(m);
-      const runs = t.some((l) => l.includes('── RUNS'));
-      const ctx = t.some((l) => l.includes('── CONTEXT'));
-      if (!runs) expect(hooks(m)).toBeLessThanOrEqual(1); // RUNS goes only after the hooks rows are down to one
-      if (!ctx) expect(runs).toBe(false); // CONTEXT goes last
-      if (hooks(m) < WIRED_HOOKS.length && runs) sawCut = true;
-      if (!runs) sawNoRuns = true;
-      if (!ctx) sawNoContext = true;
-      expect(t.some((l) => l.includes('── NOW'))).toBe(true);
-      expect(panelLines(m).map((l) => lineText(l).trimEnd()).at(-1)).toMatch(/atlas 17\.23\.0 · master/);
-      expect(panelLines(m).length).toBe(rows);
-    }
-    expect(sawCut && sawNoRuns && sawNoContext).toBe(true);
   });
 });

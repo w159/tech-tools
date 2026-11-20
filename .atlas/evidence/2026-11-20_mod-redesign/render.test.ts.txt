@@ -1,0 +1,69 @@
+// Renders the REAL mod surfaces (bandTree, sidebarTree) from the test fixtures into colored HTML, one file per surface.
+import { test } from 'bun:test';
+import { writeFileSync } from 'node:fs';
+const M = '/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/mod';
+const { scene, sidebarModel, els, on, UI256 } = await import(`${M}/surface_indices.ts`);
+const { sidebarTree } = await import(`${M}/view/panel/pane/sidebar.tsx`);
+const { bandTree } = await import(`${M}/view/band/band.tsx`);
+const { liveWorkers } = await import(`${M}/data/live.ts`);
+const { withSpinFrame } = await import(`${M}/design/atlas-ui.ts`);
+const { NOW } = await import(`${M}/live_fixture.ts`);
+const { hudAgents, hudRows } = await import(`${M}/view/hud/hud.ts`);
+const { queuedMembers } = await import(`${M}/data/live.ts`);
+const { ownTodos } = await import(`${M}/data/todos.ts`);
+const HEALTH = {
+  gates: { total: 4, green: 3, checks: [{ id: 'completion', ok: true }, { id: 'tripwire', ok: false }], denied: 2 }, version: '17.32.0', branch: 'main', upSecs: 57_420, ctxPct: 27, tokens: 339_000, window: 1_000_000,
+  last: { secs: 492, done: 5, total: 7, agents: 2, failed: 0 }, denyAgeSecs: 125,
+  hooks: { total: 60, byLabel: [], recent: [{ label: 'tool.call', ageSecs: 3, ms: 2 }, { label: 'tool.call', ageSecs: 9, ms: 9 }, { label: 'tool.call', ageSecs: 12, ms: 4 }], latency: { n: 60, p50: 2, p95: 9 } },
+  pulse: { events: [0, 1, 2, 3, 5, 4, 3, 2, 1, 0, 2, 3, 4, 5, 6, 3, 2, 1, 0, 2], ctx: [], runs: [3,6,2,7,4,3,6,5,1,2,3,7,6,2,5,3,1,2].map((m, i) => ({ secs: m * 300, ok: ![11, 12, 14].includes(i), at: i })) },
+};
+const GATES = [{ id: 'tripwire', title: 'tripwire', lines: [{ id: 'team', label: 'dispatch_denied:team', ok: false, detail: 'Working dispatches run as a tmux team.', fix: 'atlas_mux.py spawn-team --class fix' }, { id: 'scope', label: 'scope', ok: true }, { id: 'toolkit', label: 'toolkit', ok: true }] }, { id: 'completion', title: 'completion', lines: [{ id: 'evidence', label: 'evidence', ok: true }, { id: 'changelog', label: 'changelog', ok: true }] }];
+const OUT = '/private/tmp/claude-501/-Users-jerry-MEGA-Projects-Agentic-tech-tools/890e9d83-fa13-406f-9200-522c3cb199dc/scratchpad/render';
+const UI = { ...UI256, color: 'truecolor' };
+
+type N = { kind?: string; type?: string; props?: Record<string, unknown>; children?: unknown };
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+// Element tree -> HTML: Text carries color/backgroundColor/bold; a row Box joins its children, a column Box stacks them.
+function html(n: unknown, inherit: Record<string, unknown> = {}): string {
+  if (Array.isArray(n)) return n.map((x) => html(x, inherit)).join('');
+  if (n === null || n === undefined || typeof n !== 'object') return n == null ? '' : esc(String(n));
+  const o = n as N; const p = (o.props ?? {}) as Record<string, unknown>;
+  const kind = o.kind ?? o.type;
+  if (p.width === 0) return '';
+  const bg = (p.backgroundColor as string) ?? (inherit.bg as string);
+  if (kind === 'Text') {
+    const st = [p.color ? `color:${p.color}` : '', bg ? `background:${bg}` : '', p.bold ? 'font-weight:bold' : '', p.dimColor ? 'opacity:.6' : '', p.underline ? 'text-decoration:underline' : '', p.strikethrough ? 'text-decoration:line-through' : ''].filter(Boolean).join(';');
+    const inner = html(p.children, { bg }) + (Array.isArray(o.children) ? html(o.children, { bg }) : '');
+    return `<span style="${st}">${inner}</span>`;
+  }
+  if (kind === 'Input') return `<span style="color:#888;border:1px solid #555;padding:0 6px">${esc(String(p.label ?? ''))} ${esc(String(p.placeholder ?? ''))}</span>`;
+  const kids = o.kind ? p.children : o.children;
+  const list = Array.isArray(kids) ? kids : kids == null ? [] : [kids];
+  const row = p.flexDirection === 'row' || kind === 'Button';
+  const style = bg ? `background:${bg}` : '';
+  if (row) return `<div style="display:flex;white-space:pre;${style}">${list.map((k) => html(k, { bg })).join('')}</div>`;
+  return `<div style="${style}">${list.map((k) => `<div style="white-space:pre">${html(k, { bg })}</div>`).join('')}</div>`;
+}
+const segs = (rows: any[][]) => rows.map((r) => `<div style="white-space:pre">${r.map((x: any) => { const t = x.text ?? x.t ?? x.children ?? ''; const st = [x.color ? `color:${x.color}` : '', (x.bg ?? x.backgroundColor) ? `background:${x.bg ?? x.backgroundColor}` : '', x.bold ? 'font-weight:bold' : '', x.dimColor ? 'opacity:.6' : ''].join(';'); return `<span style="${st}">${esc(String(t))}</span>`; }).join('')}</div>`).join('');
+const page = (body: string) => `<!doctype html><meta charset=utf-8><style>@font-face{font-family:JB;src:url(file:///Users/jerry/Library/Fonts/JetBrainsMono-Regular.ttf)}@font-face{font-family:JB;font-weight:bold;src:url(file:///Users/jerry/Library/Fonts/JetBrainsMono-Bold.ttf)}body{margin:0;padding:18px;background:#0d0e12;color:#cdd6f4;font:15px/21px JB,monospace}</style>${body}`;
+const draw = <T,>(f: () => T): T => withSpinFrame(Math.floor(NOW / 100), f);
+
+const notes = [
+  { ts: new Date(NOW - 300_000).toISOString(), seq: 1, owner: 'lead', to: 'alpha-explorer', text: 'Read alpha.py and report the call sites of the gate.', channel: '#c', kind: 'dispatch' },
+  { ts: new Date(NOW - 240_000).toISOString(), seq: 2, owner: 'alpha-explorer', to: 'lead', text: 'Found 3 call sites in alpha.py; the gate is wired at line 42.', channel: '#c', kind: 'say' },
+  { ts: new Date(NOW - 200_000).toISOString(), seq: 3, owner: 'you', to: 'lead', text: 'also check beta.py please', channel: '#c', kind: 'say' },
+  { ts: new Date(NOW - 120_000).toISOString(), seq: 4, owner: 'beta-explorer', to: 'lead', text: 'beta.py reads the same knob; no gate call.', channel: '#c', kind: 'report' },
+  { ts: new Date(NOW - 60_000).toISOString(), seq: 5, owner: 'lead', to: 'all', text: 'Thanks. Combining the reports now.', channel: '#c', kind: 'say' },
+];
+
+test('render real surfaces', () => {
+  for (const kind of ['running', 'killed'] as const) {
+    const s = scene(kind, { notes, channel: '#tech-tools@main' } as never);
+    const live = liveWorkers(s, s.now);
+    writeFileSync(`${OUT}/band-${kind}.html`, page(html(draw(() => bandTree(els, { snapshot: s, live, gates: [], columns: 110, tick: 0, maxRows: 24, ui: UI } as never)))));
+    const hudIn = { todos: ownTodos(s.todos, s.sessionId), agents: hudAgents(live, s.squad, queuedMembers(s)), root: s.root };
+    writeFileSync(`${OUT}/hud-${kind}.html`, page(segs(draw(() => hudRows(hudIn, { cols: 108, tick: 0, ui: UI, now: s.now, maxRows: 40 })))));
+    const views = ['core', 'route', 'gates', 'channel'];
+    writeFileSync(`${OUT}/panel-${kind}.html`, page(`<div style="display:flex;gap:24px;align-items:flex-start">${views.map((v) => `<div style="width:640px">${html(draw(() => sidebarTree(els, ({ ...sidebarModel(s, v as never, 62, UI), health: HEALTH, gates: GATES, run: { kind: 'working', secs: 74, startMs: NOW - 74_000, frame: 0 } }), on)))}</div>`).join('')}</div>`));
+  }
+});

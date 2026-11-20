@@ -18,32 +18,12 @@ describe('critique 19 C4: the route tab reads a killed worker in words', () => {
     { id: 't3', label: 'T3 combine the reports', state: 'done' as const },
   ];
   for (const cols of [64, 56, 38]) {
-    test(`${cols} cells: the T2 row says what happened to its worker on its own row (\`closed · worker killed\` where it fits, \`killed\` in the narrow pane), the others plain done, nothing wider than the pane`, () => {
-      const rows = body('route', cols, { todos });
-      const at = rows.findIndex((l) => l.includes('T2 read ghost') || l.includes('T2 read'));
-      expect(at).toBeGreaterThan(-1);
-      expect(rows[at]).toMatch(/failed\s*$/); // one row, never a second line (critique 26)
-      expect(rows[at]).toContain('ghost-explorer'); // the agent's name stays whole at every width
-      expect(rows.join('\n').match(/failed/g)!.length).toBeGreaterThanOrEqual(1);
-      for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(cols);
-    });
   }
 });
 
 describe('critique 19 C4: the gates tab counts the replies it checked', () => {
   // live-150-232567af-1 tab-gates: `Header contract  warning  0/1 green` over one line while the transcript drew 7 chips.
   const header = (ok: number, total: number) => ({ id: 'header', title: 'Header contract', lines: [{ id: 'header-matched', label: 'Replies with header matched', ok: ok >= total, detail: `${ok} of ${total}` }] });
-  test('the figure beside a failing header group is its reply tally, not its line count', () => {
-    const tally = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 7, total: 8 }, openGates: 3 });
-    const rows = body('gates', 80, { gates: [header(7, 8)], core: tally });
-    const g = rows.find((l) => l.includes('Header contract'))!;
-    expect(g).toMatch(/7 pass · 1 deny$/); // the reply tally in the one gate vocabulary
-    expect(g).not.toContain('green');
-  });
-  test('a plain failing group says `0 pass · 1 deny`', () => {
-    const rows = body('gates', 80, { gates: [{ id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run it' }] }] });
-    expect(rows[0]).toMatch(/0 pass · 1 deny$/);
-  });
 });
 
 describe('critique 19 C4: the core tab says each fact once', () => {

@@ -32,7 +32,7 @@ describe('truth29 item 1: the panel never says done while work is open', () => {
 });
 
 describe('truth29 item 2: the first done frame shows the final run time', () => {
-  // stoprun-150-46d4825c-1 f0130:24 `● done · 0:20`, then f0131:24 `● done · 1:05`: the host turn had ended, the clock had not closed yet, and the band fell back to the worker wave's span.
+  // stoprun-150-46d4825c-1 f0130:24 `✓ done · 0:20`, then f0131:24 `✓ done · 1:05`: the host turn had ended, the clock had not closed yet, and the band fell back to the worker wave's span.
   test('an open clock whose host turn ended reads the run so far, not nothing', () => {
     const c = stepRun(newRunClock(), true, 1_000);
     const open = stepRun(c, true, 66_400);
@@ -107,7 +107,7 @@ describe('truth29 item 5: a hidden agent row is counted in the SUBAGENTS title',
   // live-110-46d4825c-1 f0071: `SUBAGENTS 3 running` over one agent row and no overflow line.
   for (const cols of [150, 110]) {
     test(`${cols} cols: 3 running and rows hidden: the merged block counts them once, on the TODO ribbon (wave 31)`, () => {
-      const rows = rowsAt(three(), cols, 3); // state 39: title, ONE dim summary row, the closing rule that carries the SUBAGENTS title (folded to its one row, never an empty box)
+      const rows = rowsAt(three(), cols, 4); // redesign: the TODO box folds to its top rule, ONE dim summary row and its bottom rule; the SUBAGENTS title (the folded rule that carries the count) is the fourth row
       const title = rows.find((r) => r.includes('SUBAGENTS'))!;
       expect(title).toContain('3 running');
       const summary = rows.find((r) => /^ {2}\S (?:\d+ done {2}\S )?\d+ more running/.test(r) || /more running/.test(r))!;
@@ -123,7 +123,7 @@ describe('truth29 item 5: a hidden agent row is counted in the SUBAGENTS title',
 });
 
 describe('truth29 item 6: a returned worker is drawn with the neutral glyph and the word in 245', () => {
-  // live-150-46d4825c-1 f0107: `●` (green, 114) with `returned` in 240.
+  // live-150-46d4825c-1 f0107: `✓` (green, 114) with `returned` in 240.
   test('the glyph, its colour token and the word tone', () => {
     expect(stateGlyph(RETURNED, ui)).toBe('◉');
     expect(stateGlyph(RETURNED, { ascii: true })).toBe('?');
@@ -136,15 +136,15 @@ describe('truth29 item 6: a returned worker is drawn with the neutral glyph and 
     const input: HudInput = { todos: [todo(1, 'a-explorer'), todo(2, 'b-explorer')], agents: [agent('a-explorer', 'working', 'running'), agent('b-explorer', 'done', 'done')] };
     const rows = hudLines(input, { cols: 150, maxRows: 40, ui, now: 5 });
     const r = rows.find((x) => runsString(x).includes('T2 read beta.py'))!;
-    expect(r.some((x) => x.t === '●')).toBe(false);
+    expect(r.some((x) => x.t === '✓')).toBe(false);
     expect(r.find((x) => x.t === '◉')?.tone).toBe('text');
-    expect(r.find((x) => x.t === 'returned')?.tone).toBe('sub');
+    expect(r.find((x) => x.t.trim() === 'returned')?.tone).toBe('sub'); // the state cell is padded to its column
   });
 });
 
 describe('truth29 item 7: one case and one mark on the lead header line', () => {
-  // live-150-46d4825c-1 f0065:23 `● ▌ research · waiting on 3 explorers` and, elsewhere, `▌ RESEARCH working`.
-  const lead = leadOf('ATLAS | 🔍 research 1/3 | waiting on 3 explorers', '^(?:● )?ATLAS \\|')!;
+  // live-150-46d4825c-1 f0065:23 `✓ ▌ research · waiting on 3 explorers` and, elsewhere, `▌ RESEARCH working`.
+  const lead = leadOf('ATLAS | 🔍 research 1/3 | waiting on 3 explorers', '^(?:✓ )?ATLAS \\|')!;
   test('the host-drawn line carries the brand and glyph, no bar of ours and no capitals', () => {
     const line = displayLine(lead);
     expect(line).toBe('ATLAS 🔍 research 1/3 | waiting on 3 explorers');
@@ -167,7 +167,7 @@ describe('truth29 item 7: one case and one mark on the lead header line', () => 
 describe('truth29 item 8: the done mark holds its highlighted first state', () => {
   // The 200 ms fade appeared in 0 of the live frames (500 ms capture period). The first beat now stays DONE_HOLD_MS, redraws stay at 10 a second.
   const items = (state: string): MotionItem[] => [{ key: 'todo:a', state }];
-  const row = [{ t: '●', tone: 'ok' as const }, { t: ' wire the gate', tone: 'sub' as const }];
+  const row = [{ t: '✓', tone: 'ok' as const }, { t: ' wire the gate', tone: 'sub' as const }];
   test('wave 31: a done mark shows its first (231) beat for one 200 ms step and then moves to the held 151', () => {
     expect(DONE_HOLD_MS).toBe(MOTION_STEP_MS);
     const m = new Motion(true);

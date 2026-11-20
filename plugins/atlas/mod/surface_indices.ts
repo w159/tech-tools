@@ -21,7 +21,7 @@ import { paintAnsi } from './design/atlas-ui';
 export const UI256: Ui = { theme: 'mocha', ascii: false, color: '256' };
 
 /** The indices Atlas's palette may put on screen: accent 141, ok 114, warn 179, error 203, neutrals 236 / 240 / 245 / 252, the panel fills 234 / 235, the chip tile 237 and 239 (Y2c: 239 on the 234 panel is five steps up), 231 (white, a fade's first step), 151 (the done fade's held step) and 97 (the wordmark pill, pinned to its pre-image in band.tsx). */
-export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 237, 239, 240, 245, 252, 234, 235, 231, 151, 97, 74, 68]); // 74 and 68: the cyan and blue phase tokens (the lead header tells eight phases apart)
+export const PALETTE_INDICES: ReadonlySet<number> = new Set([141, 114, 179, 203, 236, 237, 239, 240, 245, 252, 234, 235, 231, 151, 97, 74, 68, 243]); // 74 and 68: the cyan and blue phase tokens (the lead header tells eight phases apart); 243: PALETTE5.pending, the dim column-header grey of the HUD grid
 
 type Node = { kind?: string; type?: string; props?: Record<string, unknown>; children?: unknown };
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });

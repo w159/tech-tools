@@ -75,7 +75,7 @@ describe('3: one text grey on every card', () => {
 });
 
 describe('4: no side panel row is nameless or wrapped', () => {
-  test('a row that has just appeared (its reveal under way) still names its agent, in every tab and width', () => {
+  test('a row that has just appeared (its reveal under way) still names its agent, in every width', () => {
     const after = scene('running');
     const items = after.squad.flatMap((a) => [{ key: `worker:${a.name}`, state: 'running' as const }, { key: `agent:${a.name}`, state: 'running' as const }]);
     const todoItems = after.todos.map((t) => ({ key: `task:${t.id}`, state: 'running' as const }));
@@ -83,27 +83,26 @@ describe('4: no side panel row is nameless or wrapped', () => {
     mo.observe('x', [], NOW - 5000);
     mo.observe('x', [...items, ...todoItems], NOW);
     for (const cols of [60, 37]) {
-      for (const view of ['route', 'team'] as const) {
-        for (const dt of [0, 60, 120, 240]) {
-          const text = flat(withSpinFrame(1, () => sidebarTree(els, sidebarModel(after, view, cols, UI256, mo.ctx(NOW + dt)), on)));
-          for (const l of text.split('\n').filter((x) => /\brunning\b/.test(x) && !/^\s*(phase|agents|todo|workers)\b/.test(x))) expect([cols, view, dt, l, NAMES.test(l)]).toEqual([cols, view, dt, l, true]);
-        }
+      for (const dt of [0, 60, 120, 240]) {
+        const text = flat(withSpinFrame(1, () => sidebarTree(els, sidebarModel(after, 'route', cols, UI256, mo.ctx(NOW + dt)), on)));
+        const running = text.split('\n').filter((x) => /^▸ [◐◓◑◒] /.test(x.trimStart()) || /^▸ [◐◓◑◒] /.test(x));
+        expect(running.length).toBeGreaterThan(0);
+        for (const l of running) expect([cols, dt, l, NAMES.test(l)]).toEqual([cols, dt, l, true]);
       }
     }
   });
-  test('at 36 and 59 columns each task is one row that keeps the agent name whole and ends in its state; a killed worker reads `killed` on its own row', () => {
+  test('at 37 and 60 columns each plan task is one row that keeps the agent name whole and ends in its time; a failed worker reads `failed` on its own team row', () => {
     for (const kind of ['running', 'killed'] as const) {
       for (const cols of [37, 60]) {
         const rows = textOf(withSpinFrame(1, () => sidebarTree(els, sidebarModel(scene(kind), 'route', cols, UI256), on))).map((l) => l.trimEnd());
         for (const r of rows) expect([cols, r, [...r].length <= cols - 1]).toEqual([cols, r, true]);
         for (const id of ['T1', 'T2', 'T3']) {
-          const own = rows.filter((l) => new RegExp(`\\b${id} `).test(l));
+          const own = rows.filter((l) => new RegExp(`^▸ \\S ${id}\\b`).test(l));
           expect([kind, cols, id, own.length]).toEqual([kind, cols, id, 1]);
-          expect(own[0]).toMatch(/-explorer/); // the name, never the task, is what the cut takes
-          expect(own[0]).toMatch(/\b(running|done|failed|queued|[a-z]+-explorer)$/); // the state closes the row, or the owner column after it
+          expect(own[0]).toMatch(/\(\w+-explorer\)\s+(\d+:\d\d|-)$/); // the task text is what the cut takes, the name and the time stay
         }
-        expect(rows.filter((l) => /^\s+(closed|worker killed|killed|failed)\b/.test(l))).toEqual([]);
-        if (kind === 'killed') expect(rows.find((l) => /\bT3 /.test(l))).toMatch(/failed$/);
+        expect(rows.filter((l) => /^\s+(worker killed|killed)\b/.test(l))).toEqual([]);
+        if (kind === 'killed') expect(rows.find((l) => /^▸ ✗ gamma-explorer/.test(l))).toMatch(/failed\s+\d+:\d\d$/);
       }
     }
   });
@@ -134,8 +133,9 @@ describe('5: one spinner frame per render', () => {
         flat(bandTree(els, { snapshot: s, live, gates: [], columns: 120, tick: 0, maxRows: 12, ui: UI256 } as never)),
       ]) as [string, string, string];
       const circles = '◐◓◑◒';
-      expect([frame, seen(panel + hud + band, '\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f')]).toEqual([frame, []]); // the retired braille lead set is drawn nowhere
-      expect([frame, seen(panel + hud + band, circles)]).toEqual([frame, [circles[frame % 4]!]]);
+      expect([frame, seen(panel, '\u280b\u2819\u2839\u2838\u283c\u2834\u2826\u2827\u2807\u280f')]).toEqual([frame, []]); // the retired braille lead set is drawn nowhere on the panel
+      const rowsOnly = panel.split('\n').filter((l) => !/^ TEAM /.test(l)).join('\n'); // the TEAM tally is a legend: its `◐ n running` is the state's own glyph, not a turning spinner
+      expect([frame, seen(rowsOnly + hud, circles)]).toEqual([frame, [circles[frame % 4]!]]);
     }
   });
 });

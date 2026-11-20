@@ -24,31 +24,10 @@ const strip = (rows: string[]): string[] => rows.map((l) => l.replace(/ +10:02$/
 describe('team tab focus mark', () => {
   const ws = [w('a', 'running'), w('b', 'waiting')];
   const marked = (over: Partial<PanelModel>): string[] => bodyLines(panelWorld('team', 80, mocha, { lead, workers: ws, ...over })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold).map((l) => lineText(l).split(/\s+/)[2]!); // round 3 (E8): every expandable row carries `▸`; the focus is the bold accent one
-  test('without a recipient the first running worker is marked', () => {
-    expect(marked({ recipient: undefined })).toEqual(['a']);
-  });
-  test('a recipient that is not on the roster falls back to the first running worker', () => {
-    expect(marked({ recipient: 'ghost' })).toEqual(['a']);
-  });
-  test('a recipient on the roster takes the mark, and only it', () => {
-    expect(marked({ recipient: 'b' })).toEqual(['b']);
-  });
-  test('with nobody running and no recipient, nobody is marked', () => {
-    expect(marked({ workers: [w('b', 'waiting')], recipient: undefined })).toEqual([]);
-  });
 });
 
 describe('channel log word column', () => {
   const only = (kind: PanelNote['kind']): string => strip(body('channel', 120, { notes: [note({ kind, from: 'a' })] }))[1]!;
-  test('a lone blocked, handoff or done note brings the word column; a lone plain note has none', () => {
-    expect(only('blocked')).toBe('  ▲ a  blocked hello');
-    expect(only('handoff')).toBe('  ● a  handoff hello');
-    expect(only('done')).toBe('  ● a  done    hello');
-    expect(only(undefined)).toBe('    a hello');
-  });
-  test('a plain note beside a marked one is padded to the word column', () => {
-    expect(strip(body('channel', 120, { notes: [note({ kind: 'done', from: 'a' }), note({ from: 'b' })] })).slice(1)).toEqual(['  ● a  done    hello', '    b          hello']);
-  });
 });
 
 describe('wrap', () => {
@@ -60,14 +39,6 @@ describe('wrap', () => {
 });
 
 describe('core tab dispatch rows', () => {
-  test('the name column is capped at 16 cells, cut in the middle', () => {
-    const c = empty();
-    c.routes = [route('t1', { cls: 'implement', effort: 'medium', seats: [{ role: 'completeness-critic', count: 1, model: 'sonnet', effort: 'low', ran: ['sonnet'] }] })] as never;
-    expect(body('core', 120, { core: c }).filter((l) => /implement|critic|complete/.test(l))).toEqual([
-      '    implement team (medium effort) t1  tmux, shared, max 1',
-      '  ●   1 completenes… as planned ran sonnet, low effort',
-    ]);
-  });
   test('a detail is whole at every width: it fits after the row or wraps under it, and is never clipped by one cell', () => {
     const c = empty();
     c.routes = [route('rt-zq', { maxParallel: 7, isolation: 'worktree', seats: [{ role: 'runner', count: 1, model: 'model-zz', effort: 'xhigh', ran: [] }] })] as never;

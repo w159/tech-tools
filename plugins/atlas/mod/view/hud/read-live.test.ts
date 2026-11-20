@@ -31,6 +31,7 @@ const model = (view: SidebarModel['ui']['view'], clock: number, over: Partial<Si
 const status = (clock: number): string[] => panelLines(model('route', clock)).map((l) => lineText(l).trimEnd());
 const gatesTab = (clock: number, gates: PanelGate[]): string[] => bodyLines(model('gates', clock, { gates: gates as never })).map((l) => lineText(l).trimEnd());
 const row = (rows: string[], name: string): string => rows.find((l) => l.includes(name)) ?? '';
+const gatesHead = (clock: number): string => row(gatesTab(clock, parseGates(GOOD) as never), 'GATES'); // the gates tab's header carries how the gates were read: nothing for a fresh read, `~1m` for a stale one, `err` for a failed one
 const gatesOf = (stdout: string) => parseGates(stdout);
 
 const test = (name: string, fn: () => void): void => bare(name, () => { resetReads(); try { fn(); } finally { resetReads(); } });
@@ -38,30 +39,29 @@ const test = (name: string, fn: () => void): void => bare(name, () => { resetRea
 describe('gates: reader result to rendered cell', () => {
   test('nothing read yet: no ReadInfo, the row keeps its plain age', () => {
     expect(readInfoOf(NOW)).toBeUndefined();
-    expect(row(status(NOW), 'tripwire')).toMatch(/6s$/);
+    expect(gatesHead(NOW)).not.toMatch(/~|err/);
   });
   test('fresh read (inside the 30 s interval): plain age, no mark', () => {
     noteGatesRead(gatesOf(GOOD), NOW);
-    const r = row(status(NOW + 5_000), 'tripwire');
-    expect(r).toMatch(/ 6s$/);
+    const r = gatesHead(NOW + 5_000);
+    expect(r).toContain('this run');
     expect(r).not.toContain('~');
     expect(r).not.toContain('err');
   });
   test('old read (past the interval): the figure is `~` and carries the real age (its own plus the snapshot s)', () => {
     noteGatesRead(gatesOf(GOOD), NOW);
-    expect(row(status(NOW + 90_000), 'tripwire')).toMatch(/~1m$/); // 6 s + 90 s
+    expect(gatesHead(NOW + 90_000)).toMatch(/~1m/); // 6 s + 90 s
   });
   test('stale gates never age the hook rows: the hook log is in memory with no refresh interval', () => {
     noteGatesRead(gatesOf(GOOD), NOW);
-    const out = status(NOW + 90_000);
-    const hooks = out.slice(out.findIndex((l) => /HOOKS/.test(l)));
-    expect(hooks.length).toBeGreaterThan(2);
+    const out = bodyLines(model('core', NOW + 90_000)).map((l) => lineText(l).trimEnd());
+    const hooks = out.filter((l) => /hook p50|tools\/min/.test(l));
+    expect(hooks.length).toBe(2);
     expect(hooks.some((l) => l.includes('~'))).toBe(false);
   });
   test('missing script (nonzero exit becomes an error group): the rows say err, not the no-data dash', () => {
     noteGatesRead([gatesError('python3: can not open file atlas_gates.py')], NOW);
-    expect(row(status(NOW), 'completion')).toMatch(/err$/);
-    expect(row(status(NOW), 'tripwire')).toMatch(/err$/);
+    expect(gatesHead(NOW)).toMatch(/err/);
   });
   test('unreadable output (bad JSON throws in the parser, the run stores the error group): the gates tab says err and the reason', () => {
     let groups;
@@ -73,7 +73,7 @@ describe('gates: reader result to rendered cell', () => {
   test('a later good read clears the failure', () => {
     noteGatesRead([gatesError('boom')], NOW);
     noteGatesRead(gatesOf(GOOD), NOW + 1_000);
-    expect(row(status(NOW + 2_000), 'completion')).not.toContain('err');
+    expect(gatesHead(NOW + 2_000)).not.toContain('err');
   });
 });
 

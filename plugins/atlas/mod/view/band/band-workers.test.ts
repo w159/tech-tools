@@ -4,7 +4,7 @@
 //   stoprun-150-232567af-1 f0093 (band count glyph ◒ against the HUD row ◐)
 //   stoprun-110-232567af-2 f0101 (blocked band at 61 cells: the todo figure and the failed count dropped)
 // The scorer (round2/tools/live_capture.py, parse_frame rev 4, line 659) reads a band worker row as
-// `^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
+// `^\s*([◐◓◑◒◐◓◑◒◐◓○✗▲◉✓])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S` on the lines under the band ribbon, state from the glyph.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { SPIN_FRAMES, leadSpinnerGlyph, spinClock, spinFrameOf, type Ui } from '../../design/atlas-ui';
@@ -19,7 +19,7 @@ const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, prop
 const els = { Box: mk('Box'), Text: mk('Text') } as unknown as ClientElements;
 const text = (row: Node): string => (row.props.children as Node[]).map((t) => t.props.children).join('');
 const UI: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const SCORER_ROW = /^\s*([◐◓◑◒◐◓◑◒◐◓◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py:659
+const SCORER_ROW = /^\s*([◐◓◑◒◐◓◑◒◐◓○✗▲◉✓])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py:659
 const SPIN = '◐◓◑◒';
 
 const explorer = (name: string, over: Partial<LiveWorker> = {}): LiveWorker => ({
@@ -79,9 +79,9 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
     ];
     const rows = rowsOf(93, 6, live);
     const byName = Object.fromEntries(parsed(rows).map((m) => [m[2], m]));
-    expect(byName['beta-explorer']![1]).toBe('●');
+    expect(byName['beta-explorer']![1]).toBe('✓');
     expect(byName['beta-explorer']![3]).toBe('done');
-    expect(byName['ghost-explorer']![1]).toBe('■');
+    expect(byName['ghost-explorer']![1]).toBe('✗');
     expect(byName['ghost-explorer']![3]).toBe('failed');
     expect(rows.find((r) => r.includes('ghost-explorer'))).toContain('failed');
     expect(byName['gamma-explorer']![1]).toBe('◉');
@@ -159,7 +159,7 @@ describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)
     expect(row).toContain('blocked');
     expect(row).toContain('stop refused'); // state 38: two reasons only
     expect(row).toContain('5/5');
-    expect(row).toMatch(/■\s?1/);
+    expect(row).toMatch(/✗\s?1/);
   });
   test('wide bands keep the whole reason', () => {
     expect(blockedAt(93)).toContain('blocked · stop refused');

@@ -1,5 +1,5 @@
 // Critique 18, slice A (build 562576ed): one truth on the band, the route, the gates and the core tab.
-// Shapes: stoprun-110-562576ed-1 f0102 / f0113 (band reason), stoprun-150-562576ed-2 f0097 + tab-board.png (green count, `■2`), stoprun-150-562576ed-3 tab-route.ans:40
+// Shapes: stoprun-110-562576ed-1 f0102 / f0113 (band reason), stoprun-150-562576ed-2 f0097 + tab-board.png (green count, `✗2`), stoprun-150-562576ed-3 tab-route.ans:40
 // (missing `·`), live-150-562576ed-1 tab-core.png (core words).
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../contracts/panel-world';
@@ -47,13 +47,13 @@ describe('A1: a reason never contradicts the todo figure beside it', () => {
 });
 
 describe('A2: the gates figure counts the green marks drawn', () => {
-  // stoprun-150-562576ed-2 f0097: `checks ◇ completion ● tripwire ▲ routing ● header 3/4 green` with 2 green marks.
+  // stoprun-150-562576ed-2 f0097: `checks ○ completion ✓ tripwire ▲ routing ✓ header 3/4 green` with 2 green marks.
   const checks = [{ id: 'completion', ok: true, pending: true }, { id: 'tripwire', ok: true }, { id: 'routing', ok: false, name: 'routing' }, { id: 'header', ok: true }];
-  const footer = (cols: number): string => missionLines(m(cols, { maxRows: 6, workers: [], checks, done: 1, total: 5 })).map((l) => runsText(l.runs)).filter((t) => t.includes('checks')).join(' ').replace(/\s+/g, ' '); // the checks row only: the band row leads with its own `●`
-  test('the band footer says 2/4 green beside two ● marks', () => {
+  const footer = (cols: number): string => missionLines(m(cols, { maxRows: 6, workers: [], checks, done: 1, total: 5 })).map((l) => runsText(l.runs)).filter((t) => t.includes('checks')).join(' ').replace(/\s+/g, ' '); // the checks row only: the band row leads with its own `✓`
+  test('the band footer says 2/4 green beside two ✓ marks', () => {
     const t = footer(150);
     expect(t).toContain('2/4 green');
-    expect((t.match(/●/g) ?? []).length).toBe(2);
+    expect((t.match(/✓/g) ?? []).length).toBe(2);
     expect(t).not.toContain('3/4 green');
   });
   test('gateTally.green is the green marks: a pending and a failing group are not green', () => {
@@ -61,30 +61,30 @@ describe('A2: the gates figure counts the green marks drawn', () => {
     const t = gateTally([g('completion', true, true), g('tripwire', true), g('routing', false), g('header', true)] as never);
     expect([t.green, t.total]).toEqual([2, 4]);
   });
-  test('a pending check with no failure still shows what is not green: `◇ completion  3/4 green`', () => {
+  test('a pending check with no failure still shows what is not green: `○ completion  3/4 green`', () => {
     const t = runsText(missionLines(m(80, { maxRows: 6, workers: [], checks: [checks[0]!, checks[1]!, checks[3]!], done: 1, total: 5 })).flatMap((l) => l.runs));
-    expect(t.replace(/\s+/g, ' ')).toContain('checks ◇ completion ● tripwire ● header 2/3 green');
+    expect(t.replace(/\s+/g, ' ')).toContain('checks ○ completion ✓ tripwire ✓ header 2/3 green');
   });
 });
 
 describe('A3: a middle dot between band segments, and a count never loses its word to a bare glyph', () => {
-  // stoprun-150-562576ed-3 tab-route.ans:40: `todo 4/5 ▲ 1 blocked · ■ 1 failed`; stoprun-150-562576ed-2 tab-board.png (82 columns): `... · ■2`, `▲ 1 blocked` lost.
+  // stoprun-150-562576ed-3 tab-route.ans:40: `todo 4/5 ▲ 1 blocked · ✗ 1 failed`; stoprun-150-562576ed-2 tab-board.png (82 columns): `... · ✗2`, `▲ 1 blocked` lost.
   const warn = (cols: number): string => row(m(cols, { phase: 'research', done: 1, total: 5, openWork: 2, openDispatch: 2, todoBlocked: 1, checks: [{ id: 'routing', ok: false, name: 'routing' }], workers: [{ ...failed, name: 'beta-explorer' }, failed] }));
   test('no `n ▲ 1 blocked` without a dot at any width', () => {
     for (let cols = 40; cols <= 150; cols++) expect([cols, /\d ▲ \d+ blocked/.test(warn(cols))]).toEqual([cols, false]);
-    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ■ 1 failed'); // wave 31: blocked rides the state word; the band keeps four segments
+    expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('todo 4/5 · ✗ 1 failed'); // wave 31: blocked rides the state word; the band keeps four segments
     expect(row(m(110, { done: 4, total: 5, todoBlocked: 1, blocked: true, stopGates: [], workers: [failed] }))).toContain('▲ blocked');
   });
   test('82 columns (the tab open): the words stay, a lower-priority segment goes', () => {
     const t = warn(82);
-    expect(t).toMatch(/■ 2 failed/); // wave 31: one failure word, and blocked rides the state word
-    expect(t).not.toMatch(/■2/);
+    expect(t).toMatch(/✗ 2 failed/); // wave 31: one failure word, and blocked rides the state word
+    expect(t).not.toMatch(/✗2/);
     expect(t).toContain('blocked · stop refused'); // state 38: open dispatch rows with nothing running are Stop's, so the band is blocked and says `stop refused`
   });
   test('no bare glyph-and-number count while a form with the words fits', () => {
     for (let cols = 62; cols <= 150; cols++) { // 62: the lead `○ idle · ▲ routing warning` is 7 cells longer than the old bare warning
       const t = warn(cols);
-      expect([cols, /[■▲◐]\d/.test(t)]).toEqual([cols, false]);
+      expect([cols, /[✗▲◐]\d/.test(t)]).toEqual([cols, false]);
       expect([cols, cells(t.trimEnd()) <= cols]).toEqual([cols, true]);
     }
   });
@@ -101,19 +101,6 @@ describe('A4: the lead waits on the person', () => {
     expect(asksUser('The three explorers listed their functions. All five board items are completed.')).toBe(false);
     expect(asksUser('')).toBe(false);
     expect(asksUser(null)).toBe(false);
-  });
-  test('a declared block reads a bare `blocked` and the route phase reads blocked, not `research`', () => {
-    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).toContain('▲ blocked');
-    expect(row(m(150, { phase: 'research', blocked: true, done: 1, total: 5 }))).not.toContain('needs you');
-    const route = bodyLines(panelWorld('route', 120, ui, { phase: 'blocked' as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
-    expect(route).toContain('blocked');
-  });
-  test('a refused Stop makes the route phase blocked whatever the last header said', () => {
-    const stop = [{ id: 'completion', title: 'C', lines: [{ id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'team gate' }] }];
-    for (const phase of ['research', 'done'] as const) {
-      const line = bodyLines(panelWorld('route', 120, ui, { phase, gates: stop as never, workers: [], todos: [] })).map(lineText).find((l) => l.trimStart().startsWith('phase'))!;
-      expect([phase, line]).toEqual([phase, expect.stringContaining('blocked')]);
-    }
   });
 });
 

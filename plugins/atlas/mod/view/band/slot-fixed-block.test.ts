@@ -85,7 +85,7 @@ function frameOf(st: Stage, cols: number, budget: number, held: number, gates: u
 
 const SIZES = [[150, 45, 93], [110, 40, 56], [150, 45, 145], [110, 40, 105]] as const;
 const bandIndex = (f: Frame): number => f.plan.lead;
-const MARKER = '◖ ◆ ATLAS ◗ ▸ SUBAGENTS';
+const MARKER = 'SUBAGENTS';
 
 /** The whole scenario at one size, `held` carried between stages as the register does. */
 function scenario(screen: number, cols: number): { st: Stage; f: Frame }[] {
@@ -108,7 +108,7 @@ describe('1. one block, no hidden rows, no spacers', () => {
     });
     test(`${cols} cells: the TODO box top sits on the row under the band in every state`, () => {
       for (const { st, f } of scenario(screen, cols)) {
-        const at = f.rows.findIndex((r) => r.includes('▸ TODO'));
+        const at = f.rows.findIndex((r) => r.includes('TODO'));
         expect(at - bandIndex(f), st.name).toBe(1);
       }
     });
@@ -122,39 +122,39 @@ describe('1. one block, no hidden rows, no spacers', () => {
 });
 
 // Wave 32 (hud32): the SUBAGENTS box and its AGENT STATE TASK LAST RESULT header are gone in every state; the lower rule of the one block carries the title (`◑ 3 running` while they work,
-// `● 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
+// `✓ 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
 describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower rule of the block', () => {
   for (const [, screen, cols] of SIZES) {
     test(`${cols} cells: agent and clock are right-aligned on the row; the SUBAGENTS table exists in every state that has an agent (wave 36)`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         const listed = st.running + st.returned > 0;
-        expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS/.test(r)), `${st.name}: wave 36: the table appears in every state that has an agent`).toBe(listed);
+        expect(f.rows.some((r) => /^╭.*SUBAGENTS/.test(r)), `${st.name}: a titled box in every state (an empty one before the first agent)`).toBe(true);
         if (!listed) continue;
-        expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS.*╮\s*$/.test(r)), `${st.name}: the title rule`).toBe(true);
+        expect(f.rows.some((r) => /^╭.*SUBAGENTS.*╮\s*$/.test(r)), `${st.name}: the title rule`).toBe(true);
       }
-      const ownerW = cols - 1 - 36 >= 28 ? 16 : 12; // state 39: the OWNER column of the TODO grid
+      const ownerW = 99; // the OWNER column holds a whole agent name at these widths
       for (const { st, f } of scenario(screen, cols)) {
         for (let i = st.returned; i < st.returned + st.running; i++) {
           const row = f.rows.find((r) => r.includes(`T${i + 1} `))!;
-          expect(row, `${st.name} T${i + 1}`).toMatch(/^[ ▸] [◐◓◑◒] T\d/);
-          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > ownerW ? `${NAMES[i]!.slice(0, ownerW - 1)}…` : NAMES[i])}\\s+\\d+:\\d\\d$`));
+          expect(row, `${st.name} T${i + 1}`).toMatch(/^[│▌] [◐◓◑◒] T\d/);
+          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > ownerW ? `${NAMES[i]!.slice(0, ownerW - 1)}…` : NAMES[i])}\\s+(?:\\d+:\\d\\d\\s+)?│$`));
         }
       }
     });
     test(`${cols} cells: at rest the title reads \`● N done\` over an AGENT STATE TIME table, and never the old STATE TASK header`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         if (st.running !== 0 || st.returned === 0) continue;
-        const rule = f.rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r));
+        const rule = f.rows.find((r) => /^╭.*SUBAGENTS/.test(r));
         expect(rule, st.name).toBeDefined();
-        expect(rule!, st.name).toMatch(st.blocked ? /■ \d+ failed|● \d+ done/ : /● \d+ done/);
-        expect(f.rows.some((r) => /^\s+AGENT\s+STATE\s+TIME\b/.test(r)), st.name).toBe(true);
+        expect(rule!, st.name).toMatch(st.blocked ? /✗ \d+ failed|✓ \d+ done/ : /✓ \d+ done/);
+        expect(f.rows.some((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE\s+NOW\b/.test(r)), st.name).toBe(true);
         expect(f.rows.some((r) => /AGENT\s+STATE\s+TASK/.test(r)), st.name).toBe(false);
       }
     });
   }
   test('the SUBAGENTS rule is the same shape at 150 and 110 (docked and not)', () => {
-    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╭.*▸ SUBAGENTS/.test(r))!;
-    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╭─ ◖ ◆ ATLAS ◗ ▸ SUBAGENTS ● 3 done.*╮\s*$/);
+    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╭.*SUBAGENTS/.test(r))!;
+    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╭─ SUBAGENTS ─+ ✓ 3 done ─╮\s*$/);
   });
 });
 
@@ -164,8 +164,8 @@ describe('3. a queued TODO row whose agent runs shows running', () => {
     const agent = { name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', tool: 'Read', startedAt: NOW - 5000 } as never;
     const rows = hudLines({ todos: ownTodos(todos), agents: [agent] }, { cols: 93, maxRows: 10, ui, now: NOW }).map((r) => r.map((x) => x.t).join(''));
     const t1 = rows.find((r) => r.includes('T1 read alpha.py'))!;
-    expect(t1).toMatch(/^[ ▸] [◐◓◑◒] T1/);
-    expect(t1).not.toMatch(/queued|◇/);
+    expect(t1).toMatch(/^[│▌] [◐◓◑◒] T1/);
+    expect(t1).not.toMatch(/queued|○/);
   });
 });
 
@@ -180,19 +180,22 @@ describe('4. accent motion and the done fade', () => {
     const f = frameOf({ name: 'one returned', running: 2, returned: 1 }, 93, hostBudget(45, 2), 0);
     for (const g of f.hud.flat().filter((s) => /^[◐◓◑◒]$/.test(s.t))) expect(g.color).toBe(PALETTES.mocha.accent);
   });
-  const doneIn = (since: number): number[] => {
+  const markAt = (since: number): { bold?: boolean; bg?: string } | undefined => {
     const todos: TodoItem[] = [{ id: 't1', content: 'T1 read alpha.py', status: 'completed', owner: 'alpha-explorer' } as TodoItem];
     const ctx: MotionCtx = { now: 10_000 + since, entry: () => ({ state: 'done', changed: 10_000, born: 0 }) };
     const rows = hudRows({ todos: ownTodos(todos), agents: [] }, { cols: 93, maxRows: 10, ui: ui256, now: NOW, motion: ctx });
-    return rows.flat().filter((s) => s.t === '●' || s.t.includes('●')).map((s) => hostTo256(s.color!));
+    return rows.flat().find((s) => s.t === '✓');
   };
-  test('the done mark steps 231, 151 (held to 800 ms), then 114, so a 0.5 s capture sees 151', () => {
+  test('the done mark flashes bold on a green-tinted fill, a lighter fill, then none (held to 800 ms), then the resting row, so a 0.5 s capture sees the settle', () => {
     expect(MOTION_STEP_MS).toBe(200);
-    expect(doneIn(0)[0]).toBe(231);
-    expect(doneIn(199)[0]).toBe(231);
-    for (const t of [200, 300, 500, 799]) expect(doneIn(t)[0], `${t} ms`).toBe(151);
-    expect(doneIn(800)[0]).toBe(114);
-    expect(DONE_FADE.map(hostTo256)).toEqual([231, 151]);
+    expect(markAt(0)!.bold).toBe(true);
+    expect(markAt(199)!.bg).toBe(markAt(0)!.bg); // the strong fill holds one beat
+    expect(markAt(200)!.bg).not.toBe(markAt(0)!.bg); // then the light one
+    expect(markAt(200)!.bold).toBeUndefined();
+    const rest = markAt(800)!;
+    for (const t of [400, 500, 799]) expect(markAt(t)!.bg, `${t} ms`).toBe(rest.bg); // no fill from the third beat
+    expect(rest.bold).toBeUndefined();
+    expect(DONE_FADE.map(hostTo256)).toEqual([231, 151]); // the shared fade table the band's own done word still steps
   });
   test('the band done word fades the same way', () => {
     const m = { cols: 100, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'done'], phase: 'done', done: 5, total: 5, workers: [], checks: null, busy: false, ranSecs: 58, restSecs: 3, ui: ui256 };
@@ -213,11 +216,11 @@ describe('5. band segments, one failure word, one warning colour', () => {
     const rows = [150, 93, 56].map((cols) => bandLines({ ...base, cols, busy: true, turnSecs: 28, workers: [worker('running'), worker('failed')] } as never)[0]!.runs.map((x) => x.t).join('').trim());
     for (const r of rows) expect(r.split(' · ').length, r).toBeLessThanOrEqual(4);
   });
-  test('the failure word is `■ N failed` in the error colour, in working, blocked, done and idle', () => {
+  test('the failure word is `✗ N failed` in the error colour, in working, blocked, done and idle', () => {
     for (const extra of [{ busy: true }, { busy: true, stopGates: ['stop refused'] }, { busy: false, phase: 'done', restSecs: 3, ranSecs: 58 }, { busy: false, restSecs: 60, ranSecs: 58, lastRun: { workers: 1, failed: 1, secs: 58 } }]) {
       const runs = bandLines({ ...base, cols: 150, workers: [worker('failed')], ...extra } as never)[0]!.runs;
       const text = runs.map((x) => x.t).join('');
-      expect(text, JSON.stringify(extra)).toContain('■ 1 failed');
+      expect(text, JSON.stringify(extra)).toContain('✗ 1 failed');
       expect(runs.find((x) => x.t === '1 failed')?.tone, JSON.stringify(extra)).toBe('bad');
     }
   });

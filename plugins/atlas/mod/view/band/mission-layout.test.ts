@@ -75,8 +75,8 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
       const b = band(model({ cols, checks: bad, phase: 'verify', done: 3 }));
       expect(b).not.toContain('blocked');
       expect(b).toContain(cols >= 60 ? '1 gate to check' : '1 gate'); // the short form below 60 cells
-      expect([cols, /ATLAS ◗ +[●○] (done|idle)/.test(b)]).toEqual([cols, true]); // the state leads
-      expect([cols, b.indexOf('△') > b.search(/[●○] (done|idle)/)]).toEqual([cols, true]); // and the warning follows it
+      expect([cols, /ATLAS +[✓○] (done|idle)/.test(b)]).toEqual([cols, true]); // the state leads
+      expect([cols, b.indexOf('△') > b.search(/[✓○] (done|idle)/)]).toEqual([cols, true]); // and the warning follows it
       expect([cols, b.includes('▲')]).toEqual([cols, false]); // and never wears the solid blocked triangle
     }
     expect(band(model({ checks: [{ id: 'a', ok: false }, { id: 'b', ok: false }] }))).toContain('2 gates to check');
@@ -86,7 +86,7 @@ describe('mission-layout: the header never reads idle or all ok beside a failing
   test('the rich band says warning too, after the state', () => {
     const b = runsText(bandLines(model({ cols: 160, rich: true, checks: bad }))[0]!.runs);
     expect(b).not.toContain('blocked');
-    expect(b).toMatch(/ATLAS ◗ +[●○] (done|idle) · △ 1 gate to check/);
+    expect(b).toMatch(/ATLAS +[✓○] (done|idle) · △ 1 gate to check/);
   });
   test('a refused Stop reads BLOCKED with the refusing gate named, in every width form and the rich band', () => {
     for (const cols of [160, 120, 100, 80, 60, 40]) {

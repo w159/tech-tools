@@ -40,7 +40,7 @@ const view = (cols: number, maxRows: number) => ({ cols, maxRows, ui, rich: fals
 const HUD_WIDTHS = [88, 104, 138];
 const PANE_WIDTHS = [55, 43, 37];
 /** A TODO row starts with its state glyph and `T<n> `; the SUBAGENTS rows start with theirs too, but name a worker. */
-const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T\d /;
+const PLAN_ROW = /^[│▌] [◐◓◑◒○✓✗▲◉] T\d /;
 
 describe('1. titles use the width the row has', () => {
   for (const cols of HUD_WIDTHS) {
@@ -65,7 +65,7 @@ describe('1. titles use the width the row has', () => {
     const row = rows.find((r) => r.includes('very long'))!;
     expect(row).toContain('…');
     expect(row).not.toContain('...');
-    expect(row.trimEnd().endsWith('queued')).toBe(true);
+    expect(row).toMatch(/ queued /); // the state word stays whole (the OWNER cell follows it now)
   });
   test('the pane route tab at 55 columns shows whole titles, owners aside', () => {
     const m = panelWorld('route', 55, ui, { todos: PLAN.map((t) => ({ id: t.id, label: t.content, state: 'queued' as const })), workers: [] });
@@ -77,7 +77,7 @@ describe('1. titles use the width the row has', () => {
 });
 
 describe('2. the tab strip fits the pane and the lit tab is the filled chip', () => {
-  const tabs = ['route', 'team', 'channel', 'gates', 'core'] as const;
+  const tabs = ['route', 'channel', 'gates', 'core'] as const; // redesign: the team view lives in the status tab, so the strip has four chips
   for (const cols of PANE_WIDTHS) {
     for (const tab of tabs) {
       test(`pane ${cols}, ${tab} lit: whole words (a second strip row where one does not fit), the lit label filled, no rule`, () => {
@@ -91,7 +91,7 @@ describe('2. the tab strip fits the pane and the lit tab is the filled chip', ()
         const lit = prows.flatMap((p) => p.runs).filter((x) => x.bg === 'accent').map((x) => x.t.trim());
         expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: /); // wave 43: no key letter is drawn
         expect(lit).toHaveLength(1);
-        expect(['status', 'team', 'chan', 'channel', 'gates', 'core', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
+        expect(['status', 'team', 'chan', 'channel', 'gates', 'core', 'health', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
         if (cols >= 55) expect(lit[0]).toBe(entry.label);
       });
     }
@@ -162,8 +162,8 @@ describe('4. no fold marker', () => {
 
 describe('5. the plan row budget and the overflow row', () => {
   test('five todos and three agents: the compact form holds all five plan rows', () => {
-    // ribbon + 5 plan rows + rule + agents ribbon + the column names + 3 agents + rule = 13 rows (round 5: the closing rules stay; the blank goes first)
-    expect(hudCompactRows(input, 88)).toBe(13);
+    // TODO box: top rule + column names + 5 plan rows + bottom rule, SUBAGENTS box: top rule + column names + 3 agents + bottom rule = 14 rows (redesign: each box carries its own header row)
+    expect(hudCompactRows(input, 88)).toBe(14);
     const rows = hudLines(input, view(88, hudBudget(15, hudCompactRows(input, 88), 7, true))).map(runsString);
     expect(rows.filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
     expect(rows.some((r) => /more todos?/.test(r))).toBe(false);
@@ -171,7 +171,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('when rows run short the cut says how many are not shown, in plain words, with no ellipsis', () => {
     const rows = hudLines(input, view(88, 5)).map(runsString); // wave 31: the merged block holds all five plan rows and the agents on them in 7 rows, so the cut needs a slot under that
     expect(rows[0]).not.toMatch(/\+\d+ more/); // state 39: one overflow idiom, a dim summary row inside the box, never the title
-    const more = rows.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
+    const more = rows.find((r) => /^│ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
     expect(more, rows.join('\n')).toBeDefined();
     expect(more).not.toContain('...');
     const planRows = rows.filter((r) => PLAN_ROW.test(r)).length;
@@ -180,7 +180,7 @@ describe('5. the plan row budget and the overflow row', () => {
   test('a plan longer than five still keeps its window and counts the rest', () => {
     const many = Array.from({ length: 8 }, (_, i) => todo(`t${i}`, `T${i + 1} item ${i}`, 'pending'));
     const rows = hudLines({ todos: many, agents: [] }, view(88, hudCompactRows({ todos: many, agents: [] }, 88))).map(runsString);
-    expect(rows.some((r) => /◇ \d+ queued/.test(r))).toBe(true); // state 39: the summary row, not `+N more`
+    expect(rows.some((r) => /○ \d+ queued/.test(r))).toBe(true); // state 39: the summary row, not `+N more`
   });
 });
 
@@ -197,7 +197,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
 
   test('the band at the live budget spends rows on blanks while the plan is cut', () => {
     const first = draw(cap);
-    expect(first.map(runsString).some((r) => /\+\d+ more|· \d+ done/.test(r))).toBe(true); // the defect: the plan is cut (windowed or folded onto the ribbon)
+    expect(first.map(runsString).some((r) => /\+\d+ more|· \d+ done|\S \d+ (?:more )?(?:queued|running|done)\b/.test(r))).toBe(true); // the defect: the plan is cut (windowed or folded onto the ribbon)
     expect(bandSpareRows(bandModel(budget - first.length))).toBeGreaterThan(0);
   });
   test('reclaimBlanks shows every plan row once the blanks are handed over, and the band loses only blanks', () => {
@@ -209,7 +209,7 @@ describe('5b. A1: the band blanks go to the plan before the plan is folded', () 
     expect(hud.length).toBeLessThanOrEqual(budget);
     // the band keeps its content: the same non-blank rows before and after
     // (the compact worker rows fill what the HUD leaves, so they give way to the reclaim; the band's own row and its message stay)
-    const WORKER_ROW = /^\s*[◐◓◑◒◐◓◑◒◐◓◇■▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/;
+    const WORKER_ROW = /^\s*[◐◓◑◒◐◓◑◒◐◓○✗▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/;
     const body = (maxRows: number): string[] => (bandTree(els, bandModel(maxRows)) as unknown as Node).props.children.map(text).filter((r: string) => r.trim() !== '' && !WORKER_ROW.test(r));
     expect(body(budget - hud.length)).toEqual(body(budget - first.length));
   });
@@ -226,7 +226,7 @@ describe('5c. an idle band that leaves rows undrawn hands them to the plan', () 
   const doneAgent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'done', model: 'haiku', ui: 'done', since: NOW });
   const plan = PLAN.map((t, i) => ({ ...t, status: i === 0 || i === 2 ? 'completed' : 'pending' }));
   const hudIn: HudInput = { todos: plan, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(doneAgent) };
-  const budget = 15;
+  const budget = 16; // the compact form is 14 rows now (each box has its own header row), so the slot is one taller to leave the band two rows to give back
   const cols = 104;
   const snapshot = busySnap({ squad: [], activity: {}, comms: [] }); // idle: nothing running, so the band draws fewer rows than it is allotted
   const bandModel = (maxRows: number) => ({ snapshot, live: liveWorkers(snapshot, NOW), gates: [], columns: cols, tick: 0, maxRows, workersInHud: true, ui });
@@ -256,7 +256,7 @@ describe('5d. a task that just completed stays in the folded plan', () => {
     const rows = hudLines({ todos: plan, agents: [] }, { cols: 104, maxRows: 5, ui, rich: false, now: NOW }).map(runsString); // state 39: the summary row takes a slot, so the two rows and the summary need 5
     expect(rows.some((r) => r.includes('T3 read gamma.py'))).toBe(true);
     expect(rows.some((r) => r.includes('T2 read beta.py'))).toBe(true);
-    expect(rows.some((r) => /◇ \d+ queued/.test(r))).toBe(true);
+    expect(rows.some((r) => /○ \d+ queued/.test(r))).toBe(true);
   });
 });
 

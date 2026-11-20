@@ -156,8 +156,8 @@ describe('step 4: the narrow band keeps the state glyph, the clock and every non
   const band = (m: MissionModel): string => runsText(bandLines(m)[0]!.runs).trimEnd();
   test('stoprun-110-1 f0098: blocked at 62 cells keeps its clock, the failure and the done count (the reason text goes first)', () => {
     const t = band(base({ stopGates: ['stop refused'], ranSecs: 48, workers: [w('a', 'done'), w('b', 'done'), w('c', 'failed')], tally: { running: 0, waiting: 0, queued: 0, failed: 1, done: 2, blocked: 0 } as never }));
-    expect(t).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? 0:48 ▌ (?:todo )?1\/5 ■1 ▌ .*■1/);
-    expect(t).toMatch(/●2/);
+    expect(t).toMatch(/^ ◆ ATLAS  ▲ blocked(?: · stop refused)? 0:48 ▌ (?:todo )?1\/5 ✗1 ▌ .*✗1/);
+    expect(t).toMatch(/✓2/);
     expect(t.length).toBeLessThanOrEqual(62);
   });
   test('the clock outlasts the reason at every width down to 40 cells', () => {
@@ -171,11 +171,11 @@ describe('step 4: the narrow band keeps the state glyph, the clock and every non
     const m = base({ turnSecs: 39, busy: true, workers: [w('a', 'running'), w('b', 'done'), w('c', 'failed')], tally: { running: 1, waiting: 0, queued: 0, failed: 1, done: 1, blocked: 0 } as never });
     const t = band({ ...m, cols: 100 });
     expect(t).toMatch(/working 0:39/);
-    expect(t).toMatch(/1 running · ● 1 done · ■1$/);
+    expect(t).toMatch(/1 running · ✓ 1 done · ✗1$/);
     for (const cols of [62, 46]) {
       const narrow = band({ ...m, cols });
       expect(narrow, String(cols)).toMatch(/0:39/);
-      expect(narrow, String(cols)).toMatch(/[◐◓◑◒]1 ●1 ■1$/);
+      expect(narrow, String(cols)).toMatch(/[◐◓◑◒]1 ✓1 ✗1$/);
     }
   });
 });
@@ -183,18 +183,6 @@ describe('step 4: the narrow band keeps the state glyph, the clock and every non
 describe('step 3: the channel tab does not contradict itself', () => {
   const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   const text = (over: Partial<PanelModel>): string[] => panelLines(panelWorld('channel', 110, ui, { rows: 40, now: 2_000_000, notes: [], ...over })).map(lineText);
-  test('senders shown: no `○ no messages` above them, `0 messages` under them', () => {
-    const t = text({});
-    expect(t.some((l) => l.includes('senders'))).toBe(true);
-    expect(t.join('\n')).not.toContain('no messages');
-    const at = (re: RegExp): number => t.findIndex((l) => re.test(l));
-    expect(at(/^\s+0 messages$/)).toBeGreaterThan(at(/senders/));
-  });
-  test('no senders: the tab keeps its one `○ no messages` line', () => {
-    const t = text({ workers: [], mates: [], lead: undefined });
-    expect(t.filter((l) => l.includes('○ no messages'))).toHaveLength(1);
-    expect(t.join('\n')).not.toContain('senders');
-  });
 });
 
 describe('step 2: the side panel stepper wears the band\'s glyph (slice S3: no word, no clock)', () => {
@@ -208,28 +196,6 @@ describe('step 2: the side panel stepper wears the band\'s glyph (slice S3: no w
   test('the band note carries the state word', () => {
     noteBandFrame(2, 36, NOW, 'blocked');
     expect(bandFrame()).toEqual({ frame: 2, secs: 36, kind: 'blocked' });
-    forgetBandFrame();
-  });
-  test('stoprun-150-3 f0074: the run built from the band\'s inputs says blocked 0:36, and the panel prints exactly that (truth 41: no copy of a note)', () => {
-    expect(rowOf({ run: { kind: 'blocked', secs: 36 } }).replace(/\s+/g, ' ').trim()).toBe('● plan ▲ research ○ build ○ verify'); // the band's `▲`, on the stage the run is in; the word and the clock are the band's alone
-  });
-  test('live-150-2 f0106: a run that reads idle 0:39 prints idle 0:39, never working', () => {
-    const row = rowOf({ run: { kind: 'idle', secs: 39 } });
-    expect(row.replace(/\s+/g, ' ').trim()).toBe('○ plan ○ research ○ build ○ verify'); // idle: nothing turns, nothing is green
-  });
-  test('a band note is never read: the panel prints the run it was built with', () => {
-    noteBandFrame(2, 36, NOW, 'blocked');
-    expect(rowOf({})).toMatch(/[◐◓◑◒] research/); // working: the spinner on the stage
-    forgetBandFrame();
-  });
-  test('the phase strip does not sit lit on `research` after the plan finished and the band rests', () => {
-    const todos = [1, 2, 3].map((i) => ({ id: `t${i}`, label: `T${i}`, state: 'done' as const }));
-    noteBandFrame(2, 39, NOW, 'idle');
-    const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'idle', secs: 39 }, phase: 'research', todos });
-    const t = panelLines(m).map(lineText);
-    const chain = t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
-    expect(chain).toMatch(/● research/);
-    expect(chain).not.toMatch(/○ research/);
     forgetBandFrame();
   });
 });

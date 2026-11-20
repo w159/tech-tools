@@ -37,6 +37,7 @@ const ONE_CELL: ReadonlyArray<readonly [number, number]> = [
   [0x25a0, 0x25e1], // geometric shapes up to (not incl.) the U+25E2 triangles
   [0x2726, 0x2727], // four-point stars
   [0x2800, 0x28ff], // braille
+  [0x2713, 0x2717], // check mark and ballot x (the done and failed marks)
   [0x2da, 0x2da], // ring above (spark)
 ];
 const cellWidth = (s: string): number => {

@@ -464,6 +464,34 @@ def test_install_staged(tmp_path):
     assert irc.install_staged(stage, root, None) == []
 
 
+def _stage_files(tmp_path, names):
+    stage, root = tmp_path / "stage", tmp_path / "root"
+    root.mkdir()
+    for n in names:
+        (stage / n).parent.mkdir(parents=True, exist_ok=True)
+        (stage / n).write_bytes(b"x")
+    return stage, root
+
+
+def test_install_staged_directory_owner_installs_nested(tmp_path):
+    stage, root = _stage_files(tmp_path, ["m/view/panel/a.ts", "m/view/panel/sub/b.ts", "m/view/panelx/c.ts"])
+    assert irc.install_staged(stage, root, ["m/view/panel"]) == ["m/view/panel/a.ts", "m/view/panel/sub/b.ts"]
+    assert (root / "m/view/panel/sub/b.ts").read_bytes() == b"x"
+    assert not (root / "m/view/panelx/c.ts").exists()
+
+
+def test_install_staged_glob_owner(tmp_path):
+    stage, root = _stage_files(tmp_path, ["m/hud/hud1.ts", "m/hud/other.ts"])
+    assert irc.install_staged(stage, root, ["m/hud/hud*"]) == ["m/hud/hud1.ts"]
+    assert not (root / "m/hud/other.ts").exists()
+
+
+def test_install_staged_exact_owner_and_unowned_skipped(tmp_path):
+    stage, root = _stage_files(tmp_path, ["a.py", "b.py"])
+    assert irc.install_staged(stage, root, ["a.py"]) == ["a.py"]
+    assert not (root / "b.py").exists()
+
+
 def test_install_staged_newer_stage_overwrites_and_equal_mtime_skips(tmp_path):
     stage, root = tmp_path / "s", tmp_path / "r"
     stage.mkdir()

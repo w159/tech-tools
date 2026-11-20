@@ -29,7 +29,7 @@ test('C3: every card opens with the rail; the finish cards carry the brand `◆ 
 
 test('C3: the state word is followed by two spaces and the name, whatever the word', () => {
   const c = cards()
-  expect(c.done).toMatch(/● done {2}wave-a/)
+  expect(c.done).toMatch(/✓ done {2}wave-a/)
   expect(c.failed).toMatch(/failed {2}wave-b/)
   expect(c.killed).toMatch(/failed {2}wave-c/)
   expect(c.dispatch).toMatch(/running {2}impl-a/)

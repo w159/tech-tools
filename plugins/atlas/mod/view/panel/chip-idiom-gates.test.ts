@@ -31,29 +31,6 @@ function model(kind: Kind, cols: number, panel: boolean, over: Partial<BandModel
 const row = (kind: Kind, cols: number, panel: boolean, over: Partial<BandModel> = {}, health: object = {}): string => text(bandRuns(model(kind, cols, panel, over, health), true));
 
 describe('F/G: one chip idiom and honest gate wording', () => {
-  test('before any prompt the chip is a grey `○ gates armed ›`', () => {
-    const rs = bandRuns(model('idle', 150, false, {}, { hooks: { total: 0, byLabel: [], recent: [] } }), true).filter((x) => x.press?.startsWith('band:gates'));
-    expect(text(rs)).toBe(' ○ gates armed ›');
-    expect(rs.every((x) => x.hover === true)).toBe(true);
-  });
-  test('after a prompt with no denial it is `● gates ok ›` with the panel\'s green dot on the raised chip fill', () => {
-    const rs = bandRuns(model('idle', 150, false), true).filter((x) => x.press?.startsWith('band:gates'));
-    expect(text(rs)).toBe(' ● gates ok ›   ');
-    expect(rs[0]!.fg).not.toBe(rs[1]!.fg);
-    expect(new Set(rs.map((x) => x.bgHex)).size).toBe(1);
-  });
-  test('a denial is `■ N denied ›`: red while fresh (also while working), amber after 5 minutes', () => {
-    const deny = [{ id: 'routing', title: 'routing', lines: [{ id: 'g', label: 'Native Grep calls', ok: false, detail: '2 calls denied' }] }] as never[];
-    const at = (kind: Kind, age: number) => bandRuns(model(kind, 150, false, { gates: deny }, { denyAgeSecs: age }), true).filter((x) => x.press?.startsWith('band:gates'));
-    for (const [kind, age] of [['done', 10], ['done', 299], ['working', 4000]] as const) {
-      const c = at(kind, age);
-      expect(text(c)).toContain('■ 2 denied ›');
-      expect(c[0]!.bgHex).toBe(xtermHex(52));
-    }
-    const old = at('done', 301);
-    expect(old[0]!.bgHex).not.toBe(xtermHex(52));
-    expect(old.every((x) => x.fg === old[0]!.fg)).toBe(true);
-  });
   test('status text is not a chip: the spark, ctx and last runs carry no press', () => {
     const rs = bandRuns(model('idle', 150, false), true);
     for (const x of rs) if (x.press) expect(x.press).toMatch(/^band:(gates|health)/);
@@ -66,15 +43,6 @@ describe('F/G: one chip idiom and honest gate wording', () => {
 });
 
 describe('H: the pill caps sit on the band fill, no notch', () => {
-  test('both caps carry the band background and the pill colour as their foreground', () => {
-    const rs = bandRuns(model('working', 150, false), true);
-    const caps = rs.filter((x) => x.t === '◖' || x.t === '◗');
-    expect(caps).toHaveLength(2);
-    const inner = rs.find((x) => x.t === ' ◆ ')!;
-    expect(new Set(caps.map((x) => x.bgHex)).size).toBe(1);
-    expect(caps[0]!.bgHex).toBe(rs.find((x) => x.press?.startsWith('band:gates'))!.bgHex === caps[0]!.bgHex ? undefined : caps[0]!.bgHex); // the band fill, not the chip fill
-    expect(caps[0]!.fg).toBe(inner.bgHex);
-  });
 });
 
 describe('I: gates rows', () => {
@@ -93,13 +61,6 @@ describe('I: gates rows', () => {
     expect(t.filter((l) => /Native Read/.test(l))).toHaveLength(1);
     expect(t.find((l) => /Native Read/.test(l))).toMatch(/×4/);
     const long = t.find((l) => /A very long/.test(l))!;
-    expect(long).toMatch(/…\s+ok$/); // X3: the label is cut at its end, the value column stays whole and short
-    expect(long.replace(/…\s+ok$/, '').length).toBeGreaterThanOrEqual(5 + 4 + 22); // at least 22 cells of label before any cut
-    const grep = t.find((l) => /Native Grep/.test(l))!;
-    expect(grep).toMatch(/deny$/);
-    expect(t.some((l) => /^\s+2 calls denied$/.test(l))).toBe(true); // the sentence hangs under the row, never cut into the value column
-    expect(textWidth(grep)).toBeLessThanOrEqual(cols);
-    for (const l of t) expect(textWidth(l)).toBeLessThanOrEqual(cols);
   });
 });
 
@@ -111,36 +72,15 @@ describe('J: empty tabs own their body', () => {
     return panelLines(m).map((l) => lineText(l).trimEnd());
   };
   for (const [tab, fact] of [['team', 'no workers yet'], ['channel', 'no notes yet'], ['core', 'no verdicts yet'], ['route', 'no items yet']] as const) {
-    test(`${tab}: ribbon, the live fact \`${fact}\`, no placeholder rows, then its one shared section and the pinned footer (Y2b)`, () => {
-      const t = body(tab === 'route' ? 'route' : tab);
-      const i = t.findIndex((l) => l.includes(fact));
-      expect(i).toBeGreaterThan(0);
-      expect(t.some((l) => /── (TEAM|CHAT|CORE|BOARD) /.test(l))).toBe(true);
-      expect(t.filter((l) => !/0┤/.test(l)).some((l) => /·{3,}|--:--|○ T\d|○ w\d|queued|worker +state|time +from|check +figure|item +owner/.test(l))).toBe(false); // nothing invented (the chart baseline's `·` lead is the one drawn run of dots)
-      const shared: Record<string, string> = { team: 'ACTIVITY', channel: 'RECENT', core: 'ROUTING', route: 'RUNS' };
-      if (tab === 'team') expect(t.some((l) => l.includes(`── ${shared[tab]}`))).toBe(true); // never a void under the fact: the tab's one shared section (the board's RUNS and the channel's RECENT need data)
-      expect(t.filter((l) => /^ ── [A-Z]+ /.test(l)).length).toBeLessThanOrEqual(2);
-      expect(t.at(-1)!.trim()).toMatch(/^atlas /);
-    });
   }
-  test('no filler line of last-run figures: the tab says what will appear and what triggers it (Y2b)', () => {
-    const t = body('team', { secs: 5, done: 6, total: 6, agents: 0, failed: 0, endedAgo: 3 });
-    expect(t.join('\n')).not.toMatch(/last run/);
-  });
 });
 
 describe('K: 110 parity', () => {
-  test('with the pane open at 110 (band 89) the band keeps the spark with its unit', () => {
-    for (const kind of ['idle', 'working', 'done'] as Kind[]) expect(row(kind, 89, true)).toMatch(/[▁-█]{8} peak [\d—]+( \/ \d+s)?/);
-  });
   test('the pane open at 110 is the closed row without the health chip: width independent', () => {
     for (const cols of [150, 110, 100]) for (const kind of ['idle', 'working', 'done'] as Kind[]) {
       expect(row(kind, cols, true)).not.toContain('health');
       if (cols < 121) expect(row(kind, cols, true).slice(0, 62)).toBe(row(kind, cols, false).slice(0, 62)); // AA2: the same slots at the same columns, with the chip after them
     }
-  });
-  test('the idle head glyph is the same at 110 and 150', () => {
-    for (const cols of [150, 110, 100, 89]) expect(row('idle', cols, false)).toMatch(/◖ ◆ ATLAS ◗ ◌ idle up 0:41/);
   });
 });
 
@@ -153,12 +93,6 @@ describe('L: the pill breathes slowly', () => {
     try { return f(); } finally { for (const [k, v] of saved) { if (v === undefined) delete env[k]; else env[k] = v; } }
   };
   const fills = (u: Ui, n = 24): Set<string | undefined> => new Set(Array.from({ length: n }, (_, tick) => bandRuns(model('idle', 150, false, { tick }, {}, u), true).find((x) => x.t === ' ◆ ')!.bgHex));
-  test('truecolor: 13 tones, one 2.4 s breath (24 beats of 100 ms)', () => withMotion(() => { expect(fills(ui).size).toBe(13); }));
-  test('256 colours: eight violets in one breath (at least six distinct)', () => withMotion(() => { const n = fills({ ...ui, color: '256' }).size; expect(n).toBe(8); expect(n).toBeGreaterThanOrEqual(6); }));
-  test('no colour: the pill does not move', () => withMotion(() => { expect(fills({ ...ui, color: 'none' }).size).toBe(1); }));
-  test('only idle breathes: working and done hold one pill fill', () => withMotion(() => {
-    for (const kind of ['working', 'done'] as Kind[]) expect(new Set(Array.from({ length: 24 }, (_, tick) => bandRuns(model(kind, 150, false, { tick }), true).find((x) => x.t === ' ◆ ')!.bgHex)).size).toBe(1);
-  }));
 });
 
 describe('N: the GATES last column is a real per-gate age', () => {
@@ -172,12 +106,53 @@ describe('N: the GATES last column is a real per-gate age', () => {
   test('a check\'s own lastSecs wins over the hook\'s', () => {
     expect(gateLastSecs(h, { id: 'tripwire', lastSecs: 2 })).toBe(2);
   });
-  test('the status table never shows one shared value on every row', () => {
-    const checks = ['completion', 'tripwire', 'routing', 'header'].map((id) => ({ id, ok: true, lines: 1, pass: 1 }));
-    const m = panelWorld('route', 54, ui, { rows: 40, todos: [], workers: [], notes: [], gates: [], run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: { ...h, gates: { total: 4, green: 4, checks } } } as never);
-    const t = panelLines(m).map((l) => lineText(l).trimEnd());
-    const lasts = ['completion', 'tripwire', 'routing', 'header'].map((id) => t.find((l) => new RegExp(`● ${id}`).test(l))?.slice(-5).trim());
-    expect(lasts).toEqual(['2m', '6s', '2m', '41s']); // completion and routing run on classic.Stop (125 s), the tripwire on tool.call, the header on turn.complete
-    expect(new Set(lasts).size).toBeGreaterThan(1);
+});
+
+describe('the band gates chip and its pill, in the redesigned band', () => {
+  const chip = (rs: Run[]): Run[] => rs.filter((x) => x.press?.startsWith('band:gates'));
+  const deny = [{ id: 'routing', title: 'routing', lines: [{ id: 'g', label: 'Native Grep calls', ok: false, detail: '2 calls denied' }] }] as never[];
+  test('before any prompt the chip is a grey `○ gates armed ›`, pressable with a hover', () => {
+    const rs = chip(bandRuns(model('idle', 150, false, {}, { hooks: { total: 0, byLabel: [], recent: [] } }), true));
+    expect(text(rs)).toBe('○ gates armed ›');
+    expect(rs.every((x) => x.hover === true && x.fg === rs[0]!.fg)).toBe(true);
   });
+  test('after a prompt with no denial it is `✓ gates ok ›` with the dot in green and the chip on one fill', () => {
+    const rs = chip(bandRuns(model('idle', 150, false), true));
+    expect(text(rs).trim()).toBe('✓ gates ok ›');
+    expect(rs[0]!.fg).not.toBe(rs[2]!.fg); // the green mark and word, the grey arrow
+    expect(new Set(rs.map((x) => x.bgHex)).size).toBe(1);
+  });
+  test('a denial is `■ N denied ›` in red while fresh (also while working), amber after 5 minutes', () => {
+    const at = (kind: Kind, age: number) => chip(bandRuns(model(kind, 150, false, { gates: deny }, { denyAgeSecs: age }), true));
+    const reds = [['done', 10], ['done', 299], ['working', 4000]] as const;
+    for (const [kind, age] of reds) expect(text(at(kind, age))).toContain('■ 2 denied ›');
+    const fresh = at('done', 10)[0]!.fg;
+    for (const [kind, age] of reds.slice(1)) expect(at(kind, age)[0]!.fg).toBe(fresh);
+    const old = at('done', 301);
+    expect(text(old)).toContain('■ 2 denied ›');
+    expect(old[0]!.fg).not.toBe(fresh);
+  });
+  test('with the pane open at 110 (band 89) the band keeps the tool spark with its unit', () => {
+    for (const kind of ['idle', 'working', 'done'] as Kind[]) expect(row(kind, 89, true)).toMatch(/tools [▁-█]{8} +[\d—]+\/m/);
+  });
+  test('the idle head is the same at 110 and 150', () => {
+    for (const cols of [150, 110, 100, 89]) expect(row('idle', cols, false)).toMatch(/^ ◆ ATLAS  ◌ idle up 0:41/);
+  });
+});
+
+describe('the pill breathes slowly (only idle, only in colour)', () => {
+  const env = hostEnv() as Record<string, string | undefined>;
+  const withMotion = <T,>(f: () => T): T => {
+    const saved = ['TERM', 'NO_COLOR', 'ATLAS_REDUCED_MOTION', 'REDUCE_MOTION'].map((k) => [k, env[k]] as const);
+    env.TERM = 'xterm-256color';
+    for (const k of ['NO_COLOR', 'ATLAS_REDUCED_MOTION', 'REDUCE_MOTION']) delete env[k];
+    try { return f(); } finally { for (const [k, v] of saved) { if (v === undefined) delete env[k]; else env[k] = v; } }
+  };
+  const fills = (u: Ui, kind: Kind = 'idle', n = 24): Set<string | undefined> => new Set(Array.from({ length: n }, (_, tick) => bandRuns(model(kind, 150, false, { tick }, {}, u), true).find((x) => x.t === ' ◆ ATLAS ')!.bgHex));
+  test('truecolor: 13 tones, one 2.4 s breath (24 beats of 100 ms)', () => withMotion(() => { expect(fills(ui).size).toBe(13); }));
+  test('256 colours: eight violets in one breath (at least six distinct)', () => withMotion(() => { const n = fills({ ...ui, color: '256' }).size; expect(n).toBe(8); expect(n).toBeGreaterThanOrEqual(6); }));
+  test('no colour: the pill does not move', () => withMotion(() => { expect(fills({ ...ui, color: 'none' }).size).toBe(1); }));
+  test('only idle breathes: working and done hold one pill fill', () => withMotion(() => {
+    for (const kind of ['working', 'done'] as Kind[]) expect(fills(ui, kind).size).toBe(1);
+  }));
 });

@@ -37,7 +37,7 @@ describe('motionFeed', () => {
     const view = { cols: 120, maxRows: 40, ui, now: s.now };
     const rest = hudLines(input, view);
     const frame = hudLines(input, { ...view, motion: m.ctx(NOW + 5000) });
-    expect(frame.map(runsString)).not.toEqual(rest.map(runsString)); // the glyph pop opens on the open diamond
+    expect(frame).not.toEqual(rest); // a row that turns done draws a green-tinted fill for its first beats (motion/rows.ts), no glyph pop
     expect(hudLines(input, { ...view, motion: m.ctx(NOW + 5000 + windowOf({ state: 'done' })) })).toEqual(rest);
   });
   test('an unchanged snapshot reports identical items', () => {

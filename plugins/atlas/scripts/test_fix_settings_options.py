@@ -91,7 +91,7 @@ class ManifestOptions(unittest.TestCase):
             self.assertEqual(USER_CONFIG[key]["default"], _code_default(var), key)
 
     def test_version(self):
-        self.assertEqual(MANIFEST["version"], "17.32.0")
+        self.assertEqual(MANIFEST["version"], "17.33.0")
 
 
 def _home() -> str:

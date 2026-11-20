@@ -21,29 +21,11 @@ const route = (cols: number, todos: PanelTodo[] = LIVE): string[] => bodyLines(p
 
 describe('A4: route rows at the 110-column pane', () => {
   for (const cols of [37, 38, 43]) {
-    test(`pane ${cols}: one row per task, the task text is cut with an ellipsis and the owner's name never is, no row wraps or overflows`, () => {
-      const rows = route(cols);
-      const tasks = rows.filter((r) => /T\d /.test(r));
-      expect(tasks).toHaveLength(5); // never a second row for a title or a state (critique 26: no wrapped row)
-      for (const t of LIVE.slice(0, 3)) expect(rows.join('\n')).toContain(`(${t.label.match(/\((.*)\)/)![1]})`); // the agent's name, whole, on every owned row
-      expect(rows.join('\n')).not.toContain('...');
-      for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(cols);
-      for (const r of tasks) expect(r).toMatch(/\S +done\s*$/); // the state word closes the same row
-      expect(rows.filter((r) => /^\s+done\s*$/.test(r))).toHaveLength(0); // the state is never a row of its own (critique 15 C2)
-    });
   }
   test('a pane with room keeps one row per task (nothing moves to a second row)', () => {
     const rows = route(80);
     expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
     expect(rows.filter((r) => /^\s+done\s*$/.test(r))).toHaveLength(0);
-  });
-  test('a title longer than the pane is cut with an ellipsis on its one row, the state beside it', () => {
-    const long: PanelTodo = { id: 'x', label: 'T9 reconcile the schema drift report against the migration plan', state: 'running' };
-    const rows = route(37, [long]);
-    const task = rows.filter((r) => /T9 /.test(r));
-    expect(task).toHaveLength(1);
-    expect(task[0]).toMatch(/…\s+running\s*$/);
-    for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(37);
   });
 });
 

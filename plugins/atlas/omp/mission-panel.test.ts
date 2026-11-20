@@ -23,7 +23,7 @@ test("band: the todo gauge reads `N/M`, no ctx on the one-row band, no board mea
 
 test("band names the capsule, the phase and the worker count; no project, scope or clock", () => {
 	const h = head(model({ team: "fix/low", elapsedSecs: 59, workers: Array.from({ length: 8 }, (_, i) => worker(`implementer-000${i}`)) }));
-	expect(h).toContain("◖ ◆ ATLAS ◗  ◐ working 0:59   phase 4/5");
+	expect(h).toContain(" ◆ ATLAS   ◐ working 0:59   phase 4/5");
 	expect(h).toContain("◐ 8 running");
 	expect(h).not.toMatch(/demo@master|fix\/low|00:59/);
 });
@@ -45,7 +45,7 @@ test("a worker row is `<glyph> <name>  <state word>  <last>  <time>` at every wi
 	expect(lane("solo")).toMatch(/^ ◐ solo +running {2}edit a\.ts/);
 	expect(lane("explorer-9", 99)).not.toContain("explorer ");
 	expect(lane("explorer-9", 100)).not.toContain("explorer ");
-	const scorer = /^\s*([◐◓◑◒◇■▲◉●])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py band worker row
+	const scorer = /^\s*([◐◓◑◒○✗▲◉✓])\s+(\S+)\s+([a-z][a-z-]*)\s{2,}\S/; // live_capture.py band worker row
 	for (const width of [110, 150]) expect(laneOf(model({ width, workers: [worker("explorer-9")] }), "edit")).toMatch(scorer);
 });
 
@@ -72,7 +72,7 @@ test("worker states: running spins with tool and target, thinking dims the last 
 	expect(r.find((x) => x.includes("run-1"))).toMatch(/◐ run-1 +running {2}edit a\.ts/);
 	expect(r.find((x) => x.includes("think-1"))).toMatch(/◐ think-1 +running {2}thinking/);
 	expect(r.find((x) => x.includes("start-1"))).toMatch(/◐ start-1 +running {2}thinking/); // the registry lists it: running, never a clock-guessed starting
-	expect(r.find((x) => x.includes("queued-1"))).toMatch(/◇ queued-1 +queued/);
+	expect(r.find((x) => x.includes("queued-1"))).toMatch(/○ queued-1 +queued/);
 	expect(r.some((x) => /starting/.test(x))).toBe(false);
 });
 
@@ -82,14 +82,14 @@ test("failed and waiting workers sort first and never spin; a finished worker so
 	const plain = out.map(strip);
 	const at = (n: string) => plain.findIndex((x) => x.includes(n));
 	expect([at("fail-1"), at("wait-1"), at("run-1"), at("done-1")]).toEqual([...[at("fail-1"), at("wait-1"), at("run-1"), at("done-1")]].sort((a, b) => a - b));
-	expect(plain[at("fail-1")]).toMatch(/■ fail-1 .* failed/);
+	expect(plain[at("fail-1")]).toMatch(/✗ fail-1 .* failed/);
 	expect(plain[at("wait-1")]).toMatch(/◉ wait-1 .* waiting/);
-	expect(plain[at("done-1")]).toMatch(/● done-1 .* finished/);
+	expect(plain[at("done-1")]).toMatch(/✓ done-1 .* finished/);
 	expect(out[at("fail-1")]).toContain("38;2;255;95;95"); // bad (203)
 	expect(out[at("wait-1")]).toContain("38;2;175;135;255"); // info (141)
 	expect(out[at("done-1")]).toContain("38;2;135;215;135"); // ok (114)
 	const later = renderPanel(model({ workers: ws, tick: 3 })).map(strip);
-	expect(later.find((x) => x.includes("fail-1"))).toContain("■ fail-1");
+	expect(later.find((x) => x.includes("fail-1"))).toContain("✗ fail-1");
 	expect(later.find((x) => x.includes("wait-1"))).toContain("◉ wait-1");
 });
 
@@ -124,14 +124,14 @@ test("the message row drops before the footer when rows run short", () => {
 
 test("footer: checks only, no key hints or buttons on omp", () => {
 	const r = rows(model({ gates: [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }, { id: "routing", title: "r", lines: [{ ok: true, label: "y" }] }] as never, notes: [{ from: "a", to: "b", text: "hi" }] }));
-	expect(r.at(-1)).toBe(" checks  △ tripwire  ● routing  1/2 green".padEnd(140));
+	expect(r.at(-1)).toBe(" checks  △ tripwire  ✓ routing  1/2 green".padEnd(140));
 	expect(r.join("\n")).not.toMatch(/r: route|ctrl\+x/);
 });
 
 test("idle panel: the band reads idle, the last run follows, a failed count is bold text", () => {
 	const idle = (failed: number) => model({ idle: { workers: 3, secs: 70, failed }, workers: [], phase: "done", done: 6, total: 6, maxLines: 6 });
 	const ok = rows(idle(0));
-	expect(ok[0]).toContain("● done · 1:10   todo");
+	expect(ok[0]).toContain("✓ done · 1:10   todo");
 	expect(ok[0]).toContain("6/6");
 	expect(ok[1]).toMatch(/^ last run {2}3 workers · 1:10 · all ok +$/);
 	expect(rows(idle(2))[1]).toContain("2 failed");
@@ -161,11 +161,11 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: `◖ ◆ ATLAS ◗ todo 1/4 · ◐ 1 running`", () => {
+test("below 80 columns the panel is the band alone: ` ◆ ATLAS  todo 1/4 · ◐ 1 running`", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
 	expect(r).toHaveLength(1);
-	expect(r[0]!.trim()).toBe("◖ ◆ ATLAS ◗ ◐ working · todo 1/4 · ◐ 1 running");
+	expect(r[0]!.trim()).toBe("◆ ATLAS  ◐ working · todo 1/4 · ◐ 1 running");
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 
@@ -176,12 +176,11 @@ test("blocked: a bare `▲ blocked` (state 38: no `needs you`) with the amber ma
 	expect(renderPanel(m)[0]).toContain("38;2;255;95;95"); // the error tone (203): blocked is the one red state
 });
 
-test("tones are the round 3 hexes: panel #181825, accent #af87ff (141) on the caps and the pill fill, ink 234 on the pill", () => {
+test("tones are the round 3 hexes: panel #181825, accent #af87ff (141) on the pill fill (no caps), ink 234 on the pill", () => {
 	const out = renderPanel(model());
 	expect(out[0]).toContain("48;2;24;24;37"); // panel
 	expect(out[0]).toContain("38;2;175;135;255"); // accent: the caps and the lit letter (141)
-	expect(out[0]).toMatch(/38;2;175;135;255;48;2;24;24;37m◖/); // the cap: accent on the default background
-	expect(out[0]).toMatch(/1;38;2;28;28;28;48;2;175;135;255m ◆ /); // the pill: 234 ink on a 141 fill, bold
+	expect(out[0]).toMatch(/1;38;2;28;28;28;48;2;175;135;255m ◆ /); // the pill: 234 ink on a 141 fill, bold, no caps
 });
 
 test("latte, NO_COLOR and 256 colours reach the ANSI: latte panel, no colour codes, indexed colours", () => {
@@ -189,7 +188,7 @@ test("latte, NO_COLOR and 256 colours reach the ANSI: latte panel, no colour cod
 	expect(latte[0]).toContain("48;2;230;233;239"); // latte panel
 	const none = renderPanel(model({ ui: { theme: "mocha", ascii: false, color: "none" } }));
 	expect(none.join("")).not.toMatch(/38;|48;/);
-	expect(strip(none[0]!)).toContain("◖ ◆ ATLAS ◗");
+	expect(strip(none[0]!)).toContain(" ◆ ATLAS ");
 	const c256 = renderPanel(model({ ui: { theme: "mocha", ascii: false, color: "256" } }));
 	expect(c256[0]).toMatch(/38;5;\d+/);
 	expect(c256[0]).not.toContain("38;2;");

@@ -144,7 +144,7 @@ describe('step 3: the lane takes the pane (stoprun-110-1: a 12-cell lane, 1-3 ce
   test('the time leaves the lane: at the bar end where no caption row stands, under it with the calls where one does', () => {
     const agents = [{ name: 'alpha-explorer', state: 'done' as const, secs: 13, startMs: 0, endMs: 13_000, calls: [1, 2] }, { name: 'beta-explorer', state: 'done' as const, secs: 26, startMs: 0, endMs: 26_000, calls: [1] }]; // the axis ends on the longest bar, so a shorter one leaves room for its time
     const plain = boardText(boardTimeline(agents, { cols: 38, ui, spark: false }));
-    expect(plain[0]).toMatch(/^ ● alpha {5}▇+ 0:13/);
+    expect(plain[0]).toMatch(/^ ✓ alpha {5}▇+ 0:13/);
     const caps = boardText(boardTimeline(agents, { cols: 38, ui, spark: true }));
     expect(caps.some((l) => /^ {13}0:13 · 2 calls$/.test(l))).toBe(true);
   });
@@ -155,14 +155,14 @@ describe('step 3: the lane takes the pane (stoprun-110-1: a 12-cell lane, 1-3 ce
   });
 });
 
-describe('step 4: a dispatch row follows its worker (stoprun-110-1: `◇ Read ghost.py first… queued` beside a failed ghost)', () => {
+describe('step 4: a dispatch row follows its worker (stoprun-110-1: `○ Read ghost.py first… queued` beside a failed ghost)', () => {
   const dispatchLine = (t: string[], re: RegExp): string => t.find((l) => re.test(l))!;
   for (const columns of [57, 38]) {
-    test(`${columns === 57 ? 150 : 110} cols: the dispatch whose worker failed reads \`■ failed\`, one with no worker yet reads queued`, () => {
+    test(`${columns === 57 ? 150 : 110} cols: the dispatch whose worker failed reads \`✗ failed\`, one with no worker yet reads queued`, () => {
       const t = render(columns);
-      expect(dispatchLine(t, /Read ghost\.py first/)).toMatch(/■ Read ghost\.py first.*\bfailed\b/);
+      expect(dispatchLine(t, /Read ghost\.py first/)).toMatch(/✗ Read ghost\.py first.*\bfailed\b/);
       expect(dispatchLine(t, /Read ghost\.py first/)).not.toMatch(/queued/);
-      expect(dispatchLine(t, /Write the closing/)).toMatch(/◇ Write the closing.*\bqueued\b/);
+      expect(dispatchLine(t, /Write the closing/)).toMatch(/○ Write the closing.*\bqueued\b/);
     });
   }
   test('the row word is the worker\'s word: failed, running, done; queued only with no worker', () => {

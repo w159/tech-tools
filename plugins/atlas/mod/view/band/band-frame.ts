@@ -1,56 +1,69 @@
-// band-frame.ts: the one-row band of the approved frame spec (critics/mock-final.md frames B1-B10), as runs. Pure: the model hands it the pill, the state and the health figures.
+// band-frame.ts: the status ribbon of the redesigned band (SPEC "Band", band.png), as runs. Pure: the model hands it the pill, the state and the health figures.
 //
-// Row grammar (columns 1-based at pill width 11): pill 1-11, one space, the state slot from column 13: head (17 cells, `◌ idle up 0:41`, `◐ test 3/6`, `● done 6/6`) and, from W >= 85, a detail
-// slot (1 gap + 10 cells: the newest tool while working, `ended 12s` once done), then segments joined by ` │ `: the gates chip (12 cells, fixed), the events spark (20/10/5 cells by width) with
-// `%3d ev/5m`, or the bare `%3d/5m` when the spark does not fit, then the extras `ctx %3d%%`, `hook %3dms`, `last %-4s`, `$0.00` while they fit, then (pane closed) the 10-cell `▸ health` chip,
-// right-anchored. Every figure is fixed width so the dividers never move when digits change. Narrowing order (2.7): state slot, gates chip, spark or count, health chip, detail slot, extras from the end.
-// Colour (2.4): band bg 235, text 252, dim 244, rules 238, chips bg 239 fg 183, alert chip bg 52 fg 210, ok green 78 only on the done head, amber 214 for ctx >= 70 % and hook p50 >= 50 ms, red 203 for
-// the denial mark. The only thing that changes colour with time is the heartbeat glyph (97 to 183).
+// Row grammar: the `◆ ATLAS` pill, one space, the state slot (head: braille spinner, the phase word, `n/m` and the segmented phase bar; idle `◌ idle up 0:41`, done `✓ done 6/6 ▰▰▰▰▰▰`; from W >= 121 a detail
+// slot after it: the newest tool while working, `ended 12s` once done), then slots joined by a thin ` │ `: the gates pill (16 cells, fixed: `■ 2 denied ›`), the tool rate (`tools ▁▂▃▅▇▆▃▂ 17/m`, 20 cells), the hook
+// median (`hook p50 7ms`), the context (`ctx ━━━━━━━ 27%`: a thin bar, `━` filled and faint), then (pane closed) the 10-cell `▸ health` chip, right-anchored. Every figure is fixed width so the dividers never
+// move when digits change. Narrowing order: state slot, gates pill, tool rate, health chip, detail slot, hook, context.
+// Colour: text on the panel (no band fill), faint rules, green only on the done head and a healthy figure, amber for ctx >= 70 % and hook p50 >= 100 ms, red for the denial mark. Motion (a MotionCtx-free
+// render is the resting one): the spinner turns, the tool-rate window slides with the clock, a new denial pulses its pill once.
 import { contrast, elapsedClock, PALETTES, xtermHex, type Run, type Ui } from '../../design/atlas-ui';
 import { idleRamp } from './band-motion';
 import { blockSpark } from '../../design/chart';
 import { agoText, gatesSummary, promptedOf, type Health } from '../../data/idle-health';
+import { callBuckets } from '../../data/live';
 import { metricsOf } from '../../data/metrics';
 import { fitText, textWidth } from '../../design/theme';
 
-/** Cells of the state head (`◌ idle up 0:41`); the detail slot adds a gap and DETAIL_W after it (AA2: packed in one 28-cell state slot, `● done 6/6 · ended 18s`). */
-const HEAD_W = 17;
+/** Cells of the state head (`⠋ implement 5/6 ▰▰▰▰▰▱`); the detail slot adds a gap and DETAIL_W after it. */
+const HEAD_W = 22;
 const DETAIL_W = 10;
 /** The head's width below NARROW_BELOW cells of band (the pane open at 110 columns). */
 const HEAD_NARROW = 11;
 const NARROW_BELOW = 75;
-/** The detail rides the state slot from this band width, while the pane is closed (the pane's NOW row says it otherwise): 121 = the state slot with detail, every figure slot and the health chip. */
-export const DETAIL_FROM = 121;
-/** AA2: the figure slots' widths: the spark (always 8 cells), `peak 3 / 5s`, `hook p50 7ms`, `ctx 6%`. */
+/** The detail rides the state slot from this band width, while the pane is closed (the pane's NOW row says it otherwise). */
+export const DETAIL_FROM = 129;
+/** The figure slots' widths: the tool rate (label, spark, figure), `hook p50 7ms`, `ctx ━━━━━━━ 27%`. */
 export const SPARK_W = 8;
-export const PEAK_W = 12;
+const TOOLS_W = 6 + SPARK_W + 5;
 export const HOOK_W = 14;
-export const CTX_W = 8;
-/** The gates chip and the health chip, in cells, padding included. */
-export const GATES_CHIP_W = 16;
+const CTX_BAR_W = 7;
+export const CTX_W = 4 + CTX_BAR_W + 1 + 4;
+/** Kept for the panel's own layout (peak text); the ribbon no longer draws a peak slot. */
+export const PEAK_W = 12;
+/** The gates pill and the health chip, in cells, padding included. */
+export const GATES_CHIP_W = 15;
 export const HEALTH_CHIP_W = 10;
-/** Press keys: the gates chip opens the pane on its gates tab, the health chip toggles the card. A `#n` suffix keeps the pieces of one chip apart; hover scopes read what is before it. */
+/** Press keys: the gates pill opens the pane on its gates tab, the health chip toggles the card. A `#n` suffix keeps the pieces of one chip apart; hover scopes read what is before it. */
 export const BAND_GATES_KEY = 'band:gates';
 export const BAND_HEALTH_KEY = 'band:health';
 /** A denial reads red for this long after it was raised (and for as long as the run works). */
 export const DENY_RED_SECS = 300;
+/** The braille phase spinner of the ribbon, ten frames of SPIN_MS. */
+const BRAILLE = '⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏';
+const SPIN_MS = 100;
+/** The tool-rate window: eight cells of this many ms (a minute); the window slides with the clock. */
+const RATE_BUCKET_MS = 7500;
+/** A new denial pulses its pill this long. */
+export const PULSE_MS = 400;
 
 export type BandFrameIn = {
   cols: number;
   ui: Ui;
-  /** The wordmark pill runs (`◖ ◆ ATLAS ◗`). */
+  /** The wordmark pill runs (`◆ ATLAS`). */
   cap: Run[];
   kind: 'idle' | 'working' | 'done';
-  /** The shared spinner clock in ms: the heartbeat frame and its colour read it. */
+  /** The shared spinner clock in ms: the spinner frame and the rate window read it. */
   clockMs: number;
-  /** The working spinner glyph (`◐◓◑◒`). */
+  /** The working spinner glyph for the ASCII form (`|/-\`). */
   spin: string;
-  /** Reduced motion: the heartbeat holds one glyph and one colour. */
+  /** Reduced motion: the spinner holds one glyph and one colour. */
   still: boolean;
   /** The phase word (`test`) and its place `n` of `of`; an empty word reads `working`. */
   phase: { word: string; n: number; of: number };
   /** Seconds since the last run ended (the done detail `ended 12s`). */
   restSecs?: number;
+  /** Ms since the denied count last rose, while a MotionCtx watches it: the pill pulses for PULSE_MS. */
+  denyPulseMs?: number;
   health: Health;
 };
 
@@ -60,21 +73,26 @@ export const ctxLevel = (pct: number): 'ok' | 'warn' | 'bad' => (pct >= 90 ? 'ba
 /** The latency colour on every surface (Z3): green up to 100 ms, amber above 100, red above 500. */
 export const latencyLevel = (ms: number): 'ok' | 'warn' | 'bad' => (ms > 500 ? 'bad' : ms > 100 ? 'warn' : 'ok');
 
+/** The denied-call count the gates pill shows: 0 when none, else 1..99. The one reading the pill and the motion feed share. */
+export function deniedOf(h: Health): number {
+  const g = gatesSummary(h);
+  return g.deny > 0 || (h.gates.denied ?? 0) > 0 ? Math.max(1, Math.min(99, h.gates.denied ?? g.deny)) : 0;
+}
+
 export const bandLook = (ui: Ui) => ui.theme === 'latte'
   ? { fill: PALETTES.latte.base, text: PALETTES.latte.text, dim: xtermHex(241), rule: xtermHex(250), chipBg: xtermHex(253), chipFg: xtermHex(54), litBg: xtermHex(147), litFg: xtermHex(54), alertBg: xtermHex(224), alertFg: xtermHex(124), ok: PALETTES.latte.ok, warn: PALETTES.latte.warn, bad: PALETTES.latte.bad, work: xtermHex(54), ramp: [xtermHex(97), xtermHex(98), xtermHex(54)] as const }
   : { fill: xtermHex(235), text: xtermHex(252), dim: xtermHex(244), rule: xtermHex(238), chipBg: xtermHex(239), chipFg: xtermHex(183), litBg: xtermHex(60), litFg: xtermHex(255), alertBg: xtermHex(52), alertFg: xtermHex(210), ok: ui.color === '256' ? PALETTES.mocha.ok : xtermHex(78), warn: xtermHex(214), bad: xtermHex(203), work: xtermHex(183), ramp: [xtermHex(97), xtermHex(141), xtermHex(183)] as const };
 
-/** The frame's text pieces: `fg` the colour, `dim`/`text` shorthand; every piece sits on the band fill unless it is a chip. */
+/** The frame's text pieces: `fg` the colour, `dim`/`text` shorthand; every piece sits on the panel unless it is a chip. */
 export function bandFrameRuns(a: BandFrameIn): Run[] {
   const { ui, cols, health: h } = a;
   const k = bandLook(ui);
   const ascii = ui.ascii;
   const capW = a.cap.reduce((n, x) => n + textWidth(x.t), 0);
-  // The wordmark pill (H, L): the `◖ ◗` caps sit on the band's own fill (no notch), and at rest the pill's background breathes (2.4 s, 13 tones in truecolor, 8 in 256 colours, none without colour or with reduced motion).
+  // The wordmark pill: at rest its fill breathes (2.4 s, 13 tones in truecolor, 8 in 256 colours, none without colour or with reduced motion).
   const breath = a.kind === 'idle' && !ascii ? idleRamp(a.clockMs, ui, undefined, a.still).hex : undefined;
   const cap: Run[] = ui.color === 'none' || ascii ? a.cap : a.cap.map((x): Run => {
-    if (x.t === '◖' || x.t === '◗') return { ...x, bgHex: k.fill, ...(breath ? { fg: breath } : {}) };
-    if (!breath) return x;
+    if (!breath || !x.chip) return x;
     const ink = contrast(xtermHex(234), breath) >= contrast(xtermHex(255), breath) ? xtermHex(234) : xtermHex(255);
     const { bg: _bg, ...rest } = x;
     return { ...rest, bgHex: breath, fg: ink };
@@ -84,40 +102,49 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const txt = (t: string, o: Partial<Run> = {}): Run => on(t, k.text, o);
   const pad = (n: number): Run[] => (n > 0 ? [on(' '.repeat(n), k.text)] : []);
   const join = (): Run[] => [on(' ', k.text), on(ascii ? '|' : '│', k.rule, { tone: 'dim' }), on(' ', k.text)];
+  const glyph = (full: string, plain: string): string => (ascii ? plain : full);
 
-  // AA2: fixed geometry. Every slot has one width per band width, whatever the state or the data, so a separator sits at the same column in idle, working and done; a slot is shed whole, from the end, when it does not fit:
-  // state slot (head, and the detail packed after it from DETAIL_FROM when the pane is closed), gates chip, spark (8 cells), `peak 3 / 5s`, `hook p50 7ms`, `ctx 6%`, then the health chip right-anchored.
+  // Fixed geometry: every slot has one width per band width, whatever the state or the data, so a separator sits at the same column in idle, working and done; a slot is shed whole, from the end, when it does not fit:
+  // state slot (head, and the detail packed after it from DETAIL_FROM when the pane is closed), gates pill, tool rate, hook p50, ctx, then the health chip right-anchored.
   const detailOn = cols >= DETAIL_FROM && h.panel !== true;
   const stateW = detailOn ? HEAD_W + 1 + DETAIL_W : cols >= NARROW_BELOW ? HEAD_W : HEAD_NARROW;
-  // ---- the gates chip ----
+  // ---- the gates pill ----
+  const denied = deniedOf(h);
   const g = gatesSummary(h);
-  const denied = g.deny > 0 || (h.gates.denied ?? 0) > 0 ? Math.max(1, Math.min(99, h.gates.denied ?? g.deny)) : 0;
-  const chip = (pieces: { t: string; fg: string; bold?: boolean }[], key: string, bg: string): Run[] => pieces.map((p, i): Run => ({ t: p.t, tone: 'accent', fg: p.fg, bgHex: bg, bold: p.bold ?? true, press: pieces.length > 1 ? `${key}#${i}` : key, hover: true }));
-  const glyph = (full: string, plain: string): string => (ascii ? plain : full);
-  // One idiom (F): the gates chip is clickable (it opens the gates tab), so it is a raised chip with a trailing ` ›`; the dot is the panel's own colour (green once checks passed, grey while armed, red on a denial).
+  const chip = (pieces: { t: string; fg: string; bold?: boolean }[], key: string, bg?: string): Run[] => pieces.map((p, i): Run => ({ t: p.t, tone: 'accent', fg: p.fg, bgHex: bg ?? k.fill, bold: p.bold ?? true, press: pieces.length > 1 ? `${key}#${i}` : key, hover: true }));
   const tail = glyph('›', '>');
-  const body = (text: string, fg: string, dot: { t: string; fg: string }, bg: string): Run[] => chip([{ t: ` ${dot.t} `, fg: dot.fg }, { t: (`${text} ${tail}`).padEnd(GATES_CHIP_W - 3), fg }], BAND_GATES_KEY, bg);
+  const body = (text: string, fg: string, dot: { t: string; fg: string }, o: { bg?: string; tailFg?: string } = {}): Run[] => chip([{ t: `${dot.t} `, fg: dot.fg }, { t: text, fg }, { t: ` ${tail}`.padEnd(GATES_CHIP_W - 2 - cellsOf(text)), fg: o.tailFg ?? k.dim, bold: false }], BAND_GATES_KEY, o.bg);
   let gates: Run[];
   if (denied > 0) {
     const fresh = a.kind === 'working' || h.denyAgeSecs === undefined || h.denyAgeSecs < DENY_RED_SECS;
-    gates = fresh
-      ? body(`${denied} denied`, k.alertFg, { t: glyph('■', 'x'), fg: k.alertFg }, k.alertBg)
-      : body(`${denied} denied`, k.warn, { t: glyph('■', 'x'), fg: k.warn }, k.chipBg);
-  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.chipFg, { t: glyph('○', 'o'), fg: k.dim }, k.chipBg);
-  else gates = body('gates ok', k.chipFg, { t: glyph('●', '*'), fg: k.ok }, k.chipBg);
+    const pulsing = a.denyPulseMs !== undefined && a.denyPulseMs >= 0 && a.denyPulseMs < PULSE_MS && ui.color !== 'none';
+    gates = pulsing
+      ? body(`${denied} denied`, k.alertFg, { t: glyph('■', 'x'), fg: k.alertFg }, { bg: k.alertBg, tailFg: k.alertFg })
+      : fresh
+        ? body(`${denied} denied`, k.bad, { t: glyph('■', 'x'), fg: k.bad })
+        : body(`${denied} denied`, k.warn, { t: glyph('■', 'x'), fg: k.warn });
+  } else if (g.fired === 0 || !promptedOf(a.kind, h)) gates = body('gates armed', k.dim, { t: glyph('○', 'o'), fg: k.dim });
+  else gates = body('gates ok', k.ok, { t: glyph('\u2713', '*'), fg: k.ok });
   const joinW = 3;
 
-  // ---- the state slot: head, then the detail closed up after it (`● done 6/6 · ended 18s`), padded to the slot's one width ----
+  // ---- the state slot: head, then the detail closed up after it (`✓ done 6/6 · ended 18s`), padded to the slot's one width ----
   const head: Run[] = [];
+  const bar = (n: number, of: number, fg: string): Run[] => {
+    const cellsN = Math.min(8, Math.max(0, of));
+    if (cellsN === 0) return [];
+    const lit = Math.min(cellsN, Math.round((Math.min(of, Math.max(0, n)) / of) * cellsN));
+    return [txt(' '), on(glyph('▰', '#').repeat(lit), fg), on(glyph('▱', '-').repeat(cellsN - lit), k.rule, { tone: 'dim' })];
+  };
   if (a.kind === 'idle') {
     head.push(on(ascii ? '.' : '◌', k.dim, { tone: 'sub' }), dim(' idle'), ...(h.upSecs !== undefined ? [dim(` up ${elapsedClock(h.upSecs)}`)] : []));
   } else if (a.kind === 'done') {
-    head.push(on(ascii ? '*' : '●', k.ok, { tone: 'ok' }), txt(' done'), dim(` ${a.phase.of}/${a.phase.of}`));
+    head.push(on(glyph('\u2713', '*'), k.ok, { tone: 'ok' }), txt(' done'), dim(` ${a.phase.of}/${a.phase.of}`), ...bar(a.phase.of, a.phase.of, k.ok));
   } else {
-    head.push(on(a.spin, k.work, { tone: 'accent' }), txt(` ${a.phase.word || 'working'}`, { bold: true }), ...(a.phase.word ? [dim(` ${a.phase.n}/${a.phase.of}`)] : []));
+    const spin = ascii ? a.spin : BRAILLE[a.still ? 0 : Math.floor(a.clockMs / SPIN_MS) % BRAILLE.length]!;
+    head.push(on(spin, k.work, { tone: 'accent' }), txt(` ${a.phase.word || 'working'}`, { bold: true }), ...(a.phase.word ? [dim(` ${a.phase.n}/${a.phase.of}`), ...bar(a.phase.n, a.phase.of, k.work)] : []));
   }
   const widthOf = (runs: readonly Run[]): number => runs.reduce((n, x) => n + textWidth(x.t), 0);
-  /** The runs that fit `w` cells: a run that does not fit whole is dropped from the end (the `3/6` before the word), the last one left is cut with `…`; padded to `w`. */
+  /** The runs that fit `w` cells: a run that does not fit whole is dropped from the end (the bar, then the `3/6`, before the word), the last one left is cut with `…`; padded to `w`. */
   const fitHead = (runs: Run[], w: number): Run[] => {
     const kept = [...runs];
     while (kept.length > 2 && widthOf(kept) > w) kept.pop();
@@ -145,12 +172,16 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   const gatesW = widthOf(gates);
   if (w + joinW + gatesW <= cols) { out.push(...join(), ...gates); w += joinW + gatesW; }
 
-  // ---- the figures: spark, peak, hook p50, ctx (AA1: all from metricsOf) ----
+  // ---- the figures: tool rate, hook p50, ctx (all from metricsOf) ----
   const m = metricsOf(h);
   const healthChip = h.button === true && h.panel !== true;
   const limit = cols - (healthChip ? HEALTH_CHIP_W : 0); // the pane-closed health chip keeps its own cells at the right edge
-  const slots: { w: number; runs: () => Run[]; glue?: boolean }[] = [];
-  const events = m.activity.vals.slice(-SPARK_W);
+  const slots: { w: number; runs: () => Run[]; alts?: { w: number; runs: () => Run[] }[] }[] = [];
+  // The window slides with the clock: eight cells of RATE_BUCKET_MS ending now, from the raw event stamps; a pulse that kept only its 15 s buckets draws the newest eight of them.
+  const stamps = h.pulse?.stamps;
+  const nowMs = Math.max(a.clockMs, h.pulse?.at ?? 0);
+  const events = stamps ? callBuckets(stamps, nowMs, SPARK_W, RATE_BUCKET_MS) : m.activity.vals.slice(-SPARK_W);
+  const perMin = stamps ? events.reduce((n, x) => n + x, 0) : m.activity.vals.slice(-Math.max(1, Math.round(60 / m.activity.bucketSecs))).reduce((n, x) => n + x, 0);
   const sparkRuns = (): Run[] => {
     const cells = [...blockSpark(events, SPARK_W, { ascii, min: m.scale })];
     const first = cells.length - events.length;
@@ -165,19 +196,28 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
     return runs;
   };
   const inkOf = (lv: 'ok' | 'warn' | 'bad'): Partial<Run> => (lv === 'bad' ? { fg: k.bad, tone: 'bad' } : lv === 'warn' ? { fg: k.warn, tone: 'warn' } : { fg: k.ok, tone: 'ok' });
-  slots.push({ w: SPARK_W, runs: sparkRuns });
-  slots.push({ w: 1 + PEAK_W, glue: false, runs: () => [txt(' '), dim(fitText((m.activity.total > 0 ? (m.peakText.length > PEAK_W ? m.peakText.replace(' / ', '/') : m.peakText) : 'peak —').padEnd(PEAK_W), PEAK_W))] });
+  const rate = (): Run => txt(perMin > 99 ? '99+/m' : `${perMin > 0 || m.activity.total > 0 ? perMin : '—'}/m`.padStart(5));
+  // The tool rate gives way in steps before it goes: the label first (`▄▁▁█▁▁▂▁ 17/m`), then the figure (the bare spark), so a narrow band keeps its eight-cell spark.
+  slots.push({ w: TOOLS_W, runs: () => [dim('tools '), ...sparkRuns(), rate()], alts: [{ w: SPARK_W + 5, runs: () => [...sparkRuns(), rate()] }, { w: SPARK_W, runs: () => sparkRuns() }] });
   slots.push({ w: HOOK_W, runs: () => (m.hook ? [dim('hook p50 '), txt(`${String(m.hook.p50).padStart(3)}ms`, inkOf(latencyLevel(m.hook.p50)))] : [dim(`hook p50 ${'—'.padStart(3)}${'  '}`.slice(0, HOOK_W))]) });
-  slots.push({ w: CTX_W, runs: () => (m.ctx ? [dim('ctx '), m.ctx.prev ? dim(`${String(m.ctx.pct).padStart(3)}%`) : txt(`${String(m.ctx.pct).padStart(3)}%`, inkOf(ctxLevel(m.ctx.pct)))] : [dim(`ctx ${'—'.padStart(3)}${' '}`)]) });
-  // a slot joins the row only when it and every slot before it fit (ctx goes first, then hook, then the peak figure, then the spark); the peak figure rides the spark's join, the others get their own
-  let blocked = false;
-  slots.forEach((sl, i) => {
-    if (blocked) return;
-    const need = i === 1 ? sl.w : joinW + sl.w;
-    if (w + need > limit) { blocked = true; return; }
-    out.push(...(i === 1 ? [] : join()), ...sl.runs());
-    w += need;
+  slots.push({
+    w: CTX_W,
+    runs: () => {
+      if (!m.ctx) return [dim(`ctx ${(ascii ? '-' : '━').repeat(CTX_BAR_W)} ${'—'.padStart(3)} `)];
+      const lit = Math.min(CTX_BAR_W, Math.round((CTX_BAR_W * m.ctx.pct) / 100));
+      const ink = m.ctx.prev ? { fg: k.dim, tone: 'sub' as const } : inkOf(ctxLevel(m.ctx.pct));
+      return [dim('ctx '), on((ascii ? '=' : '━').repeat(lit), ink.fg!, { tone: ink.tone }), on((ascii ? '-' : '━').repeat(CTX_BAR_W - lit), k.rule, { tone: 'dim' }), m.ctx.prev ? dim(` ${String(m.ctx.pct).padStart(3)}%`) : txt(` ${String(m.ctx.pct).padStart(3)}%`, inkOf(ctxLevel(m.ctx.pct)))];
+    },
   });
+  // a slot joins the row only when it and every slot before it fit (ctx goes first, then hook, then the tool rate)
+  let blocked = false;
+  for (const sl of slots) {
+    if (blocked) break;
+    const form = [{ w: sl.w, runs: sl.runs }, ...(sl.alts ?? [])].find((f) => w + joinW + f.w <= limit);
+    if (!form) { blocked = true; break; }
+    out.push(...join(), ...form.runs());
+    w += joinW + form.w;
+  }
 
   // ---- the health chip, right-anchored ----
   if (healthChip && w + HEALTH_CHIP_W <= cols) {
@@ -187,3 +227,5 @@ export function bandFrameRuns(a: BandFrameIn): Run[] {
   out.push(...pad(cols - w));
   return out;
 }
+
+const cellsOf = (s: string): number => textWidth(s);

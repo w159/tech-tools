@@ -25,7 +25,7 @@ const agents = [agent(names[0]!, 'done', 'done'), agent(names[1]!, 'failed', 'fa
 const hud = (cols: number, maxRows: number, input: HudInput = { todos: plan(), agents }): string[] => hudLines(input, { cols, maxRows, ui, now: NOW, merge: false }).map(runsString); // wave 32: the at-rest rows these tests pin are the two-box shape (merge: false); the default is the one merged block
 
 /** A plan row: its glyph starts the line (agent rows start with theirs too, but name a worker, not `T<n> <title>`). */
-const PLAN_ROW = /^[▸ ] [◐◓◑◒◇●■▲◉] T[1-5] [a-z]/;
+const PLAN_ROW = /^[│▌] [◐◓◑◒○✓✗▲◉] T[1-5] [a-z]/;
 
 describe('B1: a completed row never leaves the TODO block while the rows fit', () => {
   test('93 cells, 14 rows (f0086; the column names, both closing rules and the blank take four): all five rows are drawn, T1 included, with no `done` fold on the ribbon', () => {
@@ -34,51 +34,51 @@ describe('B1: a completed row never leaves the TODO block while the rows fit', (
     expect(rows.find((r) => r.includes('T1 read alpha.py'))).toMatch(/done/);
     expect(rows[0]).toContain('1/5');
     expect(rows[0]).not.toMatch(/· \d+ done/);
-    expect(rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r))).toHaveLength(3);
+    expect(rows.filter((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] [a-z]+-explorer /.test(r))).toHaveLength(3);
   });
   test('when the rows truly do not fit (critique 28): the blank goes, then the column names, then the finished row folds into the count, then open plan rows; every agent keeps its row and every box stays closed', () => {
     const open = (n: number): string[] => hud(93, n).filter((r) => PLAN_ROW.test(r) && !/T1 /.test(r));
-    const agentRows = (n: number): number => hud(93, n).filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [a-z]+-explorer /.test(r)).length;
+    const agentRows = (n: number): number => hud(93, n).filter((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] [a-z]+-explorer /.test(r)).length;
     const closes = (n: number): number => hud(93, n).filter((r) => /^╰─+╯$/.test(r)).length;
-    const names = (n: number): boolean => hud(93, n).some((r) => /AGENT\s+STATE/.test(r));
-    expect([names(14), names(13), names(12)]).toEqual([true, true, false]); // the column names go before a plan row does
+    const names = (n: number): boolean => hud(93, n).some((r) => /AGENT\s+ROLE\s+STATE/.test(r));
+    expect([names(14), names(13), names(12)]).toEqual([true, false, false]); // the column names of both boxes go together, before a plan row does
     expect(hud(93, 12)[0]).not.toMatch(/done/);
     expect(hud(93, 12).filter((r) => PLAN_ROW.test(r))).toHaveLength(5);
-    expect(hud(93, 11)[0]).toMatch(/1\/5 · ■2/); // then the finished row folds behind the one summary row (state 38: `● 1 done  ◇ 1 queued`; the title keeps the figure alone)
+    expect(hud(93, 11)[0]).toMatch(/1\/5 · ✗2/); // then the finished row folds behind the one summary row (state 38: `✓ 1 done  ○ 1 queued`; the title keeps the figure alone)
     expect(hud(93, 11)[0]).not.toMatch(/done/);
-    expect(hud(93, 11).some((r) => /^ {2}● 1 done {2}◇ 1 queued/.test(r))).toBe(true);
+    expect(hud(93, 11).some((r) => /^│ {2}✓ 1 done {2}○ 1 queued/.test(r))).toBe(true);
     expect(open(11)).toHaveLength(3);
     expect(open(10)).toHaveLength(2);
     expect(hud(93, 10)[0]).not.toMatch(/\+\d+ more/); // done and queued rows ride the summary row, not the title
-    expect(open(9)).toHaveLength(1); // state 39: the summary row takes a slot whenever a row is left out, and it counts the hidden open row too (`■ 1 failed`), never the title
-    expect(hud(93, 9).some((r) => /^ {2}● 1 done {2}■ 1 failed {2}◇ 2 queued/.test(r))).toBe(true);
+    expect(open(9)).toHaveLength(1); // state 39: the summary row takes a slot whenever a row is left out, and it counts the hidden open row too (`✗ 1 failed`), never the title
+    expect(hud(93, 9).some((r) => /^│ {2}✓ 1 done {2}✗ 1 failed {2}○ 2 queued/.test(r))).toBe(true);
     expect(hud(93, 9)[0]).not.toMatch(/\+\d+ more/);
     expect(open(8)).toHaveLength(0);
-    expect(hud(93, 8).some((r) => /^ {2}● 1 done {2}■ 2 failed {2}◇ 2 queued/.test(r))).toBe(true);
+    expect(hud(93, 8).some((r) => /^│ {2}✓ 1 done {2}✗ 2 failed {2}○ 2 queued/.test(r))).toBe(true);
     expect(hud(93, 8)[0]).not.toMatch(/\+\d+ more/);
     for (const n of [14, 12, 11, 10, 9, 8]) {
       expect([n, agentRows(n)]).toEqual([n, 3]); // a running or listed agent keeps its row while a plan row can give way
       expect([n, closes(n)]).toEqual([n, 2]); // no box is left open at the bottom
     }
-    expect(hud(93, 7).some((r) => r.includes('▸ TODO'))).toBe(false); // only then the plan box goes, whole
+    expect(hud(93, 7).some((r) => r.includes('TODO'))).toBe(false); // only then the plan box goes, whole
     expect([agentRows(7), closes(7)]).toEqual([3, 1]);
     expect(hud(93, 4).filter((r) => PLAN_ROW.test(r))).toHaveLength(0);
     expect(hud(93, 4)[0]).not.toMatch(/\+\d+ more/); // state 39: the agent window is the last to fold; its title keeps the tally of every agent, never `+N more`
-    expect(hud(93, 4)[0]).toMatch(/2 failed · 1 done/);
+    expect(hud(93, 4)[0]).toMatch(/✗ 2 failed  ✓ 1 done/);
   });
 });
 
 describe('B3: a row the store holds as pending never reads failed', () => {
   test('todoState (wave 35): a failed owner fails the row from the first frame, whatever the store row holds (pending, in_progress, blocked)', () => {
-    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: no `◇ worker failed` beat before the failure
+    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: no `○ worker failed` beat before the failure
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
     expect(todoState('blocked', 'failed')).toEqual({ state: 'failed' });
   });
-  test('HUD T3 (f0097.ans:27) reads `■ failed` the moment its worker fails (wave 35), never `◇ worker failed`', () => {
+  test('HUD T3 (f0097.ans:27) reads `✗ failed` the moment its worker fails (wave 35), never `○ worker failed`', () => {
     const t3 = hud(150, 12).find((r) => r.includes('T3 read beta.py'))!;
-    expect(t3).toContain('■');
+    expect(t3).toContain('✗');
     expect(t3).toMatch(/\bfailed\b/);
-    expect(t3).not.toContain('◇');
+    expect(t3).not.toContain('○');
     expect(t3).not.toContain('worker failed');
   });
   test('board row for the same plan (dispatch rows folded) reads queued as well', () => {
@@ -115,7 +115,7 @@ describe('B2: a killed worker reads in words, not only in colour', () => {
   const done = [item(1, 'completed', 'T1 read alpha.py (alpha-explorer)', names[0]), item(2, 'completed', 'T2 read ghost.py (ghost-explorer)', names[1])];
   test('HUD row at 93 cells (stoprun-150-562576ed-1 f0103.ans:26): `closed · worker killed`', () => {
     const t2 = hud(93, 12, { todos: done, agents }).find((r) => r.includes('T2 read ghost.py'))!;
-    expect(t2).toContain('■ T2'); expect(t2).toContain('failed'); expect(t2).not.toContain('killed'); // critique 28: one glyph and one word for a killed worker
+    expect(t2).toContain('✗ T2'); expect(t2).toContain('failed'); expect(t2).not.toContain('killed'); // critique 28: one glyph and one word for a killed worker
     expect(hud(93, 12, { todos: done, agents }).find((r) => r.includes('T1 read alpha.py'))).not.toContain('killed');
   });
   test('HUD row in the 61-cell strip keeps the words and fits', () => {
@@ -147,7 +147,7 @@ describe('B5 / critique 19 C1: the 110 board keeps the owner with its row and sa
   ];
   test('37 cells (critique 19 C1): each owner is the sub-line under its own row, with the row\'s reason and age; no detached list', () => {
     const text = boardText(boardLines(boardRowsOf(src, 400), { cols: 37, ui, ribbon: false, title: false }));
-    const rows = text.filter((r) => /^\s*[●◇▲■◐] T\d/.test(r));
+    const rows = text.filter((r) => /^\s*[✓○▲✗◐] T\d/.test(r));
     expect(rows).toHaveLength(3);
     const under = (title: string): string => text[text.findIndex((r) => r.includes(title)) + 1]!;
     expect(under('T1 read alpha.py')).toMatch(/^\s+alpha-explorer$/);

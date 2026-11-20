@@ -131,7 +131,7 @@ describe('wire-expert: the pulse', () => {
     await b.tool(3);
     await b.advance(600); // the poll rebuilds the snapshot with the new usage
     const band = textOf(await b.band());
-    expect(band).toMatch(/ctx +6%/);
+    expect(band).toMatch(/ctx [━─=]+ +6%/);
     expect(band).toMatch(/[▁-█]{8}/); // the events spark (eighth blocks, round 3 E10)
     await press(button(await b.band(), 'band:health'));
     const card = textOf(await b.band());
@@ -177,9 +177,10 @@ describe('wire-expert: one spinner', () => {
     await b.advance(1500, async () => { await b.band(); });
     const band = textOf(await b.band());
     const pane = textOf(await b.pane());
-    const glyph = /ATLAS ◗ ([◐◓◑◒])/.exec(band)?.[1]; // round 2 D2: the working head is `◓ <phase> · ..`, no `working` word
-    expect(glyph).toBeDefined();
-    expect(pane).toContain(`${glyph}`);
+    const braille = /ATLAS +([⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏])/.exec(band)?.[1]; // the band's working head is a braille spinner (ribbon redesign), one of ten frames
+    const glyph = braille === undefined ? undefined : '◐◓◑◒'[('⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'.indexOf(braille)) % 4]; // the panel's rows turn the circle quarters on the same frame index (truth 41)
+    expect(braille).toBeDefined();
+    expect(pane).toMatch(/[◐◓◑◒]/); // the pane turns circle quarters, the band a braille head: two families on purpose (ribbon redesign)
     // The host's turn flag is register.ts module state that no session hook resets: end the turn this test started, so a later
     // file's boot (y1-live) does not read a working host before its first band render.
     b.props.working = false;

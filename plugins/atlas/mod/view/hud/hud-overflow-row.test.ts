@@ -33,8 +33,8 @@ describe('1. one overflow idiom: no `+N more` on any HUD title', () => {
     const rows = text(hudLines(running3, view(93, 3, { merge: true })));
     expect(rows.some((r) => /more running/.test(r)), rows.join('\n')).toBe(true);
     const summary = rows.find((r) => /more running/.test(r))!;
-    expect(summary).toMatch(/^ {2}\S+ .*\d+ more running/);
-    const shown = rows.filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] [A-Za-z]/.test(r)).length;
+    expect(summary).toMatch(/^│ {2}\S+ .*\d+ more running/);
+    const shown = rows.filter((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] [A-Za-z]/.test(r)).length;
     expect(shown + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done|failed|blocked)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(running3.todos.length);
   });
   test('overflowText is one text: done and queued read `N state`, an open state reads `N more state`', () => {
@@ -47,38 +47,41 @@ describe('1. one overflow idiom: no `+N more` on any HUD title', () => {
 describe('2. the TODO columns line up on every row, at 150 and 110 columns', () => {
   const todos = [item(1, 'completed', 'T1 read alpha.py', 'alpha-explorer'), item(2, 'in_progress', 'T2 read beta.py', 'beta-explorer'), item(3, 'in_progress', 'T3 read gamma.py', 'gamma-explorer'), item(4, 'pending', 'T4 combine the reports'), item(5, 'pending', 'T5 write the summary')];
   const agents = [agent('alpha-explorer', 'done', 'done'), agent('beta-explorer', 'working', 'running', { startedAt: NOW - 5000 }), agent('gamma-explorer', 'working', 'running', { startedAt: NOW - 6000 })];
-  const AT = { 93: { state: 45, owner: 54, time: 71 }, 56: { state: 28, owner: 37, time: 50 } } as const;
   for (const cols of [93, 56] as const) {
-    test(`${cols} cells: state, owner and time start on the same cell in running, queued and done rows`, () => {
-      const rows = text(hudLines({ todos, agents }, view(cols, 30, { merge: true }))).filter((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] T\d/.test(r));
+    test(`${cols} cells: state and owner start on the cell their column name starts on, in running, queued and done rows`, () => {
+      const out = text(hudLines({ todos, agents }, view(cols, 30, { merge: true })));
+      const head = out.find((r) => /ITEM\s+STATE\s+OWNER/.test(r))!;
+      const AT = { state: head.indexOf('STATE'), owner: head.indexOf('OWNER') };
+      const rows = out.filter((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] T\d/.test(r));
       expect(rows).toHaveLength(5);
       for (const r of rows) {
-        expect(r.slice(AT[cols].state, AT[cols].state + 8).trimEnd(), r).toMatch(/^(running|queued|done)$/);
-        expect(r[AT[cols].owner - 1], r).toBe(' ');
-        expect(r[AT[cols].owner], r).not.toBe(' '); // the owner (or `-`) starts here on every row
+        expect(r.slice(AT.state, AT.state + 8).trimEnd(), r).toMatch(/^(running|queued|done)$/);
+        expect(r[AT.owner - 1], r).toBe(' ');
+        expect(r[AT.owner], r).not.toBe(' '); // the owner (or `-`) starts here on every row
         expect(r.length, r).toBeLessThanOrEqual(cols);
       }
-      expect(rows.map((r) => r.slice(AT[cols].state, AT[cols].state + 8).trimEnd())).toEqual(['done', 'running', 'running', 'queued', 'queued']);
+      expect(rows.map((r) => r.slice(AT.state, AT.state + 8).trimEnd())).toEqual(['done', 'running', 'running', 'queued', 'queued']);
       const queued = rows.filter((r) => /queued/.test(r));
-      for (const r of queued) expect(r.slice(AT[cols].owner).trimStart().startsWith('-'), r).toBe(true); // a queued row has the owner cell `-`, never blank
+      for (const r of queued) expect(r.slice(AT.owner).trimStart().startsWith('-'), r).toBe(true); // a queued row has the owner cell `-`, never blank
     });
   }
   test('the title is clipped on its own cells with `…`, never into the state column', () => {
     const long = [item(1, 'in_progress', 'T1 a title that is much longer than the forty cells the grid gives it', 'alpha-explorer')];
     const row = text(hudLines({ todos: long, agents: [agent('alpha-explorer', 'working', 'running')] }, view(93, 20, { merge: true }))).find((r) => /T1/.test(r))!;
-    expect(row.slice(0, 45)).toMatch(/…\s*$/);
-    expect(row.slice(45, 53).trimEnd()).toBe('running');
+    const at = text(hudLines({ todos: long, agents: [agent('alpha-explorer', 'working', 'running')] }, view(93, 20, { merge: true }))).find((r) => /ITEM\s+STATE/.test(r))!.indexOf('STATE');
+    expect(row.slice(0, at)).toMatch(/…\s*$/);
+    expect(row.slice(at, at + 8).trimEnd()).toBe('running');
   });
 });
 
 describe('3. idle keeps the done and failed marks in colour', () => {
   const todos = [item(1, 'completed', 'T1 read alpha.py', 'alpha-explorer'), item(2, 'completed', 'T2 read ghost.py', 'ghost-explorer')];
   const agents = [agent('alpha-explorer', 'done', 'done'), agent('ghost-explorer', 'failed', 'failed')];
-  test('at rest the `●` stays the done tone and the `■` the failed tone; only titles and words go 245', () => {
+  test('at rest the `✓` stays the done tone and the `✗` the failed tone; only titles and words go 245', () => {
     const rows = hudLines({ todos, agents }, view(93, 30, { merge: false, idle: true }));
-    const marks = rows.flat().filter((r) => ['●', '■'].includes(r.t));
+    const marks = rows.flat().filter((r) => ['✓', '✗'].includes(r.t));
     expect(marks.length).toBeGreaterThan(0);
-    for (const m of marks) expect(m.tone).toBe(m.t === '●' ? 'ok' : 'bad');
+    for (const m of marks) expect(m.tone).toBe(m.t === '✓' ? 'ok' : 'bad');
     const title = rows.flat().find((r) => r.t.startsWith('T1 read'))!;
     expect(title.tone).toBe('sub');
   });
@@ -94,38 +97,36 @@ describe('4. SUBAGENTS cells', () => {
   test('a done agent whose count lives on its closing line, not on the dispatch evidence, still reads its FN', () => {
     const dispatch = item(9, 'completed', 'Read alpha-explorer', 'alpha-explorer', { origin: 'dispatch', evidence: '1. read alpha.py -> ok' });
     const input: HudInput = { todos: [item(1, 'completed', 'T1 read alpha.py', 'alpha-explorer'), dispatch], agents: [agent('alpha-explorer', 'done', 'done', { lastLine: 'alpha_one (line 1), alpha_two (line 5), alpha_three (line 9)' })] };
-    const row = text(hudLines(input, view(150, 30, { merge: false }))).find((r) => /^[▸ ] ● alpha-explorer/.test(r))!;
-    expect(row, 'alpha row').toMatch(/3 fn/);
+    const row = text(hudLines(input, view(150, 30, { merge: false }))).find((r) => /^[│▌] ✓ alpha-explorer/.test(r))!;
+    expect(row, 'alpha row').toMatch(/\s3\s+│$/); // the FN column
   });
   test('LAST is never blank: a done row shows its last tool action, a failed row `stopped`', () => {
     const input: HudInput = { todos: [item(1, 'completed', 'T1 read alpha.py', 'alpha-explorer'), item(2, 'blocked', 'T2 read ghost.py', 'ghost-explorer')], agents: [agent('alpha-explorer', 'done', 'done', { lastTool: 'Read', target: 'alpha.py' }), agent('ghost-explorer', 'failed', 'failed')] };
     for (const cols of [150, 61]) {
       const rows = text(hudLines(input, view(cols, 30, { merge: true })));
-      const done = rows.find((r) => /^ {2}alpha-\S*\s+● done/.test(r))!;
-      const failed = rows.find((r) => /^ {2}ghost-\S*\s+■ failed/.test(r))!;
-      expect([cols, done.trimEnd().endsWith('read alpha.py'), done]).toEqual([cols, true, done]);
-      expect([cols, failed.trimEnd().endsWith('stopped')]).toEqual([cols, true]);
+      const done = rows.find((r) => /^[│▌] ✓ alpha-\S*\s+(?:\S+\s+)?done/.test(r))!;
+      const failed = rows.find((r) => /^[│▌] ✗ ghost-\S*\s+(?:\S+\s+)?failed/.test(r))!;
+      expect([cols, /read alpha\.py\s+(\d+:\d\d\s+)?│$/.test(done), done]).toEqual([cols, true, done]);
+      expect([cols, /stopped\s+(\d+:\d\d\s+)?│$/.test(failed)]).toEqual([cols, true]);
     }
   });
-  test('at 110 columns AGENT is cut to 12 before LAST drops below 14 cells', () => {
-    // State 40: under 80 cells the numeric columns take their header's width and the gaps one cell, so at 56 cells AGENT is 12 and LAST keeps 14; at 61 AGENT keeps its 14 cells (a whole `alpha-explorer`) and LAST has 17.
-    for (const [cols, agentW] of [[56, 12], [61, 14]] as const) {
+  test('under 80 cells the name stays whole and NOW / RESULT keeps 14 cells: ROLE goes first', () => {
+    for (const cols of [56, 61]) {
       const rows = text(hudLines(running3, view(cols, 30, { merge: true })));
-      const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
-      expect([cols, head.indexOf('STATE') - head.indexOf('AGENT')]).toEqual([cols, agentW + 1]);
-      const width = cols - 1 - head.indexOf('LAST');
-      expect(width).toBeGreaterThanOrEqual(14);
+      const head = rows.find((r) => /AGENT\s+(ROLE\s+)?STATE/.test(r))!;
+      expect(head.lastIndexOf('│') - head.indexOf('NOW'), `${cols}`).toBeGreaterThanOrEqual(14);
+      expect(rows.some((r) => /^[│▌] \S implementer-band\s/.test(r)), rows.join('\n')).toBe(true); // a whole name
     }
   });
   test('the 110 SUBAGENTS title keeps its tally, not a bare spinner', () => {
     const input: HudInput = { todos: [item(1, 'completed', 'T1 a', 'a-explorer'), item(2, 'in_progress', 'T2 b', 'b-explorer'), item(3, 'blocked', 'T3 c', 'c-explorer')], agents: [agent('a-explorer', 'done', 'done'), agent('b-explorer', 'working', 'running'), agent('c-explorer', 'failed', 'failed')] };
     const title = text(hudLines(input, view(50, 30, { merge: true }))).find((r) => r.includes('SUBAGENTS'))!;
-    expect(title, title).toMatch(/SUBAGENTS \S 1 run · ■1 · ●1/);
+    expect(title, title).toMatch(/SUBAGENTS ─+ ● 1 ✗ 1 ✓ 1 ─╮/); // the counts keep their short form (glyph and figure) before they go
   });
   test('a folded SUBAGENTS block is one title row with the tally, never an empty two-row box', () => {
-    const rows = text(hudLines(running3, view(93, 3, { merge: true })));
+    const rows = text(hudLines(running3, view(93, 4, { merge: true })));
     const at = rows.findIndex((r) => r.includes('SUBAGENTS'));
-    expect(at).toBe(rows.length - 1); // the one row that closes the plan box carries the title
+    expect(at).toBe(rows.length - 1); // the one row under the plan box carries the title
     expect(rows[at]).toMatch(/3 running/);
     expect(rows.filter((r) => /^╭/.test(r) && r.includes('SUBAGENTS'))).toHaveLength(0); // no second box opened over it
   });

@@ -165,3 +165,18 @@ describe('crew runs', () => {
     expect(await crewSig(fs, ROOT)).not.toBe(before);
   });
 });
+
+describe('crew worker run window', () => {
+  test('a finished worker carries startedAt = pid mtime and endedAt = exit mtime; a running one has no endedAt', async () => {
+    const fs = seed({ [`${CREW}/exit/auvik.r0.json`]: JSON.stringify({ exit: 0 }) });
+    const mt = (p: string) => fs.stat(p).then((s) => s!.mtimeMs);
+    const { agents } = await readCrew(fs, ROOT, FIXTURE_EPOCH_MS + 1000);
+    const auvik = agents.find((a) => a.name === 'auvik') as { startedAt?: number; endedAt?: number };
+    const broker = agents.find((a) => a.name === 'gw-broker') as { startedAt?: number; endedAt?: number };
+    expect(auvik.startedAt).toBe(await mt(`${CREW}/pid/auvik`));
+    expect(auvik.endedAt).toBe(await mt(`${CREW}/exit/auvik.r0.json`));
+    expect(auvik.endedAt!).toBeGreaterThan(auvik.startedAt!);
+    expect(broker.startedAt).toBe(await mt(`${CREW}/pid/gw-broker`));
+    expect(broker.endedAt).toBeUndefined();
+  });
+});

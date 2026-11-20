@@ -17,7 +17,7 @@ import { type PanelModel } from './panel/panel-layout';
 import type { TodoItem } from '../contract';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
-const glyphOf = (rows: readonly string[], name: string): string | undefined => rows.find((l) => l.includes(name))?.trimStart().replace(/^▸\s*/, '')[0];
+const glyphOf = (rows: readonly string[], name: string): string | undefined => rows.find((l) => l.includes(name))?.trimStart().replace(/^[▸│▌]\s*/, '')[0];
 
 describe('spinClock', () => {
   test('the snapshot clock moves with the ticker: one SPINNER_MS per tick', () => {
@@ -58,7 +58,7 @@ describe('the HUD and the side panel turn one frame per agent', () => {
   });
 
   test('the HUD frame turns between data polls: the same snapshot at the next tick shows the next frame', () => {
-    const at = (tick: number): string => hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).find((l) => l.includes(running[0]!.name))!.trimStart().replace(/^▸\s*/, '')[0]!;
+    const at = (tick: number): string => hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).find((l) => l.includes(running[0]!.name))!.trimStart().replace(/^[▸│▌]\s*/, '')[0]!;
     expect(at(1)).not.toBe(at(0));
   });
 });
@@ -107,7 +107,7 @@ describe('one spinner glyph set for the HUD rows, the band and the side panel', 
       const now = base + i * SPINNER_MS + 37;
       const hud = spinsOf(hudLines({ todos, agents }, { cols: 120, maxRows: 30, ui, now, tick: 0 }).map((l) => runsText(l)).join('\n'));
       const band = spinsOf(runsText(bandLines(bandModel(now))[0]!.runs));
-      const panel = spinsOf(bodyLines(panelWorld('route', 150, ui, { now, tick: 0, run: { kind: 'working', secs: 42 } })).map(lineText).join('\n'));
+      const panel = spinsOf(bodyLines(panelWorld('route', 150, ui, { now, tick: 0, run: { kind: 'working', secs: 42 } })).map(lineText).filter((l) => !/^ TEAM /.test(l)).join('\n')); // the TEAM tally's ◐ is the static running glyph, not a turning mark
       expect([i, hud.length > 1, band.length > 0, panel.length > 0]).toEqual([i, true, true, true]); // the TODO row and a SUBAGENTS mark, the band lead, a panel mark
       expect([i, [...new Set([...hud, ...band, ...panel])].join('')]).toEqual([i, spinnerGlyph(spinFrameOf(now))]);
     }

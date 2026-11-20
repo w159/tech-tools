@@ -16,22 +16,6 @@ const text = (tab: PanelTab, cols: number, over: Partial<PanelModel> = {}): stri
 const runsOf = (m: PanelModel) => panelLines(m).flatMap((l) => l.runs);
 
 describe('step 2: one vocabulary with the HUD', () => {
-  test('every tab at 150, 110 and 80 columns: no `█░` gauge, no strikethrough, a light title rule and no heavy rule under the lit tab', () => {
-    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as PanelTab[]) for (const cols of [150, 110, 80]) {
-      const m = world(tab, cols);
-      const rows = panelText(m);
-      expect([tab, cols, rows.some((l) => /[█▏▎▍▌▋▊▉░]/.test(l))]).toEqual([tab, cols, false]);
-      expect([tab, cols, runsOf(m).some((x) => x.strike)]).toEqual([tab, cols, false]);
-      expect(rows[0]).toContain('─');
-      expect(rows[0]).not.toContain('━');
-      expect(rows.filter((l) => l.includes('━')).length).toBe(0); // idle polish 3: no underline under the lit tab (it is the filled chip)
-    }
-  });
-  test('the route meter is the HUD one, `▰▱`', () => {
-    const todos = [{ id: '1', label: 'a', state: 'done' as const }, { id: '2', label: 'b', state: 'queued' as const }];
-    const row = text('route', 150, { todos }).find((l) => l.startsWith(' todo'))!;
-    expect(row).toMatch(/^ todo {3}▰{4}▱{4} 1\/2/);
-  });
 });
 
 describe('step 3: the board pane', () => {
@@ -55,13 +39,6 @@ describe('step 3: the board pane', () => {
     expect(items[1]).toContain('T2 read ghost.py');
     expect(t.join('\n')).not.toContain('...');
   });
-  test('a doubted done reads `failed` once (wave 33), never a cut word; the row names its owner and no footer repeats it', () => {
-    const t = boardText(pane(59, [row(1), row(2, { label: 'T2 read ghost.py', owner: 'ghost-explorer', word: DONE_DOUBT, detail: 'worker killed' })]));
-    const line = t.find((l) => l.includes('T2 read ghost.py'))!;
-    expect(line).toMatch(/^  ■ T2 read ghost\.py +failed {2}ghost-explorer$/);
-    expect(line).not.toContain('…');
-    expect(t.join('\n')).not.toContain('T2 failed · ghost-explorer'); // wave 33: the footer is gone, the row is the one place
-  });
   test('no strikethrough on the board, in the pane or the full form', () => {
     for (const o of [{ pane: true, ribbon: false, title: false }, {}, { rich: true }]) for (const cols of [150, 110, 80]) {
       expect(boardLines(rows, { cols, ui: mocha, ...o }).flatMap((l) => l.runs).some((x) => x.strike)).toBe(false);
@@ -70,17 +47,6 @@ describe('step 3: the board pane', () => {
   test('the ribbon of the whole board is the light `─`', () => {
     const rib = boardText(boardLines(rows, { cols: 120, ui: mocha }))[0]!;
     expect([rib.includes('─'), rib.includes('━')]).toEqual([true, false]);
-  });
-  test('the timeline is one row per agent, `alpha-explorer ████ 0:14 ●`: the solid bar as long as the run, the glyph its state, queued agents left off', () => {
-    const t = boardText(boardTimeline([{ name: 'alpha-explorer', state: 'done', secs: 14 }, { name: 'gamma', state: 'running', secs: 7 }, { name: 'beta-explorer', state: 'queued' }], { cols: 60, ui: mocha }));
-    expect(t).toHaveLength(4); // the two agents, the axis rule with its ticks, the tick labels
-    expect(t[0]).toMatch(/^ ● alpha {5}▇+ 0:14[ ┊]*$/); // wave 39: the mark leads, the name is short, the lane takes the rest and the time sits at the bar's end
-    expect(t[1]).toMatch(/^ [◐◓◑◒] gamma {5}[▇▓▒]+ 0:07[ ┊]*$/); // wave 32: a working agent row wears the band's spinner
-    expect(t[2]).toMatch(/^ {13}┬[─┬]+$/);
-    expect(t[3]).toMatch(/^ {13}0:00 .*0:14$/); // state 40: the axis ends on the run total, 0:14
-    const bar = (l: string): number => [...l].filter((c) => /▇/.test(c)).length;
-    expect(bar(t[0]!)).toBeGreaterThan(bar(t[1]!));
-    expect(boardTimeline([{ name: 'a', state: 'done', secs: 3 }], { cols: 10, ui: mocha })).toEqual([]);
   });
 });
 
@@ -106,14 +72,6 @@ describe('step 4: the channel', () => {
     for (const who of ['ghost-explorer', 'stop gate', 'lead']) expect(t.some((l) => l.includes(who))).toBe(true);
     expect(t.filter((l) => /\d\d:\d\d$/.test(l)).length).toBe(3);
   });
-  test('with nothing to say and no sender the pane holds one dim line under the head (left-aligned since wave 32)', () => {
-    const t = text('channel', 80, { notes: [], workers: [] });
-    const say = t.filter((l) => l.includes('○ no messages'));
-    expect(say).toHaveLength(1);
-    expect(say[0]!.length - say[0]!.trimStart().length).toBe(4); // wave 32: left-aligned under the head, not centred
-    const runs = panelLines(world('channel', 80, { notes: [], workers: [] })).flatMap((l) => l.runs).filter((x) => x.t.includes('no messages'));
-    expect(runs.map((x) => x.tone)).toEqual(['dim']); // wave 36: one dim (240) line, as every quiet empty row
-  });
   test('the live model stamps a refusal and a closure with the time of the log before them, so all three rows carry a time', () => {
     const m = baseSidebar();
     const s = m.snapshot as unknown as { notes: unknown[]; squad: unknown[]; todos: unknown[]; members: unknown[]; activity: Record<string, unknown> };
@@ -124,12 +82,6 @@ describe('step 4: the channel', () => {
 });
 
 describe('step 5: the blocked phase and whole names', () => {
-  test('a refused Stop reads `phase  blocked` whatever the lead last declared', () => {
-    const gates = [{ id: 'completion', title: 'completion', lines: [{ id: 'stop-verdict', label: 'Last Stop blocked', ok: false, detail: 'Team gate' }] }];
-    const t = text('route', 110, { phase: 'done', gates });
-    expect(t.find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}▲ blocked/);
-    expect(text('route', 110, { phase: 'blocked' }).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}▲ blocked/);
-  });
   test('a worker never draws a blank name: whole, or `…`', () => {
     const t = text('route', 110, { workers: [{ name: '', state: 'running', detail: '' }] });
     expect(t.some((l) => /^ {3}[◐◓◑◒] +…/.test(l.trimEnd()) || l.includes('… '))).toBe(true);

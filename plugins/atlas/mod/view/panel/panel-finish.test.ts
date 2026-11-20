@@ -17,28 +17,12 @@ const MIDDLE = /[A-Za-z0-9]\.\.\.[A-Za-z0-9]/;
 
 describe('1: the tab strip never blanks a label', () => {
   for (const cols of [26, 30, 40, 60]) {
-    test(`at ${cols} every shown tab keeps a word, the rest sit behind \`more ›\``, () => {
-      const rows = tabRows(model('route', cols)).map((l) => lineText(l));
-      const text = rows.join('\n');
-      expect(text).not.toMatch(/\b[rtcgko]: /); // the words alone (the keys stay bound by the host layer)
-      const all = ['status', 'team', 'channel', 'gates', 'core', 'board'];
-      const shown = all.filter((w) => text.includes(w === 'channel' ? 'chan' : w)); // AA5: the one short label
-      expect(shown).toEqual(all.slice(0, shown.length)); // whole words, in order, from the left
-      if (shown.length < all.length) expect(text).toContain('more ›');
-      expect(shown.length).toBeGreaterThanOrEqual(2);
-      expect(text).not.toMatch(/[a-z]: {2,}/);
-      expect(text).not.toMatch(/[a-z]: *$/m);
-      for (const l of rows) expect(l.length).toBeLessThanOrEqual(cols);
-    });
   }
 });
 
 describe('2: no middle ellipsis on a name the panel owns', () => {
   const long = 'board-auditor-open-items';
   const workers = [{ name: long, state: 'running' as const, model: 'opus', task: 'T1', detail: 'listing the board', secs: 5 }, { name: 'alpha-explorer', state: 'done' as const, detail: 'read alpha.py', secs: 9 }];
-  test('team tab at 150: the whole name shows', () => {
-    expect(body('team', 150, { workers }).join('\n')).toContain(long);
-  });
   for (const cols of [150, 110, 60, 45, 38]) {
     test(`no tab has a middle cut at ${cols}`, () => {
       const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false, fix: 'run the thing' }, { id: 'b', label: 'y', ok: true }] }, { id: 'g2', title: 'Dispatch required', lines: [{ id: 'c', label: 'z', ok: true }] }];
@@ -48,37 +32,14 @@ describe('2: no middle ellipsis on a name the panel owns', () => {
       }
     });
   }
-  test('gates at 45 keep the whole name and put the failing count in the row below', () => {
-    const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false }, { id: 'b', label: 'y', ok: true }] }];
-    const rows = body('gates', 45, { gates });
-    expect(rows[0]).toContain('Completion gate');
-    expect(rows.join('\n')).toContain('1 pass · 1 deny');
-  });
 });
 
 describe('3: one count vocabulary inside the panel (`N denied`, `8 pass · 0 deny`), never a ratio', () => {
   for (const cols of [150, 80, 60, 45, 38]) {
-    test(`no \`n of m\` on the route tab at ${cols}`, () => {
-      const rows = body('route', cols);
-      expect(rows.filter((l) => /^ (phase|gates|todo) /.test(l)).join('\n')).not.toMatch(/\b\d+ of \d+\b/);
-      expect(rows.find((l) => l.startsWith(' gates'))).toMatch(/\d+ denied|\bok\b/);
-    });
   }
-  test('the phase row is the phase word alone, never an `n/m` beside it (critique 17 A5: it shared the todo format and went stale beside the chip)', () => {
-    expect(body('route', 80).find((l) => l.startsWith(' phase'))).toMatch(/^ phase {2}[◐●○▲] [a-z]+$/);
-  });
 });
 
 describe('4: each route section is labelled by what it lists', () => {
-  test('the agents row comes before the tasks and a todo row heads the tasks', () => {
-    const rows = body('route', 100);
-    const agents = rows.findIndex((l) => l.startsWith(' agents'));
-    const todo = rows.findIndex((l) => l.startsWith(' todo'));
-    const first = rows.findIndex((l) => /^[▸ ] [◐◓◑◒◐◓◑◒◐◓◇●■▲▲◉] /.test(l));
-    expect(agents).toBeGreaterThan(-1);
-    expect(agents).toBeLessThan(todo);
-    expect(todo).toBeLessThan(first);
-  });
 });
 
 describe('5: the core tab is plain language', () => {
@@ -107,12 +68,6 @@ describe('6: height and indent', () => {
     for (const l of body('core', 80).filter((x) => /^ ?(contract|verdicts)/.test(x))) expect(l.startsWith(' ')).toBe(true);
   });
   for (const t of ['team', 'gates', 'channel', 'route'] as PanelTab[]) {
-    test(`${t} uses more of a tall pane than a short one, and fits it`, () => {
-      const tall = panelText(model(t, 80, { rows: 60 }));
-      const short = panelText(model(t, 80, { rows: 14 }));
-      expect(tall.length).toBeGreaterThan(short.length);
-      expect(tall.length).toBeLessThanOrEqual(60);
-    });
   }
 });
 

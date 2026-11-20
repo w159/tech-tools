@@ -33,7 +33,7 @@ const { renderPanel } = await ompLoad('mission-panel');
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const STATES: readonly UiState[] = ['queued', 'running', 'done', 'failed', 'blocked', 'waiting'];
 const GLYPH = new Map<string, UiState>([...STATES.map((s): [string, UiState] => [stateRun(s, ui, 0).t, s]), ...['◐', '◓', '◑', '◒'].map((g): [string, UiState] => [g, 'running'])]);
-const G = '[◐◓◑◒◇●■▲▲◉]';
+const G = '[◐◓◑◒○✓✗▲▲◉]';
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -73,11 +73,11 @@ const todoOf = (text: string): [number, number] | undefined => {
   const m = /(\d+)(?: of |\/)(\d+)/.exec(text); // the band reads `4/5`, the HUD and the route tab `4 of 5`
   return m ? [Number(m[1]), Number(m[2])] : undefined;
 };
-/** `● lint  ■ doctor`: glyph and name pairs for the world's gates; the glyph says ok or not. */
+/** `✓ lint  ✗ doctor`: glyph and name pairs for the world's gates; the glyph says ok or not. */
 const GATE_NAMES = world.gates.map((g) => g.name).join('|');
 const gatePairs = (text: string): Record<string, boolean> => {
   const out: Record<string, boolean> = {};
-  for (const m of text.matchAll(new RegExp(`([●■▲△]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '●'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
+  for (const m of text.matchAll(new RegExp(`([✓✗▲△]) (${GATE_NAMES})\\b`, 'g'))) out[m[2]!] = m[1] === '✓'; // a failing check is the warning triangle on the band and the gates tab, the square on the route tab's own row
   return out;
 };
 /** Rows `glyph name  word`: the glyph must agree with the word. */
@@ -96,7 +96,7 @@ function stateRows(rows: readonly string[], rowRe: RegExp): Record<string, UiSta
 const railOf = (text: string): Facts['rail'] => {
   const ids: string[] = [];
   let lit = -1;
-  for (const m of text.matchAll(/([●▸◇]) (\d) (\w+)/g)) {
+  for (const m of text.matchAll(/([✓▸○]) (\d) (\w+)/g)) {
     if (m[1] === '▸') lit = ids.length;
     ids.push(m[3]!);
   }
@@ -109,8 +109,8 @@ type Inputs = { band: LiveSnapshot; hud: LiveSnapshot; board: LiveSnapshot; pane
 
 /** The band's agent counts: after the `agents` noun when it is drawn, else the whole row less the todo group's own blocked count (the noun gives way to the state word on a crowded row). */
 const bandCounts = (head: string): ReturnType<typeof counts> => {
-  const found = counts((head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▲ \d+ blocked/g, '')).replace(/● \d+ done/g, '')); // wave 37: the finished count of the workers segment is not a state count the world is compared on
-  const failed = /■(\d+)/.exec(head); // and the failure rides the plan segment: `todo 3/7 ■1`
+  const found = counts((head.includes('agents') ? head.slice(head.indexOf('agents')) : head.replace(/▲ \d+ blocked/g, '')).replace(/✓ \d+ done/g, '')); // wave 37: the finished count of the workers segment is not a state count the world is compared on
+  const failed = /✗(\d+)/.exec(head); // and the failure rides the plan segment: `todo 3/7 ✗1`
   return failed ? { ...found, failed: Number(failed[1]) } : found;
 };
 
@@ -134,6 +134,19 @@ function ompBand(): Facts {
 }
 function richRail(rows: readonly string[]): Facts { return { rail: railOf(rows.join('\n')) }; }
 
+/** `T1,T2` per owner: the 1-based plan positions of the TODO rows (`glyph item  state  owner`) each owner holds. */
+function owned(rows: readonly string[]): Record<string, string> {
+  const out: Record<string, string[]> = {};
+  let n = 0;
+  for (const r of rows) {
+    const m = new RegExp(`^[│▌] ${G} .+?\\s{2,}(?:queued|running|done|failed|killed|blocked|waiting)\\s+(\\S+)`).exec(r);
+    if (!m) continue;
+    n++;
+    if (m[1] !== '-' && !/^(you|lead)$/.test(m[1]!) && !/^\d/.test(m[1]!)) (out[m[1]!] ??= []).push(`T${n}`);
+  }
+  return Object.fromEntries(Object.entries(out).map(([k2, v]) => [k2, v.join(',')]));
+}
+
 function hudFacts(s: LiveSnapshot, host: 'cc' | 'omp', rich = false): Facts {
   const live = liveWorkers(s, s.now);
   const input = { todos: s.todos, agents: hudAgents(live, s.squad, queuedMembers(s)), root: s.root, phases: hudPhases(s) };
@@ -146,9 +159,10 @@ function hudFacts(s: LiveSnapshot, host: 'cc' | 'omp', rich = false): Facts {
   const todoRows = rows.slice(0, at);
   return {
     todo: todoOf(rows[0]!), agents: counts(rows[at]!), rail: railOf(todoRows.join('\n')),
-    items: stateRows(two.slice(0, at2), new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)), // wave 32: a done row of the merged block carries no `done` word, so the per-row words are read from the two-box shape of the same input
-    workers: stateRows(two.slice(at2 + 1), new RegExp(`^[▸ ] (${G}) (\\S+)\\s+(queued|running|done|failed|killed|blocked|waiting)\\b`)),
-    ...(rich ? {} : { tasks: Object.fromEntries(two.slice(at2 + 1).flatMap((r: string) => { const m = new RegExp(`^[▸ ] ${G} (\\S+)\\s+.*?\\s((?:T\\d+,?)+)(?:\\s|$)`).exec(r); return m ? [[m[1]!, m[2]!]] : []; })) }),
+    items: stateRows(two.slice(0, at2), new RegExp(`^[│▌] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`)), // wave 32: a done row of the merged block carries no `done` word, so the per-row words are read from the two-box shape of the same input
+    workers: stateRows(two.slice(at2 + 1), new RegExp(`^[│▌] (${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|killed|blocked|waiting)\\b`)), // the ROLE cell sits between the name and the state word
+    // redesign: the SUBAGENTS box has no task column; the plan rows carry their owner, so each worker's task ids are the 1-based positions of the rows it owns
+    ...(rich ? {} : { tasks: owned(two.slice(0, at2)) }),
   };
 }
 
@@ -157,8 +171,8 @@ function boardFacts(s: LiveSnapshot, host: 'cc' | 'omp'): Facts {
     ? rowsOfTree(boardTree(els, withOwnerStates(s.todos, workerStates(s, liveWorkers(s, s.now))), { cols: 120, rows: 40, tick: 0, now: Math.floor(s.now / 1000), ui }))
     : ompBoard(worldItems() as never, { width: 120, tick: 0, now: Math.floor(s.now / 1000), ui }).map(strip);
   return {
-    todo: [rows.filter((r: string) => /\bdone\b/.test(r) && new RegExp(`^[▸ ] ${G}`).test(r)).length, Number(/(\d+) items/.exec(rows[0]!)?.[1])],
-    items: stateRows(rows, new RegExp(`^[▸ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`)),
+    todo: [rows.filter((r: string) => /\bdone\b/.test(r) && new RegExp(`^[▸▾ ] ${G}`).test(r)).length, Number(/(\d+) items/.exec(rows[0]!)?.[1])],
+    items: stateRows(rows, new RegExp(`^[▸▾ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|blocked|waiting)\\b`)),
   };
 }
 
@@ -171,19 +185,26 @@ function panelFacts(host: 'cc' | 'omp', tab: PanelTab, s: LiveSnapshot): Facts {
   const f: Facts = {};
   const greenOf = (row: string, gates: Facts['gates']): string | undefined => { const m = /(?:\bok|(\d+) denied)\s*$/.exec(row.trimEnd()); const n = gates ? Object.keys(gates).length : 0; return m && n > 0 ? `${n - Number(m[1] ?? 0)}/${n}` : undefined; };
   if (tab === 'route') {
-    const word = /phase\s+(?:[◐●○▲]\s+)?(\S+)/.exec(text)?.[1]; // the route names the phase by its word alone (critique 17 A5); its place on the rail is read back from the world's rail
+    // redesign: the status tab draws `PLAN n of m`, one row per item (the glyph is its state; a failed or blocked row adds its word on a second line) and a `TEAM` tally with one row per agent.
+    // It carries no gates line and no phase word of its own (the phase is the stepper, the gates are the gates tab), so those facts are read from the tabs that draw them.
+    const railAt = rows.findIndex((r: string) => /^ [●◉○✓◐▲]─/.test(r));
+    const lit = railAt < 0 ? -1 : [...rows[railAt]!.matchAll(/[●◉○✓◐▲]/g)].findIndex((m) => m[0] === '◉');
+    const word = lit < 0 ? undefined : (rows[railAt + 1] ?? '').trim().split(/\s+/)[lit]; // the stepper: the lit node and the name under it
     f.phase = word !== undefined && expected.rail.ids.includes(word) ? `${expected.rail.ids.indexOf(word) + 1}/${expected.rail.ids.length}` : undefined;
-    f.todo = todoOf(/^ todo .*$/m.exec(text)?.[0] ?? ''); // the labels sit one cell in (the tab indent)
-    f.gates = gatePairs(/^ gates .*$/m.exec(text)?.[0] ?? '');
-    f.gatesGreen = greenOf(/^ gates .*$/m.exec(text)?.[0] ?? '', f.gates); // the one gate vocabulary: `ok` or `N denied`, the green count is the gates listed less the denied
-    f.agents = counts(/^ agents .*$/m.exec(text)?.[0] ?? '');
-    f.items = stateRows(rows, new RegExp(`^[▸▾ ] (${G}) (.+?)\\s{2,}(queued|running|done|failed|killed|blocked|waiting)\\b`));
+    f.todo = todoOf(/^ PLAN .*$/m.exec(text)?.[0] ?? '');
+    f.agents = counts(/^ TEAM .*$/m.exec(text)?.[0] ?? '');
+    const at = rows.findIndex((r: string) => /^ TEAM /.test(r));
+    const ownerRow = new RegExp(`^[▸▾ ] (${G}) (.+?)\\s{2,}\\S`);
+    const stateOf = (g: string): UiState => GLYPH.get(g)!;
+    f.items = Object.fromEntries(rows.slice(0, at).flatMap((r: string) => { const m = ownerRow.exec(r); return m ? [[m[2]!.trim(), stateOf(m[1]!)]] : []; }));
+    f.workers = Object.fromEntries(rows.slice(at + 1).flatMap((r: string) => { const m = new RegExp(`^[▸▾ ] (${G}) (\\S+)\\s+\\S+\\s`).exec(r); return m ? [[m[2]!, stateOf(m[1]!)]] : []; })); // the glyph is the state (no word column)
   }
-  if (tab === 'team') f.workers = stateRows(rows.filter((r: string) => !/^[▸▾ ] ?◉ lead\b/.test(r)), new RegExp(`^[▸▾ ] ?(${G}) (\\S+)\\s+(?:\\S+\\s+)?(queued|running|done|failed|killed|blocked|waiting)\\b`));
+  if (tab === 'team') { /* the team view lives in the status tab now */ }
   if (tab === 'channel') { const m = /^ #\S+\s+(\d+) people(?: · (\d+) unread)?/m.exec(text); if (m) f.channel = { people: Number(m[1]), unread: Number(m[2] ?? 0) }; }
   if (tab === 'gates') {
     f.gates = gatePairs(text);
-    f.gatesGreen = greenOf(rows[0] ?? '', f.gates); // the ribbon's figure is `ok` or `N denied`
+    const tally = /^ GATES .*?✓ (\d+)(?:\s+✗ (\d+))?\s*$/m.exec(text); // the ribbon's figure is the passed and the failed count: `✓ 2   ✗ 1`
+    f.gatesGreen = tally ? `${tally[1]}/${Number(tally[1]) + Number(tally[2] ?? 0)}` : undefined;
   }
   // the core tab's evidence figure is `n/m` over the plan (critique 10 B4): only its m is the plan total; its n counts evidence, not done rows, so the done count is the world's own
   if (tab === 'core') f.todo = [done, Number(/evidence\s+\d+\/(\d+)/.exec(text)?.[1])];
@@ -247,7 +268,7 @@ function check(over: Partial<Inputs> = {}): string[] {
   bad.push(...owed('cc hud rich', richRail(hudLines({ todos: inp.hud.todos, agents: hudAgents(liveWorkers(inp.hud, inp.hud.now), inp.hud.squad, queuedMembers(inp.hud)), root: inp.hud.root, phases: hudPhases(inp.hud) }, { cols: 120, maxRows: 60, ui, now: inp.hud.now, rich: true }).map((r) => r.map((x) => x.t).join(''))) ));
   bad.push(...owed('cc board', boardFacts(inp.board, 'cc')));
   bad.push(...owed('omp board', boardFacts(inp.board, 'omp')));
-  for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
+  for (const tab of ['route', 'channel', 'gates', 'core'] as const) { // the team view is the status tab's TEAM section
     bad.push(...owed(`cc panel ${tab}`, panelFacts('cc', tab, inp.panel)));
     bad.push(...owed(`omp panel ${tab}`, panelFacts('omp', tab, inp.panel)));
   }
@@ -279,8 +300,8 @@ describe('one world, every surface', () => {
     expect(Object.keys(hudFacts(w, 'cc').items!)).toHaveLength(7);
     expect(hudFacts(w, 'cc', true).rail).toEqual(expected.rail);
     expect(Object.keys(boardFacts(w, 'cc').items!)).toHaveLength(7);
-    expect(panelFacts('cc', 'route', w)).toMatchObject({ phase: '2/4', todo: [3, 7], gatesGreen: '2/3' });
-    expect(Object.keys(panelFacts('cc', 'team', w).workers!)).toHaveLength(5);
+    expect(panelFacts('cc', 'route', w)).toMatchObject({ phase: '2/4', todo: [3, 7] }); // the status tab has no gates line now: the gates tab and the band carry the gate facts
+    expect(Object.keys(panelFacts('cc', 'route', w).workers!)).toHaveLength(5); // the TEAM rows of the status tab
     expect(panelFacts('cc', 'gates', w).gatesGreen).toBe('2/3');
     expect(panelFacts('cc', 'core', w).todo).toEqual([3, 7]);
   });
@@ -297,7 +318,7 @@ describe('one world, every surface', () => {
     const handed = { ...w, todos: w.todos.map((t) => (t.id === 'T5' ? { ...t, owner: 'implementer-live' } : t)) };
     const ccF = rowsOfTree(boardTree(els, withOwnerStates(handed.todos, workerStates(handed, liveWorkers(handed, handed.now))), { cols: 120, rows: 40, tick: 0, now, ui }));
     const ompF = ompBoard(worldItems().map((t) => (t.id === 'T5' ? { ...t, owner: 'implementer-live', ownerState: 'failed' } : t)) as never, { width: 120, tick: 0, now, ui }).map(strip);
-    expect(ccF.find((r) => r.includes('Gate tests'))).toMatch(/■ Gate tests +failed +implementer-live/);
+    expect(ccF.find((r) => r.includes('Gate tests'))).toMatch(/✗ Gate tests +failed +implementer-live/);
     expect(ompF.map((r: string) => r.trimEnd())).toEqual(ccF);
   });
 });
@@ -320,9 +341,9 @@ describe('no invented budget: a running item without an estimate reads `elapsed 
   for (const rich of [false, true]) {
     test(`rich=${rich}`, () => {
       for (const [name, row] of Object.entries(surfaces(rich))) {
-        expect([name, row]).toEqual([name, expect.stringContaining('elapsed 00:42')]);
+        expect([name, row]).toEqual([name, expect.stringContaining(!rich && name.endsWith('hud') ? ' 0:42 ' : 'elapsed 00:42')]); // the HUD's TIME cell is the elapsed time
         expect([name, / of /.test(row)]).toEqual([name, false]);
-        expect([name, /[█░▏▎▍▌▋▊▉]/.test(row)]).toEqual([name, false]);
+        expect([name, (!rich && name.endsWith('hud') ? /[█░▏▎▍▋▊▉]/ : /[█░▏▎▍▌▋▊▉]/).test(row)]).toEqual([name, false]); // (the HUD's focus bar is the `▌` at the row start)
       }
     });
   }
@@ -356,6 +377,6 @@ describe('seeded faults: change one surface\'s source and the check names it', (
   test('the panel lists a worker the host never listed as running', () => {
     const squad = w.squad.map((a) => (a.name === 'implementer-gates' ? { ...a, state: 'running' as const } : a));
     const bad = check({ panel: { ...w, squad, activity: { ...w.activity, 'implementer-gates': { ...w.activity['implementer-gates']!, mood: 'working' as const } } } });
-    expect(bad.some((b) => b.startsWith('cc panel team: workers'))).toBe(true);
+    expect(bad.some((b) => b.startsWith('cc panel route: workers'))).toBe(true);
   });
 });

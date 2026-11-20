@@ -59,7 +59,7 @@ describe('board goldens', () => {
     for (const cols of [40, 59, 60, 79, 99, 100]) {
       for (const l of boardLines(worldBoardRows(), { cols, ui: ui('mocha') })) expect([cols, runsWidth(l.runs) <= cols]).toEqual([cols, true]);
     }
-    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐■▲] /.test(l))[3]).toMatch(/^▸ ◐ Subagents block +running$/); // critique 19 C1: its owner is the sub-line under it
+    expect(boardText(boardLines(worldBoardRows(), { cols: 40, ui: ui('mocha') })).filter((l) => /^[▸ ] [✓○▲◐■▲] /.test(l))[3]).toMatch(/^▸ ◐ Subagents block +running$/); // critique 19 C1: its owner is the sub-line under it
   });
   test('A3: from 30 cells up every row keeps a state column, and an owner column wherever the label keeps its room; below 30 the label alone', () => {
     // two plan rows with a title owner, one folded dispatch row (alpha), one dispatch row with no plan row (beta): three rows
@@ -72,7 +72,7 @@ describe('board goldens', () => {
     expect(rows.length).toBe(3);
     for (const cols of [38, 59, 60, 80, 99, 110, 150]) {
       const text = boardText(boardBody(rows, { cols, ui: ui('mocha') }));
-      const lines = text.filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
+      const lines = text.filter((l) => /^[▸ ] [✓○▲◐] /.test(l));
       expect(lines.length).toBe(3);
       for (const l of lines) {
         expect([cols, /\b(done|queued)\b/.test(l)]).toEqual([cols, true]);
@@ -82,7 +82,7 @@ describe('board goldens', () => {
       }
     }
     // narrow: no owner cell, and no title cut shorter than it has to be
-    const narrow = boardText(boardBody(rows, { cols: 38, ui: ui('mocha') })).filter((l) => /^[▸ ] [●◇▲◐] /.test(l));
+    const narrow = boardText(boardBody(rows, { cols: 38, ui: ui('mocha') })).filter((l) => /^[▸ ] [✓○▲◐] /.test(l));
     expect(narrow.some((l) => /(alpha|beta|gamma)(-|\.\.\.)/.test(l))).toBe(false);
     expect(boardText(boardBody(rows, { cols: 28, ui: ui('mocha') })).every((l) => !/\b(done|queued)\b/.test(l))).toBe(true);
   });
@@ -110,7 +110,7 @@ describe('board goldens', () => {
     const rows = boardRowsOf([{ content: 'A long plan title that needs room to read', status: 'pending', owner: 'alpha-explorer' }]);
     for (let cols = 30; cols < 60; cols++) {
       const l = boardText(boardBody(rows, { cols, ui: ui('mocha') }))[0]!;
-      const label = /^[▸ ] [●◇▲◐] (.+?) +(queued|running|done)\b/.exec(l)?.[1] ?? '';
+      const label = /^[▸ ] [✓○▲◐] (.+?) +(queued|running|done)\b/.exec(l)?.[1] ?? '';
       expect([cols, cells(label) >= 16]).toEqual([cols, true]);
     }
   });
@@ -251,7 +251,7 @@ describe('S1: a dispatch row follows its worker', () => {
       const rows = boardRowsOf([{ content: 'x', status, origin: 'dispatch', owner: 'w' }]);
       for (const cols of [38, 80, 110]) {
         const line = boardText(boardBody(rows, { cols, ui: ui('mocha') }))[cols >= 100 ? 1 : 0]!;
-        expect([status, cols, line.includes('●'), line.includes('◉'), /\bdone\b/.test(line)]).toEqual([status, cols, false, status === 'ended', false]); // an ended row wears the neutral `◉` and the 245 word `returned` (as the HUD does), never the green done disc nor the word `done`
+        expect([status, cols, line.includes('✓'), line.includes('◉'), /\bdone\b/.test(line)]).toEqual([status, cols, false, status === 'ended', false]); // an ended row wears the neutral `◉` and the 245 word `returned` (as the HUD does), never the green done disc nor the word `done`
       }
     }
   });

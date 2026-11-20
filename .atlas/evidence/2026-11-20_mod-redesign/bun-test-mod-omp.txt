@@ -1,0 +1,5 @@
+ 4697 pass
+ 31 skip
+ 0 fail
+ 76506 expect() calls
+Ran 4728 tests across 290 files. [50.07s]

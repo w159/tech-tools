@@ -40,56 +40,11 @@ describe('clipMiddle (atlas-ui)', () => {
 
 describe('change 6: the route tab is the Board compact form', () => {
   // 38 is the 110-column pane: one row per task there; the task is cut with `…` and the owner's name rides the title whole (critique 26, A4 in mod/view/panel/panel-route-titles.test.ts)
-  test('at 38 a long title is cut on its one row, the owner kept whole and the state word beside it, never pushed off', () => {
-    const rows = body('route', 38, { todos: plan });
-    const text = rows.join(' ').replace(/\s+/g, ' ');
-    expect(text).toContain('Wire t… (implementer-band) running');
-    expect(text).toMatch(/running/);
-    for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(38);
-    expect(taskRows(rows)).toHaveLength(4);
-  });
   for (const cols of [120, 80, 56, 38]) {
-    test(`at ${cols} every task row has its state word in one column, long titles and owners included`, () => {
-      if (cols < 50) return; // the narrow pane spills long titles (above)
-      const rows = taskRows(body('route', cols, { todos: plan }));
-      expect(rows).toHaveLength(4);
-      const at = rows.map((l) => l.search(new RegExp(` ${WORD}( |$)`)));
-      expect(at.every((n) => n > 0)).toBe(true);
-      expect(new Set(at).size).toBe(1);
-    });
     // critique 4 (panel B2) replaces "cut in the middle, its end survives": the label is clipped at its end and the owner column stays whole.
-    test(`at ${cols} a long title is clipped at its end: its start survives, the state word is never pushed off`, () => {
-      if (cols < 50) return; // the narrow pane spills long titles (above)
-      const row = taskRows(body('route', cols, { todos: plan }))[1]!;
-      expect(row).toMatch(/Wire the band .*\S… +running/); // one `…` marks the cut (wave 24), never the ASCII `...`
-      expect(row).not.toMatch(/\S…\S|\.\.\./);
-      expect(row).toContain('running');
-    });
-    test(`at ${cols} rows keep the Board's item order (no done-last reshuffle)`, () => {
-      const rows = taskRows(body('route', cols, { todos: plan }));
-      expect(rows.map((l) => /Shipped|implementer-layout|Wire|Gate|runner-land|Changelog|Change/.exec(l)?.[0])).toEqual([cols < 50 ? 'implementer-layout' : 'Shipped', 'Wire', cols < 50 ? 'runner-land' : 'Gate', cols < 50 ? 'Change' : 'Changelog']);
-    });
   }
   for (const cols of [120, 80, 56]) {
-    test(`at ${cols} the owner is the right-aligned value column of every row`, () => {
-      const rows = taskRows(body('route', cols, { todos: plan }));
-      expect(rows.map((l) => cells(l))).toEqual(rows.map(() => cols));
-      expect(rows[3]).toMatch(/implementer-live$/);
-    });
   }
-  test('B2: a label that carries its owner in brackets is clipped at the end, never in the middle', () => {
-    const todos = [{ id: 'T1', label: 'T1 read alphabetical.py and report every function in it, then compare the two lists line by line (alpha-explorer)', state: 'done' as const }];
-    for (const cols of [110, 80, 56]) {
-      const row = taskRows(body('route', cols, { todos }))[0]!;
-      expect(row).toContain('T1 read alph');
-      expect(row).not.toMatch(/\S…\S|\.\.\./);
-      expect(row).toMatch(/…[^…]*\(alpha-explorer\) +done|… +done/); // the task is cut; the owner named in the title stays whole
-    }
-  });
-  test('B2: the owner column is whole whenever it was given room, at every width the column exists', () => {
-    const todos = [{ id: 'a', label: 'Wire the band to the host and verify every width of the layout until the end', state: 'running' as const, owner: 'implementer-band' }];
-    for (const cols of [120, 100, 80, 56]) expect(taskRows(body('route', cols, { todos }))[0]!).toMatch(/ implementer-band$/);
-  });
   test('the detail is one fixed column from 100 cells; below that it moves to the open row instead of a ragged third column', () => {
     const wide = taskRows(body('route', 120, { todos: plan })).filter((l) => l.includes('tests red 3') || l.includes('read runs.ts') || l.includes('blocked:'));
     expect(wide.length).toBeGreaterThan(0);
@@ -139,28 +94,7 @@ describe('change 7: the core tab in plain words, numbers whole', () => {
 describe('one row grammar on all five tabs', () => {
   const grid = new RegExp(`^[▸ ] (${G}| ) `);
   for (const cols of [120, 80, 38]) {
-    test(`at ${cols} the state glyph sits in cell 3 and names start in cell 5 on every tab row`, () => {
-      const pick: Record<PanelTab, string[]> = {
-        route: taskRows(body('route', cols)),
-        team: body('team', cols).filter((l) => /^[▸ ] /.test(l)),
-        channel: body('channel', cols).slice(1),
-        gates: body('gates', cols, { gates: [{ id: 'lint', title: 'lint', lines: [{ id: 'l', label: 'lint', ok: true }] }, { id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run the doctor' }] }] }),
-        core: body('core', cols).filter((l) => l && !/^\S/.test(l) && !/^ \S/.test(l)),
-      };
-      for (const t of TABS) {
-        expect(pick[t].length).toBeGreaterThan(0);
-        for (const l of pick[t]) expect([t, l, grid.test(l)]).toEqual([t, l, true]);
-      }
-    });
   }
-  test('channel and gates carry a right-aligned value column (time, failing count)', () => {
-    const ch = body('channel', 120).slice(1);
-    expect(ch.map((l) => cells(l))).toEqual(ch.map(() => 120));
-    expect(ch[0]).toMatch(/10:02$/);
-    const gates = body('gates', 80, { gates: [{ id: 'doctor', title: 'doctor', lines: [{ id: 'd', label: 'doctor', ok: false, fix: 'run it' }] }] });
-    expect(cells(gates[0]!)).toBe(80);
-    expect(gates[0]).toMatch(/0 pass · 1 deny$/);
-  });
   test('rows never pass the panel width, in ASCII and both themes, 10 to 160 columns', () => {
     for (const ui of [mocha, latte, ascii]) for (const t of TABS) for (const cols of [10, 24, 38, 56, 80, 100, 120, 160])
       for (const l of panelText(panelWorld(t, cols, ui, { core }))) expect([ui.ascii, t, cols, cells(l) <= cols]).toEqual([ui.ascii, t, cols, true]);

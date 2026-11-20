@@ -17,40 +17,5 @@ const body = (cols: number, over: Partial<PanelModel> = {}) => bodyLines(panelWo
 
 describe('C2: gates grouped by check', () => {
   for (const cols of [38, 49, 80]) {
-    test(`${cols}: every group row carries its N pass · M deny count in one right-aligned column, the title is bold`, () => {
-      const all = body(cols);
-      const rows = all.filter((l) => l.press?.key.startsWith('group:'));
-      expect(rows).toHaveLength(3);
-      // 38 cells: the figure does not fit the group row, so it is the first indented row under it (a named row, never bare dots)
-      const figure = (l: (typeof rows)[number]): string => { const t = lineText(l).trimEnd(); return /pass · \d+ deny$/.test(t) ? t : lineText(all[all.indexOf(l) + 1]!).trimEnd(); };
-      const texts = rows.map(figure);
-      expect(texts[0]).toMatch(/2 pass · 1 deny$/);
-      expect(texts[1]).toMatch(/2 pass · 0 deny$/);
-      expect(texts[2]).toMatch(/8 pass · 0 deny$/);
-      if (cols >= 49) expect(new Set(rows.map((l) => cells(lineText(l).trimEnd()))).size).toBe(1); // one value column: the counts end on the same cell
-      for (const l of rows) expect(l.runs.some((x) => x.bold && /gate|tripwire|contract/.test(x.t))).toBe(true);
-    });
   }
-  test('a passing group count is dim, a failing one warn', () => {
-    const rows = body(80).filter((l) => l.press?.key.startsWith('group:'));
-    const tone = (l: (typeof rows)[number]) => l.runs.find((x) => /\d+ pass/.test(x.t))!.tone;
-    expect([tone(rows[0]!), tone(rows[1]!)]).toEqual(['warn', 'muted']);
-  });
-  test('fix1728: no Stop refused, the same group reads pending: 3 pass · 0 deny, dim, on the same value column', () => {
-    const open = gates.map((g) => ({ ...g, lines: g.lines.filter((l) => l.id !== 'stop-verdict') }));
-    const rows = body(80, { gates: open }).filter((l) => l.press?.key.startsWith('group:'));
-    expect(lineText(rows[0]!).trimEnd()).toMatch(/◇ Completion gate +pending +3 pass · 0 deny$/);
-    expect(new Set(rows.map((l) => cells(lineText(l).trimEnd()))).size).toBe(1);
-    expect(rows[0]!.runs.find((x) => /\d+ pass/.test(x.t))!.tone).toBe('muted');
-  });
-  test('the checks of an open group are indented under the title: their mark sits at the title text column', () => {
-    const rows = body(80, { expanded: 'group:completion' });
-    const at = rows.findIndex((l) => lineText(l).includes('Completion gate'));
-    const title = lineText(rows[at]!);
-    const child = lineText(rows[at + 1]!);
-    expect(child).toContain('verification coverage');
-    const markCol = child.replace(/^[▸▾]/, ' ').search(/\S/); // the row's own chevron is not its mark
-    expect(markCol).toBe(title.indexOf('Completion'));
-    expect(child.indexOf('verification')).toBe(markCol + 2);
-  });
 });

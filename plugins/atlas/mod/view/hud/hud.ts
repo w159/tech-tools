@@ -3,7 +3,7 @@
 // rows, fits them to the row budget and paints Runs as Claude Code Segments. Pure: todos and agents in, Segment rows out.
 import type { SquadAgent, TodoItem } from '../../contract';
 import { descriptionName } from '../../data/orchestration';
-import { liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from '../../data/live';
+import { callBuckets, liveState, tallyOf, workerUiState, type LiveWorker, type Tally } from '../../data/live';
 import { FN_TAIL, isPlanItem } from '../../data/todos';
 import { todoState } from '../../data/todos';
 import { ownerOutcome } from '../board/board-model';
@@ -37,6 +37,8 @@ export type HudAgent = {
   since?: number;
   /** Tool calls the host counted for the worker (wave 35): the CALLS column of the done table. Absent when none were seen. */
   calls?: number;
+  /** Tool start times (epoch ms) over the last minute: the ACT sparkline of the SUBAGENTS row. */
+  callTimes?: readonly number[];
 };
 
 const GENERIC = new Set(['unknown', 'general-purpose', 'task', '']);
@@ -82,7 +84,7 @@ export function hudAgents(live: readonly LiveWorker[], squad: readonly SquadAgen
   const listed = [...live].sort((a, b) => started(a) - started(b)).map((w) => {
     const s = squad.find((a) => a.name === w.name);
     const name = displayName(w.name, w.role, s?.task);
-    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, startedAt: w.startedAt, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(w.calls?.length ? { calls: w.calls.length } : {}), ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
+    return { name, ...(name !== w.name ? { key: w.name } : {}), role: w.role, state: w.state, ui: liveState(w), since: w.since, startedAt: w.startedAt, tool: w.tool, target: w.target, detail: w.detail, lastTool: w.lastTool, lastLine: w.lastLine, ...(w.calls?.length ? { calls: w.calls.length, callTimes: w.calls } : {}), ...(s?.model ? { model: s.model } : {}), ...(s?.task ? { task: s.task } : {}) };
   });
   return [...listed, ...queued.filter((n) => !live.some((w) => w.name === n)).map((name): HudAgent => ({ name, role: '', state: 'queued', ui: 'queued' }))];
 }
@@ -313,7 +315,10 @@ const lastFallback = (a: Pick<HudAgent, 'tool' | 'lastTool'>): string => {
 /** The LAST column: the clock since the agent started (`0:13`), frozen at the instant it ended (`since`, stamped by the builder when the worker finished or failed); `-` when the worker's start is not known. */
 export const elapsedOf = (a: Pick<HudAgent, 'state' | 'since' | 'startedAt'>, state: UiState, now?: number): string => {
   if (typeof a.startedAt !== 'number' || !Number.isFinite(a.startedAt) || now === undefined) return state === 'queued' ? '0:00' : '-';
-  const ended = (state === 'done' || state === 'failed') && typeof a.since === 'number' && a.since > a.startedAt && a.since <= now;
+  const over = state === 'done' || state === 'failed';
+  const ended = over && typeof a.since === 'number' && a.since > a.startedAt && a.since <= now;
+  // An ended agent with no finish stamp after its start (a worker first seen already finished) has no known run time: `-`, never a clock that keeps counting.
+  if (over && !ended) return '-';
   return elapsedClock((Math.max(a.startedAt, ended ? a.since! : now) - a.startedAt) / 1000);
 };
 
@@ -348,7 +353,7 @@ export function agentModel(agents: readonly HudAgent[], todos: readonly TodoItem
     const fn = state === 'done' ? functionsIn([...owned.map((t) => t.evidence), a.lastLine]) : 0; // state 39: the whole report's count, whichever row states the outcome
     const fallback = lastFallback(a);
     const task = taskOf(a.task) || taskOf(owned.find((t) => (t as { origin?: string }).origin === 'dispatch')?.content); // the dispatch row's text when the squad has none
-    return { ...(a.role ? { persona: a.role } : {}), seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(fn > 0 ? { fn } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
+    return { ...(a.role ? { persona: a.role } : {}), seq: seqFor(a.key ?? shown), name: shown, id: a.key ?? shown, state, model: shortModel(a.model) || '-' /* critique 18: MODEL is never blank; a dispatch that named none reads `-` */, tasks, tool: last, ctx: a.ctx ?? null, focus: false, elapsed: elapsedOf(a, state, now), ...(lastAction(a, root) ? { action: lastAction(a, root) } : {}), ...(a.calls ? { calls: a.calls } : {}), ...(now !== undefined && a.callTimes && (state === 'running' || state === 'blocked' || state === 'waiting') ? { act: callBuckets(a.callTimes, now, 8, 7500) } : {}), ...(fn > 0 ? { fn } : {}), ...(task ? { task } : {}), ...(fallback ? { fallback } : {}) };
   });
   const sorted = sortAgents(rows);
   const at = sorted.findIndex((r) => r.state === 'running');
@@ -408,7 +413,7 @@ export function hudLines(input: HudInput, opts: HudOpts): Run[][] {
 /** At rest the block is quiet (critique 29: idle and done drew the same green boxes): every run but the 240 rules and the done and failed marks reads 245, no weight, no fill. */
 const idleRow = (row: Run[]): Run[] => row.map((x) => (x.tone === 'dim' || IDLE_MARK.has(x.t) || (x.tone === 'bad' && METER_CELLS.test(x.t)) ? x : { t: x.t, tone: 'sub' as const, ...(x.strike ? { strike: true } : {}) }));
 /** State 39 (idle turned all five done circles 245, hiding that the work finished): the done `●` (114) and the failed `■` (203) keep their colour at rest; only the titles and words go quiet. */
-const IDLE_MARK = new Set(['●', '■']);
+const IDLE_MARK = new Set(['\u2713', '✗']);
 /** Truth 41 (stoprun-110-2 f0076: the meter was all 245 at rest while f0096 drew its 203 cell): the failed cell of the TODO meter keeps its colour at rest, like the failed `■`. */
 const METER_CELLS = /^[▰!]+$/u;
 

@@ -1,45 +1,23 @@
-// The TODO and SUBAGENTS surfaces of the rev 4 ATLAS design (round2/design/atlas-design-system-rev4.md, sections 3f/3g).
-// Pure and host free: design rows in, tone-tagged Runs out. mod/view/hud/hud.ts adapts board and squad data to these rows and
-// paints Runs for Claude Code; omp/hud-paint.ts paints the same Runs as ANSI, so the two hosts draw identical rows.
-// Layout grid (cell columns): focus 0, glyph 2, label 4; state and meta columns follow the tier below.
 import { workerTally } from '../../data/tally';
-import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS, sharedSpinFrame, type MotionCtx } from '../../motion/motion';
+import { animateRow, calmRun, easedMs, MOTION_MS, MOTION_STEP_MS } from '../../motion/motion';
 import { clipWords, lastText } from '../../data/lasttext';
 import { noteWorkerFacts, tallyOf } from '../../data/live';
 import { DONE_RETRIED, planFigure, WORKER_DOWN } from '../board/board-model';
-import { activitySection, contextSection, gatesSection, runsSection, sessionRow, type Health } from '../../data/idle-health';
-import { chevron, chipRun } from '../../input/clickable';
-import { cardFrame } from './card-frame'; import { roleLabel, roleOf } from '../../design/theme'; import { roleHex } from '../../design/atlas-ui';
-import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, LINGER_MS, PALETTE5, PALETTES, WORKER_FAILED, xtermHex, clip, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, spinClock, spinFrameOf, spinnerGlyph, chip, stateChip, stateGlyph, stateRun, type MarkState, type Run, type Ui, type UiState } from '../../design/atlas-ui';
-
-export type TodoRow = { label: string; /** The plan item's id (T1): its spinner phase when no agent owns it, the same key the side panel turns. */ id?: string; /** The agent that owns the item: its spinner turns the owner's frame, as on the board. */ owner?: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`: the owner agent ended, the store row is still open). */ word?: string; detail: string; focus: boolean; /** Motion key (hud.ts sets it); absent: the row never animates. */ key?: string; /** Epoch ms the item completed, when the board records it: a fresh one outranks the queue when rows fold. */ doneAt?: number; /** Merged block (wave 31): the agent that works the row and its clock (`alpha-explorer`, `0:08`), drawn right-aligned in 245. */ agent?: string; agentTime?: string; /** Wave 34: dispatches that fold under this plan row and have no row of their own (`explorer-f3da queued 0:00`), each drawn as one 240 child line while it is open. */ children?: readonly string[] };
-/** `tasks`: the 1-based plan positions of every item the agent owns (`T1`, `T2`); none for an agent that owns no row. */
-export type AgentRow = { /** The worker's persona (`implementer`, `atlas:explorer`; tmux workers carry `unknown`): its role, else the name prefix decides (theme.ts roleOf). */ persona?: string; /** Dispatch order (wave 36): the agent's place in the order it was dispatched; the SUBAGENTS table sorts by it, so a row never moves. */ seq?: number; name: string; state: UiState; model: string; tasks: readonly number[]; tool: string; ctx: number | null; focus: boolean; key?: string; /** The squad name (the side panel's row id): its spinner phase, which the display `name` would change. */ id?: string; /** The agent's own task text (its dispatch description): the TASK column shows it when the agent owns no plan row. */ task?: string; /** What RESULT reads when the agent has no outcome or call to show (its last tool word): never the state word again. */ fallback?: string; /** State 38: the agent's last tool action in plain words (`read gamma.py`): the SUBAGENTS LAST column shows it when the outcome would only restate the FN count. */ action?: string; /** The LAST column: the elapsed clock since the agent started (`0:13`), frozen at its end. */ elapsed?: string; /** Tool calls the host counted for the agent (wave 35, the finish card's own figure): the CALLS column of the done table; absent when none were seen, never guessed. */ calls?: number; /** State 39: the functions the agent's whole report holds, counted over every evidence row and its closing line (hud.ts functionsIn), so the FN column never depends on which row stated the outcome. */ fn?: number };
-/** The one spinner frame of the HUD: the shared clock's frame (spinFrameOf of spinClock) when the snapshot's `now` is known, else the caller's tick.
- * Rev 5: ONE phase for every row and title in a frame (no per-row id: out-of-phase spinners read as noise, critique 17.13.0 problem 1). */
-const spinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? spinFrameOf(spinClock(o.now, o.tick), '') : o.tick ?? 0);
-/** The spinner frame of the SUBAGENTS header and rows: the one shared tick (motion.ts sharedSpinFrame), the same beat and the same glyph spinOf counts for the TODO rows. */
-const titleSpinOf = (o: Pick<SurfaceOpts, 'now' | 'tick'>): number => (o.now !== undefined ? sharedSpinFrame(spinClock(o.now, o.tick)) : o.tick ?? 0);
-
-/** The running mark of a HUD row: the one spinner (atlas-ui spinnerGlyph), the glyph the titles, the band and the side panel turn on the same clock. The capture scorer
- * (round2/tools/live_capture.py GLYPH_STATE4, :467-469) reads a TODO item's state from its glyph alone and a SUBAGENTS row only when its glyph is one of `◐◓◑◒◇■▲◉●`,
- * which is why the one set is the circle quarters and not braille. */
-export const rowSpinnerGlyph = spinnerGlyph;
-function markRun(s: MarkState, o: Pick<SurfaceOpts, 'now' | 'tick' | 'ui'>): Run {
-  if (s === RETURNED) return stateRun(RETURNED, o.ui); // `returned` is a hand-back, not a finish: the neutral `◉` (one the scorer reads) in body 252 and the word in 245, never the green done mark (critique 27, live-150-46d4825c-1 f0085:26)
-  const base = stateRun(s, o.ui, spinOf(o));
-  if (s === 'doubt') return { ...stateRun('failed', o.ui), tone: o.ui.ascii ? 'text' : 'bad' }; // a row closed over a killed worker is `■ failed` in the error 203: one glyph and one word for a killed worker everywhere (critique 28)
-  return s === 'running' ? { ...base, t: rowSpinnerGlyph(spinOf(o), o.ui.ascii), ...(o.ui.ascii ? {} : { tone: 'accent' as const }) } : base; // wave 31: every running circle is the accent 141, as the band spinner and the side panel's
-}
+import { type Health } from '../../data/idle-health';
+import { cardFrame } from './card-frame';
+import { roleLabel, roleOf } from '../../design/theme';
+import { roleHex } from '../../design/atlas-ui';
+import { cells, CHIP_W, clipEll, ELL, ellOf, DONE_KILLED, COUNT_ORDER, GLYPH5, PALETTE5, PALETTES, gauge, markOf, markToken, percent, RETURNED, rowWordTone, runsCells, chip, stateChip, stateGlyph, stateRun, type Run, type Ui, type UiState } from '../../design/atlas-ui';
+import { AgentRow, BlockOpts, KILLED, NONE, REASON_MIN, RULE, STOPPED, SurfaceOpts, Surfaces, TodoRow, bottomRule, detailOf, dimRun, flat, gridWord, isDoubt, isFailedRow, isMerged, markRun, mergedTodos, overflowRow, ownerBase, planWindow, reasonOf, resultOf, t, tallyStates, titleSpinOf, windowRows, actionOutcome, planCount } from './hud-model';
+import { agentBox, listedAgents, todoBox } from './hud-frame';
+export type { AgentRow, BlockOpts, SurfaceOpts, Surfaces, TodoRow } from './hud-model';
+export { bottomRule, isFailedRow, isMerged, mergedTodos, overflowRow, overflowText, planWindow, reasonOf, resultOf, rowSpinnerGlyph, windowRows } from './hud-model';
 
 // ---- rev 5 titles: a plain title, a thin rule, the meter on the right ------------------------------------------------------
 // File-local tokens until the shared set lands (names match slice A's GLYPH5): the meter marks, the rule.
 const METER_ON = GLYPH5.meterOn;
 const METER_OFF = GLYPH5.meterOff;
 const METER_W = 8;
-const RULE = '─';
-/** A quiet run of the box chrome: the 240 neutral (PALETTE5.dim), the rule, the corners and the brand. The exact grey rides `fg` except in the light theme, where the tone's own muted grey is already the dark one. */
-const dimRun = (text: string, ui: Pick<Ui, 'theme'>): Run => ({ t: text, tone: 'dim', ...(ui.theme === 'latte' ? {} : { fg: PALETTE5.dim }) });
 /** The brand the scorer locates a block by (the ribbon text then `> TODO`, live_capture.py is_block_header :510): the same text as atlas-ui's wordmark, drawn quiet (no fill, 240); the band alone carries the solid chip. ASCII: `[ATLAS]`. */
 const brand = (ui: Ui): Run[] => [dimRun(ui.ascii ? '[ATLAS]' : '◖ ◆ ATLAS ◗', ui)];
 /** `▰▰▰▱▱▱▱▱` for done/total: full only when everything is done, never empty once one is. ASCII: `#` and `-`. */
@@ -77,11 +55,6 @@ export function sectionRibbon(title: string, figure: string, cols: number, ui: U
   if (w <= lead.length) return [dimRun(left, ui)];
   return [dimRun(lead, ui), titleRun(head, ui), dimRun(' ' + rule.repeat(gap) + tail, ui)];
 }
-/** The bottom edge that closes a box: `╰────╯` in exactly `cols` cells in the 240 neutral (ASCII `+---+`), under the last row of a block in every state. The capture scorer skips a row with no space after its first character. */
-export const bottomRule = (cols: number, ui: Ui): Run[] => {
-  const w = Math.max(3, cols);
-  return [dimRun(ui.ascii ? `+${'-'.repeat(w - 2)}+` : `╰${RULE.repeat(w - 2)}╯`, ui)];
-};
 
 /** The tone and weight of a row's state word. The tone is the ONE shared table (atlas-ui rowWordTone), so the HUD, the route tab and the board never disagree on a row's colour
  * (phase-sync.test.ts); rev 5 asks that table for: running `text`, finished and queued `muted`, failed `bad`, blocked/waiting/doubt `warn`, returned `text`. Weight: the running word
@@ -90,31 +63,6 @@ function wordStyle(r: Pick<TodoRow, 'state' | 'word'>): { tone: Run['tone']; bol
   const tone = r.word === WORKER_DOWN || isDoubt(r) ? 'bad' : r.word === RETURNED ? 'sub' : rowWordTone(r.state, r.word); // a doubted done is the error tone in the HUD (`closed · worker failed`) // `returned` is the secondary 245 word beside its neutral mark
   return r.state === 'running' && r.word === undefined ? { tone, bold: true } : { tone };
 }
-export type SurfaceOpts = {
-  cols: number;
-  ui: Ui;
-  /** Spinner frame for running glyphs. */
-  tick?: number;
-  /** Rich form: state chips, the phase rail, a ctx gauge per agent (120 columns and up). */
-  rich?: boolean;
-  /** Phase ids and the 0-based lit phase for the rich rail. */
-  phases?: { ids: readonly string[]; active: number };
-  /** Motion view (mod/motion/motion.ts): a row with a key and an entry is drawn mid-transition. Absent: the resting render. */
-  motion?: MotionCtx | undefined;
-  /** The snapshot clock in epoch ms: a done row that completed within LINGER_MS of it ranks with running rows when the plan folds. */
-  now?: number | undefined;
-  /** The run's fixed shape (slot.ts): an empty block still draws its closed box with one quiet row (`no tasks yet`, `none running yet`), so the HUD has one shape from the first working frame to idle. */
-  reserve?: boolean | undefined;
-  /** Wave 42: the live health summary (`● gates 4/4 · ctx 18%`): an empty reserved box says what will appear and this, never an empty-looking box. Absent: the old quiet words. */
-  healthLine?: string | undefined;
-  /** False: never merge the running agents into the TODO rows (the row counters ask for the roomiest form so the slot holds one height). */
-  merge?: boolean | undefined;
-};
-/** `spacers`: the blank rows of the mocks. `extras`: the rail and the progress gauge. `cap`: row slots for the rows (the overflow row takes one); undefined shows all, 0 only the ribbon. */
-/** `header`: the SUBAGENTS column-name row (default: with `spacers`); `stack` always asks for it, so a drawn HUD prints it in every state until a budget too small turns it off. */
-export type BlockOpts = { spacers: boolean; extras: boolean; cap?: number; header?: boolean; /** The `╰───╯` rule under the last row (a block with no row under its title has nothing to close); `stack` asks for it in every state. */ close?: boolean; /** Fold the finished rows into a `3 done` count on the ribbon and draw every open row (never folds an open one). */ foldDone?: boolean; /** The merged block (wave 31): each row carries its agent and clock at the right, and the closing rule is `closer`. */ merged?: boolean; closer?: Run[]; /** Agents windowed to `cap` rows with no `n more agents not shown` row: the running count already rides the ribbon, so every slot holds an agent. */ quiet?: boolean };
-
-const t = (text: string, tone: Run['tone'] = 'text', extra: Partial<Run> = {}): Run => ({ t: text, tone, ...extra });
 const BLANK: Run[] = [];
 
 export type Tier = 'full' | 'mid' | 'min';
@@ -124,17 +72,8 @@ export const isRich = (o: SurfaceOpts): boolean => !!o.rich && o.cols >= 120;
 
 /** The leftmost the TODO state column may start at (a title of one cell, its glyph and gaps). */
 const MIN_STATE_AT = 6;
-const flat = (s: string): string => s.replace(/\s+/g, ' ').trim();
-/** A row's detail column text: empty when the title already says it (`T1 read alpha.py (alpha-explorer)` with the owner `alpha-explorer` printed again beside it). */
-const detailOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word'>, rich = false): string => (r.detail !== '' && (flat(r.label).toLowerCase().includes(flat(r.detail).toLowerCase()) || isDoubt(r)) ? '' : r.detail); // a doubted done says `worker failed` in its state cell (non-rich), so the detail column does not say it again
-/** A completed row whose worker failed or was killed (critique 17 A1). */
-const isDoubt = (r: Pick<TodoRow, 'state' | 'word'>): boolean => markOf(r.state, r.word) === 'doubt';
-/** A row the block draws `■ failed`: its state is failed, or the lead closed it over a failed worker (wave 36: one state for it in the title, the meter and the row). */
-export const isFailedRow = (r: Pick<TodoRow, 'state' | 'word'>): boolean => r.state === 'failed' || isDoubt(r);
 /** A doubted done spelled out in the plain form (the atlas-ui word, one source): the lead CLOSED the row (the store says completed) but its worker was killed, so the HUD does not call it done. The scorer reads the glyph (`●`, completed), which is the store's truth. */
 export const CLOSED_KILLED = DONE_KILLED;
-/** The one word for a worker that was stopped mid-call (critique 28), on the TODO row closed over it, the SUBAGENTS row and the band. */
-const KILLED = 'failed';
 /** The state cell's text: the row's word, and for a doubted done in the plain form `closed · worker failed` (critique 18 B2: a tone alone certified a killed worker; the chip form keeps its 11-cell chip and the detail column). */
 const wordOf = (r: Pick<TodoRow, 'state' | 'word'>, rich: boolean): string => (isDoubt(r) ? KILLED : rich && (r.word === DONE_RETRIED || r.word === WORKER_DOWN) ? r.state : r.word ?? r.state); // the 11-cell chip cannot hold `retried · done` or `worker failed`: the chip reads the state and the detail column says the rest
 /** The tone of a row's state word: `worker failed` (a pending row whose worker failed) is red, the rest is the shared word tone. */
@@ -161,96 +100,19 @@ export function stateCounts(states: readonly UiState[]): string {
   return COUNT_ORDER.map((s) => [s, tally[s]] as const).filter(([, n]) => n > 0).map(([s, n]) => `${n} ${s}`).join(' · ');
 }
 
-/** Row slots by priority when the rows do not all fit: open work first (running, blocked, failed, waiting), then queued, then the newest done.
- * A row that completed within LINGER_MS of `now` ranks with running rows, so a task that just finished is not hidden behind the queue. */
-const PRIORITY = Object.fromEntries(COUNT_ORDER.map((s, i) => [s, i])) as Record<UiState, number>;
-
-/** A done row that completed within LINGER_MS of `now`. */
-const isFresh = (r: { state: UiState; doneAt?: number }, now?: number): boolean => r.state === 'done' && now !== undefined && r.doneAt !== undefined && now - r.doneAt <= LINGER_MS;
-
-/** The `slots` rows to draw, in their own order, and how many were left out. `slots` includes the overflow row when something is hidden. */
-export function windowRows<T extends { state: UiState; word?: string; doneAt?: number }>(rows: readonly T[], slots: number | undefined, now?: number, overflowRow = true): { shown: T[]; hidden: number } {
-  if (slots === undefined || slots >= rows.length) return { shown: [...rows], hidden: 0 };
-  const keep = overflowRow ? Math.max(0, slots - 1) : slots; // `overflowRow` false: the count of the rest rides the ribbon, so every slot holds a row
-  const rank = (r: T): number => (isFailedRow(r) ? PRIORITY.failed : isFresh(r, now) ? PRIORITY.queued - 0.5 : PRIORITY[r.state]); // state 40: a row closed over a failed worker ranks as failed, never as a finished one // state 39: a row that just finished ranks after every open row (a running row is never hidden behind it) and before the queue
-  const ranked = rows.map((row, i) => ({ row, i })).sort((a, b) => rank(a.row) - rank(b.row) || (a.row.state === 'done' && !isFailedRow(a.row) ? (b.row.doneAt ?? 0) - (a.row.doneAt ?? 0) || b.i - a.i : a.i - b.i));
-  const picked = new Set(ranked.slice(0, keep).map((x) => x.i));
-  return { shown: rows.filter((_, i) => picked.has(i)), hidden: rows.length - picked.size };
-}
-
 // ---- TODO ------------------------------------------------------------------------------------------------
 
 /** An empty block of the fixed shape: the closed box with one quiet row (critique 28: bare rows under a box). */
 /** A run with no plan row and no agent yet (the health band is on): ONE ribbon line, `── ATLAS ▸ TODO  no plan yet · 0 agents ───`, in place of two boxes that each say they are empty. */
 const emptyBox = (o: SurfaceOpts, title: string, text: string): Run[][] => [titleRow(o.cols, title, '', [], o.ui, false), [t(`  ${text}`, 'muted')], bottomRule(o.cols, o.ui)];
 
-/** One overflow idiom for every block (state 39): the rows a block cannot draw are counted on ONE dim summary row, the last row inside its box, never on the title: `● 2 done  ■ 1 failed  ◇ 1 queued`, and a hidden open row is
- * named by its state (`◒ 2 more running`). State 40: every hidden state is counted apart with its own glyph and colour, a failed row is never folded into `done`, and the order is done, failed, queued, then the other open states.
- * Counts by state in, the parts out: each part is the glyph run and the text run that follow it (`''` parts when nothing is hidden). */
-const OVERFLOW_ORDER: readonly UiState[] = ['done', 'failed', 'queued', ...COUNT_ORDER.filter((x) => x !== 'done' && x !== 'failed' && x !== 'queued')];
-export function overflowParts(counts: Partial<Record<UiState, number>>, ui: Ui, spinFrame = 0): Run[][] {
-  return OVERFLOW_ORDER.flatMap((st): Run[][] => {
-    const n = counts[st] ?? 0;
-    if (n <= 0) return [];
-    const glyph = st === 'running' ? stateRun('running', ui, spinFrame) : stateRun(st, ui);
-    const word = st === 'done' || st === 'queued' || st === 'failed' ? `${n} ${st}` : `${n} more ${st}`;
-    return [[glyph, { t: ` ${word}`, tone: st === 'failed' && !ui.ascii ? 'bad' : 'sub' }]];
-  });
-}
-export function overflowText(counts: Partial<Record<UiState, number>>, ui: Ui, spinFrame = 0): string {
-  return overflowParts(counts, ui, spinFrame).map((p) => p.map((x) => x.t).join('')).join('  ');
-}
-/** The summary row: two blank cells, then the parts apart, each glyph in its own colour; whole parts only, the last cell stays empty (a part that does not fit ends the row, so a count is never cut mid-figure). */
-export function overflowRow(counts: Partial<Record<UiState, number>>, ui: Ui, cols: number, spinFrame = 0): Run[] {
-  const out: Run[] = [dimRun('  ', ui)];
-  for (const part of overflowParts(counts, ui, spinFrame)) {
-    const sep: Run[] = out.length > 1 ? [dimRun('  ', ui)] : [];
-    if (runsCells(out) + runsCells(sep) + runsCells(part) > cols - 1) break;
-    out.push(...sep, ...part);
-  }
-  return out;
-}
-/** Counts per state for rows left out. A row closed over a failed worker (state `done` with the doubt word) is `failed` here, as in the title, the meter and its own row (state 40: `● 3 done` hid a failed item). */
-const tallyStates = (rows: readonly { state: UiState; word?: string }[]): Partial<Record<UiState, number>> => rows.reduce<Partial<Record<UiState, number>>>((m, r) => { const st: UiState = isFailedRow(r) ? 'failed' : r.state; return { ...m, [st]: (m[st] ?? 0) + 1 }; }, {});
-
-/** State 38/39: which plan rows to draw in `cap` slots, and the one summary row for the rest. Finished rows go first (a fresh one last), then queued rows from the bottom, behind ONE dim summary row that takes a slot:
- * `● 3 done  ◇ 2 queued`. A row that just finished (LINGER_MS) ranks with the open ones. A running, blocked, failed or waiting row is hidden only when nothing else is left to hide, from the bottom, and then the SAME summary row counts it
- * (`◒ 2 more running`), never the title (`hiddenOpen` is the number of such rows). `fold`: the finished rows go regardless of `cap` (a short budget). */
-export function planWindow<T extends { state: UiState; word?: string; doneAt?: number }>(rows: readonly T[], cap: number | undefined, now: number | undefined, fold: boolean, ui: Ui, spinFrame = 0): { shown: T[]; summary: string | null; counts: Partial<Record<UiState, number>>; hiddenOpen: number } {
-  let hide = new Set<number>();
-  const idx = rows.map((r, i) => ({ r, i }));
-  const finished = idx.filter((x) => x.r.state === 'done' && !isFailedRow(x.r)); // state 40: a row closed over a failed worker is open work to hide last, never one of the finished rows that go first
-  if (fold && finished.length > 0 && finished.length < rows.length) for (const x of finished) if (!isFresh(x.r, now)) hide.add(x.i);
-  const isSummed = (i: number): boolean => (rows[i]!.state === 'done' && !isFailedRow(rows[i]!)) || rows[i]!.state === 'queued';
-  const slots = (): number => rows.length - hide.size + (hide.size > 0 ? 1 : 0);
-  if (cap !== undefined && cap > 0 && slots() > cap) {
-    const summed = [
-      ...finished.filter((x) => !isFresh(x.r, now)).sort((a, b) => (a.r.doneAt ?? 0) - (b.r.doneAt ?? 0) || a.i - b.i),
-      ...idx.filter((x) => x.r.state === 'queued').reverse(),
-    ];
-    for (const x of summed) { if (slots() <= cap) break; hide.add(x.i); }
-    if (slots() > cap) {
-      // The open rows alone fill the slots: the summary row still takes the last one and counts every row left out, the open ones by name.
-      const w = windowRows(rows, cap, now, true);
-      hide = new Set(idx.filter((x) => !w.shown.includes(x.r)).map((x) => x.i));
-    }
-  }
-  if (hide.size === 0) return { shown: [...rows], summary: null, counts: {}, hiddenOpen: 0 };
-  const counts = tallyStates([...hide].map((i) => rows[i]!));
-  const text = overflowText(counts, ui, spinFrame);
-  return { shown: rows.filter((_, i) => !hide.has(i)), summary: text === '' ? null : text, counts, hiddenOpen: [...hide].filter((i) => !isSummed(i)).length };
-}
-
 export function todoRows(rows: readonly TodoRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
+  if (!isRich(o)) return todoBox(rows, o, b);
   if (rows.length === 0) return o.reserve ? emptyBox(o, 'TODO', o.healthLine ? 'plan rows appear here' : 'no tasks yet') : []; // the gates figure is the band's: a box that waits for data does not say it again
   const { ui, cols } = o;
   const tier = tierOf(cols);
   const rich = isRich(o);
-  const failed = rows.filter(isFailedRow).length; // wave 36: a failed row (or one closed over a failed worker) is counted apart, never as done
-  const done = rows.filter((r) => r.state === 'done' && !isFailedRow(r)).length;
-  const plain = planFigure(done, rows.length, rows.filter((r) => r.word === RETURNED).length); // one count format at every width: `n/m`, like the band, the board and the panel (critique 14: `5 of 5 done`)
-  const failMark = `${ui.ascii ? '!' : '■'}${failed}`;
-  const figures = failed > 0 ? [`${plain} · ${failMark}`, `${plain}${failMark}`] : [plain]; // `4/5 · ■1` with a failed row; the dot goes first when the title is crowded, the failed count never
+  const { failed, done, plain, failMark, figures } = planCount(rows, ui, '■'); // wave 36: a failed row is counted apart, never as done
   const figure = figures[0]!;
   const meter = meterRuns(done, rows.length, ui, failed);
   /** The title in the first form that fits: the count text with the meter, then without it. */
@@ -360,19 +222,6 @@ export function todoGrid(cols: number): Grid | undefined {
   return { titleW, stateAt, ownerAt, ownerW, timeAt: ownerAt + ownerW + 1 };
 }
 
-/** The state word as the 8-cell column holds it: `done` too (every row has one), `failed` for a doubted done or a pending row whose worker died, `retried` for a retried done. */
-const gridWord = (r: Pick<TodoRow, 'state' | 'word'>): string => (isDoubt(r) || r.word === WORKER_DOWN ? KILLED : r.word === DONE_RETRIED ? 'retried' : r.word ?? r.state);
-
-/** The fewest cells a row's reason is drawn in past the grid's last column (two blank cells before it); with less room the reason takes the owner and clock cells instead. */
-const REASON_MIN = 16;
-const REASON_STATES: ReadonlySet<UiState> = new Set<UiState>(['blocked', 'failed', 'waiting']);
-/** Why a blocked, failed or waiting row is stuck (its plan row's evidence or detail: `needs your approval on the schema change`); '' for any other row, a `returned` hand-back, or a detail that only names the row's owner. */
-export const reasonOf = (r: Pick<TodoRow, 'label' | 'detail' | 'state' | 'word' | 'agent' | 'owner'>): string => {
-  if (!REASON_STATES.has(r.state) || r.word === RETURNED) return '';
-  const d = flat(detailOf(r));
-  return d === '' || d === flat(r.agent ?? '') || d === flat(r.owner ?? '') ? '' : d;
-};
-
 function todoGridRow(r: TodoRow, o: SurfaceOpts, g: Grid): Run[] {
   const { ui } = o;
   const ell = ellOf(ui);
@@ -448,6 +297,7 @@ export const sortAgents = <T extends { tasks?: readonly number[] }>(rows: readon
 
 /** The Subagents block at every width: a docked side pane leaves the transcript about 61 cells at 110 columns, and the block still shows there with its ribbon and a row per agent (the columns drop first). */
 export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpts): Run[][] {
+  if (!isRich(o)) return agentBox(rows, o, b);
   if (rows.length === 0) return o.reserve ? emptyBox(o, 'SUBAGENTS', o.healthLine ? 'agents appear here' : 'none running yet') : [];
   const { ui, cols } = o;
   const rich = isRich(o);
@@ -490,11 +340,6 @@ export function agentRows(rows: readonly AgentRow[], o: SurfaceOpts, b: BlockOpt
 /** The LAST text as the column can hold it. One form at every width (critique 19 B1: `1 found` at 110, `1 function found` at 150): the outcome is already the short form (hud.ts outcomeOf),
  * and one that does not fit is ended on a whole word by the cell, never swapped for another wording (`returned` said nothing). */
 const lastFor = (text: string): string => text;
-
-/** What a TASK or LAST cell with nothing to say reads (critique 17.13.0: LAST was blank at 110). */
-const NONE = '-';
-/** What LAST reads on a failed row with no outcome of its own. */
-const STOPPED = 'stopped';
 const TASK_W = 7; // `T1,T2` or `3 tasks`: the TASK column is this wide in every frame (critique 19 B2: 5 cells in one frame, 12 in the next, as the agents' task texts came and went)
 /** Every owned id (`T1,T2`) when they fit `width`, else the count (`3 tasks`); an agent that owns none shows nothing. */
 export const taskCell = (tasks: readonly number[], width: number = TASK_W): string => {
@@ -505,15 +350,6 @@ export const taskCell = (tasks: readonly number[], width: number = TASK_W): stri
 const taskText = (r: AgentRow): string => taskCell(r.tasks) || flat(r.task ?? '');
 /** The TASK cell of the plain form: the plan ids and the dispatch text (`T1 read alpha.py`), the whole width the column has. */
 const taskLine = (r: AgentRow): string => [taskCell(r.tasks), flat(r.task ?? '')].filter((x) => x !== '').join(' ');
-/** RESULT: a finished agent's count (`2 functions` -> `2 fn`), else `-`. Never the activity (`preparing`, `read alpha.py`) and never the state word again. `fn` (state 39): the count the whole report holds, which wins over the outcome text. */
-export function resultOf(r: Pick<AgentRow, 'state' | 'tool'> & { fn?: number | undefined }): string {
-  if (r.state !== 'done') return NONE;
-  if (r.fn !== undefined && r.fn > 0) return `${r.fn} fn`;
-  const m = /^(\d+)\s+(function|functions|fn|test|tests|file|files|line|lines|check|checks|finding|findings|row|rows)\b/i.exec(flat(r.tool));
-  if (!m) return NONE;
-  const unit = /^function/i.test(m[2]!) ? 'fn' : m[2]!.toLowerCase();
-  return `${m[1]} ${unit}`;
-}
 /** The task column's width: constant. */
 const taskWidth = (_rows: readonly AgentRow[]): number => TASK_W;
 
@@ -635,18 +471,8 @@ function wordsEll(text: string, n: number, ell: string = ELL): string {
   return cut.endsWith('...') ? `${cut.slice(0, -3)}${ell}` : ''; // not even one word fits: nothing (the cell reads its fallback)
 }
 
-// ---- assembly --------------------------------------------------------------------------------------------
-
-export type Surfaces = { todos: readonly TodoRow[]; agents: readonly AgentRow[] };
-
 /** An agent that works right now: the merged block draws it on its TODO row. */
-const isLive = (a: Pick<AgentRow, 'state'>): boolean => a.state === 'running'; // wave 34: only a running agent turns the spinner; queued ones are not counted at all
-/** Whether the block is merged: an agent runs, so the SUBAGENTS box gives way to the agent and clock on each TODO row (wave 31, critique 29). */
-export const isMerged = (s: Surfaces, o: Pick<SurfaceOpts, 'merge' | 'reserve'>): boolean => o.merge !== false && s.todos.length > 0 && (s.agents.length > 0 || o.reserve === true); // wave 32: one block in every state; no plan rows: the agents keep their own SUBAGENTS box
-
-const ownerBase = (name: string): string => name.replace(/\s+#\d+$/, '');
-/** A plan row's `(alpha-explorer)` title suffix: a kebab name with a hyphen, optionally a retry mark. The merged block shows the agent in its own column, so the title drops it. */
-const AGENT_SUFFIX = /\s*\(([a-z][a-z0-9]*(?:-[a-z0-9]+)+(?:\s#\d+)?)\)\s*$/i;
+const isLive = (a: Pick<AgentRow, 'state'>): boolean => a.state === 'running';
 /** The file-like words of a text (`alpha.py`, `README.md`), lowercased: what a dispatch prompt and a plan row title share when they speak of the same work. */
 const FILE_WORD = /[\w-]+\.[a-z]{1,5}\b/g;
 const fileWords = (text: string): string[] => text.toLowerCase().match(FILE_WORD) ?? [];
@@ -661,25 +487,6 @@ function homeOf(task: string, rows: readonly TodoRow[]): number {
   if (byFile.length > 1) return -1;
   const byName = rows.flatMap((r, i) => (stem(r).length >= 3 && new RegExp(`\\b${stem(r).replace(/[^a-z0-9]/g, '')}\\b`).test(text) ? [i] : []));
   return byName.length === 1 ? byName[0]! : -1;
-}
-
-/** The TODO rows of the merged block (wave 34): exactly one row per plan item, each naming the agent that owns it with its clock (the title never repeats the name). An agent that owns no plan row has no row of its own:
- * a queued one (a dispatch whose worker the host never listed) folds into the plan row its prompt is about while that row is open, otherwise (and for any other orphan agent that is not done) it is one child line under that row,
- * the first open row when none fits, so the title count is the plan's own and the band's. */
-export function mergedTodos(s: Surfaces): TodoRow[] {
-  const nameOf = (r: TodoRow): string | undefined => r.owner ?? AGENT_SUFFIX.exec(r.label)?.[1]; // a plan row names its worker in its `owner` or its `(alpha-explorer)` title suffix
-  const agentOf = (r: TodoRow): AgentRow | undefined => { const n = nameOf(r); return n === undefined ? undefined : s.agents.find((a) => a.name === n || a.id === n || ownerBase(a.name) === ownerBase(n)); };
-  const rows = s.todos.map((r): TodoRow => {
-    const a = agentOf(r);
-    const suffix = AGENT_SUFFIX.exec(r.label)?.[1];
-    const label = suffix === undefined ? r.label : r.label.replace(AGENT_SUFFIX, '');
-    if (a) return { ...r, label, agent: flat(a.name), agentTime: a.elapsed ?? NONE };
-    const named = flat(r.owner ?? '') || suffix; // an assignee with no listed agent yet: the name holds its column from the first frame, the clock stays blank
-    // Wave 36: a started row nobody owns is the lead's (`lead` in 245 where an agent's name would be); an unstarted one has no owner yet and shows none.
-    return named ? { ...r, label, agent: named, agentTime: '' } : r.state !== 'queued' ? { ...r, label, agent: 'lead', agentTime: '' } : { ...r, label };
-  });
-  // State 38: no `└ explorer-xxxx queued` child rows. A dispatched worker the host has not listed yet is a row of the SUBAGENTS count and the band, never a line hung under a plan row.
-  return rows;
 }
 
 /** The short tally of the SUBAGENTS title, `◒ 1 run · ■1 · ●1` (state 39): the spinner while one runs, then a count per state (`N run`, else the state's mark and the figure). Where the words of the full tally do not fit (61 cells),
@@ -727,6 +534,7 @@ function mergedCloser(s: Surfaces, o: SurfaceOpts): Run[] {
  * call, a finished agent's outcome) fills the rest and is left out when no agent has text for it. The columns give way from the right (LAST, FN, CALLS) as the row narrows. `cap`: the most agent rows to draw; the rest are counted on a
  * `+N more` row, never as bare times. Null when there is no agent to list (queued dispatches are child lines of the plan, not agents). */
 export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number, header = true): Run[][] | null {
+  if (!isRich(o)) { const rows = agentBox(s.agents, { ...o, reserve: false }, { spacers: header, extras: false, cap, header, close: true, queued: false }); return rows.length > 0 ? rows : null; }
   const { ui, cols } = o;
   const ell = ellOf(ui);
   const all = s.agents.filter((a) => a.state !== 'queued').map((a, i) => ({ a, i })).sort((x, y) => (x.a.seq ?? x.i) - (y.a.seq ?? y.i) || x.i - y.i).map((x) => x.a);
@@ -736,9 +544,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number, header = t
   // State 38: LAST is the last tool action or the final one-line result, never a restatement of FN (`2 fn` beside `2 functions`): an outcome that is only the counted figure gives way to the agent's last action.
   // State 39: LAST is never blank. A done row without an outcome of its own shows its last tool action (`read alpha.py`), a failed row `stopped`, a live row its current call.
   const lastOf = (a: AgentRow): string => {
-    const x = flat(a.tool);
-    const action = a.action && a.action !== 'preparing' ? a.action : '';
-    const outcome = x !== '' && x !== 'finished' && x !== KILLED && x !== 'preparing' && x.toLowerCase() !== flat(a.task ?? '').toLowerCase() ? x : ''; // never the dispatch title (state 40) // the filler `finished`, a failed agent's own word and the setup filler say nothing LAST does not
+    const { action, outcome } = actionOutcome(a); // State 40: never the dispatch title
     if (a.state === 'failed') return outcome || STOPPED;
     if (a.state === 'done') return (resultOf(a) !== NONE && fnOf(a) !== NONE && /^\d+\s+(?:function|functions|fn)\b/i.test(outcome) ? '' : outcome) || action || 'finished'; // an outcome that only restates the FN figure gives way to the last action
     return outcome || action || 'working';
@@ -782,6 +588,7 @@ export function agentTable(s: Surfaces, o: SurfaceOpts, cap?: number, header = t
 
 /** Both blocks stacked. While an agent runs they are ONE block (merged); otherwise the TODO box and the SUBAGENTS box, with no blank row between: every row of the block is content or a rule. */
 export function stack(s: Surfaces, o: SurfaceOpts, b: { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean; tableHeader?: boolean }): Run[][] {
+  if (!isRich(o)) return [...todoBox(mergedTodos(s), o, { spacers: b.spacers, extras: false, cap: b.todoCap, header: b.header ?? true, ...(b.foldDone ? { foldDone: true } : {}), close: b.close !== false }), ...agentBox(s.agents, o, { spacers: b.spacers, extras: false, cap: b.agentCap, header: b.header ?? true, close: b.close !== false, ...(b.quiet ? { quiet: true } : {}), queued: !isMerged(s, o) })];
   if (isMerged(s, o)) {
     const todos = mergedTodos(s);
     const table = b.table === true && b.agentCap !== 0 ? agentTable(s, o, b.agentCap, b.tableHeader !== false) : null; // state 39: SUBAGENTS folded (cap 0) is the plan box's closing rule carrying its title and tally, not a second box // wave 36: the squad is a table under the plan's closed box in every state, running or not
@@ -807,6 +614,7 @@ export function fitStack(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] 
 
 function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
   if (maxRows <= 0) return [];
+  if (!isRich(o)) return fitPlain(s, o, maxRows); // the redesigned boxes (hud-frame.ts); the rich form keeps its own tries below
   const n = s.todos.length;
   const m = s.agents.length;
   type Try = { spacers: boolean; extras: boolean; todoCap?: number; agentCap?: number; hideTodo?: boolean; header?: boolean; foldDone?: boolean; close?: boolean; quiet?: boolean; table?: boolean; tableHeader?: boolean };
@@ -822,8 +630,7 @@ function fitRows(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
       // Wave 38 (live-110 f0030-f0045: `0/5 · +4 more` over one drawn row while three plan rows ran, beside a full SUBAGENTS table): open plan rows fold onto the title first, every agent keeping its row (critique 28), but never below the
       // rows that are open (running, blocked, failed, waiting). Before one of those would be hidden, SUBAGENTS gives way first and folds to its one title row (`◒ 3 running`).
       // State 39: the rows left out are counted on one summary row inside the box (never on the title), so the slots every open row needs are the open rows plus that row while anything else is hidden.
-      const open = mergedTodos(s).filter((r) => r.state !== 'done' && r.state !== 'queued').length;
-      const keep = Math.max(1, Math.min(open + (total > open ? 1 : 0), total));
+      const keep = keptPlanRows(s);
       for (let cap = total - 1; cap >= keep; cap--) tries.push({ ...flatBox, table: true, todoCap: cap });
       // State 40 (critique 39, live-150-1 f0040: three agents running and no table, only a title on the plan's rule): while any worker runs the table keeps its title with the tally and a row for EVERY running worker.
       // What gives way first: the column names, then the finished agents (counted on the summary row inside the box); the SUBAGENTS box folds to its title only when not even that fits (the tries below).
@@ -940,3 +747,84 @@ function agentWordTone(state: UiState, ui: Ui): Run['tone'] {
 const agentNameTone = (state: UiState, ui: Ui): Run['tone'] => (state === 'failed' ? (ui.ascii ? 'text' : 'bad') : state === 'done' ? 'muted' : 'text');
 const agentTimeCell = (a: AgentRow): string => (a.elapsed && a.elapsed !== NONE ? a.elapsed : NONE);
 const agentCallsCell = (a: AgentRow): string => (a.calls !== undefined && a.calls > 0 ? String(a.calls) : NONE);
+
+// ---- fitting ---------------------------------------------------------------------------------------------------------
+
+type Try = { todoCap?: number; agentCap?: number; hideTodo?: boolean; hideAgents?: boolean; header?: boolean; foldDone?: boolean; quiet?: boolean; noReserve?: boolean };
+
+
+/** The plan rows a fold never goes below: the open rows plus the summary row while anything else is hidden. */
+function keptPlanRows(s: Surfaces): number {
+  const total = mergedTodos(s).length;
+  const open = mergedTodos(s).filter((r) => r.state !== 'done' && r.state !== 'queued').length;
+  return Math.max(1, Math.min(open + (total > open ? 1 : 0), total));
+}
+
+type FitShape = { n: number; m: number; keep: number; running: number; merged: boolean };
+
+/** The counts every try is built from: plan rows, listed agents, the plan rows an open plan keeps, running agents. */
+function fitShape(s: Surfaces, o: SurfaceOpts): FitShape {
+  const n = s.todos.length;
+  const merged = isMerged(s, o);
+  const listed = listedAgents(s.agents, merged);
+  return { n, m: listed.length, keep: keptPlanRows(s), running: listed.filter((a) => a.state === 'running').length, merged };
+}
+
+/** The tries before the agents-only forms: the full form, then each fold of the plan, then the agents giving way. */
+function leadTries({ n, m, keep, running, merged }: FitShape): Try[] {
+  const tries: Try[] = [{}, { header: false }, { header: false, foldDone: true }];
+  for (let cap = n - 1; cap >= (merged ? keep : 1); cap--) tries.push({ header: false, todoCap: cap }); // not merged: the plan folds to its running row and the summary row before the agents give up a row
+  // The agents give way before an open plan row does: finished agents first (a running agent keeps its row), then the whole box folds to its title row, then the running agents one at a time.
+  for (let ac = m - 1; ac >= Math.max(1, running); ac--) for (let cap = n; cap >= keep; cap--) tries.push({ header: false, todoCap: cap, agentCap: ac });
+  return tries;
+}
+
+/** The agents windowed down to fewer than the running ones, the plan whole to its open rows. */
+function windowAgentTries({ n, m, keep, running }: FitShape): Try[] {
+  const tries: Try[] = [];
+  for (let ac = Math.min(m, running) - 1; ac >= 1; ac--) for (let cap = n; cap >= keep; cap--) tries.push({ header: false, todoCap: cap, agentCap: ac });
+  return tries;
+}
+
+/** The box folded to its title row; merged: the plan folds down to its summary row before the agents' title goes. */
+function foldTries({ n, m, keep, merged }: FitShape): Try[] {
+  const tries: Try[] = [];
+  if (m > 0) for (let cap = n; cap >= (merged ? 1 : keep); cap--) tries.push({ header: false, todoCap: cap, agentCap: 0 });
+  return tries;
+}
+
+/** The tries after the plan and agents both fold: merged boxes hide the agents last, then every form that hides the plan or the reserve. */
+function tailTries(sh: FitShape): Try[] {
+  const { n, m, keep, merged } = sh;
+  const tries: Try[] = [];
+  // Merged (the plan rows name their agents in OWNER): the box folds to its title before the plan hides. Not merged (the row counters, a plan with no owners): the agents outrank the plan's last rows.
+  if (merged) {
+    tries.push(...windowAgentTries(sh), ...foldTries(sh));
+    for (let cap = n; cap >= 1 && m > 0; cap--) tries.push({ header: false, todoCap: cap, hideAgents: true }); // under 4 rows the plan's summary box outranks a lone agents title
+  }
+  if (m === 0) tries.push({ header: false, noReserve: true });
+  if (n > 0 && m > 0) tries.push({ header: false, hideTodo: true, noReserve: true });
+  if (m > 1) for (let ac = m - 1; ac >= 1; ac--) tries.push({ header: false, hideTodo: true, agentCap: ac, quiet: true, noReserve: true });
+  if (!merged) tries.push(...windowAgentTries(sh), ...foldTries(sh));
+  for (let cap = keep - 1; cap >= 1; cap--) tries.push({ header: false, todoCap: cap, noReserve: true });
+  tries.push({ header: false, todoCap: 0, agentCap: 0, noReserve: true });
+  return tries;
+}
+
+/** One try's box stack: the hidden half is dropped, the caps and flags pass through. */
+function stackFor(s: Surfaces, o: SurfaceOpts, tr: Try): Run[][] {
+  const oo = tr.noReserve ? { ...o, reserve: false } : o;
+  return stack(tr.hideTodo ? { todos: [], agents: s.agents } : tr.hideAgents ? { todos: s.todos, agents: [] } : s, tr.hideAgents ? { ...oo, reserve: false } : oo, { spacers: tr.header !== false, extras: false, close: true, ...(tr.header === false ? { header: false } : {}), ...(tr.todoCap !== undefined ? { todoCap: tr.todoCap } : {}), ...(tr.agentCap !== undefined ? { agentCap: tr.agentCap } : {}), ...(tr.foldDone ? { foldDone: true } : {}), ...(tr.quiet ? { quiet: true } : {}) });
+}
+
+/** The box stack for `maxRows`: the full form first, then without the column names, the finished plan rows folded onto one summary row, the plan windowed down to its open rows, the agents windowed (a running agent keeps its row
+ * longest), the plan hidden, then a single title row. Every try is two closed boxes; the first that fits wins. */
+function fitPlain(s: Surfaces, o: SurfaceOpts, maxRows: number): Run[][] {
+  const sh = fitShape(s, o);
+  for (const tr of [...leadTries(sh), ...tailTries(sh)]) {
+    const rows = stackFor(s, o, tr);
+    if (rows.length <= maxRows) return rows;
+  }
+  const agents = agentBox(s.agents, o, { spacers: false, extras: false, cap: 0 });
+  return agents.length > 0 ? agents.slice(0, 1) : todoBox(mergedTodos(s), o, { spacers: false, extras: false, cap: 0 }).slice(0, 1);
+}

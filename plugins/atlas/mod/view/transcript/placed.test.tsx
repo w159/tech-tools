@@ -19,7 +19,7 @@ const live = (now: number, squad: SquadAgent[], activity: Record<string, unknown
 const act = (over: Record<string, unknown>) => ({ tool: null, since: 0, toolCount: 0, tokens: null, mood: 'working', lastLine: '', ...over })
 const strings = (n: unknown): string => JSON.stringify(n) ?? ''
 
-/** The card shape (wave 32, critique 30: `<role> finished` is gone, `● done` says it once): `▌ ◆ ATLAS  ● done  <name>  <time> · <n> fn`. The external scorer (round2/tools/live_capture.py:642) still reads the old tail and needs the same change. */
+/** The card shape (wave 32, critique 30: `<role> finished` is gone, `✓ done` says it once): `▌ ◆ ATLAS  ✓ done  <name>  <time> · <n> fn`. The external scorer (round2/tools/live_capture.py:642) still reads the old tail and needs the same change. */
 const CARD = /▌ ◆ ATLAS\s+(\S)\s+(\w+)\s+(\S+)/
 const flat = (tree: unknown): string => {
   const out: string[] = []
@@ -57,7 +57,7 @@ test('B3: the card is placed in the build that shows the worker done (the HUD ro
   const row = flat(placedTree(ids[0]!, uiFromEnv()))
   expect(row).toMatch(CARD)
   expect(row).toContain('alpha-explorer')
-  expect(row).toContain('● done')
+  expect(row).toContain('✓ done')
   expect(row).not.toContain('finished')
   expect(row).toContain('0:13')
   expect(placedTree('done-missing-9', uiFromEnv())).toBeNull()
@@ -113,7 +113,7 @@ test('A2: a place the host refused is retried on the next build, so the failed c
   expect(ids).toEqual(['done-ghost-explorer-1'])
   await placeFinished(engine(ids), failed, snap(5500, [worker('ghost-explorer', 'failed')])) // nothing moved, the card is still owed
   expect(ids).toHaveLength(2)
-  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('■ failed')
+  expect(flat(placedTree(ids[1]!, uiFromEnv()))).toContain('✗ failed')
   await placeFinished(engine(ids), failed, snap(6000, [worker('ghost-explorer', 'failed')]))
   expect(ids).toHaveLength(2) // placed once: nothing owed any more
 })
@@ -127,7 +127,7 @@ test('C4: a worker first listed as failed (the killed ghost dropped out of the h
   expect(finishedWorkers(before, after)).toEqual([{ name: 'ghost-explorer', role: 'explorer', failed: true, durationMs: 6000 }])
   await placeFinished(engine(ids), before, after)
   expect(ids).toEqual(['done-ghost-explorer-1'])
-  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('■ failed')
+  expect(flat(placedTree(ids[0]!, uiFromEnv()))).toContain('✗ failed')
   await placeFinished(engine(ids), after, live(20_500, [worker('alpha-explorer', 'running'), worker('ghost-explorer', 'failed')], { 'alpha-explorer': act({ startedAt: 9000 }), 'ghost-explorer': act({ startedAt: 12_000, since: 18_000, mood: 'failed' }) }))
   expect(ids).toHaveLength(1) // placed once
   expect(finishedWorkers(before, live(20_000, [worker('alpha-explorer', 'running'), worker('gamma-explorer', 'finished')], { 'gamma-explorer': act({}) }))).toEqual([]) // a worker first listed done is still no finish
@@ -169,7 +169,7 @@ test('the Placed site draws the mod\'s own card and passes another plugin\'s row
   expect(await sites().Placed!(host(), placedEvent('atlas', 'done-nope-7'), next)).toBe(SENTINEL)
 })
 
-// stoprun-150-95c4a588-1/frames/tab-team.ans:10: the host's notification row for the killed task read `● done ghost-explorer explorer finished · 5s`, 31 s after the kill.
+// stoprun-150-95c4a588-1/frames/tab-team.ans:10: the host's notification row for the killed task read `✓ done ghost-explorer explorer finished · 5s`, 31 s after the kill.
 function killed(over: { rows?: AgentInfo[]; squad?: SquadAgent[]; messages?: unknown[]; mood?: string } = {}): EngineInterface {
   const activity = over.mood ? { a1: { mood: over.mood, startedAt: 1000, since: 6000, tool: null, toolCount: 0, tokens: null, lastLine: '' } } : {}
   return {
@@ -183,7 +183,7 @@ const stoppedNotice = (requestId: string, status?: string) => ({ surface: 'termi
 
 test('A1: the notification row of a killed task reads failed, never finished, whichever source says it', async () => {
   const h = sites().UserMessage!
-  const FINISHED = /● done/
+  const FINISHED = /✓ done/
   for (const [label, eng, status] of [
     ['task status killed', killed(), 'killed'],
     ['task status stopped', killed(), 'stopped'],
@@ -195,14 +195,14 @@ test('A1: the notification row of a killed task reads failed, never finished, wh
   ] as const) {
     forgetPlaced()
     const row = flat(await h(eng, stoppedNotice(`k-${label}`, status), next))
-    expect([label, FINISHED.test(row), /■ (failed|stopped)/.test(row)]).toEqual([label, false, true])
+    expect([label, FINISHED.test(row), /✗ (failed|stopped)/.test(row)]).toEqual([label, false, true])
   }
 })
 
 test('A1: a worker the host lists completed with no failure anywhere still reads finished', async () => {
   forgetPlaced()
   const row = flat(await sites().UserMessage!(killed({ squad: [worker('ghost-explorer', 'finished')] }), stoppedNotice('ok1', 'completed'), next))
-  expect(row).toMatch(/● done/)
+  expect(row).toMatch(/✓ done/)
 })
 
 // critique 17 C2/C3: stoprun-150-a4fad2f9-1 f0057 drew the mod-placed `ghost-explorer explorer failed · 9s` where the lead had stopped the task (every other
@@ -227,13 +227,13 @@ test('C2: the card placed for a worker the lead stopped reads killed with its ru
   const $ = stopped()
   await placeFinished({ ...($ as object), ui: { place: async ({ id }: { id: string }) => { ids.push(id); return { isPlaced: true, requestId: id } } } } as unknown as EngineInterface, before, after)
   const cards = ids.map((id) => flat(placedTree(id, uiFromEnv())))
-  expect(cards.find((c) => c.includes('ghost-explorer'))).toMatch(/■ failed {2}ghost-explorer\s+0:09/)
-  expect(cards.find((c) => c.includes('beta-explorer'))).toMatch(/■ failed {2}beta-explorer\s+0:09/)
+  expect(cards.find((c) => c.includes('ghost-explorer'))).toMatch(/✗ failed {2}ghost-explorer\s+0:09/)
+  expect(cards.find((c) => c.includes('beta-explorer'))).toMatch(/✗ failed {2}beta-explorer\s+0:09/)
 })
 
 test('C3: the host row of a stopped task with no duration_ms carries the run the HUD prints, like a done card', async () => {
   const row = flat(await sites().UserMessage!(stopped(), stoppedNoDuration('k1'), next))
-  expect(row).toMatch(/■ failed {2}ghost-explorer\s+0:09/)
+  expect(row).toMatch(/✗ failed {2}ghost-explorer\s+0:09/)
 })
 const stoppedNoDuration = (requestId: string) => ({ surface: 'terminal', component: 'UserMessage', requestId, props: { text: 'Agent stopped', origin: { kind: 'task-notification' }, isExpanded: false, task: { id: 'a1', status: 'killed' } } })
 

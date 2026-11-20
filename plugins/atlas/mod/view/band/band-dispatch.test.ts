@@ -51,7 +51,7 @@ describe('step 1: the band is the first row of the slot, so no host clip can tak
     const tree = atlasSlot(els, { band: band as never, gapRow: blank, hud: hud.map((r) => rowOf(els, r, cols)), below: els.Box({ children: [] }) }) as unknown as Node;
     return rowsOf(tree);
   }
-  const isBand = (row: string): boolean => row.includes('◖ ◆ ATLAS ◗') && !row.includes('▸');
+  const isBand = (row: string): boolean => row.includes(' ◆ ATLAS ') && !row.includes('▸');
   for (let h = 1; h <= 24; h++) {
     test(`a slot of ${h} row${h === 1 ? '' : 's'}: the tree fits it, the first row is the band, and the host keeps it`, () => {
       const rows = slotFor(h);
@@ -62,10 +62,10 @@ describe('step 1: the band is the first row of the slot, so no host clip can tak
   }
   test('inline the slot is the terminal height and the host clips below the mod\'s guess: any window of 1 row or more still holds the band', () => {
     const rows = slotFor(24);
-    expect(rows.some((r) => r.includes('▸ TODO'))).toBe(true); // a tall tree, as at dispatch (live-150-1 f0053)
+    expect(rows.some((r) => r.includes('TODO'))).toBe(true); // a tall tree, as at dispatch (live-150-1 f0053)
     for (let window = 1; window <= rows.length; window++) expect(hostKeeps(rows, window + 1).slice(0, window).some(isBand)).toBe(true);
-    expect(rows.findIndex(isBand)).toBeLessThan(rows.findIndex((r) => r.includes('▸ TODO')));
-    expect(rows.findIndex(isBand)).toBeLessThan(rows.findIndex((r) => r.includes('▸ SUBAGENTS')));
+    expect(rows.findIndex(isBand)).toBeLessThan(rows.findIndex((r) => r.includes('TODO')));
+    expect(rows.findIndex(isBand)).toBeLessThan(rows.findIndex((r) => r.includes('SUBAGENTS')));
   });
 });
 
@@ -219,7 +219,7 @@ describe('step 5: the side panel phase and the band read one gate verdict, so th
   const verdict = (blocked: boolean): GateGroup[] => withStopVerdict([], JSON.stringify({ sessions: { s1: { blocked, why: blocked ? ['dispatch T2 open'] : [] } } }), 's1');
   const phaseRow = (gates: GateGroup[]): string => {
     const m = panelModelOf({ snapshot: snap, gates, core: null, ui: { recipient: null, expanded: null, draft: '', view: 'route' }, look: ui, columns: 121, rows: 40, tick: 0 } as never, ui);
-    return bodyLines(m).map((l) => l.runs.map((r) => r.t).join('')).find((t) => /^\s*phase\b/.test(t)) ?? '';
+    return bodyLines(m).map((l) => l.runs.map((r) => r.t).join('')).find((t) => /^\s*PHASE\b/.test(t)) ?? '';
   };
   const bandText = (gates: GateGroup[]): string => {
     const tree = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates, columns: 150, tick: 0, ui, maxRows: 1, working: false }) as unknown as Node;

@@ -19,17 +19,17 @@ describe('the selected row is a bar', () => {
       const [sel, other] = [rows[2]!, rows[3]!];
       expect(filled(sel)).toBe(true);
       expect(runsCells(sel)).toBe(cols); // padded to the full width
-      expect(runsString(sel)).toMatch(/^▸ [◐◓◑◒] alpha-explorer\s+running/); // the cursor text and the glyph still start the row for the scorer
+      expect(runsString(sel)).toMatch(/^▌ [◐◓◑◒] alpha-explorer\s+\S+\s+running/); // the cursor text and the glyph still start the row for the scorer
       expect(sel.find((x) => x.t.includes('alpha-explorer'))?.bold).toBe(true);
       expect(other.some((x) => x.bgHex !== undefined)).toBe(false);
     });
     test(`TODO at ${cols}: the focused open row has the bar, a queued or unfocused row has none`, () => {
       const rows = todoRows([todo({ focus: true }), todo({ label: 'T2 read beta.py' }), todo({ label: 'T3 later', state: 'queued', focus: true })], { cols, ui }, full);
-      expect(filled(rows[1]!)).toBe(true);
-      expect(runsCells(rows[1]!)).toBe(cols);
-      expect(runsString(rows[1]!)).toMatch(/^▸ [◐◓◑◒] T1 /);
-      expect(rows[2]!.some((x) => x.bgHex !== undefined)).toBe(false);
-      expect(rows[3]!.some((x) => x.bgHex !== undefined)).toBe(false); // a queued row is never the selected one
+      expect(filled(rows[2]!)).toBe(true);
+      expect(runsCells(rows[2]!)).toBe(cols);
+      expect(runsString(rows[2]!)).toMatch(/^▌ [◐◓◑◒] T1 /);
+      expect(rows[3]!.some((x) => x.bgHex !== undefined)).toBe(false);
+      expect(rows[4]!.some((x) => x.bgHex !== undefined)).toBe(false); // a queued row is never the selected one
     });
   }
   test('256 colours map the bar through the same stable table as every fill; NO_COLOR draws no fill at all', () => {

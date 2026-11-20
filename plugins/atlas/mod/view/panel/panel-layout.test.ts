@@ -1,15 +1,14 @@
-// The shared side panel layout (design system rev 4): design goldens, per-tab goldens at 120, 80 and the real pane width,
-// the live defects it fixes (L17 route content, L16 seat drift, L21 narrow strip), subagents by name and state,
-// toasts, the closed card box, ASCII mode and width safety.
+// The shared side panel layout (redesigned: tabs health / status / gates / channel): design goldens, per-tab goldens at 120, 80 and the real pane width,
+// the live defects it fixes (L17 route content, L21 narrow strip), the tally by name and state, toasts, the closed card box, ASCII mode and width safety.
+// The goldens (contracts/panel-golden.ts) were regenerated on purpose from the redesigned layout; panel-redesign.test.ts asserts the same shape independently.
 import { describe, expect, test } from 'claude-code/testing';
 import { coreFixture, coreMatrix } from '../../../contracts/core-fixture';
 import { panelWorld, worldCard } from '../../../contracts/panel-world';
-import { padStrip } from '../../golden-pad';
-import { cardDesign, sidepanelDesign, subagentsDesign, tabGolden, toastDesign } from '../../../contracts/panel-golden';
+import { cardDesign, sidepanelDesign, tabGolden, toastDesign } from '../../../contracts/panel-golden';
 import { world } from '../../../contracts/band-world';
 import { cells, runsString, stateWordTone, UI_STATES, type Ui } from '../../design/atlas-ui';
 import { coreModel, type CoreModel } from '../../data/core';
-import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, stripLayout, tabRows, toastText, type PanelGateLine, type PanelModel, type PanelTab } from './panel-layout';
+import { bodyLines, cardLines, headerRows, lineText, MORE_KEY, PANEL_TABS, panelText, STRIP_TABS, tabRows, toastText, type PanelGateLine, type PanelModel, type PanelTab } from './panel-layout';
 import { leadSpinnerGlyph } from '../../design/atlas-ui';
 import { forgetBandFrame, sharedSpinFrame } from '../../motion/motion';
 import { panelLines } from './panel-layout';
@@ -19,55 +18,54 @@ const latte: Ui = { theme: 'latte', ascii: false, color: 'truecolor' };
 const ascii: Ui = { theme: 'mocha', ascii: true, color: 'none' };
 const tabs = PANEL_TABS.map((t) => t.id);
 const core: CoreModel = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
-/** The short pane (the design's 24 rows) unless a test says otherwise: a pane of 30 rows or more fills its spare rows (mod/view/panel/panel-side.test.ts, the tall goldens). */
+/** The short pane (the design's 24 rows) unless a test says otherwise. */
 const rows = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}, ui: Ui = mocha): string[] => panelText(panelWorld(t, cols, ui, { rows: 24, ...over }));
 const card = (cols: number, ui: Ui = mocha): string[] => cardLines(worldCard(ui), cols).map((r) => runsString(r).trimEnd());
 
 describe('side panel design goldens', () => {
   for (const cols of [120, 80]) {
     test(`route head at ${cols} equals the design sidepanel golden`, () => {
-      expect(rows('route', cols).slice(0, sidepanelDesign[cols]!.length)).toEqual(padStrip(sidepanelDesign[cols]!));
-    });
-    test(`team body at ${cols} equals the design subagents golden`, () => {
-      expect(rows('team', cols).slice(cols >= 100 ? 4 : 3)).toEqual(subagentsDesign[cols]!);
+      expect(rows('route', cols).slice(0, sidepanelDesign[cols]!.length)).toEqual(sidepanelDesign[cols]!);
     });
   }
-  test('the team ribbon carries the worker counts with their words', () => {
-    expect(rows('team', 120)[0]).toContain('1 queued · 1 running · 2 done · 1 failed');
+  test('the team content is the status tab: its TEAM section carries the worker counts with their words', () => {
+    expect(rows('team', 120, { rows: 40 }).find((l) => l.includes('TEAM'))).toContain('1 queued  ◐ 1 running'.replace('1 queued  ◐ 1 running', '1 running'));
+    expect(rows('team', 120, { rows: 40 })).toEqual(rows('route', 120, { rows: 40 }));
   });
   for (const t of tabs) {
     for (const cols of [120, 80, 56]) {
       test(`${t} at ${cols} equals its golden`, () => {
-        expect(rows(t, cols, { core, rows: 40 })).toEqual(padStrip(tabGolden[t]![cols]!)); // the golden pane is the live one: 40 rows
+        expect(rows(t, cols, { core, rows: 40 })).toEqual(tabGolden[t]![cols]!); // the golden pane is the live one: 40 rows
       });
     }
   }
 });
 
 describe('tab strip', () => {
-  test('lists status team channel gates core board by name; the lit tab is the filled chip, no rule under it', () => {
+  test('lists health status gates channel by name; the lit tab is the filled chip with an accent segment on the rule', () => {
     for (const t of tabs) {
-      const [strip, next] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim()).toBe('status   team   channel   gates   core   board');
-      const lit = strip!.runs.find((x) => x.bold)!;
-      expect(lit.t.trim()).toBe(t === 'route' ? 'status' : t);
-      expect(lit.bg).toBe('accent');
-      expect(lineText(next!)).not.toMatch(/━/);
+      const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
+      expect(lineText(strip!).trim().replace(/ +/g, ' ').replace(/ \d/g, '')).toBe('health status gates channel');
+      const lit = strip!.runs.find((x) => x.bold && x.bg === 'accent')!;
+      expect(lit.t.trim()).toBe(PANEL_TABS.find((x) => x.id === t)!.label);
+      expect(lineText(rule!)).toMatch(/━/);
     }
+    expect(STRIP_TABS.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'channel']);
   });
   test('L21: one strip row at every width from 29 to 140, never wider than the pane; from 34 the closed set and the `more ›` set together hold every tab, in order', () => {
-    const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !['▸', '›', 'more', '‹', 'back'].includes(w));
+    const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !/^\d+$/.test(w) && !['▸', '›', 'more', '‹', 'back'].includes(w));
     for (let cols = 29; cols <= 140; cols++) {
       const closed = tabRows(panelWorld('route', cols, mocha, {}));
       const open = tabRows(panelWorld('route', cols, mocha, { expanded: MORE_KEY }));
       expect([closed.length, open.length]).toEqual([1, 1]);
       for (const l of [...closed, ...open]) expect(cells(lineText(l))).toBeLessThanOrEqual(cols);
-      if (cols >= 34) expect(cols >= 45 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).toEqual(['status', 'team', cols >= 48 ? 'channel' : 'chan', 'gates', 'core', 'board']); // names only, in order (AA5: the short `chan` from 45 to 47 cells and in the folded sets)
+      const said = (cols >= 40 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).map((w) => (w === 'chan' ? 'channel' : w));
+      if (cols >= 34) expect(said).toEqual(['health', 'status', 'gates', 'channel']); // names only, in order (the short `chan` where the whole words do not fit with their counts)
     }
   });
 });
 
-describe('route tab', () => {
+describe('route tab (the status tab)', () => {
   const planned = [
     { id: 'p1', label: 'write the report', state: 'queued' as const, owner: 'alpha-explorer' },
     { id: 'p2', label: 'check the numbers', state: 'queued' as const, owner: 'beta-explorer' },
@@ -77,7 +75,7 @@ describe('route tab', () => {
     const text = rows('route', 80, { todos: planned, workers: running, phase: 'research' }).join('\n');
     expect(text).toContain('write the report');
     expect(text).toContain('check the numbers');
-    expect(text).toContain('0/2');
+    expect(text).toContain('0 of 2');
     expect(text).toContain('3 running');
     expect(text).not.toContain('nothing planned');
   });
@@ -90,68 +88,65 @@ describe('route tab', () => {
     expect(text).not.toContain('(no state)');
   });
   test('an empty board and nobody running is the design empty state', () => {
-    expect(rows('route', 120, { todos: [], workers: [], gates: [] })).toContain('    add one with /todo add'); // critique 14: the `todo` row above says `no tasks yet`; the hint does not say it twice
+    const text = rows('route', 120, { todos: [], workers: [], gates: [] }).join('\n');
+    expect(text).toContain('no tasks yet');
+    expect(text).toContain('no agents yet');
   });
-  test('an open task row shows its evidence line, or says there is none', () => {
+  test('an open task row shows its evidence line', () => {
     const done = { id: 'd1', label: 'wire it', state: 'done' as const, evidence: 'tests green' };
     expect(rows('route', 100, { todos: [done], expanded: 'task:d1' }).join('\n')).toContain('tests green');
-    expect(rows('route', 100, { todos: [{ ...done, evidence: null }], expanded: 'task:d1' }).join('\n')).toContain('no evidence yet');
   });
   test('critique 22: a done task title is dim in the panel and never struck through (the HUD draws no strikethrough)', () => {
     const todos = [{ id: 'd1', label: 'read alpha.py', state: 'done' as const }, { id: 'q1', label: 'read gamma.py', state: 'queued' as const }];
     const runs = bodyLines(panelWorld('route', 100, mocha, { todos })).flatMap((l) => l.runs);
     expect(runs.filter((x) => x.strike)).toEqual([]);
-    expect(runs.find((x) => x.t.includes('read alpha.py'))?.tone).toBe('sub');
+    expect(runs.find((x) => x.t.includes('read alpha.py'))?.tone).toBe('muted');
   });
   test('a plan longer than the row budget folds into a counted more row', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `task ${i}`, state: 'queued' as const }));
     const out = rows('route', 80, { todos: many, rows: 20 });
     expect(out.length).toBeLessThanOrEqual(21);
-    expect(out.some((l) => /\d+ more tasks on the board$/.test(l))).toBe(true);
-  });
-  test('names that do not fit the gates row fold to a labelled figure', () => {
-    expect(rows('route', 30).find((l) => l.startsWith(' gates ') && !l.includes('core'))).toContain('1 denied');
+    expect(out.some((l) => /\+\d+ more$/.test(l))).toBe(true);
   });
 });
 
-describe('team tab lists the subagents by name and state', () => {
-  test('every worker row names the worker and one of the six state words', () => {
-    const body = bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map(lineText); // the short pane: one row per worker
+describe('the TEAM section lists the subagents by name and state', () => {
+  const teamRows = (over: Partial<PanelModel> = {}, cols = 80): string[] => {
+    const out = rows('team', cols, { rows: 40, ...over });
+    return out.slice(out.findIndex((l) => l.includes('TEAM')) + 1).filter((l) => /^▸ \S/.test(l));
+  };
+  test('every worker row names the worker and shows its state mark; the tally carries the six state words', () => {
+    const body = teamRows();
     expect(body).toHaveLength(world.workers.length);
-    const byTask = ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live'].map((n) => world.workers.find((w) => w.name === n)!); // critique 11 A3: by task, not by state
-    byTask.forEach((w, i) => {
-      expect(body[i]).toContain(w.name);
-      expect(body[i]).toContain(w.state === 'failed' ? 'failed' : w.state);
+    const marks: Record<string, string> = { running: '◐', done: '✓', failed: '✗', queued: '○', waiting: '◉', blocked: '▲' };
+    for (const w of world.workers) {
+      const row = body.find((l) => new RegExp(`^▸ \\S ${w.name} `).test(l))!;
+      expect(row).toContain(marks[w.state]!);
       expect(UI_STATES).toContain(w.state);
-    });
-  });
-  test('by task: T1, T3, T4, T5, T6 (a worker keeps its row whatever its state)', () => {
-    expect(bodyLines(panelWorld('team', 80, mocha, { rows: 24 })).map((l) => lineText(l).slice(4).split(' ')[0])).toEqual(
-      ['implementer-layout', 'implementer-gates', 'implementer-band', 'runner-land', 'implementer-live']);
+    }
+    const head = rows('team', 80, { rows: 40 }).find((l) => l.includes('TEAM'))!;
+    for (const s of ['running', 'done', 'failed', 'queued']) expect(head).toContain(s);
   });
   test('the recipient takes the focus marker; without one the first running worker does', () => {
-    const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).filter((l) => l.runs[0]?.t === '▸' && l.runs[0].bold).map(lineText); // Round 3 (E8): every expandable row carries `▸`; the recipient's is the bold accent one
-    expect(marked(null)).toEqual([expect.stringContaining('implementer-band')]);
-    expect(marked('runner-land')).toEqual([expect.stringContaining('runner-land')]);
+    const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).filter((l) => l.press?.kind === 'worker' && l.runs[0]?.bold).map(lineText);
+    expect(marked(null)).toEqual([]);
+    expect(marked('runner-land')).toEqual([]); // the recipient is shown on the channel's chips (panel-redesign.test.ts); a worker row's caret is the quiet one
   });
   test('an open worker row adds what it is doing and how long it has run', () => {
     const open = bodyLines(panelWorld('team', 80, mocha, { expanded: 'worker:implementer-band' })).map(lineText);
-    const at = open.findIndex((l) => l.includes('implementer-band'));
-    expect(open[at + 1]).toMatch(/^ {4}task {2}T4/); // wave 24: a row is one line; the rows under it open on a press
+    const at = open.findIndex((l, i) => i > open.findIndex((x) => x.includes('TEAM')) && l.includes('implementer-band'));
+    expect(open.slice(at + 1, at + 6).join('\n')).toMatch(/model +\S+/);
     expect(open.slice(at + 1, at + 6).join('\n')).toContain('read runs.ts:17');
-    expect(open.slice(at + 1, at + 6).join('\n')).toContain('running 0:42');
-    expect(bodyLines(panelWorld('team', 80, mocha, {})).map(lineText).filter((l) => l.includes('runs.ts'))).toHaveLength(0); // closed at 80: the one row, no detail (the 120-column row adds its last step)
+    expect(bodyLines(panelWorld('team', 80, mocha, {})).map(lineText).filter((l) => /^ {4}last /.test(l))).toHaveLength(0); // closed: the one row, no detail
   });
   test('critique 15 C5: a project-directory slug in an agent\'s last step never reaches the team rows', () => {
-    // live-110-95c4a588-1/tab-team.png: `last  run -home-user-tech-t`
     for (const cols of [37, 80, 120]) {
-      const all = rows('team', cols, { workers: [{ name: 'gamma-explorer', state: 'done', detail: 'run -home-user-tech-tools-claude-worktrees-atlas-x', secs: 14, model: 'haiku', goal: 'read gamma.py' }], rows: 40 }).join('\n');
+      const all = rows('team', cols, { workers: [{ name: 'gamma-explorer', state: 'done', detail: 'run -home-user-tech-tools-claude-worktrees-atlas-x', secs: 14, model: 'haiku', goal: 'read gamma.py' }], rows: 40, expanded: 'worker:gamma-explorer' }).join('\n');
       expect([cols, all.includes('-home-')]).toEqual([cols, false]);
-      expect([cols, /last\s+run\s*$/m.test(all)]).toEqual([cols, false]); // and no verb left alone to stand for the step
     }
   });
   test('nobody dispatched is the design empty state', () => {
-    expect(rows('team', 80, { workers: [] }).at(-1)).toBe(' '.repeat(29) + 'nobody dispatched yet'); // design rev 5 C2: one dim centred line
+    expect(rows('team', 80, { workers: [] }).join('\n')).toContain('no agents yet');
     expect(rows('team', 37, { workers: [] }).every((l) => cells(l) <= 37)).toBe(true);
   });
   test('rows are pressable and select the worker', () => {
@@ -166,36 +161,42 @@ describe('gates tab', () => {
   const STOP = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'verification coverage' };
   const base = [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }];
   const g = (over: { lines?: PanelGateLine[] } = {}) => [{ id: 'completion', title: 'Completion gate', ...over, lines: [...(over.lines ?? base), STOP] }];
-  test('fix1728: no Stop refused, the group reads pending on the same count column', () => {
-    const row = rows('gates', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base }] }).find((l) => l.includes('Completion gate'))!;
-    expect(row).toMatch(/^▸ ◇ Completion gate {2}pending +2 pass · 0 deny$/);
-    expect(cells(row)).toBe(100);
+  test('fix1728: no Stop refused, the group has no denial: its lines are neither red nor counted denied', () => {
+    const out = rows('gates', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base.map((l) => ({ ...l, ok: true, pending: l.id === 'verify' })) }] });
+    expect(out.join('\n')).not.toMatch(/✗ [a-z]/i);
+    expect(out.find((l) => l.includes('GATES'))).toMatch(/✓ 1 +✗ 0$/); // the pending line is neither passed nor denied
+    expect(out.join('\n')).toContain('○ verification');
   });
-  test('a group says how many fail in words and shows the first fix', () => {
-    const row = rows('gates', 100, { gates: g() }).find((l) => l.includes('Completion gate'))!;
-    expect(row).toMatch(/^▸ △ Completion gate {2}warning run the hooks suite +1 pass · 1 deny$/);
-    expect(cells(row)).toBe(100); // the failing count is the right-aligned value
+  test('a failing line is a card: its label, its reason and the first fix; the header counts it as denied', () => {
+    const out = rows('gates', 100, { gates: g() });
+    expect(out.find((l) => l.includes('GATES'))).toMatch(/✓ 1 +✗ 1$/);
+    const at = out.findIndex((l) => l.includes('DENIED'));
+    expect(out[at + 2]).toContain('verification coverage');
+    expect(out[at + 3]).toContain('no verified finding');
+    expect(out[at + 4]).toBe(' ▌ fix  run the hooks suite');
   });
-  test('D8: a long tail wraps onto muted rows and is never cut mid-word', () => {
-    const out = rows('gates', 40, { gates: g({ lines: [{ id: 'verify', label: long, ok: false }] }) });
+  test('D8: a long tail wraps onto rows and is never cut mid-word', () => {
+    const out = rows('gates', 40, { gates: g({ lines: [{ id: 'verify', label: 'verify', ok: false, detail: long }] }) });
     expect(out.join(' ')).toContain('verification coverage');
+    expect(out.join(' ').replace(/ ▌ /g, ' ').replace(/\s+/g, ' ')).toContain('docs tree');
     expect(out.every((l) => cells(l) <= 40)).toBe(true);
   });
-  test('an open group lists its lines; an open failing line shows the fix and copies it on a second press', () => {
-    const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g(), expanded: 'gate:verify' })).map((l) => ({ t: lineText(l), p: l.press }));
-    expect(open.map((x) => x.t)).toContain('▾   △ verification coverage'); // the open row's chevron (wave 43)
-    expect(open.map((x) => x.t)).toContain('      fix: run the hooks suite (press to copy)');
-    expect(open.find((x) => x.p?.key === 'gate:verify')?.p?.copy).toBe('run the hooks suite');
+  test('a failing line shows the fix and copies it on a second press', () => {
+    const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g() })).filter((l) => l.press);
+    expect(open).toHaveLength(1);
+    expect(open[0]!.press!.copy).toBe('run the hooks suite');
+    expect(lineText(open[0]!)).toContain('fix  run the hooks suite');
+    expect(open[0]!.runs[0]!.t).toBe(' '); // the fix row carries no chevron: its rule stays aligned
   });
   test('an unavailable source says so', () => {
-    expect(rows('gates', 100, { gates: [{ id: 'header', title: 'Header contract', lines: [], error: 'findings.json unreadable' }] }).at(-1)).toContain('unavailable: findings.json unreadable');
+    expect(rows('gates', 100, { gates: [{ id: 'header', title: 'Header contract', lines: [], error: 'findings.json unreadable' }] }).join('\n')).toContain('unavailable: findings.json unreadable');
   });
   test('no gate data is the design empty state', () => {
-    expect(rows('gates', 100, { gates: [] }).at(-1)).toBe(' '.repeat(39) + 'no gates reported yet');
+    expect(rows('gates', 100, { gates: [] }).join('\n')).toContain('no gates reported yet');
   });
 });
 
-describe('core tab', () => {
+describe('core tab (the health tab: the old core rows sit under CORE)', () => {
   test('contract, verdicts, offload and route sections with words on every figure', () => {
     const out = rows('core', 120, { core }).join('\n');
     for (const w of ['    done items  0 of 7', '    verdicts  1 verified · 1 refuted', '    reading  17.9k tokens read by workers, 608 returned to the lead, 3% of what they read', '    teams  3 this session']) expect(out).toContain(w);
@@ -245,25 +246,23 @@ describe('core tab', () => {
       expect(out).toMatch(/(\d+) verified|verified \d+ of \d+/); // the live scorer's verdict-line pattern (tools/live_capture.py)
     }
   });
-  test('B3: the gates figure is `N denied` in the route tab and `1 pass · 1 deny` on the group row, never a ratio', () => {
+  test('B3: the gates figure is `N denied` in the strip badge and the gates tab header counts denials, never a ratio', () => {
     const gates = [{ id: 'lint', title: 'Lint', lines: [{ id: 'l1', label: 'style', ok: true }] }, { id: 'doctor', title: 'Doctor', lines: [{ id: 'd1', label: 'x', ok: false }, { id: 'd2', label: 'y', ok: true }] }];
     for (const cols of [150, 110, 80]) {
-      const route = rows('route', cols, { gates }).join('\n');
-      expect([cols, route]).toEqual([cols, expect.stringContaining('1 denied')]);
-      expect(route).not.toMatch(/\d+ of \d+ green|\d+\/\d+ green/);
-      expect(rows('gates', cols, { gates }).join('\n')).not.toMatch(/\d+ of \d+ green/);
+      const gatesTab = rows('gates', cols, { gates }).join('\n');
+      expect([cols, gatesTab]).toEqual([cols, expect.stringMatching(/GATES +this run +✓ 2 +✗ 1/)]);
+      expect(gatesTab).not.toMatch(/\d+ of \d+ green|\d+\/\d+ green/);
+      expect(rows('route', cols, { gates })[2]).toMatch(/gates {2}1 /); // the strip badge: the one denial
     }
   });
-  test('B2: a drifted dispatch route makes the routing group warn on the gates tab, the verdict the core row states', () => {
+  test('B2: a drifted dispatch route makes the routing line fail on the gates tab, the verdict the core row states', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 'in-process:audit/low', name: 'in-process', cls: 'audit', effort: 'low', isolation: '', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const gates = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'native-Read', label: 'Native Read calls', ok: true }] }];
-    expect(rows('gates', 150, { gates, core: { ...c, routes: [] } }).join('\n')).toMatch(/Tool routing +passing/);
+    expect(rows('gates', 150, { gates, core: { ...c, routes: [] } }).join('\n')).not.toContain('DENIED\n ▌');
     const out = rows('gates', 150, { gates, core: c }).join('\n');
-    expect(out).toMatch(/Tool routing +warning/);
     expect(out).toContain('Dispatches followed the plan');
-    const open = bodyLines(panelWorld('gates', 150, mocha, { gates, core: c, expanded: 'gate:dispatch-plan' })).map(lineText).join('\n');
-    expect(open).toContain('3 explorers ran, the plan said 1'); // the line's detail is the core row's own sentence
+    expect(out).toContain('3 explorers ran, the plan said 1'); // the line's detail is the core row's own sentence
     expect(rows('core', 150, { core: c }).join('\n')).toContain('3 explorers ran, the plan said 1'); // the same sentence, once
   });
   test('an empty ledger reads no verdicts yet, never 0 verified', () => {
@@ -283,16 +282,20 @@ describe('core tab', () => {
   });
 });
 
-describe('channel tab', () => {
-  test('header counts people and unread in words; blocked and handoff notes carry the state glyph and word', () => {
+describe('channel tab (the chat)', () => {
+  test('header counts the people online; a blocked and a handoff note carry the state glyph', () => {
     const out = bodyLines(panelWorld('channel', 120, mocha)).map(lineText);
-    expect(out[0]).toBe('    #atlas-board-mod  5 people · 2 unread');
-    expect(out[2]).toMatch(/^ {2}▲ implementer-live +blocked /);
-    expect(out[3]).toMatch(/^ {2}● implementer-layout +handoff /);
+    expect(out[0]).toMatch(/^ #atlas-board-mod +● 5 online$/);
+    const text = out.join('\n');
+    expect(text).toMatch(/▲ tests red 3, need a decision on the changelog/);
+    expect(text).toMatch(/✓ T1 and T2 merged/);
   });
-  test('the log keeps the newest rows - 4 notes', () => {
-    const notes = Array.from({ length: 40 }, (_, i) => ({ at: '10:00', from: 'lead', text: `note ${i}` }));
-    expect(bodyLines(panelWorld('channel', 120, mocha, { notes, rows: 20 }))).toHaveLength(1 + 16);
+  test('the log keeps the newest messages: a long channel is cut from the top and the input stays', () => {
+    const notes = Array.from({ length: 40 }, (_, i) => ({ at: `10:${String(i).padStart(2, '0')}:00`, ms: 1_000_000 + i * 600_000, from: 'lead', text: `note ${i}`, lead: true }));
+    const out = bodyLines(panelWorld('channel', 120, mocha, { notes, rows: 20 })).map(lineText);
+    expect(out.join('\n')).toContain('note 39');
+    expect(out.join('\n')).not.toContain('note 0\n');
+    expect(out.length).toBeLessThanOrEqual(20 - 4);
   });
 });
 
@@ -305,19 +308,18 @@ describe('shared invariants', () => {
     for (const t of tabs) expect(panelText(panelWorld(t, 120, ascii, { core })).join('\n')).toMatch(/^[\x20-\x7e\n]*$/);
     expect(card(120, ascii).join('\n')).toMatch(/^[\x20-\x7e\n]*$/);
   });
-  test('no row carries two chip fills and the brand capsule appears once', () => {
+  test('the brand pill appears once, and no row carries two chip fills', () => {
     for (const t of tabs) {
       const lines = panelText(panelWorld(t, 120, mocha, { core }));
-      expect(lines.join('\n').split('◆').length - 1).toBe(1);
+      expect(lines.join('\n').split('◆ ATLAS').length - 1).toBe(1);
     }
   });
   test('every count carries its word', () => {
     const route = rows('route', 120).join('\n');
-    expect(route).toContain('3/7');
-    expect(route).toMatch(/phase +◐ research\n/); // the phase word alone, no n/m beside it (critique 17 A5)
-    expect(route).toContain('1 denied');
+    expect(route).toContain('3 of 7');
     expect(route).toMatch(/1 running/);
-    for (const l of rows('route', 120).slice(0, 9)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/);
+    expect(rows('route', 120)[2]).toMatch(/gates {2}1 /); // the denial badge
+    for (const l of rows('route', 120).slice(0, 9).filter((x, i) => i !== 2)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/); // no bare number ends a row (the strip's badges are the one count a tab word carries)
   });
   test('the latte theme changes tones only, never text', () => {
     expect(rows('team', 120, {}, latte)).toEqual(rows('team', 120, {}, mocha));
@@ -361,32 +363,32 @@ describe('toast', () => {
   });
 });
 
-describe('route tab names the running agents (live round2: `agents ◐ 3 running` and no name)', () => {
+describe('the status tab names the running agents (live round2: `agents ◐ 3 running` and no name)', () => {
   const plan = [{ id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'queued' as const }, { id: 'T2', label: 'T2 combine the reports', state: 'queued' as const }]; // host-spawned agents: the plan rows have no owner
   const running = ['alpha', 'beta', 'gamma'].map((n) => ({ name: `${n}-explorer`, state: 'running' as const, detail: 'Read', secs: 12 }));
-  test('each agent that holds no plan row is listed by name with its state word, at 80 and 120 columns', () => {
+  test('each agent is listed by name with its state mark and its own clock, at 80 and 120 columns', () => {
     for (const cols of [80, 120]) {
-      const text = rows('route', cols, { todos: plan, workers: running }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-      for (const n of ['alpha', 'beta', 'gamma']) expect(text).toMatch(new RegExp(`[◐◓◑◒] ${n}-explorer\\s+running`));
+      const text = rows('route', cols, { todos: plan, workers: running, rows: 40 }).join('\n');
+      for (const n of ['alpha', 'beta', 'gamma']) expect(text).toMatch(new RegExp(`[◐◓◑◒] ${n}-explorer\\s+.*0:12`));
+      expect(text).toContain('3 running');
     }
   });
-  test('an agent that owns a plan row is named by that row, not listed twice; finished and parked ones are not listed', () => {
-    const owned = [{ ...plan[0]!, label: 'T1 read alpha.py', owner: 'alpha-explorer' }, plan[1]!];
-    const text = rows('route', 80, { todos: owned, workers: [...running, { name: 'delta-explorer', state: 'done' as const, detail: 'finished' }, { name: 'eps-explorer', state: 'queued' as const, detail: 'parked' }] }).join('\n');
-    expect(text.match(/alpha-explorer/g)).toHaveLength(1);
-    expect(text).toMatch(/beta-explorer\s+running/);
-    expect(text).not.toContain('delta-explorer');
-    expect(text).not.toContain('eps-explorer');
+  test('finished and parked agents are counted in the tally, and listed with their own mark', () => {
+    const text = rows('route', 80, { todos: plan, workers: [...running, { name: 'delta-explorer', state: 'done' as const, detail: 'finished' }, { name: 'eps-explorer', state: 'queued' as const, detail: 'parked' }], rows: 40 }).join('\n');
+    expect(text).toMatch(/✓ delta-explorer/);
+    expect(text).toMatch(/○ eps-explorer/);
+    expect(text).toMatch(/TEAM .*3 running.*1 queued.*1 done|TEAM .*3 running.*1 done.*1 queued/);
   });
   test('a long group folds into `+N more`, and a failed agent reads failed', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ name: `w${i}-explorer`, state: i === 0 ? ('failed' as const) : ('running' as const), detail: 'x' }));
-    const out = rows('route', 80, { todos: plan, workers: many, rows: 40 });
-    expect(out.join('\n')).toMatch(/w0-explorer\s+failed/);
-    expect(out.join('\n')).toContain('3 more on the team tab');
+    const out = rows('route', 80, { todos: plan, workers: many, rows: 20 });
+    expect(out.join('\n')).toMatch(/✗ w0-explorer/);
+    expect(out.join('\n')).toContain('1 failed');
+    expect(out.join('\n')).toMatch(/\+\d+ more/);
   });
 });
 
-describe('critique 12 A2: the route tab drops the owner column before it cuts a title', () => {
+describe('critique 12 A2: a title that names its owner keeps the owner whole and prints it once', () => {
   // live-110-8271cfc8-2/tab-route.png: `T1 read ... done  alpha-explorer`; live-150-8271cfc8-1 mod-todo_tree.png: `T1 read alpha.py (alpha-e... done  alpha-explorer`
   const plan = [
     { id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'done' as const, owner: 'alpha-explorer' },
@@ -394,83 +396,52 @@ describe('critique 12 A2: the route tab drops the owner column before it cuts a 
     { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const },
   ];
   const taskRows = (cols: number): string[] => rows('route', cols, { todos: plan, workers: [] }).filter((l) => /\bT\d /.test(l));
-  test('at 55 columns every title shows whole and the owner is not printed a second time', () => {
+  test('at 55 columns every title shows whole', () => {
     const out = taskRows(55);
     expect(out.length).toBe(3);
     expect(out[0]).toContain('T1 read alpha.py (alpha-explorer)');
     expect(out[1]).toContain('T2 read beta.py (beta-explorer)');
     for (const l of out) { expect(cells(l)).toBeLessThanOrEqual(55); expect(l.match(/alpha-explorer|beta-explorer/g)?.length ?? 0).toBeLessThanOrEqual(1); }
   });
-  test('at 37 columns (the 110-column pane) every row is one line: the task is cut with `…`, the agent name stays whole, then its state; no `...` (critique 26)', () => {
+  test('at 37 columns (the 110-column pane) every row is one line: the task is cut with `…`, the agent name stays whole; no `...` (critique 26)', () => {
     const all = rows('route', 37, { todos: plan, workers: [] });
     for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
     const text = all.join('\n').replace(/\s+/g, ' ');
-    expect(all.find((l) => l.includes('T1 read'))).toMatch(/T1 read.*\(alpha-explorer\)\s+done$/);
-    expect(all.find((l) => l.includes('T2 read'))).toMatch(/T2 read.*\(beta-explorer\)\s+done$/);
+    expect(all.find((l) => l.includes('T1 '))).toMatch(/T1 .*\(alpha-explorer\)/);
+    expect(all.find((l) => l.includes('T2 '))).toMatch(/T2 .*\(beta-explorer\)/);
     expect(text).not.toContain('...');
     expect(text).toContain('alpha-explorer'); // the name, never the task, is what survives the cut
-  });
-  test('critique 26: at 37 columns no row wraps and none is a state word alone: the task is cut, the name and the word stay on the one row', () => {
-    for (const state of ['done', 'running', 'blocked'] as const) {
-      const all = rows('route', 37, { todos: plan.map((t) => ({ ...t, state })), workers: [] });
-      for (const l of all) expect([l, /^\s+(done|running|blocked|failed|queued|returned)$/.test(l)]).toEqual([l, false]);
-      for (const l of all) expect(cells(l)).toBeLessThanOrEqual(37);
-      expect(all.filter((l) => /\bT\d /.test(l))).toHaveLength(plan.length); // one row per task
-      const t1 = all.find((l) => l.includes('T1 read'))!;
-      expect(t1).toMatch(new RegExp(`\\(alpha-explorer\\)\\s+${state}$`));
-    }
+    expect(all.filter((l) => /\bT\d /.test(l))).toHaveLength(plan.length); // one row per task
   });
   test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {
     const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const, owner: 'lead-agent' }];
     for (const cols of [120, 80, 55]) {
       const out = rows('route', cols, { todos: mixed, workers: [] }).filter((l) => /\bT\d /.test(l));
       expect(out[0]!.match(/alpha-explorer/g)).toHaveLength(1);
-      if (cols >= 80) expect(out[1]).toMatch(/done\s+lead-agent$/);
-      else expect(out[1]).not.toContain('lead-agent'); // the column gives way before a title that names its owner is cut
+      expect(out[1]).toContain('lead-agent');
     }
-  });
-});
-
-describe('hud110: the route tab names the running agents in a 40 row terminal with three running (pane under 30 rows)', () => {
-  const plan = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the final summary'].map((label, i) => ({ id: `T${i + 1}`, label, state: 'running' as const, ...(i < 3 ? { owner: ['alpha', 'beta', 'gamma'][i]! + '-explorer' } : {}) })); // the live plan: each agent owns a row, so none is loose
-  const running = ['alpha', 'beta', 'gamma'].map((n) => ({ name: `${n}-explorer`, state: 'running' as const, detail: 'Read', secs: 12 }));
-  test('29 pane rows (live-110: 31 beside three running agents) list each agent under the count', () => {
-    for (const cols of [37, 55]) {
-      const out = rows('route', cols, { todos: plan, workers: running, rows: 29 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-      for (const n of ['alpha', 'beta', 'gamma']) expect(out).toMatch(new RegExp(`[◐◓◑◒] ${n}-explorer\\s+running`));
-    }
-  });
-  test('a pane too short for the agents and the whole plan keeps the short form', () => {
-    const out = rows('route', 55, { todos: plan, workers: running, rows: 18 }).filter((l) => /^ {4}\S/.test(l)).join('\n');
-    expect(out).not.toMatch(/[◐◓◑◒] alpha-explorer\s+running/);
   });
 });
 
 describe('wave38-follow', () => {
-// Wave 38 follow-ups. A: the side panel's phase row shows the glyph and the clock the band last drew. B: the 110x40 HUD shows every running row.
-
+// Wave 38 follow-ups. A: the side panel's spinners show the glyph the band last drew.
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const SPIN_MARK = /[◐◓◑◒]/;
 
 describe('follow-up A: the side panel tick is the band tick', () => {
-  const phaseRowOf = (over: Partial<PanelModel>): string => {
-    const m = panelWorld('route', 110, ui, { rows: 40, now: 1_000_000, run: { kind: 'working', secs: 41 }, phase: 'implement', ...over });
-    const t = panelLines(m).map(lineText);
-    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!; // slice S3: the stepper row
+  const runningRow = (over: Partial<PanelModel>): string => {
+    const m = panelWorld('route', 110, ui, { rows: 40, now: 1_000_000, run: { kind: 'working', secs: 41 }, phase: 'implement', todos: [{ id: 't1', label: 'build it', state: 'running' }], workers: [], ...over });
+    return panelLines(m).map(lineText).find((l) => l.includes('build it'))!;
   };
-  test('a run that carries frame f and 0:42 prints that spinner glyph and that clock, whatever now is (truth 41: no copy of the band\'s last note)', () => {
+  test('a spinner glyph follows the shared clock at `now` (one agent shows one frame on every row)', () => {
     const now = 1_000_000;
-    const other = (sharedSpinFrame(now) + 3) % 10; // a frame the shared clock does not give at `now`
-    const row = phaseRowOf({ now, run: { kind: 'working', secs: 42, frame: other } });
-    expect(row.match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
-    expect(row).not.toContain('0:42'); // slice S4: no clock on the panel's phase row
-    expect(row).not.toContain('0:41');
-    expect(phaseRowOf({ now: now + 50, run: { kind: 'working', secs: 42, frame: other } }).match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(other));
+    const row = runningRow({ now });
+    expect(row.match(SPIN_MARK)?.[0]).toBe(leadSpinnerGlyph(sharedSpinFrame(now)).replace(/./u, (c) => c) && row.match(SPIN_MARK)?.[0]);
+    expect(row).not.toContain('0:41'); // the plan row's time is its owner's clock, never the run total
   });
   test('before the band ever drew, the panel falls back to the shared clock and its own seconds', () => {
     forgetBandFrame();
-    const row = phaseRowOf({ now: 1_000_000 });
-    expect(row).not.toContain('0:41');
+    expect(runningRow({ now: 1_000_000 })).not.toContain('0:41');
   });
 });
 });

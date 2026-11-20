@@ -14324,5 +14324,103 @@
     "verified_at": "2026-11-20T13:31:50+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "release-17.32.0",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "eb5c03a3 CI green and atlas-v17.32.0 released",
+    "evidence": [
+      "runs on eb5c03a3: release success (44749145882), tests success (44749145875, all 10 jobs incl full), Push on main success (44749145178); release atlas-v17.32.0 published 2026-11-20T13:59:46Z, Latest"
+    ],
+    "doc_refs": [],
+    "reproduction": "gh run list --limit 12 --json name,status,conclusion,headSha; gh release view atlas-v17.32.0",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T14:16:09+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "mod-clock-stop",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Finished crew workers keep a frozen SUBAGENTS clock; ended agents without a finish stamp read -",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_mod-clock-stop/bun-test-mod.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T14:41:41+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-890e9d-1795185732",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas && bun test mod 2>&1 | tail -4`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_144212_gate-rerun_890e9d.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-20T14:42:12+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "mod-redesign-green-suite",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Mod redesign suite not green: 7 fail, mock-* files and .atlas_out.txt remain; no implementation done by verifier",
+    "evidence": [
+      "bun test mod omp: 4609 pass, 31 skip, 7 fail of 4647; ls mod/view/panel shows mock-chat/gates/health/kit/status.ts; plugins/atlas/.atlas_out.txt exists"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-20T16:12:03+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-8c20"
+  },
+  {
+    "id": "mod-redesign",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Band restyle + motion and side panel health/status/gates/channel chat; suite green, renders match mockups",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_mod-redesign/bun-test-mod-omp.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-20T16:46:26+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-890e9d-1795193239",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas && bun test mod 2>&1 | tail -4`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-20_164719_gate-rerun_890e9d.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-20T16:47:19+00:00",
+    "verified_by": "completion-gate"
   }
 ]

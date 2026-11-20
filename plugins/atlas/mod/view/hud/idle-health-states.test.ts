@@ -90,10 +90,6 @@ describe('3: a health row opens only when it has real detail', () => {
   const noHooks: Health = { ...h, hooks: undefined, version: undefined };
   test('events with no hooks seen has no detail: it is not a toggle and wears no chevron', () => {
     expect(ih.healthDetail(noHooks, 'events')).toEqual([]);
-    const ls = bodyLines(world(57, { health: noHooks }));
-    const row = ls.find((l) => /^ ── ACTIVITY/.test(lineText(l)))!;
-    expect(row.press).toBeUndefined();
-    expect(lineText(row)).not.toMatch(/[▸▾]/);
   });
   test('a runs row with no agents to list is not a toggle', () => {
     const none: Health = { ...h, last: undefined };
@@ -116,11 +112,11 @@ describe('5: rows fit by dropping the lowest-value field, never by cutting', () 
 describe('6: ctx and tokens are one measure, labelled so', () => {
   test('band: `context 18%` (round 2: the tokens are the session detail, never beside the figure)', () => {
     const row = rowsOf(model(150))[0]!;
-    expect(row).toMatch(/ctx +18%/); // slice S2: the band says `ctx 18%`
+    expect(row).toMatch(/ctx [━─=]+ +18%/); // slice S2: the band says `ctx 18%`
     expect(row).not.toContain('42k tok');
   });
   test('the panel session row reads the same words', () => {
-    expect(body(world(57, { rows: 28 })).find((l) => l.includes('of 1M'))).toContain('63k of 1M'); // the CONTEXT gauge row: `6% · 63k of 1M`
+    expect(body(world(57, { rows: 28 }, 'core')).find((l) => l.includes('1M'))).toContain('63k / 1M'); // the health tab's context row: bar, 6%, and the tokens of the window
   });
   test('the detail says what the figure is', () => {
     expect(ih.healthDetail(h, 'context')).toContain('measured on the last response, not a session total');
@@ -163,9 +159,9 @@ describe('7: the idle band carries one more live figure, the age of the last eve
 describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither for inputs and labels', () => {
   const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
   const pane = (view: 'route' | 'team'): Node => sidebarTree(els, { snapshot: { ...idleSnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 57, rows: 45 }, side) as unknown as Node;
-  test('every idle tab chip sits on a raised tile; the lit chip is the accent filled', () => {
+  test('the lit chip is the accent filled; the other tabs share one plain panel surface', () => {
     const chips = all(pane('team')).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('tab:'));
-    expect(chips.length).toBe(6);
+    expect(chips.length).toBe(4);
     const texts = chips.map((c) => all(c).find((x) => x.kind === 'Text')!.props);
     const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle
     const isLit = (t: Record<string, any>): boolean => t.inverse === litStyle.inverse && t.backgroundColor === litStyle.backgroundColor;
@@ -173,7 +169,7 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     expect(lit.length).toBe(1);
     const tiles = texts.filter((t) => !isLit(t)).map((t) => t.backgroundColor);
     expect(new Set(tiles).size).toBe(1);
-    expect(tiles[0]).not.toBe('#181825');
+    expect(tiles[0]).toBe('#181825'); // the redesign: an inactive tab is sub-tone text on the panel; only the lit chip is filled
   });
   test('the band has no footer chips (round 2 D9: tabs live only in the panel)', () => {
     const chips = all(bandTree(els, model(150), handlers) as unknown as Node).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:') && !/^band:(health|gates)/.test(String(n.props.key)));
@@ -181,7 +177,7 @@ describe('9-10: one clickable idiom: chips for tabs, ▸ for toggles, neither fo
     for (const c of chips) expect(all(c).find((x) => x.kind === 'Text')!.props.backgroundColor).not.toBe('#181825');
   });
   test('the message input is not drawn as a toggle: no ▸ in its label', () => {
-    const input = all(pane('team')).find((n) => n.kind === 'Input')!;
+    const input = all(pane('channel' as never)).find((n) => n.kind === 'Input')!;
     expect(String(input.props.label)).not.toMatch(/[▸▾]/);
   });
 });
@@ -191,7 +187,7 @@ describe('11: the team tab has no orphan time axis when nothing ran', () => {
     const lead = { name: 'lead', state: 'waiting', detail: '', secs: 0 } as never;
     const t = body(world(57, { lead, workers: [], mates: [] }, 'team'));
     expect(t.join('\n')).not.toMatch(/^\s*\d+:\d\d\s+\d+:\d\d\s*$/m);
-    expect(t.join('\n')).toMatch(/no workers/);
+    expect(t.join('\n')).toMatch(/no agents/);
     expect(t.join('\n')).not.toContain('0 running');
   });
 });

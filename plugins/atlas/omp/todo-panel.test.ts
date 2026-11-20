@@ -45,7 +45,7 @@ test("[] without todos, without room or folded; a short slot ends in +N more", (
 test("colours come from the shared tokens: done glyph ok, dim label sub, running marker accent bold, chip on its fill", () => {
 	const line = (i: number, rich = false) => todoLines(items, o(120, { rich }))[i]!;
 	const fg = (hex: string) => sgrColor(hex, 38, "truecolor");
-	expect(line(1)).toContain(`${fg(PALETTES.mocha.ok)};${sgrColor(PALETTES.mocha.panel, 48, "truecolor")}m●`);
+	expect(line(1)).toContain(`${fg(PALETTES.mocha.ok)};${sgrColor(PALETTES.mocha.panel, 48, "truecolor")}m✓`);
 	expect(line(1)).toContain(fg(PALETTES.mocha.sub)); // the sub colour, never struck (critique 22)
 	expect(line(1)).not.toContain("\x1b[9m");
 	expect(line(4)).toContain(`1;${fg(toneHex("accent", "mocha"))}`);
@@ -70,6 +70,6 @@ test("renderPanel puts the board under the band: header and one row per todo wit
 	};
 	const rows = renderPanel(model).map(strip).map(r => r.trimEnd());
 	expect(rows.some(r => /^ITEM +STATE +OWNER +DETAIL$/.test(r))).toBe(true);
-	expect(rows.filter(r => /^[ ▸] [●◐◓◑◒◇■▲▲] /.test(r)).length).toBe(7);
+	expect(rows.filter(r => /^[ ▸] [✓◐◓◑◒○✗▲▲] /.test(r)).length).toBe(7);
 	for (const l of renderPanel(model)) expect(visibleWidth(l)).toBe(120);
 });

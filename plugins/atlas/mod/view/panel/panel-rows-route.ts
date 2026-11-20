@@ -8,7 +8,7 @@ import { clipWords, lastText } from '../../data/lasttext';
 import { sectionRibbon, sortAgents } from '../hud/hud-surface';
 import { GOTO_PREFIX, statusFrame } from '../hud/status-frame';
 import { KILLED, sparkBraille, wordOf } from './pane/activity';
-import { type PanelModel, type PanelLine, r, dot, mark, line, label, tallyOf, gatesOf, countedGates, groupPending, groupOk, rowWidth, sep, WIDE, frameOf, accentRun, type PanelTodo, oneLine, stateMark, gridRow, moving, fitRuns, type PanelWorker, nameOf, BLANK, nameCap, type PanelGate, groupFailing, groupMark, stampOf, pad, noteState, noteText, spinIdx, type PanelNote } from './panel-shared';
+import { type PanelModel, type PanelLine, phaseStand, r, dot, mark, line, label, tallyOf, gatesOf, countedGates, groupPending, groupOk, rowWidth, sep, WIDE, frameOf, accentRun, type PanelTodo, oneLine, stateMark, gridRow, moving, fitRuns, type PanelWorker, nameOf, BLANK, nameCap, type PanelGate, groupFailing, groupMark, stampOf, pad, noteState, noteText, spinIdx, type PanelNote } from './panel-shared';
 import { gatesFigure, headerRows } from './panel-tabs';
 
 /** Truth 41: the run the panel prints (kind, total, spinner frame) is built by register.ts from the band's own inputs and the band's own pure functions (band.tsx bandKindOf, band-motion readRun, the shared spin frame): nothing is copied from what the band last drew, so the two cannot differ for one now. */
@@ -218,12 +218,8 @@ export const stageShort = (p: string): string => SHORT_STAGE[p] ?? (cells(p) <= 
 function phaseChainRuns(m0: PanelModel, compact: boolean | 'short' | 'one', raw: boolean, clock = true): PanelLine[] {
   const m = withBandRun(m0);
   if (!m.phases.length) return [];
-  const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done'); // a finished plan at rest is the end of the run: the strip shows where the run got to, not a lit `research`
-  const kind = m.run?.kind === 'idle' && finished ? 'done' : m.run?.kind ?? 'working';
-  const seen = m.entered ? new Set(m.entered) : null;
   // The lit phase: the rail's own, or (a blocked reply names no phase) the last one the run entered.
-  const litAt = m.phases.indexOf(m.phase);
-  const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
+  const { kind, seen, litAt, lastEntered } = phaseStand(m);
   // Truth 40 (stoprun-150-1 f0111:7): a blocked run's mark sits on the phase the run was in when it blocked, the last one it entered, not on an earlier header phase (`▲ research › ● implement`).
   const lit = kind === 'done' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered) : litAt >= 0 ? litAt : lastEntered;
   const runs: Run[] = [r(' '.repeat(GRID_LEAD))];
@@ -381,11 +377,7 @@ const PENDING_INK = { mocha: PALETTE5.pending, latte: PALETTES.latte.line } as c
 function stepperRows(m: PanelModel): PanelLine[] {
   const lead = r(' '.repeat(ROW_AT));
   if (!m.phases.length) return [line([lead, r('no phases yet', 'dim')])];
-  const finished = m.todos.length > 0 && m.todos.every((t) => t.state === 'done');
-  const kind = m.run?.kind === 'idle' && finished ? 'done' : m.run?.kind ?? 'working';
-  const seen = m.entered ? new Set(m.entered) : null;
-  const litAt = m.phases.indexOf(m.phase);
-  const lastEntered = seen ? m.phases.reduce((k, p, i) => (seen.has(p) ? i : k), -1) : -1;
+  const { kind, seen, litAt, lastEntered } = phaseStand(m);
   const lit = kind === 'done' || kind === 'idle' ? -1 : kind === 'blocked' ? Math.max(litAt, lastEntered, 0) : litAt >= 0 ? litAt : Math.max(0, lastEntered); // a working run always turns one stage: the band's spinner has a place on the panel
   // The stages the run entered stay done once it ends (done or idle after a run) until the next prompt clears them; a fresh idle pane has entered none.
   const entered = (p: string, i: number): boolean => (seen ? seen.has(p) : kind === 'idle' ? false : kind === 'done' || (litAt >= 0 && i < litAt));
@@ -454,7 +446,7 @@ function statusBody(m: PanelModel): PanelLine[] {
 const statusEvents = (m: PanelModel): readonly PanelNote[] => [...(m.starts ?? []), ...m.notes, ...(m.finishes ?? []).filter((f) => !m.notes.some((x) => x.from === f.from && (x.kind === 'done' || x.kind === 'handoff')))];
 const statusEventCount = (m: PanelModel): number => statusEvents(m).length;
 /** The route tab is the status view (wave 35): the dense status view on the Claude pane (it has the HUD), the full plan and agent list everywhere else. */
-export const routeBody = (m: PanelModel): PanelLine[] => (m.run ? statusBody(m) : routeBodyFull(m));
+const routeBody = (m: PanelModel): PanelLine[] => (m.run ? statusBody(m) : routeBodyFull(m));
 // ---- team (subagents by name and state) -----------------------------------------------------------------------------------
 
 export const shortAge = (secs: number): string => elapsedClock(secs);

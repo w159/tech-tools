@@ -1,41 +1,43 @@
-// panel-tabs.ts: panel-layout split (audit 4.3, stage S14): the tab strip, the ribbon row and the header rows.
+// panel-tabs.ts: panel-layout split (audit 4.3, stage S14): the tab strip, the header row and the rule under the strip.
+// The redesign (mock.html `tabs`): the header is the `◆ ATLAS` pill, `project · branch` dim and the version flush right; the strip is the four tabs `health status gates channel`, the lit one a filled accent chip with an accent segment on the rule below,
+// gates carrying its denial count (red) and channel its unread count (accent) as badges.
 import { workerTally } from '../../data/tally';
-import { chipRun, tileOf } from '../../input/clickable';
+import { chipRun } from '../../input/clickable';
 import { gateCounts, gatesTotal } from '../../design/vocab';
-import { capsule, cells, ribbon, UI_STATES, type Run, type Tone, type Ui, type UiState } from '../../design/atlas-ui';
-import { lightRibbon } from '../board/board-model';
+import { cells, inkFor, UI_STATES, type Run, type Tone, type Ui, type UiState } from '../../design/atlas-ui';
 import { wordOf } from './pane/activity';
-import { type PanelTab, label, type PanelWorker, dot, type PanelModel, countedGates, gatesOf, groupOk, groupPending, groupFailing, type PanelLine, rowWidth, line, fitRuns, r, BLANK } from './panel-shared';
+import { type PanelTab, type PanelWorker, dot, type PanelModel, countedGates, gatesOf, groupOk, groupPending, groupFailing, type PanelLine, line, fitRuns, r, BLANK } from './panel-shared';
 
-/** Tabs in strip order (no key letters: a tab answers a click only). */
+/** Tabs in strip order (no key letters: a tab answers a click only). The ids stay internal: `core` is the health view, `route` the status view. */
 export const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
-  { id: 'route', label: 'status' }, { id: 'team', label: 'team' }, { id: 'channel', label: 'channel' },
-  { id: 'gates', label: 'gates' }, { id: 'core', label: 'core' },
+  { id: 'core', label: 'health' }, { id: 'route', label: 'status' }, { id: 'gates', label: 'gates' }, { id: 'channel', label: 'channel' },
 ];
-/** The tab strip both hosts draw: the five views, then the board toggle (it opens the Board pane, it is not a view). The band's footer
- * buttons (mod/view/band/band.tsx BAND_BUTTONS) are this list. Each tab is a click chip named by its label alone. */
-export const STRIP_TABS: readonly { id: PanelTab | 'board'; label: string }[] = [...PANEL_TABS, { id: 'board', label: 'board' }];
+/** The tab strip both hosts draw (the band's footer buttons, mod/view/band/band.tsx BAND_BUTTONS, are this list). Each tab is a click chip named by its label alone. */
+export const STRIP_TABS: readonly { id: PanelTab | 'board'; label: string }[] = [...PANEL_TABS];
 /** Cells a chip adds around its label (one space each side). */
 export const CHIP_PAD = 2;
-/** A strip tab as drawn: its id and its label (always the whole word, the same on every surface: no `chan`, no two-letter form). */
-export type StripTab = { id: PanelTab | 'board'; label: string };
+/** A strip tab as drawn: its id, its label (always the whole word where it fits) and its badge (a count beside the chip). */
+export type StripTab = { id: PanelTab | 'board'; label: string; badge?: string };
 /** Cells of padding between the pane's left rule and the strip (both hosts draw it). */
 export const STRIP_PAD = 1;
-/** The strip's one shape (round 2, D14): a chip is its label with one cell of padding each side, one cell between chips, nothing before the first. It is the same at every width: a strip that does not fit folds its trailing tabs into `more ›`, it never changes the chips. */
+/** The strip's one shape: a chip is its label with one cell of padding each side, two cells between chips, one before the first. A strip that does not fit folds its trailing tabs into `more ›`; it never changes the chips. */
 export type StripForm = { pad: number; gap: number; lead: number };
-const STRIP_FORM: StripForm = { pad: 1, gap: 1, lead: 0 };
+const STRIP_FORM: StripForm = { pad: 1, gap: 2, lead: 1 };
 /** The text a tab is drawn as: the label with its padding. */
 export const chipText = (label: string, f: Pick<StripForm, 'pad'> = STRIP_FORM): string => `${' '.repeat(f.pad)}${label}${' '.repeat(f.pad)}`;
 /** The `more` chip's press key (and the `expanded` key that opens the folded row). */
 export const MORE_KEY = 'tabs:more';
-/** The `more` chip's words: `more ›` (X7: a chip that navigates trails `›`; the chevrons `▸`/`▾` are for chips that expand in place). */
+/** The `more` chip's words: `more ›` (a chip that navigates trails `›`; the chevrons `▸`/`▾` are for chips that expand in place). */
 export const moreWord = (_open: boolean, ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? 'more >' : 'more ›');
 /** The second tab set's chip: it swaps the first set back in place. */
 export const backWord = (ui: Pick<Ui, 'ascii'>): string => (ui.ascii ? '< back' : '‹ back');
-/** AA5: the one short label, drawn when the whole words do not fit one row (`status team chan gates core board`): the order and the set of tabs never change with the width. */
+/** The one short label, drawn when the whole words do not fit one row: the order and the set of tabs never change with the width. */
 export const SHORT_LABEL: Readonly<Record<string, string>> = { channel: 'chan' };
-const stripTabs = (short = false): StripTab[] => STRIP_TABS.map((t): StripTab => ({ ...t, ...(short && SHORT_LABEL[t.label] ? { label: SHORT_LABEL[t.label]! } : {}) }));
-const chipsWidth = (tabs: readonly { label: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label), 0);
+/** The badge text of a tab (` 2`, with its leading space), or none. */
+const badgeText = (b: string | undefined): string => (b ? ` ${b}` : '');
+const stripTabs = (short = false, badges: Readonly<Record<string, string>> = {}): StripTab[] =>
+  STRIP_TABS.map((t): StripTab => ({ ...t, ...(short && SHORT_LABEL[t.label] ? { label: SHORT_LABEL[t.label]! } : {}), ...(badges[t.id] ? { badge: badges[t.id]! } : {}) }));
+const chipsWidth = (tabs: readonly { label: string; badge?: string }[], f: StripForm): number => f.lead + tabs.reduce((n, t, i) => n + (i ? f.gap : 0) + 2 * f.pad + cells(t.label) + cells(badgeText(t.badge)), 0);
 /** Tabs per strip row: as many as fit in `inner` cells, each costing its label plus `prefix` cells and `gap` cells between; the rest wrap. */
 export function stripRows<T extends { label: string }>(items: readonly T[], inner: number, gap: number = 0, prefix: number = CHIP_PAD): T[][] {
   const rows: T[][] = [];
@@ -48,27 +50,25 @@ export function stripRows<T extends { label: string }>(items: readonly T[], inne
   }
   return rows;
 }
-/** The strip both hosts draw at `cols` cells (round 2, D14, AA5): every tab as a chip on one row where they fit (48 cells; 45 with the short `chan`), else the leading tabs that fit beside a `more ›` chip and the rest in `folded`
- * (shown on a second row while the `more` chip is open). `rows` is the visible row; `more` says the chip is there. The lit tab is filled; no key letter is drawn or bound. AA5: no tab is ever swapped for another (the strip keeps one order at every width; only a pane under 45 cells folds its trailing tabs, which the live docks of 110 and 150 never reach), and the pane header names the active tab. */
-export function stripLayout(cols: number, _lit?: string): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
+/** The strip both hosts draw at `cols` cells: every tab as a chip on one row where they fit, else the short labels, else the leading tabs that fit beside a `more ›` chip and the rest in `folded` (shown in place of them while the `more` chip is open).
+ * `badges`: a count per tab id, drawn beside its chip. No tab is ever swapped for another; the pane header names the product, the lit chip the tab. */
+export function stripLayout(cols: number, _lit?: string, badges: Readonly<Record<string, string>> = {}): StripForm & { rows: StripTab[][]; folded: StripTab[]; more: boolean; /** Always true: no key prefix is drawn. */ bare: boolean } {
   const f = STRIP_FORM;
   const room = Math.max(1, cols);
-  // AA5: all six tabs on one row in the one order: the whole words where they fit, the short labels where they do not; only a pane too narrow even for those folds its trailing tabs
-  let words = stripTabs();
+  let words = stripTabs(false, badges);
   if (chipsWidth(words, f) <= room) return { ...f, rows: [words], folded: [], more: false, bare: true };
-  words = stripTabs(true);
+  words = stripTabs(true, badges);
   if (chipsWidth(words, f) <= room) return { ...f, rows: [words], folded: [], more: false, bare: true };
   const moreW = 2 * f.pad + cells('more ›');
   const backW = 2 * f.pad + cells('‹ back');
   let n = words.length - 1;
-  // Round 3 (E8): one row always. The first set ends in `more ›`, the second (the folded tabs) in `‹ back`. The first set keeps as many tabs as fit; the folded set keeps as many of the rest as fit beside `‹ back` (a pane under ~36 cells cannot reach every tab).
   while (n > 1 && chipsWidth(words.slice(0, n), f) + f.gap + moreW > room) n--;
-  const visible = words.slice(0, n); // AA5: the order never changes and the lit tab is never swapped in: the header names the active tab
+  const visible = words.slice(0, n);
   let folded = words.filter((t) => !visible.includes(t));
   while (folded.length > 1 && chipsWidth(folded, f) + f.gap + backW > room) folded = folded.slice(0, -1);
   return { ...f, rows: [visible], folded, more: true, bare: true };
 }
-// ---- header: ribbon and tab strip ---------------------------------------------------------------------------------
+// ---- header: pill row, tab strip, rule ---------------------------------------------------------------------------
 
 export const countWords = (workers: readonly PanelWorker[], ui: Ui): string => {
   const tally = workerTally(workers);
@@ -82,46 +82,71 @@ export function gatesFigure(m: Pick<PanelModel, 'gates' | 'core'>): { text: stri
   const t = gatesTotal(countedGates(gatesOf(m)).map((g) => gateCounts({ ok: groupOk(g), pending: groupPending(g), lines: g.lines.length, pass: g.lines.length - groupFailing(g) })));
   return { text: t.text, tone: t.tone, deny: t.deny, fired: t.fired };
 }
-/** The ribbon's right-hand text: what the active tab counts, always with its word. */
-function ribbonRight(m: PanelModel): string {
-  if (m.tab === 'team') return m.lead ? '' : m.workers.length ? countWords(m.workers, m.ui) : ''; // with a lead the tally is the `workers` row under it: once, at every width (critique 14: `3 done` twice)
-  if (m.tab === 'gates') { const g = gatesFigure(m); return g.fired ? g.text : ''; } // `ok` or `2 denied` at every width, never a pass ratio (round 2, D4)
-  // the lit chip already says `status`: the ribbon's right-hand text is a figure (a count, a tally, a channel), never the tab's own name
-  if (m.tab === 'channel') return m.channel && channelLabel(m.channel) !== 'this run' ? channelLabel(m.channel) : ''; // the head row says `this run` once; the ribbon names only a real channel
-  return '';
+/** The badges of the strip: gates its denial count, channel its unread count; a tab with nothing to count has none. */
+export function stripBadges(m: Pick<PanelModel, 'gates' | 'core' | 'unread'>): Record<string, string> {
+  const deny = gatesFigure(m).deny;
+  return { ...(deny > 0 ? { gates: String(deny) } : {}), ...(m.unread > 0 ? { channel: String(m.unread) } : {}) };
 }
-const runsWidth = (runs: readonly Run[]): number => runs.reduce((n, x) => n + cells(x.t), 0);
-/** The active tab's word in the header: `SIDEPANEL · status` (the route tab is the status view). */
-const tabWord = (tab: PanelTab): string => PANEL_TABS.find((t) => t.id === tab)?.label ?? tab;
-/** `view`: another view in the panel's ribbon (the board: `▸ BOARD  5 items`, critique 15 B5); absent: the SIDEPANEL ribbon of the lit tab. The pane's close is the host's own `✕` mark: no close chip here (round 2, D8). */
-export function ribbonRow(m: PanelModel, view?: { title: string; right: string }): PanelLine {
+const badgeTone = (id: string): Tone => (id === 'gates' ? 'bad' : 'accent');
+/** The tab the strip lights: the team view is the status one. */
+const litOf = (tab: PanelTab): string => (tab === 'team' ? 'route' : tab);
+/** `project`, `branch` as the header reads them: from the channel name (`tech-tools@main`) and the health's branch. */
+function projectBranch(m: PanelModel): string {
+  const ch = m.channel && channelLabel(m.channel) !== 'this run' ? m.channel : '';
+  const [proj, br] = ch.split('@');
+  return [proj, m.health?.branch ?? br].filter(Boolean).join(` ${dot(m.ui)} `);
+}
+/** The header row: the `◆ ATLAS` pill, `project · branch` dim, the version flush right and faint. */
+export function ribbonRow(m: PanelModel): PanelLine {
+  const ui = m.ui;
+  const pill: Run = ui.ascii ? r('[ATLAS]', 'text', { bold: true }) : r(' ◆ ATLAS ', inkFor('accent', ui.theme, ui.color), { bg: 'accent', bold: true, chip: true });
   if (m.cols < 34) {
-    const cap = capsule(m.ui);
-    const fill = Math.max(0, m.cols - rowWidth(cap) - 1);
-    return line(fitRuns([...cap, r(' '), m.ui.ascii ? r('-'.repeat(fill), 'muted') : r('─'.repeat(fill), 'dim')], m.cols));
+    const fill = Math.max(0, m.cols - cells(pill.t) - 2);
+    return line(fitRuns([r(' '), pill, r(' '), r((ui.ascii ? '-' : '─').repeat(fill), 'dim')], m.cols));
   }
-  const right = view ? view.right : ribbonRight(m);
-  const fitsRight = right && m.cols >= 40 + cells(right);
-  // The gates figure (`ok`, `2 denied`) never drops from the header while the capsule and title fit beside it.
-  const keep = !view && m.tab === 'gates' && !!right && m.cols >= 32 + cells(right);
-  // X7: the `▸` before the title is a breadcrumb (dim, not a control); a chevron elsewhere is a chip that expands or collapses.
-  return line(lightRibbon(ribbon(m.cols, view?.title ?? `SIDEPANEL ${dot(m.ui)} ${tabWord(m.tab)}`, fitsRight || keep ? right : '', m.ui), m.ui).map((x) => (x.t === ' ▸ ' || x.t === ' > ' ? { ...x, tone: 'dim' as const } : x)));
+  const left: Run[] = [r(' '), pill, ...(projectBranch(m) ? [r(`  ${projectBranch(m)}`, 'muted')] : [])];
+  const ver = m.health?.version ?? '';
+  const used = left.reduce((n, x) => n + cells(x.t), 0);
+  const room = m.cols - used - 1;
+  return line(fitRuns([...left, ...(ver && room >= cells(ver) + 2 ? [r(' '.repeat(room - cells(ver))), r(ver, 'dim')] : [])], m.cols));
 }
-/** The tab strip (round 2, D14): every tab as a ` label ` chip, the lit one filled with the accent, one cell between chips. A strip that does not fit ends in a `more ›` chip (key `tabs:more`)
- * that opens a second row with the folded tabs (`▾ more`); the chip is filled while the lit tab is one of the folded. */
-export function tabRows(m: PanelModel): PanelLine[] {
-  const lit: string = m.board ? 'board' : m.tab;
-  const f = stripLayout(m.cols, lit);
-  const gap = r(' '.repeat(f.gap));
-  const tile = tileOf(m.ui);
-  const chip = (t: StripTab): Run => { const text = chipText(t.label, f); return t.id === lit ? r(text, 'ink', { bold: true, bg: 'accent' }) : r(text, 'accent', { ...(tile ? { bgHex: tile } : {}) }); }; // the lit chip is filled, every other one is raised on a tile one step off the panel
-  const strip = (tabs: readonly StripTab[]): Run[] => tabs.flatMap((t, i) => [...(i ? [gap] : []), chip(t)]);
+/** One piece of the strip row, with what the rule under it draws. */
+export type StripSeg = { kind: 'lead' | 'gap' | 'chip' | 'more' | 'back'; text: string; tab?: StripTab; lit: boolean };
+/** The strip row as pieces: the chips (with their badges), the gaps, and the `more ›` / `‹ back` chip when the tabs do not all fit. Both the omp rows and the Claude pane's buttons are built from it. */
+export function stripSegs(m: Pick<PanelModel, 'cols' | 'ui' | 'tab' | 'expanded' | 'gates' | 'core' | 'unread'> & { board?: boolean }): { segs: StripSeg[]; layout: ReturnType<typeof stripLayout> } {
+  const lit = m.board ? 'board' : litOf(m.tab); // the board the band opens is no tab: no chip is lit over it
+  const f = stripLayout(m.cols, lit, stripBadges(m));
   const open = m.expanded === MORE_KEY;
-  const litFolded = f.folded.some((t) => t.id === lit);
-  const more: Run[] = f.more ? [gap, { ...chipRun(moreWord(false, m.ui), m.ui, MORE_KEY), ...(litFolded ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }] : [];
-  // One row always: `more ›` swaps the visible set for the folded tabs (and a `‹ back` chip) on the same row.
-  if (f.more && open) return [line(fitRuns([...strip(f.folded), gap, chipRun(backWord(m.ui), m.ui, MORE_KEY)], m.cols))];
-  return [line(fitRuns([...strip(f.rows[0]!), ...more], m.cols))];
+  const chips = (tabs: readonly StripTab[]): StripSeg[] => tabs.flatMap((t, i): StripSeg[] => [...(i ? [{ kind: 'gap' as const, text: ' '.repeat(f.gap), lit: false }] : []), { kind: 'chip', text: chipText(t.label, f), tab: t, lit: t.id === lit }]);
+  const lead: StripSeg = { kind: 'lead', text: ' '.repeat(f.lead), lit: false };
+  const gap: StripSeg = { kind: 'gap', text: ' '.repeat(f.gap), lit: false };
+  const litFolded = lit !== 'board' && !f.rows[0]!.some((t) => t.id === lit); // the lit tab is behind `more ›` (even one the folded row has no room to list)
+  if (f.more && open) return { segs: [lead, ...chips(f.folded), gap, { kind: 'back', text: chipText(backWord(m.ui), f), lit: false }], layout: f };
+  return { segs: [lead, ...chips(f.rows[0]!), ...(f.more ? [gap, { kind: 'more' as const, text: chipText(moreWord(false, m.ui), f), lit: litFolded }] : [])], layout: f };
 }
-/** Ribbon, blank, tab strip, rule, and (from 100 columns) a blank before the body; the 80-column design has none. */
-export const headerRows = (m: PanelModel): PanelLine[] => [ribbonRow(m), BLANK, ...tabRows(m), ...(m.cols >= 100 ? [BLANK] : [])];
+/** The tab strip as one row of runs: the lit chip filled with the accent, the others in the sub tone, badges beside their chip. A strip that does not fit ends in `more ›` (key `tabs:more`) that swaps in the folded tabs and a `‹ back` chip. */
+export function tabRows(m: PanelModel): PanelLine[] {
+  const { segs } = stripSegs(m);
+  const runs = segs.flatMap((s): Run[] => {
+    if (s.kind === 'chip') return [s.lit ? r(s.text, 'ink', { bold: true, bg: 'accent' }) : r(s.text, 'sub'), ...(s.tab?.badge ? [r(badgeText(s.tab.badge), badgeTone(s.tab.id), { bold: true })] : [])];
+    if (s.kind === 'more' || s.kind === 'back') return [{ ...chipRun(s.kind === 'more' ? moreWord(false, m.ui) : backWord(m.ui), m.ui, MORE_KEY), ...(s.lit ? { tone: 'ink' as const, bg: 'accent' as const, bgHex: undefined } : {}) }];
+    return [r(s.text)];
+  });
+  return [line(fitRuns(runs, m.cols))];
+}
+/** The rule under the strip: faint across the pane, an accent segment under the lit chip. */
+export function tabRule(m: PanelModel): PanelLine {
+  const ui = m.ui;
+  const { segs } = stripSegs(m);
+  const heavy = ui.ascii ? '=' : '━';
+  const light = ui.ascii ? '-' : '─';
+  const runs: Run[] = segs.flatMap((s): Run[] => {
+    const n = cells(s.text);
+    const badge = s.tab?.badge ? cells(badgeText(s.tab.badge)) : 0; // the heavy segment is the chip; its badge sits on the light rule
+    return s.kind === 'lead' ? [r(' '.repeat(n))] : [r((s.lit ? heavy : light).repeat(n), s.lit ? 'accent' : 'dim'), ...(badge ? [r(light.repeat(badge), 'dim')] : [])];
+  });
+  const used = runs.reduce((n, x) => n + cells(x.t), 0);
+  return line(fitRuns([...runs, r(light.repeat(Math.max(0, m.cols - used - 1)), 'dim')], m.cols));
+}
+/** Header, blank, tab strip, rule: the four rows above every tab's body. */
+export const headerRows = (m: PanelModel): PanelLine[] => [ribbonRow(m), BLANK, ...tabRows(m), tabRule(m)];

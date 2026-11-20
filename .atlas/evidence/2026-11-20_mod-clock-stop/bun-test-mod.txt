@@ -1,0 +1,14 @@
+ 4305 pass
+ 31 skip
+ 0 fail
+ 62970 expect() calls
+Ran 4336 tests across 234 files. [14.72s]
+ plugins/atlas/mod/data/crew.test.ts                      | 15 +++++++++++++++
+ plugins/atlas/mod/data/crew.ts                           |  9 ++++++++-
+ plugins/atlas/mod/data/orchestration.ts                  |  2 +-
+ plugins/atlas/mod/orchestra-types.ts                     |  2 +-
+ plugins/atlas/mod/view/band/slot-grid.test.ts            |  2 +-
+ plugins/atlas/mod/view/band/slot-no-phantom-work.test.ts |  2 +-
+ plugins/atlas/mod/view/hud/hud.test.ts                   | 15 ++++++++++++++-
+ plugins/atlas/mod/view/hud/hud.ts                        |  5 ++++-
+ 8 files changed, 45 insertions(+), 7 deletions(-)

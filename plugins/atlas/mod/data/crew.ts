@@ -119,6 +119,13 @@ async function workerState(fs: FsLike, f: RunFacts, name: string): Promise<Agent
 	return liveState(fs, f, name, pidMt);
 }
 
+/** The worker's run window from its files: the pid file is written at spawn, the exit file at the end. Without these the SUBAGENTS clock started when the mod first saw the worker and, for one already finished, never stopped. */
+async function runStamps(fs: FsLike, f: RunFacts, name: string): Promise<{ startedAt?: number; endedAt?: number }> {
+	const start = await pidTime(fs, f, name);
+	const end = f.exits.get(name)?.mt ?? 0;
+	return { ...(start > 0 ? { startedAt: start } : {}), ...(start > 0 && end > start ? { endedAt: end } : {}) };
+}
+
 const seqOf = (v: unknown): number => Number(v) || 0;
 const noteKind = (v: unknown): string | undefined => {
 	const k = str(v);
@@ -168,7 +175,7 @@ async function readRun(fs: FsLike, crewDir: string, id: string, now: number): Pr
 	const facts = await runFacts(fs, dir, now, lines);
 	const agents: SquadAgent[] = [];
 	for (const name of workerNames(run, await json(fs, `${dir}/irc/members.json`))) {
-		agents.push({ name, persona: 'unknown', source: 'task', transport: 'crew', state: await workerState(fs, facts, name) });
+		agents.push({ name, persona: 'unknown', source: 'task', transport: 'crew', state: await workerState(fs, facts, name), ...(await runStamps(fs, facts, name)) });
 	}
 	return { agents, notes: logNotes(lines, id) };
 }

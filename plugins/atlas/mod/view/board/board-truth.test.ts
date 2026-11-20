@@ -78,7 +78,7 @@ describe('B4: no running cursor on a queued row', () => {
   const row = (label: string, state: TodoRow['state'], focus: boolean): TodoRow => ({ label, state, detail: '', focus });
   test('a focused queued row draws no marker, a focused running row does', () => {
     const lines = todoRows([row('wait', 'queued', true), row('work', 'running', true)], { cols: 60, ui }, { spacers: false, extras: false }).map((l) => runsString(l));
-    expect(lines.some((l) => /^▸.*wait/.test(l))).toBe(false);
-    expect(lines.some((l) => /^▸.*work/.test(l))).toBe(true);
+    expect(lines.some((l) => /^▌.*wait/.test(l))).toBe(false);
+    expect(lines.some((l) => /^▌.*work/.test(l))).toBe(true);
   });
 });

@@ -125,7 +125,7 @@ describe('the run duration prints once across band, panel and transcript card', 
   const flat = (tree: unknown): string => { const out: string[] = []; const walk = (n: unknown): void => { if (typeof n === 'string') out.push(n); else if (n && typeof n === 'object') for (const k of (n as { children?: unknown[] }).children ?? []) walk(k); }; walk(tree); return out.join(''); };
   const engine = (placed: string[]) => ({ ui: { place: async ({ id }: { id: string }) => { placed.push(id); return { isPlaced: true, requestId: id }; }, invalidate: () => undefined } }) as never;
 
-  test('one finished run of 0:05: the band says it, the panel says a `RUNS` section, the transcript card says its other facts', async () => {
+  test('one finished run of 0:05: the band says it, the status tab says it once under SESSION, the transcript card says its other facts', async () => {
     forgetPlaced();
     try {
       const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
@@ -135,16 +135,15 @@ describe('the run duration prints once across band, panel and transcript card', 
       const h = health({ panel: true, last: { secs: 5, done: 1, total: 1, agents: 1, failed: 0, endedAgo: 4, workers: [{ name: 'alpha-explorer', state: 'done', secs: 5 }] } });
       const world = panelWorld('route', 150, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'done', secs: 5, startMs: NOW }, health: { ...h, pulse: BUSY } } as never);
       const panelText = bodyLines(world).map(lineText).join('\n');
-      expect(panelText).toMatch(/\bRUNS\b/);
-      expect(panelText).not.toContain('last run');
+      expect(panelText).toMatch(/last run +✓ 0:05/); // the status tab's SESSION says the finished run once
       const ids: string[] = [];
       noteRunFinal(5);
       await placeFinished(engine(ids), { ...doneSnap(NOW - 6000), squad: [{ name: 'alpha-explorer', persona: 'explorer', state: 'running', source: 'task' }] } as unknown as AtlasSnapshot, doneSnap(NOW));
       const runId = ids.find((i) => i.startsWith('done-run'))!;
       const cardText = flat(placedTree(runId, ui));
-      expect(cardText).toMatch(/● done\s+1\/1 · 1 worker/);
+      expect(cardText).toMatch(/✓ done\s+1\/1 · 1 worker/);
       expect(bandText).not.toContain('0:05'); // v1 frame spec: the band's head is `done n/n` and `ended Ns`, the run clock is the panel's
-      expect(panelText.match(/0:05/g) ?? []).toHaveLength(1); // AA1: the RUNS list says the run's one m:ss text, once (the band has no run clock)
+      expect(panelText.match(/0:05/g) ?? []).toHaveLength(1); // AA1: the status tab says the run's one m:ss text, once (the band has no run clock)
       expect(cardText).not.toContain('0:05'); // the transcript card says its other facts
     } finally { forgetPlaced(); }
   });

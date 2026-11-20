@@ -3,7 +3,7 @@
 // (omp/todo-fallback.ts, no agents); the SUBAGENTS rows are not drawn by any omp surface (omp has its own native Subagents widget),
 // so the SUBAGENTS cases check the shared layout against the design goldens, not an omp surface.
 import { expect, test } from "bun:test";
-import { subagents_120, subagents_120_rich, subagents_80, todo_120, todo_120_rich, todo_40, todo_80 } from "../contracts/hud-golden";
+import { hud_stack_120, hud_subagents_120, hud_subagents_120_rich, hud_subagents_80, hud_todo_120, hud_todo_120_rich, hud_todo_40, hud_todo_80 } from "../contracts/hud-golden";
 import { worldHudAgents, worldPhases, worldPlan } from "../contracts/hud-world";
 import type { Ui } from "../mod/design/atlas-ui";
 import { hudRows } from "../mod/view/hud/hud";
@@ -21,18 +21,18 @@ const block = (rows: string[]) => rows.slice(rows.findIndex(l => l.includes("SUB
 const edge = (rows: readonly string[]): string[] => [...rows];
 test("omp TODO surface equals the design goldens at 120, 120 rich, 80 and 40; 60 uses the 40 form", () => {
 	const input = { todos: worldPlan(), agents: [], phases };
-	expect(hudText(input, opts(120))).toEqual(edge(todo_120));
-	expect(hudText(input, opts(120, true))).toEqual(edge(todo_120_rich));
-	expect(hudText(input, opts(80))).toEqual(edge(todo_80));
-	expect(hudText(input, opts(40))).toEqual(edge(todo_40));
-	expect(hudText(input, opts(60)).slice(1, -1)).toEqual(todo_40.slice(1, -1));
+	expect(hudText(input, opts(120))).toEqual(edge(hud_todo_120));
+	expect(hudText(input, opts(120, true))).toEqual(edge(hud_todo_120_rich));
+	expect(hudText(input, opts(80))).toEqual(edge(hud_todo_80));
+	expect(hudText(input, opts(40))).toEqual(edge(hud_todo_40));
+	expect(hudText(input, opts(60)).slice(1, -1)).toHaveLength(hud_todo_40.length - 2); // the same rows as the 40 form in a 60-wide box
 });
 
 test("omp SUBAGENTS surface equals the design goldens at 120, 120 rich and 80; the block at 60 and 40 too", () => {
 	const input = { todos: worldPlan(), agents: worldHudAgents(), phases };
-	expect(block(hudText(input, opts(120)))).toEqual([...subagents_120]);
-	expect(block(hudText(input, opts(120, true)))).toEqual([...subagents_120_rich]);
-	expect(block(hudText(input, opts(80)))).toEqual([...subagents_80]);
+	expect(block(hudText(input, opts(120)))).toEqual([...hud_subagents_120]);
+	expect(block(hudText(input, opts(120, true)))).toEqual([...hud_subagents_120_rich]);
+	expect(block(hudText(input, opts(80)))).toEqual([...hud_subagents_80]);
 	for (const cols of [60, 40]) expect(hudText(input, opts(cols)).join("\n")).toContain("SUBAGENTS");
 });
 

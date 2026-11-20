@@ -1,5 +1,5 @@
 // Critique 17, slice A (build a4fad2f9): row truth, the blocked glyph, the board's open dispatch row, the band's blocked text, the route phase, plain words.
-// Shapes: stoprun-150-a4fad2f9-2 (T2 ghost fades to done while ghost failed), stoprun-150-a4fad2f9-3 (band `todo 4/5 · ■1` with 13 blank columns, f0091 to f0097),
+// Shapes: stoprun-150-a4fad2f9-2 (T2 ghost fades to done while ghost failed), stoprun-150-a4fad2f9-3 (band `todo 4/5 · ✗1` with 13 blank columns, f0091 to f0097),
 // live-150-a4fad2f9-1 (tab-core.png, tab-gates.png).
 import { describe, expect, test } from 'claude-code/testing';
 import type { TodoItem } from '../contract';
@@ -21,7 +21,7 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     expect(todoState('completed', 'done')).toEqual({ state: 'done' });
     expect(todoState('completed')).toEqual({ state: 'done' });
     // the T3 case (stoprun-150-562576ed-2, critique 18 B3): the store holds `pending`, the worker was killed: the row stays queued and the owner is named failed beside it
-    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: one state from the frame the worker dies, no `◇ worker failed` first
+    expect(todoState('pending', 'failed')).toEqual({ state: 'failed' }); // wave 35: one state from the frame the worker dies, no `○ worker failed` first
     expect(todoState('in_progress', 'failed')).toEqual({ state: 'failed' });
   });
   test('the mark is error red, the word is error red, and it is its own motion entry (no fade-to-done pop)', () => {
@@ -41,11 +41,11 @@ describe('A1: a completed row whose worker failed is never the plain green done'
     { id: 't2', content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer' },
   ] as TodoItem[];
   const agents: HudAgent[] = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' }];
-  test('HUD: T2 reads `■ failed` in the error tone, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
+  test('HUD: T2 reads `✗ failed` in the error tone, not struck through; T1 stays the quiet done (247 text, not struck either)', () => {
     const rows = hudLines({ todos: plan, agents }, { merge: false, cols: 150, maxRows: 60, ui, now: 0 });
     const t2 = rows.find((r) => plain(r).includes('T2 read ghost.py'))!;
     const t1 = rows.find((r) => plain(r).includes('T1 read alpha.py'))!;
-    expect(plain(t2)).toMatch(/^[ ▸] ■ T2.* failed/); // wave 33: the HUD row reads `■ failed` (the board keeps `closed`)
+    expect(plain(t2)).toMatch(/^[│▌] ✗ T2.* failed/); // wave 33: the HUD row reads `✗ failed` (the board keeps `closed`)
     expect(t2.find((x) => x.t.trim() === 'failed')?.tone).toBe('bad');
     expect(t2.find((x) => x.t.includes('T2 read ghost.py'))?.strike).toBeFalsy();
     expect(t2.find((x) => x.t.trim() === STATE_GLYPHS.failed)?.tone).toBe('bad');
@@ -85,17 +85,17 @@ describe('A1: a completed row whose worker failed is never the plain green done'
 });
 
 describe('A2: blocked has its own glyph, distinct from failed', () => {
-  test('▲ for blocked, ■ for failed; ASCII # for blocked, x for failed; blocked has its own tone (critique 18 B3), failed stays bad', () => {
-    expect([STATE_GLYPHS.blocked, STATE_GLYPHS.failed]).toEqual(['▲', '■']);
+  test('▲ for blocked, ✗ for failed; ASCII # for blocked, x for failed; blocked has its own tone (critique 18 B3), failed stays bad', () => {
+    expect([STATE_GLYPHS.blocked, STATE_GLYPHS.failed]).toEqual(['▲', '✗']);
     expect([STATE_ASCII.blocked, STATE_ASCII.failed]).toEqual(['#', 'x']);
     expect([STATE_TOKEN.blocked, STATE_TOKEN.failed]).toEqual(['block', 'bad']);
     expect(stateRun('blocked', ui)).toEqual({ t: '▲', tone: 'block' });
-    expect(stateRun('failed', ui)).toEqual({ t: '■', tone: 'bad' });
+    expect(stateRun('failed', ui)).toEqual({ t: '✗', tone: 'bad' });
     expect(stateRun('blocked', ascii).t).not.toBe(stateRun('failed', ascii).t);
     expect(new Set(Object.values(STATE_GLYPHS)).size).toBe(Object.keys(STATE_GLYPHS).length);
   });
   test('one cell wide each', () => {
-    expect([cells('▲'), cells('■')]).toEqual([1, 1]);
+    expect([cells('▲'), cells('✗')]).toEqual([1, 1]);
   });
 });
 
@@ -138,7 +138,7 @@ describe('A4: the band names the open row by its plan title and never leaves col
     expect(openRowName(plan, { content: 'Attempt to read ghost.py', origin: 'dispatch' })).toBe('Attempt to read ghost.py');
     expect(openRowName(plan, undefined)).toBeUndefined();
   });
-  // stoprun-150-a4fad2f9-3 f0091..f0097 at the docked 93 columns: `◖ ◆ ATLAS ◗ ■ blocked: dispatch Read ghost.py first... open · todo 4/5 · ■1` and 13 blank columns.
+  // stoprun-150-a4fad2f9-3 f0091..f0097 at the docked 93 columns: ` ◆ ATLAS  ✗ blocked: dispatch Read ghost.py first... open · todo 4/5 · ✗1` and 13 blank columns.
   const m = (cols: number, over: Partial<MissionModel> = {}): MissionModel => ({
     cols, maxRows: 1, tick: 0, project: 'p', phases: ['research', 'implement', 'verify'], phase: 'implement', done: 4, total: 5, ui,
     blocked: true, stopGates: ['1 todo open'], openWork: 1, openDispatch: 1, openDispatchTitle: 'T2 read ghost.py', todoBlocked: 1,
@@ -149,21 +149,21 @@ describe('A4: the band names the open row by its plan title and never leaves col
     const t = row(m(93));
     expect(t).toContain('▲ blocked · stop refused'); // state 38: two reasons only
     expect(t).toContain('todo 4/5');
-    expect(t).toMatch(/■ 1 failed/); // wave 31: blocked rides the lead's state word; one failure word
+    expect(t).toMatch(/✗ 1 failed/); // wave 31: blocked rides the lead's state word; one failure word
     expect(t).not.toMatch(/\.\.\.|…/);
     expect(t).not.toContain('Attempt');
   });
   test('the failed word survives from 80 columns up, and no width leaves its spare columns beside a clipped bare count', () => {
     for (const cols of [150, 120, 110, 100, 93, 90, 85, 80]) {
       const t = row(m(cols));
-      expect([cols, /■ 1 failed/.test(t)]).toEqual([cols, true]);
+      expect([cols, /✗ 1 failed/.test(t)]).toEqual([cols, true]);
     }
-    // once the words fit they stay for every wider row, and no row is wider than the terminal: a bare count (`■1`) never sits beside spare columns a word form would fill
+    // once the words fit they stay for every wider row, and no row is wider than the terminal: a bare count (`✗1`) never sits beside spare columns a word form would fill
     let seen = false;
     for (let cols = 40; cols <= 150; cols++) {
       const t = row(m(cols));
       expect([cols, cells(t.trimEnd()) <= cols]).toEqual([cols, true]);
-      const words = /■ 1 failed/.test(t);
+      const words = /✗ 1 failed/.test(t);
       if (seen) expect([cols, words]).toEqual([cols, true]);
       seen = seen || words;
     }

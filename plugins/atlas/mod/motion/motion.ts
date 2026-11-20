@@ -301,6 +301,8 @@ const weighted = (r: Run, beat: number): Run => (beat >= MAX_BEATS - 1 ? r : lif
  * flashes only what the change touched (critique 17 C4: MODEL and TASK flashed 231 though they never change). Identity, so mark the run `animateRow` receives. */
 const calm = new WeakSet<Run>();
 export const calmRun = (r: Run): Run => { calm.add(r); return r; };
+/** Whether a run was marked calm (its cell never changes with the row's state): the band row motion (rows.ts) leaves it at its tone. */
+export const isCalm = (r: Run): boolean => calm.has(r);
 
 /** The done fade's two steps (xterm 231 and 151). */
 export const DONE_FADE = [PALETTES.mocha.white, xtermHex(151)] as const; // xterm 231 then 151, named by index so no second hex literal is spelled

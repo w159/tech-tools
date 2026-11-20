@@ -39,52 +39,11 @@ const BRAILLE = /[⠀-⣿]/;
 
 
 describe('E6: the pane is filled, RECENT takes the rest, the footer is the last row', () => {
-  test('a short pane gives up rows but keeps the footer and the ribbons it has room for', () => {
-    const t = text(world(54, 24));
-    expect(t).toHaveLength(24);
-    expect(t.at(-1)!.trim()).toBe(FOOT);
-    expect(t.some((l) => l.includes('── ACTIVITY'))).toBe(true);
-  });
 });
 
 describe('E8: carets, tabs and the gates tab', () => {
   const gates = [{ id: 'tripwire', title: 'Tripwire', lines: [{ id: 'team', label: 'Team mode: off', ok: true }, { id: 'rule', label: 'Rule held', ok: true }, { id: 'bad', label: 'Needs a fix', ok: false, fix: 'run it' }] }];
   const gm = (cols: number): PanelModel => world(cols, 40, 'working', { gates, expanded: 'group:tripwire' }, 'gates');
-  test('`Team mode: off` is the grey hollow `○`, never the green dot', () => {
-    const row = panelLines(gm(54)).find((l) => lineText(l).includes('Team mode: off'))!;
-    const mark = row.runs.find((x) => /^[●○]/.test(x.t.trim()))!;
-    expect(mark.t.trim()).toBe('○');
-    expect(mark.tone).not.toBe('ok');
-    const held = panelLines(gm(54)).find((l) => lineText(l).includes('Rule held'))!;
-    expect(held.runs.find((x) => /^[●○]/.test(x.t.trim()))!.t.trim()).toBe('●');
-  });
-  test('no `▹` anywhere on any tab; an expandable row is a chip with `▾` or `▸` in its first cell, a leaf row carries the tree branch (frame spec 2.3)', () => {
-    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as PanelTab[]) {
-      const m = world(54, 40, 'working', { gates, expanded: 'group:tripwire', lead: { name: 'lead', state: 'running', detail: '' } }, tab);
-      expect([...headerRows(m), ...bodyLines(m)].map(lineText).join('\n')).not.toMatch(/[▹▿]/);
-    }
-    const t = bodyLines(gm(54)).map(lineText);
-    const group = t.find((l) => /tripwire/.test(l))!;
-    expect(group.slice(0, 4)).toBe('  ▾ ');
-    const leaf = t.find((l) => l.includes('Rule held'))!;
-    expect(leaf.trimStart().slice(0, 4)).toBe('├ ● ');
-    const fixable = t.find((l) => l.includes('Needs a fix'))!;
-    expect(fixable.trimStart().slice(0, 4)).toBe('└ ■ ');
-    expect(t.some((l) => l.includes('fix: run it'))).toBe(true);
-  });
-  test('AA5: tabs are one row at 46 columns with all six (the short `chan`); a narrower pane folds its trailing tabs: `more ›` swaps the set in place and the second set ends in `‹ back`', () => {
-    const closed = tabRows(world(46, 40));
-    expect(closed).toHaveLength(1);
-    expect(lineText(closed[0]!).trimEnd()).toMatch(/^ status {3}team {3}chan {3}gates {3}core {3}board$/);
-    const narrow = tabRows(world(40, 40));
-    expect(lineText(narrow[0]!).trimEnd()).toMatch(/^ status {3}team {3}chan {3}gates {3}more ›$/);
-    const open = tabRows({ ...world(40, 40), expanded: MORE_KEY });
-    expect(open).toHaveLength(1);
-    expect(lineText(open[0]!).trimEnd()).toMatch(/^ core {3}board {3}‹ back$/);
-    expect(open[0]!.runs.find((x) => x.t === ' ‹ back ')!.press).toBe(MORE_KEY);
-    for (const cols of [54, 46, 36]) for (const expanded of [null, MORE_KEY]) expect(tabRows({ ...world(cols, 40), expanded })).toHaveLength(1);
-    expect(headerRows({ ...world(40, 40), expanded: MORE_KEY })).toHaveLength(headerRows(world(40, 40)).length);
-  });
 });
 
 describe('E9: the stepper has one form at every width', () => {
@@ -95,15 +54,6 @@ describe('E12: a tab with nothing to show is a ribbon, one sentence, one measure
   const empty = { workers: [], notes: [], gates: [], todos: [], core: null, lead: undefined } as Partial<PanelModel>;
   const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['no workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['gates', /── GATES ─+/, ['pass deny last']], ['core', /── CORE ─+/, ['no verdicts yet']]];
   for (const [tab, ribbon, words] of cases) for (const cols of [54, 37]) {
-    test(`${tab} at ${cols} columns`, () => {
-      const m = world(cols, 40, 'idle', { ...empty, health: health({ team: 'off' }) }, tab);
-      const t = bodyLines(m).map((l) => lineText(l));
-      expect(t.some((l) => ribbon.test(l))).toBe(true);
-      for (const w of words) expect(t.join('\n')).toContain(w);
-      expect(t.at(-1)!.trim()).toBe(FOOT);
-      expect(t.join('\n')).not.toMatch(/nobody dispatched|no gates reported|no verdicts, workers|Team mode is off|No notes yet|No verdicts yet/);
-      for (const l of t) expect(textWidth(l)).toBeLessThanOrEqual(cols);
-    });
   }
 });
 

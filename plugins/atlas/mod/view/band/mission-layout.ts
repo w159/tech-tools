@@ -16,7 +16,7 @@ import { blockedText, STOP_REFUSED } from '../../data/runstate';
 import { tallyOf, type Tally } from '../../data/live';
 import { displayName } from '../hud/hud';
 import { fitText, textWidth } from '../../design/theme';
-import { bandFrameRuns } from './band-frame';
+import { bandFrameRuns, deniedOf, PULSE_MS } from './band-frame';
 import type { Health } from '../../data/idle-health';
 
 export type { Run, Tone };
@@ -188,7 +188,9 @@ const countOf = (m: MissionModel, s: UiState): number => { const t = tallied(m);
 /** The finished workers: the tally's `done`; with no HUD list (omp, or the roster already cleared) the band's lingering ones or the last run's. */
 const doneCount = (m: MissionModel): number => { const t = tallied(m); return t ? t.done : Math.max(countOf(m, 'done'), m.lastRun?.workers ? Math.max(0, m.lastRun.workers - failedCount(m)) : 0); };
 /** What the Motion observes of the band: each state's agent count, so a count that moves is drawn mid-transition. */
-export const bandMotionItems = (m: MissionModel): MotionItem[] => [...COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) })), { key: 'band:lead', state: runStateOf(m).kind }];
+export const bandMotionItems = (m: MissionModel): MotionItem[] => [...COUNT_ORDER.map((s): MotionItem => ({ key: `count:${s}`, state: String(countOf(m, s)) })), { key: 'band:lead', state: runStateOf(m).kind }, ...(m.health ? [{ key: 'band:denied', state: String(deniedOf(m.health)) }] : [])];
+/** A new denial pulses the ribbon's gates pill once: ms since the count rose, while a motion view watches it (band-frame.ts PULSE_MS). */
+const denyPulse = (m: MissionModel): { denyPulseMs?: number } => { const e = m.motion?.entry('band:denied'); const age = e && m.motion && e.changed > e.born && m.health && deniedOf(m.health) > 0 ? m.motion.now - e.changed : -1; return age >= 0 && age < PULSE_MS ? { denyPulseMs: age } : {}; };
 
 /** The spinner frame of a state's count: the running count turns the frame of the worker listed first (the HUD and the panel turn spinFrameOf(clock, name) for that same row, critique 19: `◒` in the band against `◐` in the HUD); the local tick otherwise. */
 function countFrame(m: MissionModel, s: UiState): number {
@@ -510,7 +512,7 @@ function standardForms(m: MissionModel, ui: Ui): Form[] {
     const kind: 'idle' | 'working' | 'done' = st.kind === 'done' ? 'done' : st.kind === 'idle' ? 'idle' : 'working';
     const steps = m.todoPhases?.length ? m.todoPhases : m.phases;
     const at = steps.indexOf(m.leadPhase ?? m.phase);
-    const frame = bandFrameRuns({ cols: m.cols, ui, cap, kind, clockMs: m.now ?? m.tick * 100, spin: phaseGlyph('working', bandFrame(m), ui.ascii), still: !!m.still, phase: { word: at >= 0 ? steps[at]! : '', n: at + 1, of: steps.length }, ...(m.restSecs !== undefined ? { restSecs: m.restSecs } : {}), health: m.health });
+    const frame = bandFrameRuns({ cols: m.cols, ui, cap, kind, clockMs: m.now ?? m.tick * 100, spin: phaseGlyph('working', bandFrame(m), ui.ascii), still: !!m.still, phase: { word: at >= 0 ? steps[at]! : '', n: at + 1, of: steps.length }, ...(m.restSecs !== undefined ? { restSecs: m.restSecs } : {}), ...denyPulse(m), health: m.health });
     return [{ runs: frame, min: 0 }, { runs: [...cap], min: 0 }];
   }
   // State 38: a blocked band's run clock (`▲ blocked · stop refused 0:37`) goes before the reason, the word `todo` or a count does: only the word forms keep it.

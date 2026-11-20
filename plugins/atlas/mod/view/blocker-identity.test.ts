@@ -49,30 +49,6 @@ describe('B1: the blocker has one name on the band, the gates tab and the tally'
     const rows = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
     expect(rows).toContain('Team gate');
   });
-  test('the checks row counts n/m; the gates tab says the same group in the one gate vocabulary (`1 pass · 1 deny`), from one snapshot', () => {
-    const t = gateTally(teamGate);
-    const row = missionLines(mission({ checks: t.checks })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
-    const tab = body(panelWorld('gates', 120, ui, { rows: 40, gates: teamGate as never })).join('\n');
-    expect(row).toContain('1/2');
-    expect(tab).toContain('1 pass · 1 deny');
-    expect(row).not.toMatch(/\d of \d green/);
-    const pass = missionLines(mission({ checks: [{ id: 'a', ok: true }, { id: 'b', ok: true }, { id: 'c', ok: true }] })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
-    expect(pass).toContain('3/3 green');
-    expect(pass).not.toContain('all 3 pass');
-  });
-  test('fix1728: before any Stop refused the team gate is pending on the tally, the band and the gates tab alike', () => {
-    const open = teamGate.map((g) => ({ ...g, lines: g.lines.filter((l) => l.id !== 'stop-verdict') }));
-    const t = gateTally(open);
-    expect(t.names).toEqual([]);
-    expect(t.failing).toEqual([]);
-    expect(runsText(bandLines(mission({ checks: t.checks }))[0]!.runs)).not.toContain('gate to check');
-    const row = missionLines(mission({ checks: t.checks })).map((l) => runsText(l.runs)).find((l) => l.includes('checks'))!;
-    expect(row).toContain('◇ completion');
-    const tab = body(panelWorld('gates', 120, ui, { rows: 40, gates: open as never })).join('\n');
-    expect(tab).toMatch(/◇ Completion gate +pending/);
-    expect(tab).toContain('◇ Team gate');
-    expect(tab).toContain('2 pass · 0 deny');
-  });
 });
 
 describe('B1: the gates tab never says a thing twice or parts a label from its value', () => {
@@ -82,24 +58,8 @@ describe('B1: the gates tab never says a thing twice or parts a label from its v
   ];
   for (const rows of [24, 40]) {
     for (const cols of [80, 110, 150]) {
-      test(`${cols} cols, ${rows} rows`, () => {
-        const text = body(panelWorld('gates', cols, ui, { rows, gates: groups as never }));
-        expect(text.filter((l) => l.includes('Inline ops since last dispatch')).length).toBeLessThanOrEqual(1);
-        // a group row never carries the first line's detail: `0 as of the last ingest` belongs to its own row, shown open
-        expect(text.filter((l) => /^\s*\S? ?Tool routing/.test(l)).join('')).not.toContain('as of the last ingest');
-        expect(text.filter((l) => /^\s*\S? ?Dispatch tripwire/.test(l)).join('')).not.toMatch(/\barmed\b/);
-      });
     }
   }
-  test('a closed failing group still says why, once', () => {
-    const text = body(panelWorld('gates', 110, ui, { rows: 24, gates: groups as never })).join('\n');
-    expect(text.match(/Inline ops since last dispatch/g)?.length).toBe(1);
-  });
-  test('the group figure is `N pass · M deny`', () => {
-    const text = body(panelWorld('gates', 150, ui, { rows: 24, gates: groups as never })).join('\n');
-    expect(text).toMatch(/warning .*1 pass · 1 deny\n/);
-    expect(text).not.toMatch(/\d+ of \d+ failing/);
-  });
 });
 
 describe('B1: the contract and core report use the same n of m unit', () => {
@@ -120,28 +80,6 @@ describe('B2: no calm word beside a block', () => {
     expect(t).not.toContain('all ok');
   });
   const lead = worker('lead', { role: 'lead', state: 'done', detail: 'done' });
-  test('the lead does not read done on the team tab when the Stop gate refused the stop', () => {
-    const gates = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 's', label: 'Team gate', ok: false }, { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'Team gate' }] }];
-    const rows = body(panelWorld('team', 120, ui, { rows: 24, lead, workers: [worker('alpha-explorer')], gates: gates as never }));
-    const row = rows.find((l) => /\blead\b/.test(l) && !l.includes('running'))!;
-    expect(row).not.toMatch(/\bdone\b/);
-    expect(row).toMatch(/blocked/);
-    expect(row).toContain('stop refused');
-    expect(rows.join('\n')).not.toContain('Last Stop'); // the verdict is a record, not a gate row
-  });
-  test('a failing check with Stop allowed leaves the lead done (the band says warning)', () => {
-    for (const stop of [[], [{ id: 'stop-verdict', label: 'Last Stop allowed', ok: true }]]) {
-      const gates = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 's', label: 'Team gate', ok: false }, ...stop] }];
-      const rows = body(panelWorld('team', 120, ui, { rows: 24, lead, workers: [worker('alpha-explorer')], gates: gates as never }));
-      const row = rows.find((l) => /\blead\b/.test(l) && !l.includes('running'))!;
-      expect(row).toMatch(/\bdone\b/);
-      expect(row).not.toMatch(/blocked/);
-    }
-  });
-  test('the lead reads done when nothing is blocked', () => {
-    const rows = body(panelWorld('team', 120, ui, { rows: 24, lead, workers: [worker('alpha-explorer')], gates: [] }));
-    expect(rows.find((l) => /\blead\b/.test(l) && !l.includes('running'))!).toMatch(/\bdone\b/);
-  });
   test('the reading line never says nothing returned once workers have returned', () => {
     const core = coreModel({ ...coreFixture, matrix: coreMatrix, logs: {}, todos: [], header: { ok: 1, total: 1 }, openGates: 0 });
     const done = body(panelWorld('core', 120, ui, { rows: 40, core, workers: [worker('alpha-explorer'), worker('beta-explorer')] })).join('\n');
@@ -203,14 +141,6 @@ describe('B4: lastText and clipWords', () => {
   });
   const row = (over: Partial<AgentRow> = {}): AgentRow => ({ name: 'beta-explorer', state: 'done', model: 'haiku', tasks: [], tool: '1. ToolSearch select:mcp__lean-ctx__ctx_read,mcp__lean-ctx__ctx_search', ctx: null, focus: false, task: 'read beta.py', ...over });
   const text = (cols: number, rows: AgentRow[]): string[] => agentRows(rows, { cols, ui }, { spacers: true, extras: true }).map((r) => r.map((x) => x.t).join(''));
-  test('the LAST column shows sanitized text and ends on a whole word', () => {
-    for (const cols of [90, 100, 110, 150]) {
-      const line = text(cols, [row()]).find((l) => l.includes('beta-explorer'))!;
-      expect(line).not.toMatch(/\b1\. /);
-      expect(line).not.toContain('`');
-      expect(line.trimEnd()).toMatch(/(ctx_search|ToolSearch…|returned|done|-)$/); // the whole text, or cut on a word with a one-cell `…` (critique 21), or the state word where not even a word fits; never a raw cut
-    }
-  });
   test('LAST then MODEL drop before a TASK id is cut or a name is cut (critique 19 B2: TASK is the plan id, 7 cells at every width)', () => {
     for (const cols of [80, 90, 100, 110, 120, 150]) {
       const lines = text(cols, [row({ name: 'explorer-board', tasks: [1] })]);

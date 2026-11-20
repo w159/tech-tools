@@ -1,6 +1,6 @@
-// Live defect (round2 live-110 at e4a8186a, board 0.0): the board view in the 110-column pane drew the bare tab strip (`status team channel ...`)
-// under a `▸ BOARD` ribbon, so nothing in the pane named a hotkey or the SIDEPANEL and the capture could not tell the pane from a toast box.
-// The board view keeps the keys on screen (`r: route`) at a narrow pane too: the strip wraps onto a second row, as it does where the words do not fit one.
+// Live defect (round2 live-110 at e4a8186a, board 0.0): the board view in the 110-column pane drew the bare tab strip under a `▸ BOARD` ribbon, so nothing in the pane named the SIDEPANEL
+// and the capture could not tell the pane from a toast box. Redesign: every view, the board the band opens included, draws the one `◆ ATLAS` header and the one strip row (health status gates channel);
+// the board is no tab of the strip, so no chip is lit over it. The pane marker is the `◆ ATLAS` pill.
 import { describe, expect, test } from 'claude-code/testing';
 import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../../live_fixture';
@@ -13,8 +13,8 @@ const kids = (n: Node): Node[] => {
   const c = n.props.children;
   return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x: unknown): x is Node => typeof x === 'object' && x !== null);
 };
-// As the host draws it: a Button with a hotkey reads `k: label`, the zero-width key layer of a bare strip paints nothing.
-const textOf = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : n.kind === 'Box' && n.props.width === 0 ? '' : (n.kind === 'Button' && n.props.hotkey ? `${String(n.props.hotkey)}: ` : '') + kids(n).map(textOf).join(''));
+// As the host draws it: the text of every Text under the node (a Button has no hotkey prefix, the strip binds no key).
+const textOf = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
 const on = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {} } as unknown as SidebarHandlers;
 const ui = { theme: 'mocha', ascii: false, color: 'truecolor' } as const;
 const todo = (i: number) => ({ id: `t${i}`, content: `T${i} item`, status: 'completed', owner: null });
@@ -26,32 +26,31 @@ const rows = (view: SidebarView, columns: number): string[] =>
 
 describe('the board view in a narrow pane draws the one-row chip strip (critique 18, D14)', () => {
   for (const columns of [38, 39, 43]) {
-    test(`pane ${columns}: the strip is one row of chips, the ▸ SIDEPANEL · board ribbon names the pane, no rule under the strip, no row is wider than the pane`, () => {
+    test(`pane ${columns}: the strip is one row of chips, the ◆ ATLAS pill names the pane, no chip is lit over the board, no row is wider than the pane`, () => {
       const r = rows('board', columns).join('\n').split('\n');
-      expect(r[0]).toContain('▸ SIDEPANEL · board');
-      expect(r[0]).toContain('▸ SIDEPANEL'); // the scorer's pane marker (live_capture.py: `r: route` or `▸ SIDEPANEL`)
-      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status team chan( gates)? more ›$/); // D14: the trailing tabs fold behind `more ›`; AA5: the order never changes, the short `chan`, no swap; the header names the active tab
-      expect(r.findIndex((l, i) => i > 1 && /^ *━+ *$/.test(l))).toBe(-1); // one idiom: the lit chip is filled, nothing is ruled under it
-      expect(r[3]!.includes('━')).toBe(false); // the strip is not wrapped: the row under it is the body
-      for (const l of r.slice(0, 3)) expect([...l].length).toBeLessThanOrEqual(columns);
+      expect(r[0]).toContain('◆ ATLAS');
+      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^health status( more ›| gates( \d+)?( chan(nel)?( \d+)?| more ›)?)?$/); // D14: the trailing tabs fold behind `more ›`; the order never changes, no swap
+      expect(r[3]!.includes('━')).toBe(false); // the board is no tab: no accent segment under any chip
+      expect(r[4]!.includes('━')).toBe(false); // the strip is not wrapped: the row under the rule is the body
+      for (const l of r.slice(0, 4)) expect([...l].length).toBeLessThanOrEqual(columns);
     });
   }
   test('every view draws the same strip row at 38 columns (critique 17 B5: one form on every tab)', () => {
     const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
-    // AA5: one form (three chips and `more ›`) whichever tab is lit
-    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, ' status   team   chan   more ›']);
+    // one form (the chips that fit and `more ›`) whichever tab is lit
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, first('route')]);
   });
 });
 
-// The scorer (round2/tools/live_capture.py parse_frame) accepts a pane only with `r: route` / `r route` or `▸ SIDEPANEL` in its text, and finds the board by `▸ BOARD`.
-const SCORER_PANE = (text: string): boolean => /\br:?\s*route/.test(text) || text.includes('▸ SIDEPANEL');
+// The scorer (round2/tools/live_capture.py parse_frame) recognises the pane by its header: the `◆ ATLAS` pill (it read `▸ SIDEPANEL` before the redesign).
+const SCORER_PANE = (text: string): boolean => text.includes('◆ ATLAS');
 describe('the 110-column pane carries a pane marker the capture scorer recognises on every view', () => {
   for (const columns of [37, 38, 43, 55]) {
     for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) {
       test(`pane ${columns}, ${v}: marker present, strip one row`, () => {
         const text = rows(v, columns).join('\n');
         expect(SCORER_PANE(text)).toBe(true);
-        if (v === 'board') expect(text).toContain('▸ SIDEPANEL · board');
+        expect(rows(v, columns)[2]!).toMatch(/health/);
       });
     }
   }

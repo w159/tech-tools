@@ -24,19 +24,21 @@ describe('todoRows at the min tier', () => {
 });
 
 describe('agentRows columns', () => {
-  test('TASK holds plan ids only: a dispatch description never fills it (critique 19 B2: `read beta.py` for a retry)', () => {
+  test('a dispatch description never fills a cell (critique 19 B2: `read beta.py` for a retry); the row stays inside its width', () => {
     const out = agentRows([agent({ task: 'x'.repeat(30), tasks: [3] })], { cols: 200, ui }, plain);
-    expect(runsString(out[1]!)).toContain('T3');
-    expect(runsCells(out[1]!)).toBeLessThanOrEqual(200); // wave 31: TASK takes the free width, so the id is followed by the title, clipped to the column
+    expect(runsString(out[1]!)).not.toContain('x'.repeat(30));
+    expect(runsCells(out[1]!)).toBeLessThanOrEqual(200);
   });
 
-  test('the RESULT text goes first, MODEL shows only from 120 columns, and a row too narrow for TASK keeps LAST', () => {
+  test('MODEL is no column; NOW / RESULT gives its cells up before the state word does, and no row passes its width', () => {
     const wide = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!);
-    expect(wide).toContain('3 tasks');
+    expect(wide).toContain('read alpha.py');
+    expect(wide).not.toContain('haiku');
     expect(runsCells(agentRows([agent({ name: 'a'.repeat(19), tasks: [1, 2, 3], model: 'haiku', tool: 'read alpha.py' })], { cols: 80, ui }, plain)[1]!)).toBeLessThanOrEqual(80);
-    const tight = runsString(agentRows([agent({ name: 'a'.repeat(19), tasks: [1], model: 'haiku', tool: 'read alpha.py' })], { cols: 44, ui }, plain)[1]!);
-    expect(tight).not.toContain('alpha.py'); // round 5: with room for one column only, LAST (the elapsed clock) is the one kept; the task id and MODEL (120 columns and up) go
-    expect(tight).not.toContain('haiku');
+    const tight = agentRows([agent({ name: 'a'.repeat(19), tasks: [1], model: 'haiku', tool: 'read alpha.py' })], { cols: 44, ui }, plain)[1]!;
+    expect(runsString(tight)).toContain('running'); // the state word is kept whole
+    expect(runsString(tight)).not.toContain('haiku');
+    expect(runsCells(tight)).toBeLessThanOrEqual(44);
   });
 
   test('ctx gauge column: drawn when the block fits exactly, at stateAt + 14; absent one cell short', () => {
@@ -57,9 +59,9 @@ describe('agentRows columns', () => {
   });
 
   test('a cell whose column was dropped draws nothing', () => {
-    // nameW 50 -> stateAt 56; with the model column gone (task at 68) last would start at 76 and need 8 more cells: 84 > 80.
+    // a name that alone overflows is cut; the state word stays whole and the row never passes 80 cells.
     const out = agentRows([agent({ name: 'n'.repeat(50), tool: 'bashtool' })], { cols: 80, ui }, plain);
-    expect(runsString(out[1]!)).not.toContain('bashtool');
+    expect(runsString(out[1]!)).toContain('running');
     expect(runsCells(out[1]!)).toBeLessThanOrEqual(80);
   });
 });
@@ -68,7 +70,7 @@ describe('fitStack with the plan folded', () => {
   test('B5 (critique 28): a short slot folds plan rows onto the title and keeps every agent row; both boxes stay closed, the plan box goes whole before an agent row is windowed', () => {
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
-    const closed = (rows: string[]): number => rows.filter((l) => l.startsWith('+-') && l.endsWith('+') && !l.includes('[ATLAS]')).length; // the ASCII bottom rule
+    const closed = (rows: string[]): number => rows.filter((l) => /^\+-+\+$/.test(l)).length; // the ASCII bottom rule
     const nine = fitStack({ todos, agents }, { cols: 100, ui, merge: false }, 9).map((r) => runsString(r));
     expect(nine.length).toBe(9);
     expect(nine.some((l) => /o 2 queued/.test(l))).toBe(true); // state 38: the rows left out ride ONE summary row, not the title
@@ -97,9 +99,9 @@ describe('fitStack with the plan folded', () => {
   test('B5: the column names go before an agent row does; only a budget with no room for the title, one agent and its rule drops to the ribbon', () => {
     const agents = [0, 1, 2].map((i) => agent({ name: `agent${i}` }));
     const six = fitStack({ todos: [], agents }, { cols: 100, ui }, 6).map((r) => runsString(r));
-    expect(six.some((l) => /AGENT\s+STATE/.test(l))).toBe(true);
+    expect(six.some((l) => /AGENT\s+ROLE\s+STATE/.test(l))).toBe(true);
     const five = fitStack({ todos: [], agents }, { cols: 100, ui }, 5).map((r) => runsString(r));
-    expect(five.some((l) => /AGENT\s+STATE/.test(l))).toBe(false);
+    expect(five.some((l) => /AGENT\s+ROLE\s+STATE/.test(l))).toBe(false);
     expect(five.filter((l) => /agent\d/.test(l)).length).toBe(3);
     const three = fitStack({ todos: [], agents }, { cols: 100, ui }, 3).map((r) => runsString(r));
     expect(three.filter((l) => /agent\d/.test(l)).length).toBe(1);

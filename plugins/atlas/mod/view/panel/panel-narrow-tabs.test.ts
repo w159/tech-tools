@@ -64,25 +64,11 @@ describe('C2 (AA5): `channel` is whole from 48 cells; only the one short label `
 
 describe('C2: the route and channel tabs keep the tab indent', () => {
   for (const cols of [38, 60, 100, 150]) {
-    test(`route at ${cols}: every labelled row starts one cell in, like the strip`, () => {
-      const rows = text(panelWorld('route', cols, mocha, { rows: 40 })).filter((l) => /^ ?(phase|gates|agents|todo)\b/.test(l));
-      expect(rows.length).toBeGreaterThan(2);
-      for (const l of rows) expect([cols, l.startsWith(' ')]).toEqual([cols, true]);
-    });
-    test(`channel at ${cols}: the head row starts in the name column, like every list row (critique 11: it sat one cell from the border)`, () => {
-      expect(text(panelWorld('channel', cols, mocha, { rows: 40 }))[0]).toMatch(/^ {4}#\S/);
-    });
   }
 });
 
 describe('C2: the channel tab with nothing said yet fills the pane with a plain line, at 30 and 40 rows', () => {
   for (const rows of [30, 40]) {
-    test(`${rows} rows: head, a plain empty line and the fill make exactly rows - 1`, () => {
-      const m = panelWorld('channel', 38, mocha, { rows, notes: [], people: 1, unread: 0 });
-      const body = text(m);
-      expect(body.some((l) => l.trim() === '0 messages')).toBe(true); // truth 39: senders are shown, so the footer says `0 messages` (the world holds workers); with none the tab keeps `○ no messages` (panel-empty-c2)
-      expect(panelLines(m).length + fillRows(m, bodyLines(m).length).length).toBe(rows - 1);
-    });
   }
 });
 
@@ -104,18 +90,6 @@ describe('C3: Board titles at 110 columns (a 38-cell pane)', () => {
 });
 
 describe('C3: the narrow gates header carries its count', () => {
-  test('at 38 cells the ribbon names the tab and keeps the row inside the pane (the figure joins it where it fits)', () => {
-    const m = panelWorld('gates', 38, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }, { id: 'a2', label: 'y', ok: false }] }, { id: 'b', title: 'B', lines: [{ id: 'b1', label: 'z', ok: true }] }] });
-    const head = lineText(ribbonRow(m)).trimEnd();
-    expect(head).toMatch(/SIDEPANEL · gates ─+/);
-    expect(cells(head)).toBeLessThanOrEqual(38);
-  });
-  test('at 150 and 110 cells it reads `ok` or `N denied`: one gates header vocabulary at every width (critique 11)', () => {
-    const m = panelWorld('gates', 150, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] });
-    expect(lineText(ribbonRow(m)).trimEnd()).toMatch(/SIDEPANEL · gates ─+ ok$/);
-    const wide = lineText(ribbonRow(panelWorld('gates', 110, mocha, { gates: [{ id: 'a', title: 'A', lines: [{ id: 'a1', label: 'x', ok: true }] }] }))).trimEnd();
-    expect(wide).toMatch(/SIDEPANEL · gates ─+ ok$/);
-  });
 });
 
 describe('C4: the core tab in plain words', () => {

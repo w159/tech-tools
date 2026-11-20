@@ -145,7 +145,7 @@ describe('step 2: the Gantt (critique 37: a 0:31 run on a 1:00 axis at 110, bars
   });
 });
 
-describe('step 3: the board footer and its height (critique 37: `● 2 ■ 1 · 0:31` at 110, 30% blank under the footer)', () => {
+describe('step 3: the board footer and its height (critique 37: `● 2 ✗ 1 · 0:31` at 110, 30% blank under the footer)', () => {
   test('at 110 the footer keeps its words: `2 done`, `1 failed` and the time', () => {
     forgetPhases();
     const foot = render(stop(), 'board', 38, 41, { kind: 'done', secs: 31, startMs: NOW - 31000 }).filter((l) => l.trim()).at(-1)!;
@@ -156,7 +156,7 @@ describe('step 3: the board footer and its height (critique 37: `● 2 ■ 1 · 
   test('at 150 the footer is the long form with the total and the worker calls', () => {
     forgetPhases();
     const foot = render(stop(), 'board', 57, 41, { kind: 'done', secs: 31, startMs: NOW - 31000 }).filter((l) => l.trim()).at(-1)!;
-    expect(foot).toMatch(/2 done {2}■ 1 failed · total 0:31 · 9 worker calls/);
+    expect(foot).toMatch(/2 done {2}✗ 1 failed · total 0:31 · 9 worker calls/);
   });
   test('the content uses the height: the recent events fill the pane from the first dispatch and no run of blank rows exceeds 2', () => {
     forgetPhases();
@@ -170,20 +170,22 @@ describe('step 3: the board footer and its height (critique 37: `● 2 ■ 1 · 
   });
 });
 
-describe('step 4: events while agents run (critique 37: `no events yet · 0 messages` with three agents running)', () => {
-  const events = (s: never, run: Run): string[] => { return render(s, 'route', 57, 41, run).filter((l) => /^\s+\+\d:\d\d\s/.test(l)).map((l) => l.trim()); };
-  test('every worker is a `started` event from its first frame, and the empty line is gone', () => {
+describe('step 4: agents while a run is live (critique 37: `no events yet · 0 messages` with three agents running)', () => {
+  // redesign: the status tab has no event list; every worker is a TEAM row from its first frame, with its own clock, and the channel feed names each dispatch
+  const team = (s: never, run: Run): string[] => { const t = render(s, 'route', 57, 41, run); return t.slice(t.findIndex((l) => /^\s+TEAM\b/.test(l)) + 1).filter((l) => /-explorer/.test(l)).map((l) => l.trim()); };
+  test('every worker is a TEAM row from its first frame, and the empty line is gone', () => {
     forgetPhases();
     const t = render(live(), 'route', 57, 41, { kind: 'working', secs: 20, startMs: NOW - 20000 });
     expect(t.join('\n')).not.toMatch(/no events yet/);
-    for (const n of ['alpha-explorer', 'beta-explorer', 'gamma-explorer']) expect(t.some((l) => new RegExp(`^\\s+\\+\\d:\\d\\d\\s+${n}\\s+started`).test(l))).toBe(true);
-    expect(t.find((l) => /messages?\s*$/.test(l))).toMatch(/^\s+0 messages\s*$/); // the channel's own count stays the channel's
+    for (const n of ['alpha-explorer', 'beta-explorer', 'gamma-explorer']) expect(t.some((l) => new RegExp(`^[▸ ] ◐ ${n}\\s+explorer\\s+read \\w+\\.py\\s+\\d:\\d\\d`).test(l))).toBe(true);
+    const chan = render(live(), 'channel', 57, 41, { kind: 'working', secs: 20, startMs: NOW - 20000 }).join('\n');
+    for (const n of ['alpha-explorer', 'beta-explorer', 'gamma-explorer']) expect(chan).toContain(`lead dispatched ${n}`); // the channel's own feed: one dispatch line per worker
   });
-  test('a started event is stamped at its worker\'s start instant and keeps the stamp as the run clock moves', () => {
+  test('a worker\'s clock is its own start instant and keeps its value as the run clock moves', () => {
     forgetPhases();
-    const first = events(live(), { kind: 'working', secs: 20, startMs: NOW - 20000 });
-    expect(first).toEqual(['+0:08  alpha-explorer  started', '+0:12  beta-explorer   started', '+0:16  gamma-explorer  started']);
-    for (const drift of [1000, 2000, 3000]) expect(events(live(), { kind: 'working', secs: 20, startMs: NOW - 20000 + drift })).toEqual(first);
+    const first = team(live(), { kind: 'working', secs: 20, startMs: NOW - 20000 });
+    expect(first.map((l) => /(\d:\d\d)$/.exec(l)?.[1])).toEqual(['0:12', '0:08', '0:04']);
+    for (const drift of [1000, 2000, 3000]) expect(team(live(), { kind: 'working', secs: 20, startMs: NOW - 20000 + drift })).toEqual(first);
   });
 });
 
@@ -194,20 +196,20 @@ describe('step 5: the side panel lists agents in the SUBAGENTS dispatch order (c
     todo('4', 'T4 combine the reports', 'completed', null, 21, 22), todo('5', 'T5 write the final summary', 'completed', null, 22, 23),
   ] });
   const namesOf = (lines: string[]): string[] => lines.map((l) => /(alpha|ghost|beta)-explorer/.exec(l)?.[0]).filter((x): x is string => !!x);
-  test('the status and team tabs list the agents in the order the SUBAGENTS table does', () => {
+  test('the TEAM section lists the agents in the order the SUBAGENTS table does', () => {
     resetAgentSeq();
     forgetPhases();
     const s = reversedPlan();
     const subagents = agentModel(hudAgents(liveWorkers(s as never, (s as any).now), (s as any).squad, queuedMembers(s as never)), (s as any).todos, null, (s as any).now).sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0)).map((a) => a.id ?? a.name);
     expect(subagents).toEqual(['alpha-explorer', 'ghost-explorer', 'beta-explorer']);
     const run: Run = { kind: 'done', secs: 31, startMs: NOW - 31000 };
-    const agentsBlock = (view: SidebarView): string[] => {
+    const agentsBlock = (view: SidebarView): string[] => { // redesign: the team view is the TEAM section of the status tab (the plan rows above it list the owners in plan order)
       const t = render(s, view, 57, 41, run);
-      const at = t.findIndex((l) => /^\s+AGENTS\b/.test(l) || /^\s+(alpha|ghost|beta)-explorer/.test(l));
-      return namesOf(t.slice(at, at + 4)).slice(0, 3);
+      const at = t.findIndex((l) => /^\s+TEAM\b/.test(l));
+      return namesOf(t.slice(at, at + 5)).slice(0, 3);
     };
     expect(agentsBlock('route')).toEqual(subagents);
-    expect(namesOf(render(s, 'team', 57, 41, run)).slice(0, 3)).toEqual(subagents);
+    expect(agentsBlock('team')).toEqual(subagents);
   });
   test('the order survives a host that lists the squad in another order', () => {
     resetAgentSeq();
@@ -221,15 +223,15 @@ describe('step 5: the side panel lists agents in the SUBAGENTS dispatch order (c
 });
 
 describe('step 6: the channel tab at 0 messages (critique 37: `○ no messages` in an empty pane)', () => {
-  test('the tab stays, and the senders block names each worker with the time and text of its last status', () => {
+  test('the tab stays and its feed names each dispatch, with a head count of who is online', () => {
     forgetPhases();
     const t = render(live(), 'channel', 57, 41, { kind: 'working', secs: 20, startMs: NOW - 20000 });
-    expect(t.join('\n')).toMatch(/ 0 messages/); expect(t.join('\n')).not.toMatch(/○ no messages/); // truth 39
-    expect(t.some((l) => /^\s+senders\s*$/.test(l))).toBe(true);
-    const row = (n: string): string => t.find((l) => new RegExp(`^\\s+${n}\\s+\\+\\d:\\d\\d\\s`).test(l)) ?? '';
-    expect(row('alpha-explorer')).toMatch(/\+0:\d\d\s+read alpha\.py/);
-    expect(row('beta-explorer')).toMatch(/read beta\.py/);
-    expect(row('gamma-explorer')).toMatch(/read gamma\.py/);
+    expect(t.join('\n')).toMatch(/● 3 online/); expect(t.join('\n')).not.toMatch(/○ no messages/); // truth 39
+    expect(t.some((l) => /^\s*─+ today ─+\s*$/.test(l))).toBe(true);
+    const row = (n: string): string => t.find((l) => new RegExp(`⇢ lead dispatched ${n}\\s+·\\s+\\d\\d:\\d\\d`).test(l)) ?? '';
+    expect(row('alpha-explorer')).not.toBe('');
+    expect(row('beta-explorer')).not.toBe('');
+    expect(row('gamma-explorer')).not.toBe('');
     expect(t.filter((l) => l.trim()).length).toBeGreaterThanOrEqual(8); // the pane's key-hint row is gone (wave 43), and the rule under the strip (idle polish 3)
   });
 });

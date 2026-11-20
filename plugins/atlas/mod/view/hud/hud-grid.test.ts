@@ -27,28 +27,29 @@ function slot(input: HudInput, cols: number, budget: number) {
 
 describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
   // Rev 5: the column names stay while the grid shows. Of the blank between the blocks and the names (one row each) the blank goes first; then the plan is capped, never the names.
-  for (const [cols, budget] of [[150, 16], [150, 15], [61, 15], [61, 14]] as const) { // round 3: both boxes close, three rows more than before
+  for (const [cols, budget] of [[150, 18], [150, 17], [61, 17], [61, 16]] as const) { // both boxes close and carry their column names: two rows more than round 3
     test(`${cols} columns, ${budget} rows, an agent running: the column names stay, every agent keeps its row and the band keeps a row`, () => {
       const { hud, band } = slot(stop, cols, budget);
       const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
       expect(at).toBeGreaterThan(0);
-      expect(hud[at + 1]!).toMatch(/AGENT\s+STATE/); // the names show whenever the grid does
+      expect(hud[at + 1]!).toMatch(/AGENT\s+ROLE\s+STATE/); // the names show whenever the grid does
       expect(hud.slice(at + 2).filter((r) => /-explorer/.test(r))).toHaveLength(3); // every agent keeps its row
       const plan = hud.slice(0, at).filter((r) => /T\d /.test(r)).length;
-      expect(plan).toBeGreaterThanOrEqual(budget >= 16 ? 5 : 4); // every plan row while the rows fit, one folded onto the title below that
-      if (hud.length >= 14) expect(hud[at - 1]!.trim()).toBe(''); // the gap row between the blocks, when a row is left over
+      expect(plan).toBeGreaterThanOrEqual(budget >= 17 ? 5 : 4); // every plan row while the rows fit, one folded onto a summary row below that
+      expect(hud[at - 1]!.startsWith('╰')).toBe(true); // no blank row between the boxes: the TODO box's closing rule sits right above the SUBAGENTS box
       expect(band).toBeGreaterThanOrEqual(1);
     });
   }
-  test('MODEL and TASK keep two blank cells between them, also when the LAST text is long (`haiku T1` ran together)', () => {
+  test('MODEL is no column: no row carries the model word, so it can never run into the next cell (`haiku T1` ran together)', () => {
     const long: HudInput = { ...stop, todos: ownTodos([...plan(['completed', 'blocked', 'pending']).map((t) => ({ ...t, evidence: null as never }))]), agents: stop.agents };
     const rows = hudLines(long, { merge: false, cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString);
-    for (const r of rows.filter((x) => /haiku/.test(x))) expect(r).toMatch(/haiku {2,}T\d/);
+    expect(rows.filter((x) => /haiku/.test(x))).toEqual([]);
   });
   test('MODEL is never blank: an agent the squad gave no model reads `-`', () => {
     const rows = agentModel(stop.agents, stop.todos);
     expect(rows.find((r) => r.name === 'ghost-explorer')!.model).toBe('-');
     const drawn = hudLines(stop, { merge: false, cols: 150, maxRows: 30, ui, rich: false, now: NOW }).map(runsString); // 150: at 61 cells MODEL gives its cells to LAST (critique 23)
-    expect(drawn.find((r) => /^[▸ ] [◐◓◑◒◇●■▲◉] ghost-explorer/.test(r))).toMatch(/ghost-explorer\s+(failed|killed)\s+T2/); // wave 31: no MODEL column to draw the dash in
+    expect(drawn.find((r) => /^[│▌] [◐◓◑◒○✓✗▲◉] ghost-explorer/.test(r))).toMatch(/ghost-explorer\s+\S+\s+(failed|killed)/); // no MODEL column to draw the dash in
+    expect(drawn.find((r) => /T2 read ghost\.py/.test(r))).toMatch(/ghost-explorer/); // the plan row names its owner in OWNER
   });
 });

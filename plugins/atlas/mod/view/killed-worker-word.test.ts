@@ -65,11 +65,12 @@ describe('one spinner family: the band count, the SUBAGENTS title and the panel 
       expect(band).toContain(`${mark} 1 running`);
       const agents = hudAgents(live, snap.squad);
       const title = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).find((l) => l.includes('SUBAGENTS'))!;
-      expect(title).toContain(`${mark} 1 running`);
+      expect(title).toContain('● 1 running'); // the title count is the static running dot; the rows below turn the one spinner frame
       const team = bodyLines(panelModelOf({ ...worldSidebar('team', 100, snap), tick }, ui, 100)).map(lineText);
       expect(team.some((l) => l.includes(`${mark} implementer-band`))).toBe(true);
       // The HUD TODO and SUBAGENTS rows and the band worker rows are glyph-parsed by the capture scorer: circles only, and the same frame as the title.
       const hudRows = hudLines({ todos: [], agents }, { cols: 120, maxRows: 40, ui, tick, now: snap.now }).map((r) => runsString(r)).filter((l) => !l.includes('SUBAGENTS'));
+      expect(hudRows.some((l) => l.includes(`${mark} implementer-band`))).toBe(true); // the running agent row turns the band's frame
       expect(hudRows.join('\n')).not.toMatch(/[⠀-⣿]/);
       expect(SPIN_FRAMES.length).toBe(4);
     });
@@ -89,7 +90,7 @@ describe('a killed worker reads `closed` in error red on the HUD, the board and 
     ] as never;
     const agents = [{ name: 'alpha-explorer', role: 'explorer', state: 'done' as const }, { name: 'ghost-explorer', role: 'explorer', state: 'failed' as const }];
     const hud = hudLines({ todos: plan, agents }, { cols: 150, maxRows: 60, ui, now: 0 }).map((r) => runsString(r)).find((l) => l.includes('T2 read ghost.py'))!;
-    expect(hud).toContain('failed'); // wave 33: the HUD row reads `■ failed`; the board keeps `closed`
+    expect(hud).toContain('failed'); // wave 33: the HUD row reads `✗ failed`; the board keeps `closed`
     const rows = boardRowsOf([{ content: 'T2 read ghost.py (ghost-explorer)', status: 'completed', owner: 'ghost-explorer', ownerState: 'failed' }]);
     const board = boardText(boardLines(rows, { cols: 120, ui, ribbon: false, title: false })).join('\n');
     expect(board).toMatch(/failed\s+ghost-explorer/);

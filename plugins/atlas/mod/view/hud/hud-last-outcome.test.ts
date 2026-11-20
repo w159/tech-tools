@@ -40,30 +40,30 @@ describe('B1: LAST is the outcome, never the raw tool echo', () => {
     expect(lastOf({ ...none, lastTool: 'Read', target: 'ghost.py' }, 'failed', [])).toBe('failed');
     expect(lastOf({ ...none, tool: 'Read', target: 'ghost.py' }, 'running', [])).toBe('read ghost.py');
   });
-  test('the HUD rows show the outcome in the LAST column (f0088.ans:33-35)', () => {
+  test('the HUD rows show the outcome in NOW / RESULT and the count in FN (f0088.ans:33-35)', () => {
     const plan = ['T1 read alpha.py (alpha-explorer)', 'T2 read ghost.py (ghost-explorer)', 'T3 read beta.py (beta-explorer)'].map((c, i): TodoItem => ({ id: `p${i}`, content: c, status: 'completed', owner: ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i], origin: 'session', session_id: '' }) as unknown as TodoItem);
     const dispatch = (owner: string, evidence: string): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status: 'completed', owner, origin: 'dispatch', session_id: '', evidence }) as unknown as TodoItem;
     const agent = (name: string, state: string, extra: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state, ui: state as never, model: 'haiku', since: NOW - 1000, ...extra });
     const agents = [agent('alpha-explorer', 'done', { lastTool: 'Read' }), agent('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), agent('beta-explorer', 'done', { lastTool: 'Read' })];
     const rows = hudLines({ todos: [...plan, dispatch('alpha-explorer', ALPHA), dispatch('beta-explorer', BETA)], agents }, { merge: false, cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
-    const of = (n: string): string => rows.find((r) => new RegExp(`^[▸ ] \\S ${n} `).test(r))!;
-    expect(of('alpha-explorer')).toContain('2 fn'); // wave 31: RESULT is a count
+    const of = (n: string): string => rows.find((r) => new RegExp(`^[│▌] \\S ${n} `).test(r))!;
+    expect(of('alpha-explorer')).toMatch(/\s2\s+│$/); // the FN column holds the count
     expect(of('ghost-explorer')).toContain('failed');
-    expect(of('beta-explorer')).toContain('1 fn');
+    expect(of('beta-explorer')).toMatch(/\s1\s+│$/);
     for (const r of rows) expect(r).not.toMatch(/first 3 lines|-> line 1/);
   });
 });
 
-describe('B2: at narrow widths the SUBAGENTS rows keep TASK and LAST whole (MODEL gives its cells up first, critique 23)', () => {
+describe('B2: at narrow widths the SUBAGENTS rows keep the name and NOW / RESULT whole (ROLE and ACT give their cells up first, critique 23)', () => {
   const agent = (name: string, over: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', task: `${name}: read ${name.split('-')[0]}.py`, tool: 'Read', target: `${name.split('-')[0]}.py`, ...over });
   const plan: TodoItem[] = ['alpha', 'beta', 'gamma'].map((n, i) => ({ id: `t${i}`, content: `T${i + 1} read ${n}.py (${n}-explorer)`, status: 'pending', owner: `${n}-explorer` }) as unknown as TodoItem);
   const input: HudInput = { todos: plan, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((n) => agent(n)) };
-  test('the column names include LAST and every row shows what the agent is doing (61 cells: the transcript beside the docked pane)', () => {
+  test('the column names include NOW and every row shows what the agent is doing (61 cells: the transcript beside the docked pane)', () => {
     const rows = hudLines(input, { merge: false, cols: 61, maxRows: 30, ui, now: NOW }).map(runsString);
-    const head = rows.find((r) => /AGENT\s+STATE/.test(r))!;
-    expect(head).toContain('LAST');
+    const head = rows.find((r) => /AGENT\s+(ROLE\s+)?STATE/.test(r))!;
+    expect(head).toContain('NOW');
     expect(head).not.toContain('MODEL');
-    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((r) => r.includes(`${n}-explorer`) && r.includes('running') && /\bT\d\b/.test(r))).toContain(`read ${n}.py`);
+    for (const n of ['alpha', 'beta', 'gamma']) expect(rows.find((r) => new RegExp(`^[│▌] \\S ${n}-explorer`).test(r) && r.includes('running'))).toMatch(new RegExp(`read ${n.slice(0, 4)}`)); // whole while it fits, else cut with a mark
     for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(61);
   });
   test('a new row reveals its name only: MODEL and TASK are whole on every frame (f0039.ans:30 `gamma-explor` with both blank)', () => {
@@ -75,7 +75,7 @@ describe('B2: at narrow widths the SUBAGENTS rows keep TASK and LAST whole (MODE
       const rows = hudLines(input, { merge: false, cols: 61, maxRows: 30, ui, now: 1005, motion: mo.ctx(1000 + dt) }).map(runsString);
       const agentRows = rows.slice(rows.findIndex((r) => r.includes('SUBAGENTS')) + 2); // under the column names
       const gamma = agentRows[2]!; // the newest row, third in start order
-      expect([dt, gamma.includes('gamma-explorer'), gamma.includes('T3')]).toEqual([dt, true, true]);
+      expect([dt, gamma.includes('gamma-explorer'), gamma.includes('running')]).toEqual([dt, true, true]);
     }
   });
 });
@@ -86,7 +86,7 @@ describe('B3: the SUBAGENTS block stays after a clean finish', () => {
     const todos: TodoItem[] = [{ id: 'a', content: 'T1 read alpha.py (alpha-explorer)', status: 'completed', owner: 'alpha-explorer' } as unknown as TodoItem];
     const rows = hudLines({ todos, agents: ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(done) }, { merge: false, cols: 150, maxRows: 30, ui, now: NOW }).map(runsString);
     expect(rows.some((r) => r.includes('SUBAGENTS'))).toBe(true);
-    expect(rows.filter((r) => /^[▸ ] [●◐◓◑◒] \w+-explorer\s+done/.test(r))).toHaveLength(3);
+    expect(rows.filter((r) => /^[│▌] [✓◐◓◑◒] \w+-explorer\s+\S+\s+done/.test(r))).toHaveLength(3);
   });
 });
 
@@ -108,25 +108,25 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
     expect(hud.some((r) => /not shown|\+\d+ more/.test(r))).toBe(false);
     const at = hud.findIndex((r) => r.includes('SUBAGENTS'));
     expect(hud[at - 1]!.startsWith('╰')).toBe(true); // wave 31: no blank slab row; the TODO box's closing rule sits right above the SUBAGENTS box
-    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r) && /\bT\d\b/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => /^[│▌] \S \w+-explorer\s+\S+\s+running/.test(r))).toHaveLength(3);
   });
   test('3 done, 2 open at 10 rows, where the five do not fit: the done rows fold into the ribbon count, never dropped silently', () => {
     const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
-    expect(hud.filter((r) => /\bT[45] step/.test(r))).toHaveLength(1); // state 38: the three finished rows and the other queued one ride ONE summary row (`● 3 done  ◇ 1 queued`)
-    expect(hud.some((r) => /^ {2}● 3 done {2}◇ 1 queued/.test(r)), hud.join('\n')).toBe(true);
-    expect(hud.filter((r) => /-explorer\s+(running|working)/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => /\bT[45] step/.test(r))).toHaveLength(1); // state 38: the three finished rows and the other queued one ride ONE summary row (`✓ 3 done  ○ 1 queued`)
+    expect(hud.some((r) => /^│ {2}✓ 3 done {2}○ 1 queued/.test(r)), hud.join('\n')).toBe(true);
+    expect(hud.filter((r) => /^[│▌] \S \w+-explorer\s+\S+\s+running/.test(r))).toHaveLength(3);
   });
   test('all open (the live frame, critique 28): the band still keeps a row, every agent row shows, both boxes close and the plan rows left out are counted on ONE summary row inside the TODO box (state 39), never on the title', () => {
     const { hud, band } = slot(plan(['in_progress', 'in_progress', 'in_progress', 'pending', 'pending']), 61, 10);
     expect(band).toBeGreaterThanOrEqual(1);
     const shown = hud.filter((r) => /\bT[1-5] step/.test(r)).length;
     expect(shown).toBeGreaterThanOrEqual(1);
-    const summary = hud.find((r) => /^ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
+    const summary = hud.find((r) => /^│ {2}\S (\d+) (?:more )?(?:queued|running|done)/.test(r))!;
     expect(summary, hud.join('\n')).toBeDefined();
     expect(hud[0]!).not.toMatch(/\+\d+ more/);
     expect(shown + [...summary.matchAll(/(\d+) (?:more )?(?:queued|running|done)/g)].reduce((n, m) => n + Number(m[1]), 0)).toBe(5); // the hidden running rows are counted too (`◐ 2 more running`)
-    expect(hud.filter((r) => /-explorer\s+running/.test(r))).toHaveLength(3);
+    expect(hud.filter((r) => /^[│▌] \S \w+-explorer\s+\S+\s+running/.test(r))).toHaveLength(3);
     expect(hud.filter((r) => r.startsWith('╰') && r.endsWith('╯'))).toHaveLength(2);
     expect(hud.length).toBeLessThanOrEqual(9);
   });
@@ -142,24 +142,42 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
     { id: '2', label: 'T2 read ghost.py (ghost-explorer)', state: 'blocked' as const, owner: 'ghost-explorer' },
     { id: '3', label: 'T4 combine the reports', state: 'queued' as const },
   ];
-  test('37 cells (the 110-column pane): one row per task, title then state, no owner on its own line', () => {
-    const rows = bodyLines(panelWorld('route', 37, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
-    const t1 = rows.findIndex((r) => r.includes('T1 read'));
-    expect(rows[t1]).toMatch(/T1 read.*\(alpha-explorer\)\s+done$/); // the task is cut, the agent's name never (critique 26)
-    const t2 = rows.findIndex((r) => r.includes('T2 read'));
-    expect(rows[t2]).toMatch(/T2 read.*\(ghost-explorer\)\s+blocked$/);
-    expect(rows.some((r) => /^\s+\(alpha-explorer\)/.test(r))).toBe(false);
-    for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(37);
-  });
   test('wide panes keep the owner in the title as before', () => {
     const rows = bodyLines(panelWorld('route', 120, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
     expect(rows.some((r) => r.includes('T1 read alpha.py (alpha-explorer)'))).toBe(true);
   });
-  test('the strip is the same on every tab at every width; the names alone, never the keys (design rev 5 C1)', () => {
-    for (const cols of [37, 44, 47, 52, 60, 80, 120]) {
-      const forms = (['route', 'team', 'channel', 'gates', 'core', 'board'] as const).map((t) => { const f = stripLayout(cols, t); return JSON.stringify({ ...f, rows: f.rows.map((r) => r.length), folded: f.folded.length }); }); // Z5: only which tab holds the last place follows the lit one
-      expect([cols, new Set(forms).size]).toEqual([cols, 1]);
-      expect([cols, tabRows(panelWorld('route', cols, ui)).map(lineText).join('\n')]).toEqual([cols, expect.stringMatching(cols >= 48 ? /^ status {1,3}team {1,3}channel {1,3}gates {1,3}core {1,3}board ?$/m : cols >= 45 ? /^ status {1,3}team {1,3}chan {1,3}gates {1,3}core {1,3}board ?$/m : /^ status {1,3}team {1,3}chan( {1,3}gates)? {1,3}more › ?$/m)]);
+});
+
+describe('the redesigned HUD: the outcome and the doing are columns of the SUBAGENTS box', () => {
+  const dump = (n: string, fns: string): string => `1. Read \`/x/${n}.py\` -> first 3 lines: ${fns}`;
+  const plan = ['T1 read alpha.py (alpha-explorer)', 'T2 read ghost.py (ghost-explorer)', 'T3 read beta.py (beta-explorer)'].map((c, i): TodoItem => ({ id: `p${i}`, content: c, status: 'completed', owner: ['alpha-explorer', 'ghost-explorer', 'beta-explorer'][i], session_id: '' }) as unknown as TodoItem);
+  const dispatch = (owner: string, evidence: string): TodoItem => ({ id: `d-${owner}`, content: `Read ${owner}`, status: 'completed', owner, origin: 'dispatch', session_id: '', evidence }) as unknown as TodoItem;
+  const agent = (name: string, state: string, extra: Partial<HudAgent> = {}): HudAgent => ({ name, role: 'explorer', state, ui: state as never, model: 'haiku', since: NOW - 1000, ...extra });
+  const agents = [agent('alpha-explorer', 'done', { lastTool: 'Read' }), agent('ghost-explorer', 'failed', { lastTool: 'Read', target: 'ghost.py' }), agent('beta-explorer', 'done', { lastTool: 'Read' }), agent('run-explorer', 'working', { ui: 'running', tool: 'Read', target: 'run.py' })];
+  const todos = [...plan, dispatch('alpha-explorer', dump('alpha', '`1 def alpha_one():` / `2 return 1`; last 3 lines: `5 def alpha_two():`')), dispatch('beta-explorer', dump('beta', '`1 def beta_sum(a, b):`; last 3 lines: `5 class BetaBox:`'))];
+  const rows = (cols: number): string[] => hudLines({ todos, agents }, { merge: false, cols, maxRows: 30, ui, now: NOW }).map(runsString);
+  const of = (r: string[], n: string): string => r.find((l) => new RegExp(`^[│▌] \\S ${n} `).test(l))!;
+  test('a finished row shows its outcome as a count, a failed one its failure word, never the raw tool dump', () => {
+    const r = rows(150);
+    expect(of(r, 'alpha-explorer')).toMatch(/done +.* 2 /);
+    expect(of(r, 'ghost-explorer')).toContain('failed');
+    expect(of(r, 'beta-explorer')).toMatch(/done +.* 1 /);
+    for (const l of r) expect(l).not.toMatch(/first 3 lines|-> line 1/);
+  });
+  test('the column names carry what the agent is doing, and a running row says it, at 150 and at 61 cells', () => {
+    for (const [cols, name] of [[150, 'NOW / RESULT'], [61, 'NOW']] as const) {
+      const r = rows(cols);
+      expect(r.find((l) => /AGENT\s+ROLE\s+STATE/.test(l))).toContain(name);
+      expect(of(r, 'run-explorer')).toContain('read run.py');
+      for (const l of r) expect(cells(l)).toBeLessThanOrEqual(cols);
     }
+  });
+  test('37 cells (the 110-column pane): one row per task, title cut with `…`, state beside it, no wrapped owner line', () => {
+    const r = hudLines({ todos: plan.map((t) => ({ ...t, content: `${(t as { content: string }).content}  and a long tail that cannot fit` }) as TodoItem), agents: [] }, { merge: false, cols: 37, maxRows: 30, ui, now: NOW }).map(runsString);
+    const t1 = r.find((l) => l.includes('T1 read'))!;
+    expect(t1).toContain('…');
+    expect(t1).toMatch(/done/);
+    expect(r.filter((l) => /^│ +[✓✗◐○▲] /.test(l))).toHaveLength(3);
+    for (const l of r) expect(cells(l)).toBeLessThanOrEqual(37);
   });
 });

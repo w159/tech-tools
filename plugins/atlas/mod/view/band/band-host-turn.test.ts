@@ -78,8 +78,8 @@ describe('step 3: every non-zero count keeps its glyph and figure, and the clock
     for (const cols of [110, 80, 62, 46]) {
       const t = runsText(bandLines({ ...m, cols })[0]!.runs).trimEnd();
       expect(t, String(cols)).toContain('0:25');
-      expect(t, String(cols)).toMatch(/●\s?1/);
-      expect(t, String(cols)).not.toMatch(/[◐◓◑◒] 2 ●1/);
+      expect(t, String(cols)).toMatch(/✓\s?1/);
+      expect(t, String(cols)).not.toMatch(/[◐◓◑◒] 2 ✓1/);
     }
   });
 });
@@ -87,28 +87,32 @@ describe('step 3: every non-zero count keeps its glyph and figure, and the clock
 describe('step 4: the panel stepper is the band\'s last frame', () => {
   const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
   const NOW = 2_000_000;
-  const rowOf = (now: number, over: Partial<PanelModel> = {}): string => {
+  /** The PHASE card: its head row (`PHASE`, the run word with its mark at the right), the rail's marks and the names under them (redesign: the rail is a line of nodes, the run word rides the head). */
+  const cardOf = (now: number, over: Partial<PanelModel> = {}): { head: string; marks: string; names: string } => {
     const m = panelWorld('route', 150, ui, { rows: 40, now, run: { kind: 'working', secs: 24 }, phase: 'research', ...over });
     const t = panelLines(m).map(lineText);
-    return t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!.replace(/\s+/g, ' ').trim();
+    const at = t.findIndex((l) => l.trim().startsWith('PHASE'));
+    const rail = t.findIndex((l, i) => i > at && /[●◉○▲]─/.test(l));
+    return { head: t[at]!.replace(/\s+/g, ' ').trim(), marks: (t[rail]!.match(/[●◉○▲◐◓◑◒✓]/g) ?? []).join(' '), names: t[rail + 1]!.replace(/\s+/g, ' ').trim() };
   };
   test('the panel stepper turns the frame its run carries: the same glyph as the band for that frame, on every beat', () => {
     for (const frame of [0, 3, 5, 9]) {
-      expect(rowOf(NOW, { run: { kind: 'working', secs: 25, frame } }), String(frame)).toMatch(new RegExp(`^● plan ${leadSpinnerGlyph(frame)} research ○ build ○ verify$`)); // slice S3: the word and the clock are the band's alone
+      const c = cardOf(NOW, { run: { kind: 'working', secs: 25, frame } });
+      expect(c.head, String(frame)).toBe(`PHASE ${leadSpinnerGlyph(frame)} working`); // the run word is the head's; the clock is the band's alone
+      expect([c.marks, c.names], String(frame)).toEqual(['● ◉ ○ ○', 'plan research build verify']);
     }
   });
   test('a frame noted by the band is not read: the run alone decides', () => {
     noteBandFrame(5, 99, NOW, 'idle');
-    expect(rowOf(NOW)).toMatch(/[◐◓◑◒] research/);
+    expect(cardOf(NOW).head).toMatch(/[◐◓◑◒] working/);
     forgetBandFrame();
   });
   test('a blocked strip puts the mark on the last phase the run entered, not on an earlier header phase', () => {
     noteBandFrame(2, 41, NOW, 'blocked');
-    const m = panelWorld('route', 150, ui, { rows: 40, now: NOW, run: { kind: 'blocked', secs: 41 }, phase: 'research', entered: ['plan', 'research', 'build'] });
-    const t = panelLines(m).map(lineText);
-    const chain = t[t.findIndex((l) => l.trim() === 'PHASE') + 1]!;
-    expect(chain).toMatch(/▲ build/);
-    expect(chain).not.toMatch(/▲ research/);
+    const c = cardOf(NOW, { run: { kind: 'blocked', secs: 41 }, phase: 'research', entered: ['plan', 'research', 'build'] });
+    expect(c.marks).toBe('● ● ▲ ○'); // the triangle sits under build, the last phase entered
+    expect(c.names).toBe('plan research build verify');
+    expect(c.head).toContain('▲ blocked');
     forgetBandFrame();
   });
 });

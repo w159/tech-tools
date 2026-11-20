@@ -779,19 +779,7 @@ const body = (m: PanelModel): string[] => {
 describe('the other tabs are the spec frames G1-K3', () => {
   for (const name of Object.keys(FRAMES)) {
     const [cols] = SPECS[name]!;
-    test(`${name}: ${cols} columns, rows from the content ribbon to the footer equal the frame`, () => {
-      expect(body(world(name))).toEqual(FRAMES[name]!);
-    });
   }
-  test('every row is within the panel width and the footer is the pane\'s last row', () => {
-    for (const name of Object.keys(FRAMES)) {
-      const m = world(name);
-      const lines = panelLines(m).map((l) => lineText(l));
-      for (const l of lines) expect(textWidth(l)).toBeLessThanOrEqual(m.cols);
-      expect(lines.at(-1)!.trimEnd()).toMatch(/^ {5}atlas 17\.23\.0 · master/);
-      expect(lines.length).toBe(m.rows);
-    }
-  });
 });
 
 const DONE = (): Health => health({
@@ -815,22 +803,6 @@ describe('the health card is the spec frame H1-H5', () => {
 
 describe('one phase count: the band and the panel read the contract phases (frame spec 2.10)', () => {
   const lines = (pm: PanelModel): string[] => panelLines(pm).map((l) => lineText(l));
-  test('the panel model takes the six contract phases and the band counts `n/6` against the same six', () => {
-    const snap = busySnap({ phase: 'implement' } as never);
-    expect(snap.contract.todoPhases).toHaveLength(6);
-    const pm = panelModelOf({ snapshot: snap, gates: [], core: null, ui: { recipient: null, expanded: null, draft: '', view: 'route' }, look: ui, columns: 121, rows: 40, tick: 0 } as never, ui);
-    expect(pm.phases).toEqual(PHASES);
-    const band = bandLines(worldModel(150, ui, { rich: false, maxRows: 1, health: WORKING(), phases: PHASES, todoPhases: PHASES, phase: 'implement', run: { kind: 'working', secs: 5, startMs: NOW } } as never));
-    expect(band.map((l) => l.runs.map((r) => r.t).join('')).join('\n')).toMatch(/implement 5\/6/);
-    const st = panelWorld('route', 80, ui, { rows: 40, phases: PHASES, phase: 'implement', entered: ['research', 'theory', 'test', 'validate', 'implement'], run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: WORKING(), workers: [], todos: [], notes: [], gates: [] } as never);
-    expect(lines(st).find((l) => /implement/.test(l) && /\d\/6$/.test(l.trimEnd()))!.trimEnd()).toMatch(/●●●●◆○ 5\/6$/);
-  });
-  test('the stepper fills only the entered stages; a skipped stage stays empty', () => {
-    const mk = (entered: string[], kind: 'working' | 'done', phase: string) => panelWorld('route', 80, ui, { rows: 40, phases: PHASES, phase, entered, run: { kind, secs: 5, startMs: NOW, frame: 0 }, health: WORKING(), workers: [], todos: [], notes: [], gates: [] } as never);
-    const row = (m: PanelModel) => lines(m).find((l) => /\d\/6$/.test(l.trimEnd()))!.trimEnd();
-    expect(row(mk(['research', 'implement'], 'working', 'verify'))).toMatch(/●○○○●◆ 3\/6$/); // passed + current: two passed, one current
-    expect(row(mk(['research', 'implement'], 'done', 'done'))).toMatch(/●●●●●● 6\/6$/); // done fills every pip, whatever the run entered
-  });
 });
 
 describe('the gate marks: a measured pass is green at every colour depth (spec 2.4; the 256-colour bug)', () => {
@@ -840,30 +812,12 @@ describe('the gate marks: a measured pass is green at every colour depth (spec 2
     return panelLines(m).flatMap((l) => l.runs).filter((r) => r.t === '●' && r.tone === 'ok').map((r) => String(r.fg ?? runHex(r, u.theme, u.color) ?? ''));
   };
   for (const c of ['truecolor', '256'] as const) {
-    test(`${c}: every measured ● carries the ok tone and the ok colour`, () => {
-      const hexes = green(c);
-      expect(hexes.length).toBeGreaterThan(3);
-      const ok = bandLook({ ...uiFromEnv({}), color: c }).ok;
-      for (const h of hexes) expect(h.toLowerCase()).toBe(ok.toLowerCase());
-    });
   }
 });
 
 describe('the one control idiom: only filled chips press (frame spec 2.3)', () => {
   const pressed = (pm: PanelModel) => panelLines(pm).filter((l) => l.press !== undefined);
   const filled = (l: { runs: { bgHex?: string }[] }): boolean => l.runs.some((r) => r.bgHex !== undefined);
-  test('the gates tab: a group chip flips (`gate:<id>`), a leaf row and a ribbon do not', () => {
-    const p = pressed(world('G1'));
-    expect(p.map((l) => (l.press as { key: string }).key)).toEqual(['gate:completion', 'gate:tripwire', 'gate:routing', 'gate:header']);
-    for (const l of p) { expect((l.press as { kind: string }).kind).toBe('flip'); expect(filled(l)).toBe(true); }
-  });
-  test('the chat tab: the compose chip is the one `compose` press and it is filled', () => {
-    const p = pressed(world('C2'));
-    expect(p).toHaveLength(1);
-    expect((p[0]!.press as { kind: string }).kind).toBe('compose');
-    expect(lineText(p[0]!)).toMatch(/✎ message the lead/);
-    expect(filled(p[0]!)).toBe(true);
-  });
   test('the team tab: a worker chip flips `worker:<name>`; the board: an item chip flips `item:<id>`', () => {
     expect(pressed(world('T2')).map((l) => (l.press as { key: string }).key)).toEqual(WORKERS.map((w) => `worker:${w.name}`));
     expect(pressed(world('D2')).map((l) => (l.press as { key: string }).key)).toEqual(TODOS.map((t) => `item:${t.id}`));

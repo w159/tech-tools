@@ -82,7 +82,7 @@ const STAGES: { name: string; st: Stage }[] = [
 const hostBelow = (running: number): number => 4 + (running > 0 ? 2 + running : 0);
 const hostBudget = (screenRows: number, running: number): number => Math.floor(screenRows / 2) - hostBelow(running);
 
-const isBandRow = (r: string): boolean => /^◖ ◆ ATLAS ◗(?! ▸)/.test(r.trimStart()) && !r.includes('▸ TODO') && !r.includes('▸ SUBAGENTS');
+const isBandRow = (r: string): boolean => /^◆ ATLAS/.test(r.trimStart()) && !/^(╭─|──) /.test(r);
 const SPIN = /[◐◓◑◒]/;
 
 describe('1. the slot is the rows drawn: no pad under the HUD, no lead above the band', () => {
@@ -117,12 +117,12 @@ describe('2. the TODO box is closed at every agent count, with no bare rows unde
         const f = frameOf(st, cols - 5, hostBudget(screen, st.running), held);
         held = f.plan.held;
         const text = f.rows.join('\n');
-        const at = f.rows.findIndex((r) => r.includes('▸ TODO'));
+        const at = f.rows.findIndex((r) => r.includes('TODO'));
         expect(at, `${name}: a TODO box`).toBeGreaterThan(-1);
         expect(f.rows[at]!, `${name}: top rule`).toMatch(/^╭.*╮\s*$/);
         const close = f.rows.findIndex((r, i) => i > at && /^╰.*╯\s*$/.test(r)); // wave 31: a merged block closes on the SUBAGENTS rule
         expect(close, `${name}: bottom rule`).toBeGreaterThan(at);
-        expect(text, name).not.toMatch(/^── ◖ ◆ ATLAS ◗ ▸/m); // no flat ribbon without corners
+        expect(text, name).not.toMatch(/^──  ◆ ATLAS  ▸/m); // no flat ribbon without corners
         expect(f.rows.slice(0, f.rows.length - f.plan.pad).at(-1)!.trim(), `${name}: the last drawn row is a rule, not a blank (wave 31: unfilled slot rows are pad under the block)`).not.toBe('');
       }
     });
@@ -133,14 +133,14 @@ describe('3. SUBAGENTS draws every running agent', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
     test(`${cols} columns: 3 running agents are 3 rows in the block, and the title never promises a row that is not drawn`, () => {
       const f = frameOf({ running: 3, returned: 0, planned: true }, cols - 5, hostBudget(screen, 3), 0);
-      const at = f.rows.findIndex((r) => r.includes('▸ SUBAGENTS'));
+      const at = f.rows.findIndex((r) => r.includes('SUBAGENTS'));
       expect(at).toBeGreaterThan(-1);
       const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[◐◓◑◒] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
       const more = Number(f.rows.map((r) => /^ {2}(?:\+|\S )(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row (state 39: the one summary row, `2 more running`)
       if (agentRows.length + more === 0) {
         // Wave 38 (live-110 f0030-f0045): a slot too short for the plan's three running rows AND the table folds SUBAGENTS to its one closed title row; the running plan rows keep theirs.
         expect(f.rows[at]!).toMatch(/3 running/);
-        expect(f.rows.filter((r) => /^[▸ ] \S T\d.* running/.test(r)).length).toBeGreaterThanOrEqual(3);
+        expect(f.rows.filter((r) => /^[│▌] \S T\d.* running/.test(r)).length).toBeGreaterThanOrEqual(3);
       } else expect(agentRows.length + more).toBe(3);
       if (more === 0 && agentRows.length > 0) expect(agentRows).toHaveLength(3);
       expect(f.rows[at]!).not.toMatch(/\+\d+ more/);
@@ -157,8 +157,8 @@ describe('3. SUBAGENTS draws every running agent', () => {
     for (const cols of [56, 100, 145]) {
       // wave 35: nothing runs, so the table sits under the closed plan box
       const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
-      expect(f.rows.some((r) => /^╭.*▸ SUBAGENTS.*╮\s*$/.test(r)), `${cols}`).toBe(true);
-      expect(f.rows.some((r) => /^\s+AGENT\s+STATE\s+TIME\b/.test(r)), `${cols}`).toBe(true); // wave 36: AGENT STATE TIME (CALLS FN LAST as the width allows)
+      expect(f.rows.some((r) => /^╭.*SUBAGENTS.*╮\s*$/.test(r)), `${cols}`).toBe(true);
+      expect(f.rows.some((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE\s+NOW\b/.test(r)), `${cols}`).toBe(true); // wave 36: AGENT STATE TIME (CALLS FN LAST as the width allows)
     }
   });
 });
@@ -218,11 +218,11 @@ describe('6. one glyph and one word for the failed worker', () => {
     const agent = { name: 'ghost-explorer', role: 'explorer', state: 'failed', ui: 'failed', model: 'haiku', tool: null, lastTool: 'Read', startedAt: NOW - 5000, since: NOW - 1000 } as never;
     const rows = hudLines({ todos: ownTodos(todos), agents: [agent] }, { cols: 120, maxRows: 14, ui, rich: false, now: NOW, merge: false }).map(runsString); // wave 32: the SUBAGENTS box this pins is the two-box shape
     const todoRow = rows.find((r) => r.includes('T1 read ghost'))!;
-    const agentRow = rows.find((r) => /ghost-explorer\s+(killed|failed)/.test(r))!;
-    expect(todoRow).toMatch(/^[ ▸] ■ T1/);
+    const agentRow = rows.find((r) => /^[│▌] \S ghost-explorer\s+(?:\S+\s+)?(killed|failed)/.test(r))!;
+    expect(todoRow).toMatch(/^[│▌] ✗ T1/);
     expect(todoRow).toContain('failed');
     expect(todoRow).not.toMatch(/closed|killed/);
-    expect(agentRow).toMatch(/^[ ▸] ■ ghost-explorer\s+failed/);
+    expect(agentRow).toMatch(/^[│▌] ✗ ghost-explorer\s+(?:\S+\s+)?failed/);
     expect(rows.join('\n')).not.toMatch(/killed/); // wave 33: one failure word on every row and the title
   });
 });

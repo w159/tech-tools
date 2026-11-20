@@ -54,7 +54,7 @@ test("omp paints the same rows as the Claude tree for the same model: ribbon and
 		const head = headerRows(pm).length;
 		// the Claude tree adds the message input row after the body and draws `k: ` before each hotkey tab
 		expect(omp[0]).toBe(cc[0]!);
-		const body = omp.slice(head).filter(Boolean);
+		const body = omp.slice(head).filter(Boolean).filter((r) => !/^ [╭│╰]/.test(r)); // the message field is the pane's own bordered Input box
 		expect(body.length).toBeGreaterThan(0);
 		expect(cc).toEqual(expect.arrayContaining(body));
 	}

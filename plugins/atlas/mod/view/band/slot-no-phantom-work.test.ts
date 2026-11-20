@@ -51,7 +51,7 @@ type Shape = { agents: Agent[]; plan: ('completed' | 'in_progress' | 'pending')[
 
 function snapshotOf(sh: Shape): LiveSnapshot {
   const squad: SquadAgent[] = sh.agents.map((a) => ({ name: a.name, persona: 'explorer', state: a.squad, source: 'task', task: `${a.name}: read ${a.name.split('-')[0]}.py` }) as SquadAgent);
-  const act = Object.fromEntries(sh.agents.map((a, i) => [a.name, { tool: a.tool ?? null, since: NOW - 4_000, startedAt: NOW - 4_000 - i * 1000, toolCount: 1, tokens: 100, mood: a.mood, lastLine: '' }]));
+  const act = Object.fromEntries(sh.agents.map((a, i) => [a.name, { tool: a.tool ?? null, since: a.mood === 'working' ? NOW - 4_000 : NOW, startedAt: NOW - 4_000 - i * 1000, toolCount: 1, tokens: 100, mood: a.mood, lastLine: '' }]));
   const plan: TodoItem[] = PLAN.slice(0, sh.plan.length).map((c, i) => ({ id: `t${i + 1}`, content: sh.titles?.[i] ?? c, status: sh.plan[i] ?? 'pending', ...(sh.agents[i] && !sh.noOwner ? { owner: sh.agents[i]!.name } : {}) }) as TodoItem);
   const dispatch: TodoItem[] = (sh.dispatch ?? []).map((d, i) => ({ id: `d${i + 1}`, content: d.content ?? `Read ${d.owner.split('-')[0]}.py first`, status: d.status, owner: d.owner, origin: 'dispatch', session_id: 's' }) as unknown as TodoItem);
   const done = sh.plan.filter((s) => s === 'completed').length;
@@ -102,15 +102,15 @@ describe('1. frozen working: an open dispatch with no live worker is blocked, ne
     test(`${cols} columns: the host turn is over, a dispatch is open and its worker never started: a static \`▲ blocked · stop refused\``, () => {
       const f = frameOf(FROZEN, body, screen);
       expect(f.kind).toBe('blocked');
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ▲ blocked(?: · stop refused)? \d:\d\d/);
+      expect(f.band).toMatch(/^ ◆ ATLAS  ▲ blocked(?: · stop refused)? \d:\d\d/);
       expect(f.band).not.toMatch(SPIN_MARK);
       expect(f.band).not.toMatch(/working|fixing/);
       for (const run of bandRuns(f.model).filter((x) => /blocked|dispatch open/.test(x.t))) expect([run.t, run.tone, run.bgHex]).toEqual([run.t, 'ink', '#ff5f5f']); // wave 35: dark ink on the error 203 state fill
     });
-    test(`${cols} columns: with no dispatch open the same turn end reads \`● done\` in the ok green`, () => {
+    test(`${cols} columns: with no dispatch open the same turn end reads \`✓ done\` in the ok green`, () => {
       const f = frameOf({ ...FROZEN, dispatch: FROZEN.dispatch!.slice(0, 3), members: [] }, body, screen, { workSecs: 57 });
       expect(f.kind).toBe('done');
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ ● done/);
+      expect(f.band).toMatch(/^ ◆ ATLAS  ✓ done/);
       expect(f.band).not.toMatch(SPIN_MARK);
       const done = bandRuns(f.model).find((x) => x.t === 'done')!;
       expect([done.tone, done.bgHex]).toEqual(['ink', '#87d787']); // wave 35: dark ink on the ok 114 state fill
@@ -149,19 +149,19 @@ describe('2. the SUBAGENTS rule counts agents only; no spinner unless one runs',
   for (const [cols, screen, body] of SIZES) {
     test(`${cols} columns: three agents and three queued dispatches read \`3 running\`, never \`queued\``, () => {
       const f = frameOf(HASHED, body, screen);
-      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+[◐◓◑◒] 3 running/);
+      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+─+ ● 3 running/);
       expect(ruleOf(f)).not.toMatch(/queued/);
     });
-    test(`${cols} columns: nothing runs: a static \`■ 1 failed · 2 done\`, no spinner`, () => {
+    test(`${cols} columns: nothing runs: a static \`✗ 1 failed · 2 done\`, no spinner`, () => {
       const f = frameOf(SUFFIXED, body, screen);
-      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+■ 1 failed · 2 done/);
+      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+─+ ✗ 1 failed  ✓ 2 done/);
       expect(ruleOf(f)).not.toMatch(SPIN_MARK);
     });
   }
   test('the failed count is drawn in the error colour', () => {
     const f = frameOf(SUFFIXED, 93, 45);
     const failed = segOf(f, /SUBAGENTS/).find((x) => /failed/.test(x.t))!;
-    const err = segOf(f, /T3 read/).find((x) => x.t.includes('■'))!;
+    const err = segOf(f, /T3 read/).find((x) => x.t.includes('✗'))!;
     expect(failed.color).toBeDefined();
     expect(failed.color).toBe(err.color);
   });
@@ -179,8 +179,8 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
     test(`${cols} columns: a closed plan keeps five rows and the band's denominator`, () => {
       const f = frameOf(SUFFIXED, body, screen);
       expect(todoRowsOf(f)).toHaveLength(5);
-      expect(titleOf(f)).toMatch(/4\/5 · ■1/); // wave 36: one failed row is counted apart from the done rows
-      expect(f.band).toMatch(/(todo )?4\/5 ■1/); // wave 37: the failed row rides the plan segment; the word `todo` goes first at 56 cells // wave 36: the failed row is not a done row
+      expect(titleOf(f)).toMatch(/4\/5 · ✗1/); // wave 36: one failed row is counted apart from the done rows
+      expect(f.band).toMatch(/(todo )?4\/5 ✗1/); // wave 37: the failed row rides the plan segment; the word `todo` goes first at 56 cells // wave 36: the failed row is not a done row
     });
   }
   test('done rows keep their agent and time columns', () => {
@@ -194,14 +194,14 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
     const closed = frameOf({ ...SUFFIXED, dispatch: SUFFIXED.dispatch!.map((d) => ({ ...d, status: 'completed' })), members: [] }, 93, 45);
     expect(closed.hud.join('\n')).not.toMatch(/└|explorer-4e2d/);
   });
-  test('a T row whose worker failed reads `■ failed` in the same colour as the error mark, never a `●`', () => {
+  test('a T row whose worker failed reads `✗ failed` in the same colour as the error mark, never a `●`', () => {
     const f = frameOf(SUFFIXED, 93, 45);
     const row = todoRowsOf(f).find((r) => r.includes('T3'))!;
-    expect(row).toMatch(/■ T3/);
+    expect(row).toMatch(/✗ T3/);
     expect(row).toMatch(/failed/);
     const segs = segOf(f, /T3 read/);
     expect(segs.some((x) => x.t.includes('●'))).toBe(false);
-    expect(segs.find((x) => /failed/.test(x.t))!.color).toBe(segs.find((x) => x.t.includes('■'))!.color);
+    expect(segs.find((x) => /failed/.test(x.t))!.color).toBe(segs.find((x) => x.t.includes('✗'))!.color);
   });
   test('a T row is never `running` once its agent finished; its neighbour still runs', () => {
     const done: Shape = { ...HASHED, agents: [{ name: NAMES[0]!, squad: 'finished', mood: 'done' }, HASHED.agents[1]!, HASHED.agents[2]!] };
@@ -215,21 +215,21 @@ describe('4. geometry: the band keeps its row, the title takes the free cells', 
   test('110 columns: a title that does not fit the fixed grid ends in `…` on the cell (state 39: owner 12, then the title, shrink before a column drops)', () => {
     const titles = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the summary'];
     const f = frameOf({ ...DEFAULT, titles, noOwner: true }, 56, 40);
-    expect(todoRowsOf(f).find((r) => r.includes('T4'))).toContain('T4 combine the three r…');
+    expect(todoRowsOf(f).find((r) => r.includes('T4'))).toContain('T4 combine the…');
     for (const r of f.hud) expect([...r].length).toBeLessThanOrEqual(56);
   });
   test('the band is the first row of the slot in every state, within the width', () => {
     for (const sh of [HASHED, SUFFIXED, FROZEN, DEFAULT]) {
       const f = frameOf(sh, 93, 45);
       expect(f.rows[0]).toBe(f.band);
-      expect(f.band).toMatch(/^◖ ◆ ATLAS ◗ /);
+      expect(f.band).toMatch(/^ ◆ ATLAS  /);
       expect([...f.band].length).toBeLessThanOrEqual(93);
     }
   });
 });
 
 describe('5. the done fade steps 231, 151, 114 once and holds', () => {
-  const runs = [{ t: '● done', tone: 'ok' as const }];
+  const runs = [{ t: '✓ done', tone: 'ok' as const }];
   const at = (changed: number, now: number) => animateRow(runs as never, 'band:lead', 'done', { now, entry: () => ({ state: 'done', changed, born: changed - 5000 }) }, ui) as { fg?: string; t: string }[];
   test('231 first, then 151 held, then the resting row, never back', () => {
     const t0 = 10_000;

@@ -20,7 +20,7 @@ function frames(surface: 'todo' | 'agent', color: Ui['color']): { rest: Run[]; b
   for (let dt = 0; dt < MOTION_MS; dt += MOTION_STEP_MS) beats.push(draw(T0 + sinceChange('done', dt), m.ctx(T0 + sinceChange('done', dt)))); // dt is time into the ease: a done mark holds its first beat
   return { rest: draw(T0 + windowOf({ state: 'done' })), beats };
 }
-const run = (runs: Run[], text: string): Run => runs.find((r) => r.t === text)!;
+const run = (runs: Run[], text: string): Run => runs.find((r) => r.t.trim() === text)!;
 
 describe('C4: the TODO owner column does not flash', () => {
   for (const color of ['truecolor', '256'] as const) {
@@ -32,27 +32,29 @@ describe('C4: the TODO owner column does not flash', () => {
     });
     test(`${color}: the state word, glyph and title still ramp`, () => {
       const { rest, beats } = frames('todo', color);
-      expect(run(beats[0]!, 'done').fg).not.toBe(run(rest, 'done').fg);
+      expect(run(beats[0]!, '✓').bold).toBe(true); // the mark flashes bold on a green-tinted fill
+      expect(rest.filter((r) => r.t.trim() === '✓').some((r) => r.bold === true)).toBe(false);
+      expect(beats[0]!.some((r) => r.bgHex !== undefined)).toBe(true);
+      expect(rest.some((r) => r.bgHex !== undefined)).toBe(false);
     });
   }
 });
 
-// Critique 19 B5 (motion-232567af/todo-strip.ans:4-5): the ramp dropped the weight one frame AFTER the text reached 146. Wave 31: the weight holds while the colour is lifted
-// and falls on the LAST beat of the window (600 ms), where the colour is still 151; the frame after it (800 ms, the rest) changes colour only.
-describe('B5: the weight falls on the last beat of the fade, the colour lands on the frame after it', () => {
+// Critique 19 B5 (motion-232567af/todo-strip.ans:4-5): the ramp dropped the weight one frame AFTER the text reached its rest tone. The finish flash keeps one rule: the mark is bold on the first beat only, and the weight never
+// falls on the beat the colour steps.
+describe('B5: the mark is bold on the first beat only; the beat that drops the weight steps no colour', () => {
   for (const surface of ['todo', 'agent'] as const) {
-    test(`${surface}: bold holds while the colour is lifted; the frame that drops it keeps the held colour`, () => {
+    test(`${surface}: the done mark is bold on beat 0, plain from beat 1; the label's weight never changes`, () => {
       const { rest, beats } = frames(surface, '256');
-      for (const [k, r] of rest.entries()) {
-        if (r.t.trim() === '' || beats[0]![k]!.t !== r.t || beats[0]![k]!.fg === undefined || beats[0]![k]!.bold !== true || (r.bold ?? false)) continue; // a run that fades (lifted bold) and rests plain
-        const dropped = beats.findIndex((b) => !(b[k]!.bold ?? false));
-        expect([surface, r.t, dropped]).toEqual([surface, r.t, beats.length - 1]);
-        expect([surface, r.t, beats.at(-1)![k]!.fg === beats[1]![k]!.fg]).toEqual([surface, r.t, true]); // the colour does not step with the weight
-        expect([surface, r.t, beats.at(-1)![k]!.fg === r.fg]).toEqual([surface, r.t, false]); // and the rest frame still has the colour to land on
-      }
+      const marks = (rs: Run[]): Run[] => rs.filter((r) => r.t.trim() === '✓');
+      expect(beats.map((b) => (surface === 'todo' ? marks(b)[0]! : marks(b).at(-1)!).bold === true)).toEqual([true, false, false, false]); // the mark of the row that changes
+      expect(rest.filter((r) => r.t.trim() === '✓').some((r) => r.bold === true)).toBe(false);
+      for (const b of [...beats, rest]) expect(run(b, 'wire the gate').bold ?? false).toBe(false);
+      expect(marks(beats[1]!).at(-1)!.fg).toBe(marks(beats[0]!).at(-1)!.fg); // the mark keeps its colour while it loses the weight
     });
   }
 });
+
 
 describe('C4: a frame never drops the weight and steps the colour together', () => {
   for (const color of ['truecolor'] as const) {

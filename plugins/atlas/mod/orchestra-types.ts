@@ -13,7 +13,7 @@ export type ActivityEntry = ContractActivityEntry & { startedAt?: number; target
 
 /** A team pane worker's tool, read from its pane log onto its squad row (it raises no in-process events);
  * uses: tool_use blocks in the log so far, calls: their sight times (register.ts turns new uses into calls). */
-export type TeamTool = { tool?: string; lastTool?: string; target?: string; startedAt?: number; uses?: number; calls?: number[] };
+export type TeamTool = { tool?: string; lastTool?: string; target?: string; startedAt?: number; /** Epoch ms the worker's run ended, when its files say (crew exit file). */ endedAt?: number; uses?: number; calls?: number[] };
 
 /** Contract TodoGroup plus the props-slice marker (rows left out to keep Client props small). */
 export type TodoGroup = ContractTodoGroup & { hidden?: { live: number; liveDone: number; archived: number } };

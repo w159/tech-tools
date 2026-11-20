@@ -1,7 +1,7 @@
 // Critique 16 C5, from motion-e4a8186a/todo-strip.ans:1-7 (256 colours): the glyph ran 231, 193, bold 193, bold 151, 151 (bold arrived at 400-600 ms,
 // a brightness pop), the 800 ms frame repeated the final one, and the TODO strip's third column read `implementer-band` then `tests green`.
 import { describe, expect, test } from 'claude-code/testing';
-import { luminance, xtermHex } from '../design/atlas-ui';
+import { fitHex, luminance, xtermHex } from '../design/atlas-ui';
 import { demoFrames } from './motion-demo';
 import { MOTION_MS, MOTION_STEP_MS } from './motion';
 
@@ -46,33 +46,40 @@ describe('critique 16 C5: the checker sees the defect in the cited golden', () =
   });
 });
 
-describe('wave 31: the done fade is 231, then 151 held to the end of the window, then the resting tone', () => {
-  // Critique 29: the old ramp (231, 193, 151, 146) left 0 fade frames in a capture. The staircase is now 231 for one 200 ms step, 151 held for 600 ms, then rest (114).
-  // The weight is held bold while the colour is lifted and falls on the LAST beat (600 ms) - one frame never moves both - so the rest frame changes colour only.
+/** Every background of a painted frame's runs: the fill is part of the finish flash. */
+const bgsOf = (frame: string): string[] => [...new Set([...frame.matchAll(/48;(?:5;\d+|2;\d+;\d+;\d+)/g)].map((m) => m[0]))].sort();
+
+describe('the finish flash: a strong green fill, a light one, then the settle, then the resting tone', () => {
+  // The row that turns done flashes: the mark bold on a green-tinted fill and the label lifted to body text, the same row on a lighter fill with the label at the secondary tone, then no fill, the label still one step above
+  // its dim rest (held for the last two beats of the 800 ms window), then the resting row. The owner and the clock never flash.
   for (const color of ['256', 'truecolor'] as const) {
     const all = demoFrames(100, MOTION_STEP_MS, color);
+    const px = (hex: string): string => (color === '256' ? ({ '#d0d0d0': xtermHex(252), '#8a8a8a': xtermHex(245), '#767676': xtermHex(243) } as Record<string, string>)[hex]! : hex); // 256 colours: the tones land on xterm 252, 245 and 243
     for (const s of ['todo', 'agent']) {
       const strip = (f: string): string => (s === 'todo' ? f : f.trimEnd().split('\n').filter((l) => !plain(l).startsWith('╰')).at(-1)!); // the agent strip's own row, not the plan row above it
       const frames = ramp(all, s).map(strip);
       const rest = strip(all[`${s}-99-done.ans`]!);
-      const word = 'wire the gate'; // wave 32: the agent strip's row is the plan row itself (the agent in its own column, no `done` word)
+      const word = 'wire the gate';
       const fgs = (w: string): string[] => frames.map((f) => runOf(f, w).fg).concat(runOf(rest, w).fg);
-      test(`${color}/${s}: 231 for one step, 151 for 600 ms, then the resting tone`, () => {
+      test(`${color}/${s}: four held beats of 200 ms, the fill strong, light, then gone`, () => {
         expect(MOTION_STEP_MS).toBe(200);
         expect(MOTION_MS).toBe(800);
         expect(frames.length).toBe(4); // t0000, t0200, t0400, t0600
-        const disc = fgs('●');
-        expect(disc[0]).toBe(xtermHex(231));
-        expect(disc.slice(1, 4)).toEqual([xtermHex(151), xtermHex(151), xtermHex(151)]);
-        expect(disc[4]).not.toBe(xtermHex(151));
-        expect(disc[4]).toBe(xtermHex(114));
+        const restBg = bgsOf(rest);
+        const bgs = frames.map(bgsOf);
+        expect(bgs[0]!.some((b) => !restBg.includes(b))).toBe(true); // the strong tint
+        expect(bgs[1]!.some((b) => !restBg.includes(b))).toBe(true); // the light tint
+        expect(bgs[1]).not.toEqual(bgs[0]);
+        expect(bgs[2]).toEqual(restBg); // no fill from the third beat on
+        expect(bgs[3]).toEqual(restBg);
       });
-      test(`${color}/${s}: the weight falls on the last beat, so the frame that reaches rest changes colour only`, () => {
-        expect(frames.map((f) => runOf(f, '●').bold)).toEqual([true, true, true, false]);
-        expect(runOf(rest, '●').bold).toBe(false);
+      test(`${color}/${s}: the mark is bold on the first beat only and stays the done green`, () => {
+        expect(frames.map((f) => runOf(f, '✓').bold)).toEqual([true, false, false, false]);
+        expect(runOf(rest, '✓').bold).toBe(false);
+        expect(new Set(fgs('✓')).size).toBe(1); // the one green, at every beat and at rest
       });
-      test(`${color}/${s}: the label takes the fade too (${word})`, () => {
-        expect(fgs(word).slice(0, 3)).toEqual([xtermHex(231), xtermHex(151), xtermHex(151)]);
+      test(`${color}/${s}: the label is lifted to body text, then the secondary tone (held), then its dim rest (${word})`, () => {
+        expect(fgs(word)).toEqual([px('#d0d0d0'), px('#8a8a8a'), px('#8a8a8a'), px('#8a8a8a'), px('#767676')]);
       });
     }
   }
@@ -88,9 +95,9 @@ describe('critique 17 C4: the agent strip flashes only what changed', () => {
       const rest = all['agent-99-done.ans']!;
       const agentRow = (f: string): string => f.trimEnd().split('\n').filter((l) => !plain(l).startsWith('╰')).at(-1)!; // the strip's last line but the closing rule is the agent row; the plan row above it is not part of this ramp
       for (const f of ramp(all, 'agent')) {
-        for (const word of ['implementer-ba…']) expect([word, runOf(agentRow(f), word)]).toEqual([word, runOf(agentRow(rest), word)]);
+        for (const word of ['implementer-band']) expect([word, runOf(agentRow(f), word)]).toEqual([word, runOf(agentRow(rest), word)]);
       }
-      expect(runOf(agentRow(ramp(all, 'agent')[0]!), '●')).not.toEqual(runOf(agentRow(rest), '●'));
+      expect(runOf(agentRow(ramp(all, 'agent')[0]!), '✓')).not.toEqual(runOf(agentRow(rest), '✓'));
     });
   }
 });

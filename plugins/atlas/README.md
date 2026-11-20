@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.32.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.33.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 24 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -1204,10 +1204,10 @@ TODO tree from the board until the first native todo result.
 
 **The side panel.** The panel is a ribbon (`◖ ◆ ATLAS ◗ ▸ SIDEPANEL`), a tab strip
 of clickable chips with the lit tab filled, and one view under it. The strip names
-six tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/view/panel/panel-layout.ts`): status, team,
-channel, gates, core and board. Click a chip to open that view; no key hint is
+four tabs (`PANEL_TABS` and `STRIP_TABS` in `mod/view/panel/panel-tabs.ts:12-16`): health, status,
+gates and channel (team content is in status, core figures in health). Click a chip to open that view; no key hint is
 printed; each tab is its own chip with one cell between chips, and no rule is
-drawn under the lit one. All six chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
+drawn under the lit one. All four chips fit one row at 110 columns (`channel` is drawn as `chan` there). At idle
 with no prompt yet the status view reads `◌ idle · no prompt yet` and `armed: 4
 gates · 6 hooks · team off`, then ACTIVITY, GATES, HOOKS and RECENT; after a
 run it shows the stepper, CONTEXT, RUNS, GATES and HOOKS tables as described under
@@ -1255,7 +1255,7 @@ worker runs (`currentPhase` in `mod/data/todos.ts`). The views, from
   (`verifiedFigure`), or `no verdicts, workers or gates yet`.
 - **board** (key `o`): see below.
 
-**The board.** The board tab (`mod/view/board/board-model.ts`, drawn by `mod/view/panel/pane/sidebar.tsx`)
+**The board.** The board is no tab of the strip; the band's board button opens it (`mod/view/panel/panel-tabs.ts:117`, `openBoard` in `mod/host/handlers.ts:162`). The view (`mod/view/board/board-model.ts`, drawn by `mod/view/panel/pane/sidebar.tsx`)
 lists one row per plan item with state and owner, under a title row that counts
 the items and carries the same `▰▱` meter, then a Gantt timeline: one lane per
 agent, the lead's lane first, a bar (`▇`, ended exactly to the clock) in the
@@ -1596,7 +1596,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.32.0
+|-- .claude-plugin/plugin.json   manifest, version 17.33.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

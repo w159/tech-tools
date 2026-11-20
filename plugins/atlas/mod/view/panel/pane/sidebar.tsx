@@ -1,11 +1,11 @@
-// Native-element sidebar: the SIDEPANEL ribbon, a tab strip (status, team, channel, gates, core, board) with the lit tab ruled, and
-// exactly one view under it. The rows come from the shared layout (mod/view/panel/panel-layout.ts); this file adds the tab Buttons (the six of STRIP_TABS
-// in mod/view/panel/panel-layout.ts that the omp painter prints too). Each tab is a click chip (wave 43: no key letters are drawn or bound); the strip wraps only where the chips do not fit and never overflows into the neighbouring pane.
+// Native-element sidebar: the header (`◆ ATLAS`, project · branch, version), a tab strip (health, status, gates, channel) with the lit tab filled and ruled, and
+// exactly one view under it. The rows come from the shared layout (mod/view/panel/panel-layout.ts); this file adds the tab Buttons (the four of STRIP_TABS
+// in mod/view/panel/panel-layout.ts that the omp painter prints too). Each tab is a click chip (no key letters are drawn or bound); the strip folds into `more ›` only where the chips do not fit and never overflows into the neighbouring pane.
 // Pure: every handler arrives as a closure, nothing here holds state or touches `$`.
 import type { ClientElements, RenderElement } from 'claude-code';
 import { cells, markOf, runHex, spinClock, type Ui, type UiState } from '../../../design/atlas-ui'; import { lookUi } from '../../../design/look';
-import { activeChipStyle, chipStyle, hoverStyle } from '../../../input/clickable';
-import { backWord, bodyLines, boardEmptyRows, centred, chipText, frameTabOf, moreWord, MORE_KEY, recentRows, ribbonRow, stripLayout, stripRows, type PanelModel, type StripTab } from '../panel-layout';
+import { activeChipStyle, hoverStyle } from '../../../input/clickable';
+import { bodyLines, boardEmptyRows, centred, chipText, frameTabOf, MORE_KEY, recentRows, ribbonRow, stripSegs, tabRule, type PanelModel, stripRows, type StripSeg } from '../panel-layout';
 import { liveWorkers, withOwnerStates, workerStates } from '../../../data/live';
 import { ownTodos } from '../../../data/todos';
 import { boardFolded, boardFootLine, boardLines, boardOpenFolded, boardRowsOf, boardTimeline, ownerDown, titleOwner, type BoardLine } from '../../board/board-model';
@@ -20,30 +20,32 @@ export type { GateGroup, GateLine, SidebarHandlers, SidebarModel, SidebarView } 
 
 export { stripRows };
 
-function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, inner: number, ui: Ui): RenderElement[] {
+/** The tab strip as one row of Buttons, built from the same pieces the omp rows use (stripSegs): chips with their badges, the gaps, `more ›` / `‹ back`. */
+function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ui: Ui, pm: PanelModel): RenderElement[] {
   const bg = panelBg(ui);
-  const gap = (n: number): RenderElement => els.Text({ backgroundColor: bg, children: ' '.repeat(n) });
-  const f = stripLayout(inner, m.ui.view); // every tab as a ` label ` chip on one row where they fit, else the leading ones and a `more ›` chip (mod/view/panel/panel-layout.ts)
+  const { segs } = stripSegs(pm);
   const open = m.ui.expanded === MORE_KEY;
-  const accent = ui.color === 'none' ? undefined : runHex({ tone: 'accent' }, ui.theme, ui.color);
-  const tile = chipStyle(ui);
-  const folded = (it: StripTab): boolean => f.folded.some((x) => x.id === it.id);
-  const pressOf = (it: StripTab) => () => {
-    if (open && folded(it)) on.toggle(MORE_KEY); // a pick from the folded row closes it
-    if (it.id === 'board') on.toggleTodos?.();
-    else on.setView(it.id as SidebarView);
+  const sub = ui.color === 'none' ? undefined : runHex({ tone: 'sub' }, ui.theme, ui.color);
+  const badgeColour = (id: string): string | undefined => (ui.color === 'none' ? undefined : runHex({ tone: id === 'gates' ? 'bad' : 'accent' }, ui.theme, ui.color));
+  const pressOf = (id: string) => () => {
+    if (open) on.toggle(MORE_KEY); // a pick from the folded row closes it
+    on.setView(id as SidebarView);
   };
-  const keyOf = (it: { id: string }): string => (it.id === 'board' ? 'tab:todos' : `tab:${it.id}`);
-  const chip = (label: string, key: string, lit: boolean, onPress: () => void): RenderElement => {
-    const text = els.Text(lit ? { ...activeChipStyle(ui), hover: hoverStyle(ui, key), children: chipText(label) } : { color: accent, bold: true, backgroundColor: tile.backgroundColor ?? bg, ...(tile.underline ? { underline: true } : {}), hover: hoverStyle(ui, key), children: chipText(label) });
-    return els.Button({ key, plain: true, children: [text], label, onPress });
+  const piece = (s: StripSeg, i: number): RenderElement => {
+    if (s.kind === 'lead' || s.kind === 'gap') return els.Text({ backgroundColor: bg, children: s.text });
+    if (s.kind === 'more' || s.kind === 'back') {
+      const key = s.kind === 'more' ? 'tab:more' : 'tab:back';
+      const word = s.kind === 'more' ? (ui.ascii ? 'more >' : 'more ›') : (ui.ascii ? '< back' : '‹ back');
+      const text = els.Text(s.lit ? { ...activeChipStyle(ui), hover: hoverStyle(ui, key), children: chipText(word) } : { color: sub, bold: true, backgroundColor: bg, hover: hoverStyle(ui, key), children: chipText(word) });
+      return els.Button({ key, plain: true, children: [text], label: word, onPress: () => on.toggle(MORE_KEY) });
+    }
+    const tab = s.tab!;
+    const key = `tab:${tab.id}`;
+    const text = els.Text(s.lit ? { ...activeChipStyle(ui), hover: hoverStyle(ui, key), children: s.text } : { color: sub, backgroundColor: bg, hover: hoverStyle(ui, key), children: s.text });
+    const badge = tab.badge ? [els.Text({ color: badgeColour(tab.id), bold: true, backgroundColor: bg, children: ` ${tab.badge}` })] : [];
+    return els.Button({ key, plain: true, children: [text, ...badge], label: tab.label, onPress: pressOf(tab.id) });
   };
-  const tabEl = (it: StripTab): RenderElement => chip(it.label, keyOf(it), it.id === m.ui.view, pressOf(it));
-  const row = (key: string, kids: RenderElement[]): RenderElement => els.Box({ key, flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: kids.flatMap((k, i) => (i ? [gap(f.gap), k] : [k])) });
-  const more = f.more ? [chip(moreWord(false, ui), 'tab:more', f.folded.some((it) => it.id === m.ui.view), () => on.toggle(MORE_KEY))] : [];
-  // One row always (round 3, E8): `more ›` swaps the visible set for the folded tabs, which end in a `‹ back` chip.
-  const rows = [row('tabs', f.more && open ? [...f.folded.map(tabEl), chip(backWord(ui), 'tab:back', false, () => on.toggle(MORE_KEY))] : [...f.rows[0]!.map(tabEl), ...more])];
-  return rows; // no rule under the lit chip: it is the filled one
+  return [els.Box({ key: 'tabs', flexDirection: 'row', flexShrink: 0, backgroundColor: bg, children: segs.map(piece) })];
 }
 
 /** The `o` tab: the board (mod/view/board/todo-panel.tsx) drawn inside the Atlas pane, which is the pane the host shows (a second pane opens behind it). */
@@ -92,10 +94,8 @@ export function leadBarState(run: string | undefined, lead: UiState): UiState {
   return run === 'working' || (run === undefined && lead === 'running') ? 'running' : 'done';
 }
 
-/** The board view's ribbon words. Round W M: the board tab's header reads `▸ SIDEPANEL · board`, exactly like every other tab (the capture scorer tells the pane from a toast box by its `▸ SIDEPANEL` title); the count is said once, by the summary row. */
+/** The board view's ribbon words (kept for the board's own tests): `SIDEPANEL · board`; the redesigned header no longer prints them. */
 export function boardViewRibbon(model: SidebarModel, cols: number, ui: Ui): { title: string; right: string } {
-  // The count is said once, by the summary row in the body (`5 items · 3 dispatches`), not again in the ribbon (critique 22: `5 items` twice).
-  // M: the board tab's header reads like every other tab's (`▸ SIDEPANEL · board`), at every width.
   return { title: `SIDEPANEL ${ui.ascii ? '|' : '·'} board`, right: '' };
 }
 
@@ -108,7 +108,7 @@ function footerRow(totals: readonly BoardLine[], cols: number, ui: Ui): BoardLin
   return { runs: [...base, { t: ' '.repeat(Math.max(2, cols - 1 - used - cells(hint))), tone: 'text' as const }, { t: hint, tone: 'muted' as const }] };
 }
 
-/** The board view's rows (design wave 24): a summary row, every item with its owner in one right column, and the record of how the run closed. Nothing on the board: one dim line. */
+/** The board view's rows (design wave 24): a summary row, every item with its owner in one right column, and the record of how the run closed. Nothing on the board: one dim line. The band's board button opens it; it is no tab of the strip. */
 function boardIn(els: ClientElements, m: SidebarModel, on: SidebarHandlers, cols: number, ui: Ui, pm: PanelModel): RenderElement {
   if (frameTabOf(pm) === 'board') return els.Box({ flexDirection: 'column', flexShrink: 0, backgroundColor: panelBg(ui), children: bodyLines(pm).map((l) => lineEl(els, l, m, on, ui)) }); // frame spec D1-D3 (mod/view/panel/tabs-frame.ts)
   const s = m.snapshot;
@@ -182,6 +182,6 @@ export function sidebarTree(els: ClientElements, model: SidebarModel, on: Sideba
     width: cols,
     ...(model.rows > 0 ? { minHeight: model.rows } : {}), // wave 32 (critique 30: the 234 stopped short of the pane bottom): the panel surface is the pane's whole height on every tab, whatever the body holds
     backgroundColor: panelBg(ui),
-    children: [lineEl(els, ribbonRow(pm, model.ui.view === 'board' ? boardViewRibbon(model, cols, ui) : undefined), model, on, ui), blank(), ...stripEls(els, model, on, cols, ui), ...(cols >= 100 ? [blank()] : []), ...(model.ui.view === 'board' ? [boardIn(els, model, on, cols, ui, pm)] : viewRows(model.ui.view, els, model, on, cols, pm))],
+    children: [lineEl(els, ribbonRow(pm), model, on, ui), blank(), ...stripEls(els, model, on, ui, pm), lineEl(els, tabRule(pm), model, on, ui), ...(model.ui.view === 'board' ? [boardIn(els, model, on, cols, ui, pm)] : viewRows(model.ui.view, els, model, on, cols, pm))],
   });
 }

@@ -20,12 +20,12 @@ const done: HudInput = { todos: [1, 2, 3, 4, 5].map((i) => todo(i, 'completed', 
 const blocked: HudInput = { todos: [todo(1, 'completed', OWNERS[0]), todo(2, 'blocked', OWNERS[1]), todo(3, 'completed', OWNERS[2]), todo(4, 'pending'), todo(5, 'pending')], agents: [agent(OWNERS[0]!, 'done', 'done'), agent(OWNERS[1]!, 'failed', 'failed'), agent(OWNERS[2]!, 'done', 'done')] };
 const STATES = { working, done, blocked } as const;
 const text = (rows: Run[][]): string[] => rows.map((r) => runsString(r).trimEnd());
-const planRows = (rows: string[]): string[] => rows.filter((l) => /^[▸ ]\s*\S T[1-5] /.test(l));
+const planRows = (rows: string[]): string[] => rows.filter((l) => /^[│▌]\s*\S T[1-5] /.test(l));
 
 describe('every plan row the slot holds is drawn', () => {
-  test('hudWantRows is what a roomy draw takes: 13 rows for five todos and three agents (wave 31: no blank between the boxes)', () => {
-    expect(hudWantRows(working, 150, NOW)).toBe(13);
-    expect(hudWantRows(working, 110, NOW)).toBe(13);
+  test('hudWantRows is what a roomy draw takes: 14 rows for five todos and three agents (both boxes: title, column names, rows, closing rule; no blank between them)', () => {
+    expect(hudWantRows(working, 150, NOW)).toBe(14);
+    expect(hudWantRows(working, 110, NOW)).toBe(14);
   });
   for (const cols of [150, 110]) for (const [name, input] of Object.entries(STATES)) {
     for (const budget of [14, 15, 16, 17]) {
@@ -46,7 +46,7 @@ describe('every plan row the slot holds is drawn', () => {
         const hud = text(hudLines(input, { merge: false, cols, maxRows: cap, ui, now: NOW }));
         expect(hud.filter((l) => /^╭─ .*╮$/.test(l))).toHaveLength(2);
         expect(hud.filter((l) => l.startsWith('╰') && l.endsWith('╯'))).toHaveLength(2); // a box is closed at every agent count
-        expect(hud.filter((l) => /^[▸ ]\s*\S (alpha|beta|gamma)-explorer /.test(l))).toHaveLength(3); // every listed agent keeps its row
+        expect(hud.filter((l) => /^[│▌]\s*\S (alpha|beta|gamma)-explorer /.test(l))).toHaveLength(3); // every listed agent keeps its row
         expect(planRows(hud).length).toBeGreaterThanOrEqual(2);
         expect(hud[0]).toMatch(/\d+\/5/); // wave 37: the whole plan is counted on the title by its figure (n/5), never by a second `· N done`
         expect(hud.some((l) => /not shown/.test(l))).toBe(false);
@@ -69,7 +69,7 @@ describe('no blank row between TODO and SUBAGENTS in every state (wave 31)', () 
   for (const cols of [150, 110, 57]) for (const [name, input] of Object.entries(STATES)) {
     test(`${cols} columns, ${name}`, () => {
       const out = text(hudLines(input, { merge: false, cols, maxRows: 40, ui, now: NOW }));
-      const sub = out.findIndex((l) => l.includes('▸ SUBAGENTS'));
+      const sub = out.findIndex((l) => l.includes('SUBAGENTS'));
       expect(out[sub - 1]!.startsWith('╰')).toBe(true); // the SUBAGENTS box starts under the TODO box's rule
       expect(out.filter((l) => l === '')).toHaveLength(0);
     });
@@ -90,20 +90,20 @@ describe('the rule ends in a corner on the last cell, where the host `[-]` stand
 
 describe('SUBAGENTS columns and the selection', () => {
   const long: HudInput = { ...working, agents: OWNERS.map((n) => agent(n, 'working', 'running', { tool: 'Read', target: `${n.split('-')[0]}_long_module_name.py` })) };
-  test('RESULT never carries the live tool (wave 31): a count or `-`, and TASK keeps the spare width', () => {
+  test('NOW / RESULT carries the live call of a running agent, whole while the column holds it', () => {
     const rows = text(hudLines(long, { merge: false, cols: 110, maxRows: 40, ui, now: NOW }));
     for (const n of ['alpha', 'beta', 'gamma']) {
-      const row = rows.find((l) => l.includes(`${n}-explorer`) && /running\s+T\d/.test(l))!;
-      expect(row).not.toContain('_long_module_name');
-      expect(row).toMatch(/(\d+ fn|-)\s*$/);
+      const row = rows.find((l) => l.includes(`${n}-explorer`) && /running\s+read /.test(l))!;
+      expect(row).toContain(`read ${n}_long_module_name.py`);
     }
   });
-  test('at the narrowest width MODEL goes first and LAST stays whole', () => {
+  test('at the narrowest width the plan and ACT go first and the live call is cut with an ellipsis, never run into the next column', () => {
     const rows = text(hudLines(working, { merge: false, cols: 57, maxRows: 40, ui, now: NOW }));
-    const head = rows.find((l) => /AGENT\s+STATE/.test(l))!;
+    const head = rows.find((l) => /AGENT\s+/.test(l))!;
     expect(head).not.toContain('MODEL');
-    expect(head).toContain('LAST');
-    expect(rows.some((l) => l.includes('read alpha.py'))).toBe(true);
+    expect(head).not.toContain('ACT');
+    expect(head).toMatch(/AGENT\s+(ROLE\s+)?STATE\s+NOW/);
+    expect(rows.some((l) => /running\s+read alpha/.test(l))).toBe(true);
   });
   for (const cols of [150, 110, 57]) {
     test(`${cols} columns: the cursor is accent (xterm 141) on every frame of the arrival ramp, and the selected name is bold`, () => {
@@ -113,17 +113,17 @@ describe('SUBAGENTS columns and the selection', () => {
       mo.observe('hud-agents', hudMotionItems(working, { now: 1000 }).agents, 1000);
       for (const dt of [0, 40, 100, 200, 400, 800, 2000]) {
         const rows = hudLines(working, { merge: false, cols, maxRows: 40, ui, now: 1005, motion: mo.ctx(1000 + dt) });
-        const cursors = rows.flatMap((r) => r.filter((x) => x.t === '▸'));
+        const cursors = rows.flatMap((r) => r.filter((x) => x.t === '▌'));
         const marks = cursors.filter((x) => x.bold && x.tone === 'accent');
         expect([dt, marks.length >= 2, marks.every((x) => x.fg === undefined)]).toEqual([dt, true, true]);
-        for (const r of rows) if (r[0]?.t === '▸' && r.some((x) => x.t.includes('-explorer') && !x.t.includes('('))) expect(r.find((x) => x.t.includes('-explorer') && !x.t.includes('('))!.bold).toBe(true);
+        for (const r of rows) if (r[0]?.t === '▌' && r.some((x) => x.t.trim() === 'explorer')) expect(r.find((x) => x.t.includes('-explorer'))!.bold).toBe(true);
       }
     });
   }
   test('256-colour hosts map the cursor to index 141', () => {
     const c256: Ui = { theme: 'mocha', ascii: false, color: '256' };
     const rows = hudLines(working, { merge: false, cols: 150, maxRows: 40, ui: c256, now: NOW });
-    const cursor = rows.flatMap((r) => r.filter((x) => x.t === '▸'))[0]!;
+    const cursor = rows.flatMap((r) => r.filter((x) => x.t === '▌'))[0]!;
     expect(paintAnsi(cursor, c256)).toContain('38;5;141');
   });
 });

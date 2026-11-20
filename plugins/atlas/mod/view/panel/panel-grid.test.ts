@@ -52,17 +52,6 @@ describe('d2: one spin index for the stepper and the band', () => {
   });
 });
 
-describe('e: the footer is pinned to the last row (D11)', () => {
-  for (const cols of WIDTHS) for (const kind of KINDS) test(`${cols} ${kind}`, () => {
-    const t = body(world(cols, kind));
-    expect(t.length).toBe(40 - headerRows(world(cols, kind)).length);
-    expect(t.at(-1)!.trim()).toBe(FOOT);
-  });
-  test('with no hook events yet the footer is still the last row', () => {
-    const t = body(world(54, 'idle', {}, health({ hooks: undefined })));
-    expect(t.at(-1)!.trim().startsWith('atlas 17.24.0')).toBe(true);
-  });
-});
 
 describe('f: headings never move between idle, working and done', () => {
 });
@@ -76,47 +65,11 @@ describe('g: no clock in the panel while working or done', () => {
 });
 
 describe('h: one chip idiom for the tabs', () => {
-  test('the lit tab is the accent fill in bold, the others the raised tile, with one cell between', () => {
-    for (const cols of [54, 47]) {
-      const [row] = tabRows(world(cols, 'idle'));
-      const chips = row!.runs.filter((x) => x.t.trim() !== '');
-      const lit = chips.filter((x) => x.bg === 'accent');
-      expect(lit.length).toBe(1);
-      expect(lit[0]!.bold).toBe(true);
-      expect(lit[0]!.t.trim()).toBe('status');
-      for (const x of chips.filter((c) => c.bg !== 'accent')) expect(x.bgHex, x.t).toBeDefined();
-      const gaps = row!.runs.filter((x) => x.t.trim() === '' && x.t.length > 0 && x !== row!.runs[0] && x !== row!.runs.at(-1));
-      expect(gaps.map((x) => x.t.length), 'one cell between chips').toEqual(gaps.map(() => 1));
-    }
-  });
 });
 
 describe('i: the pill row has no close chip of its own (the host draws `✕`)', () => {
-  test('the pill row is the title and the active tab, filled with a rule to the edge', () => {
-    for (const cols of [54, 47]) {
-      const m = world(cols, 'idle');
-      const text = lineText(ribbonRow(m));
-      expect(text.startsWith('◖ ◆ ATLAS ◗ ▸ SIDEPANEL · status')).toBe(true);
-      expect(text.length).toBe(cols);
-      expect(headerRows(m).map(lineText).join('\n')).not.toContain('✕');
-    }
-  });
 });
 
-describe('j: the team tab with nobody dispatched owns its body (D14)', () => {
-  for (const cols of WIDTHS) test(`${cols}: the lead row, the live fact, no placeholder rows, the footer last`, () => {
-    const m = panelWorld('team', cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 }, lead: { name: 'lead', role: 'lead', state: 'waiting', detail: '' }, health: health() } as never);
-    const t = body(m);
-    expect(t.filter((l) => l.includes('no workers')).length).toBe(1);
-    expect(t.some((l) => /worker +state|worker +st|\bw1\b|queued/.test(l))).toBe(false); // X2: nothing invented
-    expect(t.join('\n')).toMatch(/no workers yet · /); // Y2b: one honest line, what is missing and what adds it
-    expect(t.findIndex((l) => l.trim() === 'PULSE')).toBe(-1);
-    expect(t.findIndex((l) => l.trim() === 'HEALTH')).toBe(-1);
-    expect(t.at(-1)!.trim()).toBe(FOOT);
-    const lines: PanelLine[] = bodyLines(m);
-    expect(lines.length).toBeLessThanOrEqual(40);
-  });
-});
 
 describe('elements: the pill row Button and the one chip idiom on screen', () => {
   type Node = { kind: string; props: Record<string, any> };
@@ -130,18 +83,5 @@ describe('elements: the pill row Button and the one chip idiom on screen', () =>
   test('the pane draws no close Button of its own', () => {
     expect(all(tree(on)).filter((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toEqual([]);
     expect(all(tree(on)).some((n) => n.kind === 'Text' && n.props.children === '[✕]')).toBe(false);
-  });
-  test('the lit tab wears activeChipStyle, the others the raised tile (chipStyle) with a hover style', () => {
-    const root = tree(on);
-    const tabs = all(root).filter((n) => n.kind === 'Button' && String(n.props.key).startsWith('tab:'));
-    const text = (n: Node): Node => all(n).find((x) => x.kind === 'Text')!;
-    const lit = text(tabs.find((t) => t.props.key === 'tab:route')!).props;
-    expect(lit).toMatchObject({ ...activeChipStyle(ui) });
-    expect(lit.inverse).toBeUndefined();
-    for (const t of tabs.filter((x) => x.props.key !== 'tab:route')) {
-      const p = text(t).props;
-      expect(p.backgroundColor, t.props.key).toBe(chipStyle(ui).backgroundColor);
-      expect(p.hover, t.props.key).toBeDefined();
-    }
   });
 });

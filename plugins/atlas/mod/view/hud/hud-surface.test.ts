@@ -11,7 +11,7 @@ import type { SquadAgent, TodoItem } from '../../contract';
 import { blockedText, STOP_REFUSED } from '../../data/runstate';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
-import { hudAgents, isRunning, type HudInput } from './hud';
+import { agentModel, hudAgents, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from '../../live_fixture';
 import type { LiveSnapshot } from '../../orchestra-types';
 import { composeSlot } from '../band/slot';
@@ -28,7 +28,7 @@ const spun = (rows: readonly string[]): string[] => rows.map((r) => (r.includes(
 const full = { spacers: true, extras: true, close: true };
 
 /** State 38: the rows a plan block leaves out behind its one summary row (`● 3 done  ◇ 2 queued`). */
-const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^ {2}[●o] (\d+) done(?: {2}[◇-] (\d+) queued)?\s*$|^ {2}[◇-] (\d+) queued\s*$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) + Number(m[3] ?? 0) : 0); }, 0);
+const summaryCount = (rows: readonly string[]): number => rows.reduce((n, r) => { const m = /^│ {2}(?:✓ (\d+) done)?(?: {2})?(?:○ (\d+) queued)?\s*│$/.exec(r); return n + (m ? Number(m[1] ?? 0) + Number(m[2] ?? 0) : 0); }, 0);
 
 describe('TODO surface goldens (rev 4)', () => {
   for (const [cols, rich, golden] of [[120, false, todo_120], [120, true, todo_120_rich], [80, false, todo_80], [40, false, todo_40]] as const) {
@@ -38,30 +38,31 @@ describe('TODO surface goldens (rev 4)', () => {
   }
   test('60 columns uses the 40 column form under a 60 column ribbon', () => {
     const rows = text(todoRows(worldTodos(), opts(60), full));
-    expect(rows.slice(1, -1)).toEqual(todo_40.slice(1, -1));
+    expect(rows).toHaveLength(todo_40.length); // the same rows as the 40 column form, a box 60 cells wide
+    for (const r of todoRows(worldTodos(), opts(60), full)) expect(runsCells(r)).toBe(60);
     expect(rows[0]!.length).toBe(60); // the title rule runs to the last cell, where the host draws its `[-]`
-    expect(rows[0]!).toMatch(/TODO {2}3\/7 · ■1 ▰{4}▱{4} ─+╮$/); // wave 36: the failed row is counted apart (`· ■1`) and has its own meter cell; critique 21: the count and the meter sit INSIDE the rule, which runs on to the corner at the edge
+    expect(rows[0]!).toMatch(/TODO ─+ 3\/7 · ✗1 ▰{6}▱ ─╮$/); // wave 36: the failed row is counted apart (`· ✗1`) and has its own bar cell; the count and the bar sit INSIDE the rule, which runs on to the corner at the edge
     expect(rows.at(-1)).toBe(`╰${'─'.repeat(58)}╯`); // the box closes at the width of the surface
   });
   test('completed rows are drawn as done: a green disc, the word, and quiet 247 text that is never struck through (critique 21)', () => {
     const rows = todoRows(worldTodos(), opts(120), full);
-    const done = rows.filter((r) => r.some((x) => x.t === 'done'));
+    const done = rows.filter((r) => r.some((x) => x.t.trim() === 'done'));
     expect(done).toHaveLength(3);
     for (const r of done) {
-      const disc = r.find((x) => x.t === '●')!;
+      const disc = r.find((x) => x.t === '✓')!;
       expect(disc.tone).toBe('ok');
       const label = r.find((x) => x.t.startsWith('Wire') || x.t.startsWith('Layout') || x.t.startsWith('Gate golden'))!;
       expect(label.tone).toBe('muted');
       expect(r.some((x) => x.strike)).toBe(false);
     }
   });
-  test('a block is a box: a bottom rule of only ╰─╯ closes TODO and SUBAGENTS, rows carry no side border, and `close` off draws neither', () => {
+  test('a block is a box: a bottom rule of only ╰─╯ closes TODO and SUBAGENTS, every row is walled by │ (or the ▌ bar), and `close` off draws neither', () => {
     for (const cols of [120, 80, 40]) {
       const t = text(todoRows(worldTodos(), opts(cols), full));
       const a = text(agentRows(worldAgents(), opts(cols), full));
       for (const rows of [t, a]) {
         expect(rows.at(-1)).toBe(`╰${'─'.repeat(cols - 2)}╯`);
-        expect(rows.slice(1, -1).some((r) => /[│]/.test(r))).toBe(false);
+        expect(rows.slice(1, -1).every((r) => /^[│▌].*│$/.test(r))).toBe(true);
       }
     }
     expect(text(todoRows(worldTodos(), opts(120), { spacers: true, extras: true })).some((r) => r.startsWith('╰'))).toBe(false);
@@ -73,7 +74,7 @@ describe('TODO surface goldens (rev 4)', () => {
     for (const cols of [40, 60, 80, 120, 150]) {
       const t = todoRows(worldTodos(), opts(cols), full)[0]!;
       const line = runsString(t);
-      expect(line.startsWith('╭─ ◖ ◆ ATLAS ◗ ▸ TODO')).toBe(true);
+      expect(line.startsWith('╭─ TODO ')).toBe(true); // no breadcrumb: the title is the bold word
       expect(runsCells(t)).toBe(cols);
       expect(line.endsWith('╮')).toBe(true); // no right corner: the host's [-] ends the rule
       expect(line.indexOf('▰')).toBeLessThan(line.lastIndexOf('─'));
@@ -86,7 +87,7 @@ describe('TODO surface goldens (rev 4)', () => {
     const done = rows.filter((r) => r.state === 'done').length;
     expect(out[0]).toContain(`${done}/${rows.length}`);
     expect(out.some((l) => /^progress |· \d+%/.test(l))).toBe(false); // one count, in the ribbon
-    expect(out.filter((l) => /^[ ▸] [●◐◐◇■▲▲◉] /.test(l))).toHaveLength(rows.length);
+    expect(out.filter((l) => /^[│▌] [✓◐○✗▲◉] /.test(l))).toHaveLength(rows.length);
   });
   test('columns: label at 4, state at 30, meta at 44; at most one chip per row; no row wider than the surface', () => {
     for (const rich of [false, true]) {
@@ -94,8 +95,8 @@ describe('TODO surface goldens (rev 4)', () => {
       const body = rows.filter((r) => runsString(r).includes('Subagents block'));
       const line = runsString(body[0]!);
       expect(line.indexOf('Subagents block')).toBe(4);
-      expect(line.indexOf(rich ? ' RUNNING' : 'running')).toBe(rich ? 30 : 30);
-      expect(line.indexOf('elapsed')).toBe(44);
+      expect(line.indexOf(rich ? ' RUNNING' : 'running')).toBe(rich ? 30 : runsString(rows[1]!).indexOf('STATE')); // the plain grid: the state word sits under its column name
+      if (rich) expect(line.indexOf('elapsed')).toBe(44);
       for (const r of rows) {
         expect(chipCount(r)).toBeLessThanOrEqual(1);
         expect([...runsString(r)].length).toBe(120);
@@ -110,13 +111,13 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
       expect(spun(text(agentRows(worldAgents(), opts(cols, rich), full)))).toEqual([...golden]);
     });
   }
-  test('A4: 80 to 99 columns (a wide terminal with the pane docked) show task, clock and result, as 104 does', () => {
+  test('A4: 80 to 99 columns (a wide terminal with the pane docked) show the live call and the clock, as 104 does', () => {
     for (const cols of [80, 88, 99]) {
       const rows = text(agentRows(worldAgents(), opts(cols), full));
-      expect(rows[1]).toMatch(/AGENT +STATE +TASK +LAST/); // MODEL joins from 120 columns
+      expect(rows[1]).toMatch(/AGENT +ROLE +STATE +NOW/); // no MODEL column; TIME closes the row
       expect(rows[1]).not.toMatch(/MODEL/);
-      expect(rows[4]).toMatch(/implementer-band +running +T4 +\d+:\d\d +-$/); // wave 31: RESULT is a count or a dash, never the tool
-      expect(rows[5]).toMatch(/runner-land +queued +T5 +0:00 +-$/);
+      expect(rows[4]).toMatch(/implementer-band +implementer +running +read runs\.ts:17 +\d+:\d\d +│$/); // NOW / RESULT carries the live call
+      expect(rows[5]).toMatch(/runner-land +runner +queued +- +0:00 +│$/);
       for (const r of agentRows(worldAgents(), opts(cols), full)) expect(runsString(r).length).toBeLessThanOrEqual(cols);
     }
     // nothing a narrow terminal shows is missing from a wide one: the 104 column row carries the same cells
@@ -134,7 +135,7 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
   test('header counts equal the row sums', () => {
     const agents = worldAgents();
     expect(stateCounts(agents.map((a) => a.state))).toBe('1 running · 1 failed · 1 queued · 2 done');
-    expect(text(agentRows(agents, opts(120), full))[0]).toContain('1 running · 1 failed · 1 queued · 2 done');
+    expect(text(agentRows(agents, opts(120), full))[0]).toContain('● 1 running  ✗ 1 failed  ○ 1 queued  ✓ 2 done'); // only the non-zero parts, the states that need a look first
   });
   test('A3: one count order everywhere, attention first (the shared COUNT_ORDER)', () => {
     const all: UiState[] = ['done', 'queued', 'waiting', 'failed', 'blocked', 'running'];
@@ -144,7 +145,7 @@ describe('SUBAGENTS surface goldens (rev 4)', () => {
   test('a long name widens the name column instead of being cut, up to 28 cells', () => {
     const rows = text(agentRows([{ ...worldAgents().find((a) => a.state === 'running')!, name: 'implementer-capture-harness' }], opts(120), full));
     expect(rows[2]).toContain('implementer-capture-harness');
-    expect(rows[2]!.indexOf('running')).toBe(4 + 27 + 2); // the AGENT column keeps a 2-cell gutter before STATE (critique 21)
+    expect(rows[2]!.indexOf('running')).toBe(4 + 27 + 2 + 13); // the AGENT column keeps a 2-cell gutter before ROLE (critique 21), ROLE is 13 cells
   });
 });
 
@@ -162,10 +163,12 @@ describe('row budget never hides rows silently', () => {
       const rows = text(fitStack({ todos, agents: worldAgents() }, opts(120), h));
       expect(rows.length).toBeLessThanOrEqual(h);
       const shown = rows.filter((l) => / Item \d+/.test(l)).length;
-      const hidden = Number(/\+(\d+) more/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) + summaryCount(rows);
-      const shownDone = rows.filter((l) => /● Item \d+/.test(l)).length;
-      const folded = hidden > 0 ? 0 : Math.max(0, Number(/TODO\s+(\d+)\/\d+/.exec(rows.find((l) => l.includes('▸ TODO')) ?? '')?.[1] ?? 0) - shownDone); // wave 37: finished rows fold into the figure's numerator (critique 17 B4)
-      if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect(shown + hidden + folded).toBe(30);
+      const title = rows.find((l) => /^(╭─|──) TODO /.test(l)) ?? '';
+      const subAt = rows.findIndex((l) => /^(╭─|──) SUBAGENTS /.test(l));
+      const hidden = summaryCount(subAt < 0 ? rows : rows.slice(0, subAt)); // the plan's own summary row, not the agents'
+      const shownDone = rows.filter((l) => /^[│▌] ✓ Item \d+/.test(l)).length;
+      const folded = hidden > 0 ? 0 : Math.max(0, Number(/ (\d+)\/30 /.exec(title)?.[1] ?? 0) - shownDone); // wave 37: finished rows fold into the figure's numerator (critique 17 B4)
+      if (rows.some((l) => l.includes('TODO') && !l.includes('SUBAGENTS')) && (shown > 0 || hidden > 0)) expect([h, shown + hidden + folded]).toEqual([h, 30]);
     }
   });
   test('windowRows keeps open work first, then the queue, in plan order', () => {
@@ -183,9 +186,13 @@ describe('row budget never hides rows silently', () => {
     expect(windowRows(dones, 2, NOW).shown.map((r) => r.label)).toEqual(['d2']); // newest completion first, not plan order
   });
   test('a running agent keeps its row before the plan keeps its last row', () => {
-    const rows = text(fitStack({ todos: many(10), agents: worldAgents() }, opts(120), 6));
-    expect(rows.length).toBeLessThanOrEqual(6);
+    const rows = text(fitStack({ todos: many(10), agents: worldAgents() }, opts(120), 8));
+    expect(rows.length).toBeLessThanOrEqual(8);
     expect(rows.some((l) => l.includes('implementer-band'))).toBe(true);
+    expect(rows.some((l) => /Item 4 /.test(l))).toBe(true); // with room for both, the plan keeps its running row too
+    const tight = text(fitStack({ todos: many(10), agents: worldAgents() }, opts(120), 6));
+    expect(tight.length).toBeLessThanOrEqual(6);
+    expect(tight.some((l) => l.includes('implementer-band'))).toBe(true); // under that the plan goes first
   });
   test('one row: the Subagents ribbon when an agent runs, else the TODO ribbon', () => {
     expect(text(fitStack({ todos: many(5), agents: worldAgents() }, opts(120), 1))[0]).toContain('SUBAGENTS');
@@ -202,13 +209,12 @@ describe('SUBAGENTS task column (critique-3 change 8)', () => {
     expect(taskCell([1, 2])).toBe('T1,T2');
     expect(taskCell([1, 2, 3])).toBe('3 tasks');
     const out = text(agentRows([row('a', [1, 2]), row('b', [3, 4, 5]), row('c', [])], opts(120), full));
-    expect(out.find((r) => / a /.test(r))).toContain('T1,T2');
-    expect(out.find((r) => / b /.test(r))).toContain('3 tasks');
+    expect(out.join('\n')).not.toMatch(/T1,T2|3 tasks/); // the redesigned SUBAGENTS grid has no TASK column: the plan's OWNER column names who works each row
   });
-  test('the full form names its columns in the spacer row: AGENT STATE TASK LAST RESULT (rich: CTX instead of TASK)', () => {
-    expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^ {4}AGENT +STATE +TASK +LAST +RESULT$/); // wave 31: the same columns at every width
+  test('the full form names its columns in the spacer row: AGENT ROLE STATE NOW (rich: CTX instead of TASK)', () => {
+    expect(text(agentRows([row('a', [1])], opts(120), full))[1]).toMatch(/^│ {3}AGENT +ROLE +STATE +NOW( \/ RESULT)? +│$/); // the same columns at every width
     expect(text(agentRows([row('a', [1])], opts(120, true), full))[1]).toMatch(/^ {4}AGENT +STATE +CTX +MODEL +LAST +RESULT$/);
-    expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toMatch(/^ {4}AGENT +STATE +TASK +LAST +RESULT$/); // A4: 80 columns names them too, without MODEL (120 columns and up)
+    expect(text(agentRows([row('a', [1])], opts(80), full))[1]).toMatch(/^│ {3}AGENT +ROLE +STATE +NOW( \/ RESULT)? +│$/); // A4: 80 columns names them too, without MODEL (120 columns and up)
   });
 });
 
@@ -241,9 +247,9 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
   });
   test('the focus marker is a bold accent triangle (a bold > in ASCII); an unfocused row has a plain blank', () => {
     const on = todoRows([td('a', 'running', true)], opts(120), { spacers: false, extras: false })[1]![0]!;
-    expect(on).toMatchObject({ t: '▸', tone: 'accent', bold: true });
+    expect(on).toMatchObject({ t: '▌', tone: 'accent', bold: true });
     const off = todoRows([td('a', 'running', false)], opts(120), { spacers: false, extras: false })[1]![0]!;
-    expect(off.t).toBe(' ');
+    expect(off.t).toBe('│');
     expect(off.bold).toBeUndefined();
     const asciiRow = todoRows([td('a', 'running', true)], { ...opts(120), ui: { ...ui, ascii: true } }, { spacers: false, extras: false })[1]![0]!;
     expect(asciiRow).toMatchObject({ t: '>', bold: true });
@@ -254,7 +260,7 @@ describe('mutation kills (round 2): order, slots, focus mark, name column cap, s
     expect(rows[1]).toContain(long);
     const tight = text(agentRows([ag('x'.repeat(90))], opts(80), { spacers: false, extras: false }));
     expect(tight[1]).toContain('running');
-    expect(tight[1]).toMatch(/x… {2}running/); // a one-cell `…` and the 2-cell gutter, never `...`
+    expect(tight[1]).toMatch(/x… {2}\S+ +running/); // a one-cell `…` and the 2-cell gutter before the next column, never `...`
   });
   test('stack puts no blank row between the blocks (wave 31)', () => {
     const s = { todos: [td('t')], agents: [ag('a')] };
@@ -282,10 +288,9 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
     const widths = [140, 100, 90, 80];
     const seen = widths.map((w) => lines([a], w)[0]!);
     for (const l of seen) { expect(l).toContain('board-auditor-open-items'); expect(l).toContain('running'); expect(l).not.toContain('...items'); }
-    for (const l of seen) expect(l).not.toContain('first lines'); // wave 31: the tool echo is not drawn, RESULT is a count or a dash
-    const at = (l: string) => ({ task: l.includes('T1'), last: l.includes('read alpha') });
-    // Whatever survives, a later column never shows without the earlier one (MODEL is 120 columns and up only).
-    for (const l of seen) { const c = at(l); if (c.last) expect(c.task).toBe(true); }
+    for (const l of seen) expect(l).toContain('read alpha.py'); // NOW / RESULT carries the call
+    // NOW / RESULT follows STATE: a later column never shows without the earlier ones, and the state word keeps its whole width.
+    for (const l of seen) expect(l.indexOf('read alpha')).toBeGreaterThan(l.indexOf('running'));
   });
   test('no state word is cut at any width (runnin, haik)', () => {
     for (let w = 80; w <= 120; w++) {
@@ -307,7 +312,7 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
       expect(out.slice(1).filter((l) => /\d+ of \d+ done|\d+\/\d+\b(?!:)|\d+%/.test(l))).toHaveLength(0); // and only there
       expect(out.some((l) => /^progress /.test(l))).toBe(false);
       expect(out.at(-1)).toBe(`╰${'─'.repeat(cols - 2)}╯`); // the box closes (critique 21)
-      const rows = out.slice(1, -1);
+      const rows = out.slice(2, -1); // the title, the column names, the rows, the closing rule
       expect(rows).toHaveLength(worldTodos().length);
       for (const l of rows) expect([cols, l]).toEqual([cols, expect.stringMatching(/(done|running|queued|failed|blocked|waiting)/)]); // the state column at every width
       for (const l of rows) expect(textWidth(l)).toBeLessThanOrEqual(cols);
@@ -324,64 +329,62 @@ describe('hud fixes (round 3): whole names, dropped columns, task text, one TODO
   test('C1: a pane under 13 cells has no room for a state word and keeps the title alone', () => {
     const out = text(todoRows(worldTodos(), opts(12), full));
     for (const l of out.slice(1)) expect(textWidth(l)).toBeLessThanOrEqual(12);
-    expect(out.slice(1).some((l) => /done|running|queued/.test(l))).toBe(false);
+    expect(out.slice(1).some((l) => /done|running|queued/.test(l))).toBe(false); // the rows keep their glyph and label, the state words wait for room
   });
 
 });
 
 describe('critique 7 B4/B5: LAST and the column header at 110 columns', () => {
   const row = (o: Partial<AgentRow> & { name: string }): AgentRow => ({ state: 'running', model: 'haiku', tasks: [], tool: 'read alpha.py', ctx: null, focus: false, ...o });
-  test('B5 (critique 28): a short slot gives up the blank, then the column names, then plan rows (counted on the title), then the plan box; boxes stay closed and every agent keeps its row', () => {
+  test('B5 (critique 28): a short slot gives up the column names, then plan rows (counted on a summary row), then the plan box; boxes stay closed and every agent keeps its row', () => {
     const rows = [row({ name: 'alpha-explorer', task: 'read alpha.py' }), row({ name: 'beta-explorer', task: 'read beta.py' })];
     const todos: TodoRow[] = [0, 1, 2].map((i) => ({ label: `item${i}`, state: 'queued', detail: '', focus: false }));
     const at = (n: number): string[] => text(fitStack({ todos, agents: rows }, opts(110), n));
-    const full = at(11); // title + 3 plan rows + rule + title + column names + 2 agents + rule
-    expect(full).toHaveLength(10);
-    expect(full[4]).toMatch(/^╰─+╯$/);
-    expect(full[5]).toContain('SUBAGENTS'); // wave 31: no blank between the boxes
+    const full = at(11); // title + column names + 3 plan rows + rule + title + column names + 2 agents + rule
+    expect(full).toHaveLength(11);
+    expect(full[5]).toMatch(/^╰─+╯$/);
+    expect(full[6]).toContain('SUBAGENTS'); // no blank between the boxes
     expect(full.at(-1)).toMatch(/^╰─+╯$/);
     const tops = (o: string[]): number => o.filter((l) => l.startsWith('╭─ ') && l.endsWith('╮')).length;
     const bottoms = (o: string[]): number => o.filter((l) => /^╰─+╯$/.test(l)).length;
-    const names = (o: string[]): boolean => o.some((l) => /^ {4}AGENT +STATE +TASK +LAST +RESULT$/.test(l));
-    const blank = at(10); // the blank goes first, both rules and both corners stay
-    expect(blank).toHaveLength(10);
-    expect([tops(blank), bottoms(blank)]).toEqual([2, 2]);
-    expect(blank.filter((l) => l === '')).toHaveLength(0);
-    expect(names(blank)).toBe(true);
-    expect(blank.filter((l) => l.includes('queued')).length).toBe(3);
-    const bare = at(9); // critique 28: the column names go next; the boxes stay closed, every plan row and both agents stay
-    expect(bare.length).toBeLessThanOrEqual(9);
+    const names = (o: string[]): boolean => o.some((l) => /^│ {3}AGENT +ROLE +STATE/.test(l));
+    expect(names(full)).toBe(true);
+    const bare = at(10); // the column names go first; the boxes stay closed, every plan row and both agents stay
+    expect(bare).toHaveLength(9);
     expect([tops(bare), bottoms(bare)]).toEqual([2, 2]);
+    expect(bare.filter((l) => l === '')).toHaveLength(0);
     expect(bare.filter((l) => l.startsWith('── '))).toHaveLength(0);
     expect(names(bare)).toBe(false);
     expect(bare.filter((l) => l.includes('queued')).length).toBe(3);
     expect(bare.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
-    const win = at(7); // then plan rows fold into the title count (every agent keeps its row)
+    const win = at(7); // then plan rows fold into one summary row (every agent keeps its row)
     expect(win.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
-    expect(win.some((l) => /◇ 3 queued/.test(l)), win.join('\n')).toBe(true); // state 38: the plan rows left out ride one summary row (nothing is open, so all three)
+    expect(win.some((l) => /○ 3 queued/.test(l)), win.join('\n')).toBe(true); // state 38: the plan rows left out ride one summary row (nothing is open, so all three)
     expect(win[0]).not.toMatch(/\+\d+ more/);
     expect([tops(win), bottoms(win)]).toEqual([2, 2]);
     const packed = at(5); // then the plan box goes whole before an agent row is windowed
     expect(packed.filter((l) => /(alpha|beta)-explorer/.test(l))).toHaveLength(2);
-    expect(packed.some((l) => l.includes('▸ TODO'))).toBe(false);
+    expect(packed.some((l) => /^(╭─|──) TODO /.test(l))).toBe(false);
   });
-  test('B4: a doubled verb never reaches the row (RESULT is a count or a dash)', () => {
-    const out = text(agentRows([row({ name: 'alpha-explorer', tasks: [1], tool: 'read Read alpha.py' })], opts(110), full));
-    expect(out[2]).toMatch(/T1 +-\s+-\s*$/); // wave 31: TASK, LAST (a dash with no start), RESULT (a dash): the tool echo is not drawn
+  test('B4: a doubled verb never reaches the row (the adapter words the call once)', () => {
+    const [m] = agentModel([{ name: 'alpha-explorer', role: 'explorer', state: 'working', ui: 'running', tool: 'Read', target: '/r/alpha.py' }], [], '/r');
+    const out = text(agentRows([m!], opts(110), full));
+    expect(out[2]).toContain('read alpha.py');
     expect(out[2]).not.toContain('Read');
     expect(out[2]).not.toContain('read alpha.py read alpha.py');
   });
-  test('B4: a 53-cell TASK fits whole at 110 on the fixed grid (TASK takes the free width)', () => {
-    const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells: LAST starts at 52 of 110
-    const out = text(agentRows([row({ name: 'alpha-explorer', task: last, tool: 'read alpha.py' })], opts(110), full));
+  test('B4: a 53-cell outcome fits whole in NOW / RESULT at 110 (the column takes the free width)', () => {
+    const last = 'one two three four five six seven eight nine tenth ab'; // 53 cells
+    const out = text(agentRows([row({ name: 'alpha-explorer', tool: last })], opts(110), full));
     expect(out[2]).toContain(last);
     expect(out[2]).not.toContain('...');
     expect(textWidth(out[2]!)).toBeLessThanOrEqual(110);
   });
   test('B4: a done agent keeps its RESULT count (the row turning done does not blank it)', () => {
-    const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: '2 functions' })], opts(110), full));
+    const out = text(agentRows([row({ name: 'alpha-explorer', state: 'done', task: 'read alpha.py', tool: '2 functions', fn: 2 })], opts(110), full));
+    expect(out[1]).toMatch(/ FN /); // the figure is its own column, dropped only while no row has one
     expect(out[2]).toContain('done');
-    expect(out[2]).toMatch(/2 fn\s*$/);
+    expect(out[2]).toMatch(/\s2\s+│$/);
   });
 });
 
@@ -391,12 +394,12 @@ describe('critique 11 C4: the TODO box', () => {
     { label: 'T2 read beta.py (beta-explorer)', state: 'running', detail: 'beta-explorer', focus: true },
     { label: 'T4 combine the three reports', state: 'queued', detail: 'wave one', focus: false },
   ];
-  test('the owner is not printed twice: a detail the title already names is dropped (live-110-5d6a53ef-1 f0072 row 22)', () => {
+  test('the owner is named once: the title says it, no detail column prints it again (live-110-5d6a53ef-1 f0072 row 22)', () => {
     const out = text(todoRows(live(), opts(110), full));
-    expect(out[1]).toContain('(alpha-explorer)');
-    expect(out[1]!.match(/alpha-explorer/g)!.length).toBe(1);
-    expect(out[2]!.match(/beta-explorer/g)!.length).toBe(1);
-    expect(out[3]).toContain('wave one'); // a detail the title does not say stays
+    expect(out[2]).toContain('(alpha-explorer)');
+    expect(out[2]!.match(/alpha-explorer/g)!.length).toBe(1);
+    expect(out[3]!.match(/beta-explorer/g)!.length).toBe(1);
+    expect(out.join('\n')).not.toContain('wave one'); // the redesigned grid is ITEM STATE OWNER TIME: a plan row's evidence lives on the board, not in the HUD
   });
   test('the title rule of every block runs to the last cell, so the host\'s [-] ends it (live PNGs: [-] floated past a gap); the count and meter sit inside it', () => {
     for (const cols of [80, 110, 150]) {
@@ -408,18 +411,21 @@ describe('critique 11 C4: the TODO box', () => {
     expect(runsString(second)).toMatch(/ ─+╮$/);
     expect(textWidth(runsString(second))).toBe(110);
   });
-  test('a 110 column budget of 13 rows keeps all 5 plan rows, the column names, both closing rules and 3 agents; the blank is the row that goes (round 5)', () => {
+  test('a 110 column budget of 14 rows keeps all 5 plan rows, both column-name rows, both closing rules and 3 agents; one row fewer gives up the column names (round 5)', () => {
     const todos: TodoRow[] = [1, 2, 3, 4, 5].map((i) => ({ label: `T${i} item`, state: 'queued', detail: '', focus: false }));
     const agents = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map((name): AgentRow => ({ name, state: 'done', model: 'haiku', tasks: [], tool: 'read x.py', ctx: null, focus: false }));
-    const out = text(fitStack({ todos, agents }, opts(110), 13));
-    expect(out.length).toBe(13);
-    expect(out[6]).toMatch(/^╰─+╯$/);
-    expect(out[7]).toContain('SUBAGENTS'); // no blank between the boxes
-    expect(out[8]).toMatch(/^ {4}AGENT +STATE/);
+    const out = text(fitStack({ todos, agents }, opts(110), 14));
+    expect(out.length).toBe(14);
+    expect(out[7]).toMatch(/^╰─+╯$/);
+    expect(out[8]).toContain('SUBAGENTS'); // no blank between the boxes
+    expect(out[9]).toMatch(/^│ {3}AGENT +ROLE +STATE/);
     expect(out.filter((l) => /^╰─+╯$/.test(l))).toHaveLength(2);
     expect(out.filter((l) => l.includes('queued')).length).toBe(5); // all five plan rows still show
-    expect(out.filter((l) => /explorer +done/.test(l))).toHaveLength(3);
-    expect(text(fitStack({ todos, agents }, opts(110), 14))).toHaveLength(13); // one more row: nothing returns, there is no blank to give back
+    expect(out.filter((l) => /explorer +\S+ +done/.test(l))).toHaveLength(3);
+    expect(text(fitStack({ todos, agents }, opts(110), 15))).toHaveLength(14); // one more row: nothing returns, there is no blank to give back
+    const bare = text(fitStack({ todos, agents }, opts(110), 13));
+    expect(bare).toHaveLength(12); // the column names of both boxes go together
+    expect(bare.some((l) => /AGENT +ROLE/.test(l) || /ITEM +STATE/.test(l))).toBe(false);
   });
 });
 
@@ -474,8 +480,8 @@ describe('fix 1: a blocked row says why', () => {
   });
   test('running and queued rows draw no detail text', () => {
     const { hud } = fxFrame(110);
-    expect(hud.find((r) => r.includes('T2 read alpha.py'))!.trimEnd()).toMatch(/0:\d\d$/);
-    expect(hud.find((r) => r.includes('T6 write the summary'))!.trimEnd()).toMatch(/ -$/);
+    expect(hud.find((r) => r.includes('T2 read alpha.py'))!.trimEnd()).toMatch(/0:\d\d\s+│$/);
+    expect(hud.find((r) => r.includes('T6 write the summary'))!.trimEnd()).toMatch(/ -\s+│$/);
   });
   test('a lead-declared block names the blocked row reason on the band, not a bare `blocked 1:12`', () => {
     const { band } = fxFrame(150, { phase: 'blocked', agents: false });
@@ -518,7 +524,7 @@ describe('fix 3: the SUBAGENTS table gives way row by row, never all at once', (
   test('five running agents and five running plan rows in 11 and 12 rows: at least one agent row and a `more running` row, inside the budget', () => {
     for (const budget of [11, 12]) for (const cols of [110, 150]) {
       const rows = text(fitStack({ todos: todos(), agents: agents() }, o(cols), budget));
-      const shown = rows.filter((r) => /^ {2}\S+-explorer +\S+ running/.test(r));
+      const shown = rows.filter((r) => /^[│▌] \S \S+-explorer +\S+ +running/.test(r));
       expect(rows.length, rows.join('\n')).toBeLessThanOrEqual(budget);
       expect(shown.length, rows.join('\n')).toBeGreaterThanOrEqual(1);
       expect(rows.join('\n')).toMatch(new RegExp(`${5 - shown.length} more running`));
@@ -527,12 +533,12 @@ describe('fix 3: the SUBAGENTS table gives way row by row, never all at once', (
   });
   test('in 10 rows the open plan rows still outrank agent rows (wave 38): SUBAGENTS folds to its title on the plan rule', () => {
     const rows = text(fitStack({ todos: todos(), agents: agents() }, o(110), 10));
-    expect(rows.filter((r) => /^[ ▸] \S T\d .* running /.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => /^[│▌] \S T\d .* running /.test(r))).toHaveLength(5);
     expect(rows.at(-1)).toMatch(/SUBAGENTS .*5 running/);
   });
   test('with room for every agent the table draws them all and no summary row', () => {
     const rows = text(fitStack({ todos: todos(), agents: agents() }, o(110), 20));
-    expect(rows.filter((r) => /^ {2}\S+-explorer +\S+ running/.test(r))).toHaveLength(5);
+    expect(rows.filter((r) => /^[│▌] \S \S+-explorer +\S+ +running/.test(r))).toHaveLength(5);
     expect(rows.join('\n')).not.toMatch(/more running/);
   });
 });

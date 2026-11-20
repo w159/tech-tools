@@ -3,6 +3,7 @@ import type { ClientElements } from 'claude-code';
 import { busySnap, NOW } from '../../../live_fixture';
 import type { LiveSnapshot } from '../../../orchestra-types';
 import { forgetRefusals } from '../../../data/channels';
+import { resetReads } from '../../../data/readinfo';
 import { sidebarTree, type GateGroup, type SidebarHandlers, type SidebarModel } from './sidebar';
 
 const mk = (kind: string) => (props: Record<string, unknown>) => ({ kind, props });
@@ -55,6 +56,7 @@ const cases: Record<string, SidebarModel> = {
 
 export const serializeGolden = (): string => {
   forgetRefusals(); // a remembered Stop refusal is run state: a golden pane starts with none, whatever ran before
+  resetReads(); // so is how the gates were last read (the gates tab marks a failed or stale read): a golden pane starts with a clean one
   return JSON.stringify(Object.fromEntries(Object.entries(cases).map(([k, m]) => [k, sidebarTree(els, m, on)])), null, 1);
 };
 
@@ -68,7 +70,7 @@ const kidsOf = (n: Node): Node[] => {
 const flat = (n: Node): string => (n.kind === 'Text' ? String(n.props.children ?? '') : n.kind === 'Box' && n.props.width === 0 ? '' : (n.kind === 'Button' && n.props.hotkey ? `${String(n.props.hotkey)}: ` : '') + kidsOf(n).map(flat).join(n.kind === 'Box' && n.props.flexDirection !== 'row' ? '\n' : ''));
 
 /** One golden case as the plain text a terminal would show (rows joined by newlines). */
-export const goldenText = (name: string): string => (forgetRefusals(), flat(sidebarTree(els, cases[name]!, on) as unknown as Node));
+export const goldenText = (name: string): string => (forgetRefusals(), resetReads(), flat(sidebarTree(els, cases[name]!, on) as unknown as Node));
 
 /** A golden case's model, for hosts that paint the same layout without the Claude tree (omp parity tests). */
 export const goldenModel = (name: string): SidebarModel => cases[name]!;

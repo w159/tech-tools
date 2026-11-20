@@ -223,14 +223,6 @@ describe('X7: a chevron only inside a chip', () => {
     expect(c).toHaveLength(1);
     expect(c[0]!.bgHex).toBeDefined();
   });
-  test('the pane header keeps `▸ SIDEPANEL` as a dim breadcrumb (not a chip); the strip overflow is `more ›`', () => {
-    const m = panelWorld('gates', 48, ui, { rows: 39, run: { kind: 'idle', secs: 0, startMs: NOW, frame: 0 } } as never) as PanelModel;
-    const r = ribbonRow(m).runs;
-    const crumb = r.find((x) => x.t === ' ▸ ')!;
-    expect(crumb).toMatchObject({ tone: 'dim' });
-    expect(crumb.bgHex).toBeUndefined();
-    expect(r.map((x) => x.t).join('')).toContain('◖ ◆ ATLAS ◗ ▸ SIDEPANEL');
-  });
 });
 
 describe('X5: the band at the pane-open width keeps state, gates chip and the spark with its unit', async () => {

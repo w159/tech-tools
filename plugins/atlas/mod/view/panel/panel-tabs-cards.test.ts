@@ -45,15 +45,6 @@ describe('board (step 1)', () => {
       expect(out.join('\n')).not.toContain('...');
     }
   });
-  test('the failure is on the plan row only; there is no closing footer (wave 33: one kill shows once)', () => {
-    const doubted = [item(1), item(2, { label: 'T2 read the ghost module', owner: 'ghost-explorer', word: DONE_DOUBT })];
-    for (const stopRefused of [true, false]) {
-      const out = pane(doubted, 80, { stopRefused }).join('\n');
-      expect(out).toMatch(/■ T2 read the ghost module\s+failed\s+ghost-explorer/);
-      expect(out).not.toContain('Stop refusal');
-      expect(out.match(/\bfailed\b/g)).toHaveLength(1);
-    }
-  });
   test('a plan that is all done adds no closing line (wave 32, critique 30: `closed · 5 of 5 items done` repeated the summary row)', () => {
     expect(pane(five, 50).join('\n')).not.toMatch(/closed|of 5 items done/);
     expect(pane(five, 50).at(-1)).toMatch(/T5/);
@@ -76,23 +67,6 @@ describe('team tab (step 2)', () => {
     { name: 'beta', role: 'verifier', state: 'done' as const, secs: 3700, detail: 'verified' },
     { name: 'gamma', role: 'runner', state: 'queued' as const, secs: 5, detail: 'waits' },
   ];
-  test('one row per agent: glyph, name, role, state word, elapsed, with the columns aligned', () => {
-    const out = body('team', 80, { workers, lead: undefined, mates: [] }).filter((l) => /^[▸▹▿ ] ?\S [a-z-]+ /.test(l) && !l.includes('workers'));
-    expect(out).toHaveLength(4);
-    const col = (re: RegExp): number[] => out.map((l) => l.search(re));
-    expect(new Set(col(/ (explorer|verifier|runner)  /)).size).toBe(1); // the role column
-    expect(new Set(col(/  (running|failed|done|queued)( |$)/)).size).toBe(1); // the state word column
-    expect(out[0]).toMatch(/alpha +explorer +running +0:42 +[▁-█ ]{12}/);
-    expect(out[1]).toMatch(/ghost-explorer +explorer +failed +2:15 +[▁-█ ]{12}/);
-    expect(out[2]).toMatch(/beta +verifier +done +1:01:40 +[▁-█ ]{12}/);
-    expect(out[3]).toMatch(/gamma +runner +queued$/); // a queued agent has not started: no elapsed time
-  });
-  test('a tall pane does not stretch the team into four rows per agent: the detail opens on a press', () => {
-    const closed = body('team', 80, { workers, mates: [], rows: 40 });
-    expect(closed.filter((l) => /^ {4}(task|model|last) /.test(l))).toEqual([]);
-    const open = body('team', 80, { workers, mates: [], rows: 40, expanded: 'worker:alpha' });
-    expect(open.some((l) => /^ {4}last /.test(l) || /^ {4}read a\.py/.test(l))).toBe(true);
-  });
   test('a name that is its own role leaves the role column blank instead of saying it twice', () => {
     const out = body('team', 80, { workers: [{ name: 'implementer-band', role: 'implementer', state: 'running' as const, secs: 9, detail: '' }], mates: [] });
     expect(out.find((l) => l.includes('implementer-band'))).not.toMatch(/implementer-band +implementer/);
@@ -101,31 +75,6 @@ describe('team tab (step 2)', () => {
 
 describe('channel tab (step 3)', () => {
   const note = (over: Partial<PanelModel['notes'][number]> = {}): PanelModel['notes'][number] => ({ at: '10:02', from: 'lead', text: 'hello', ...over });
-  test('a generated launch id is not the title: the title is `this run`, the id leaves the head (critique 23)', () => {
-    for (const cols of [80, 50]) {
-      const head = body('channel', cols, { channel: 'lc-qksrlqem', people: 3, unread: 0, notes: [] })[0]!;
-      expect(head).toMatch(/^ {4}this run {2}3 people/);
-      expect(head).not.toMatch(/^ {4}lc-/);
-      expect(head).not.toContain('#lc-');
-      expect(cells(head)).toBeLessThanOrEqual(cols - 1);
-    }
-  });
-  test('posts carry the full name, and `killed` sits next to the `■`', () => {
-    const notes = [note({ from: 'ghost-explorer', kind: 'failed', text: 'worker killed' }), note({ from: 'implementer-layout', kind: 'handoff', text: 'T1 merged', at: '10:07' })];
-    for (const cols of [80, 50, 37]) {
-      const out = body('channel', cols, { notes, channel: 'lc-qksrlqem' }).join('\n');
-      expect([cols, out]).toEqual([cols, expect.stringContaining('ghost-explorer')]);
-      expect(out).toContain('implementer-layout');
-      expect(out).toMatch(/■ ghost-explorer +failed/);
-      expect(out).not.toMatch(/ghost-exp\.\.\./);
-      expect(out).not.toMatch(/ghost-exp…/);
-    }
-  });
-  test('a pane too narrow to keep the text beside a whole name gives the post two rows', () => {
-    const out = body('channel', 37, { notes: [note({ from: 'implementer-layout', text: 'T1 and T2 merged' })] });
-    const at = out.findIndex((l) => l.includes('implementer-layout'));
-    expect(out[at + 1]).toBe('    T1 and T2 merged');
-  });
 });
 
 describe('gates and core agree (step 4)', () => {
@@ -145,13 +94,6 @@ describe('gates and core agree (step 4)', () => {
     expect(out).toMatch(/evidence +5\/5/);
     expect(out).toMatch(/verified +0\/5/);
     expect(out).not.toMatch(/\b8\b/);
-  });
-  test('the gates tab states the same figure: waived, it reads `0/5 not required` on the same mark the core tab uses', () => {
-    const g = body('gates', 120, { core, todos, gates: gates(true) }).join('\n');
-    expect(g).toMatch(/Verified finding recorded +0\/5 not required/);
-    const c = body('core', 120, { core, todos, gates: gates(true) }).join('\n');
-    expect(c).toMatch(/verified +0\/5/);
-    expect(c).toMatch(/\d+ verified findings? so far, not required for this run/);
   });
   test('the dispatch route says the over-run once: the heading carries the count, the seat line only the plan', () => {
     const c = JSON.parse(JSON.stringify(core0)) as CoreModel;

@@ -32,7 +32,7 @@ const rowOf = (lines: readonly string[]): string => [...lines].reverse().find((l
 export const demoInput = (surface: 'todo' | 'agent', state: Shown, now: number): HudInput => (surface === 'todo' ? { todos: [TODO(state, now)], agents: [] } : { todos: [TODO(state, now, true)], agents: [AGENT(state, now)] }); // the agent owns the plan row: its done LAST column is the outcome that row carries
 /** The motion demo shows the plan row only: the SUBAGENTS table (wave 35) that closes a finished run is a separate box and carries no motion. */
 const planPart = (lines: readonly string[]): string[] => {
-  const at = lines.findIndex((l) => /^╭.*▸ SUBAGENTS/.test(bare(l)));
+  const at = lines.findIndex((l) => /^(╭─|──) SUBAGENTS /.test(bare(l)));
   return at > 0 ? lines.slice(0, at) : [...lines];
 };
 const FEED = { 'todo': 'hud-todo', 'agent': 'hud-agents' } as const;
