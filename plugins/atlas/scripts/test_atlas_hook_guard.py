@@ -324,6 +324,23 @@ class EmitDedupeTest(_GuardTestCase):
         self.assertIn("systemMessage", out.getvalue())
 
 
+class TeamGateRoutesTest(unittest.TestCase):
+    def _routes(self, tmux=True, **env):
+        base = {"ATLAS_TEAM_GATE": "on", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": ""}
+        base.update(env)
+        with mock.patch.dict(os.environ, base), mock.patch(
+            "shutil.which", return_value="/usr/bin/tmux" if tmux else None
+        ):
+            return guard.team_gate_routes()
+
+    def test_routes_only_with_tmux_gate_on_outside_omp(self):
+        self.assertTrue(self._routes())
+        self.assertFalse(self._routes(tmux=False))
+        self.assertFalse(self._routes(ATLAS_TEAM_GATE="off"))
+        self.assertFalse(self._routes(ATLAS_HARNESS="omp"))
+        self.assertFalse(self._routes(ATLAS_TOOLKIT_LOAD="omp"))
+
+
 class StateDirTest(unittest.TestCase):
     """Exercises the real _state_dir() body directly. Every other test class
     patches _state_dir itself via _GuardTestCase, which bypasses the

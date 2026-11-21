@@ -708,6 +708,7 @@ class RouteScopeTest(unittest.TestCase):
         os.makedirs(os.path.join(self.tmp, ".git"))  # scope is only stored in a real project
         os.environ["ATLAS_DB"] = os.path.join(self.tmp, "atlas.db")
         os.environ["ATLAS_DECISION"] = "off"
+        os.environ["ATLAS_TEAM_GATE"] = "off"  # these tests pin the in-process/crew text, not the gate route
 
     def tearDown(self):
         self.env.stop()
@@ -1150,10 +1151,48 @@ class RouteScopeDecisionTest(unittest.TestCase):
         self.assertIn("audit/high", nudge)
 
 
+class RouteNudgeTeamGateTest(unittest.TestCase):
+    """The armed nudge names the route the team gate accepts (guard.team_gate_routes is the shared predicate)."""
+
+    TEAM = [{"role": "implementer", "count": 2, "model": "sonnet"}]
+    ONE = [{"role": "implementer", "count": 1, "model": "sonnet"}]
+
+    def _nudge(self, team, tmux=True, env=None, cls="implement"):
+        base = {"ATLAS_TEAM_GATE": "on", "ATLAS_HARNESS": "", "ATLAS_TOOLKIT_LOAD": ""}
+        base.update(env or {})
+        with mock.patch.dict(os.environ, base), mock.patch(
+            "shutil.which", return_value="/usr/bin/tmux" if tmux else None
+        ):
+            return po._route_nudge(cls, "medium", team)
+
+    def test_gate_routes_names_spawn_team(self):
+        for team in (self.TEAM, self.ONE):
+            msg = self._nudge(team)
+            self.assertIn("spawn-team", msg)
+            self.assertNotIn("as atlas:* calls", msg)
+            self.assertNotIn("in-process atlas:implementer", msg)
+            self.assertLess(len(msg.encode()), po._NUDGE_MAX_BYTES)
+
+    def test_no_tmux_keeps_old_text(self):
+        self.assertIn("as atlas:* calls", self._nudge(self.TEAM, tmux=False))
+        self.assertIn("one in-process atlas:implementer call", self._nudge(self.ONE, tmux=False))
+
+    def test_gate_off_and_omp_keep_old_text(self):
+        for env in ({"ATLAS_TEAM_GATE": "off"}, {"ATLAS_HARNESS": "omp"}, {"ATLAS_TOOLKIT_LOAD": "omp"}):
+            msg = self._nudge(self.TEAM, env=env)
+            self.assertIn("as atlas:* calls", msg)
+            self.assertNotIn("spawn-team", msg)
+
+    def test_read_only_single_seat_stays_in_process(self):
+        team = [{"role": "explorer", "count": 1, "model": "haiku"}]
+        self.assertIn("in-process atlas:explorer", self._nudge(team, cls="audit"))
+
+
 class FinishLineTest(unittest.TestCase):
     def _nudge(self, effort):
         team = [{"role": "implementer", "count": 1, "model": "sonnet"}]
-        return po._route_nudge("fix", effort, team)
+        with mock.patch.dict(os.environ, {"ATLAS_TEAM_GATE": "off"}):
+            return po._route_nudge("fix", effort, team)
 
     def test_low_and_medium_carry_finish_line(self):
         for effort in ("low", "medium"):

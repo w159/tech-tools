@@ -956,12 +956,16 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
     working = [s for s in team if s.get("role") not in _CLOSING_ROLES]
     n = _working_seats(team)
     scope = "%s/%s" % (task_class, effort)
-    if n >= 2 and task_class in _READ_ONLY_CLASSES:
+    # Working classes are routed to a tmux team by the tripwire's team gate (same predicate), so name that route.
+    routed = task_class not in _READ_ONLY_CLASSES and atlas_hook_guard.team_gate_routes()
+    if n >= 2 and (task_class in _READ_ONLY_CLASSES or (routed and not crew_cmd)) or (n == 1 and routed):
         nxt = (
             'Next: python3 "%s/atlas_mux.py" spawn-team '
             "--class %s --effort %s --task '<task>' (tmux team; not in-process "
             "atlas:* calls)." % (_scripts_dir(), task_class, effort)
         )
+        if n == 1 and effort in ("low", "medium"):
+            nxt += " " + _FINISH_LINE
     elif n >= 2 and crew_cmd:
         nxt = (
             "Don't write those files or read them. ONE Bash call now: `%s` (a crew in THIS tree: "
@@ -989,6 +993,11 @@ def _route_nudge(task_class: str, effort: str, team: list, crew_cmd: str | None 
         "[atlas-orchestrate] Session armed: use the atlas:atlas-orchestrate skill "
         "and dispatch, not inline work."
     )
+    if routed and n >= 1 and not (crew_cmd and n >= 2):
+        head = (
+            "[atlas-orchestrate] Session armed: use the atlas:atlas-orchestrate skill "
+            "and route to a tmux team, not inline work."
+        )
     if crew_cmd and n >= 2 and task_class not in _READ_ONLY_CLASSES:
         head = "[atlas-orchestrate] Session armed."
         seats = "atlas crew"
