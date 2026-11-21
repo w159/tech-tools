@@ -908,6 +908,94 @@ def check_context_tooling(root_path=None):
     )
 
 
+FOOTPRINT_MAIN_MAX = 70_000  # tokens a main session may carry before any work
+FOOTPRINT_SUBAGENT_MAX = 40_000  # median for atlas:* subagents
+_FOOTPRINT_LINE_CAP = 400  # rows read per transcript; the first usage row sits within ~50
+
+
+def _first_turn_tokens(path):
+    """(tokens, mcp_names) from one transcript. tokens is input + cache read +
+    cache creation of the first row with message.usage, or None. mcp_names is
+    the set of mcp__* tool names offered before that row (deferred_tools_delta
+    attachments). Stops at the usage row or the line cap; malformed lines skip."""
+    names = set()
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for i, line in enumerate(f):
+            if i >= _FOOTPRINT_LINE_CAP:
+                break
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            att = row.get("attachment")
+            if isinstance(att, dict) and att.get("type") == "deferred_tools_delta":
+                names.update(n for n in att.get("addedNames") or [] if isinstance(n, str) and n.startswith("mcp__"))
+            msg = row.get("message")
+            usage = msg.get("usage") if isinstance(msg, dict) else None
+            if isinstance(usage, dict):
+                total = sum(int(usage.get(k) or 0) for k in ("input_tokens", "cache_read_input_tokens", "cache_creation_input_tokens"))
+                return total, names
+    return None, names
+
+
+def check_context_footprint(root_path=None):
+    """Report the input tokens a main session and atlas:* subagents carry before
+    any work (read from the project's newest Claude Code transcripts) and warn
+    when they are high. Returns (ok, detail); never raises. No transcript, or
+    an unreadable one, is "(n/a)" and passes."""
+    try:
+        import statistics
+
+        import atlas_colony_model as cm
+
+        root = root_path or _repo_root(os.getcwd())
+        pdir = cm._claude_projects_root() / cm._cwd_slug(root)
+        mains = sorted(pdir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+        main_tokens, names = None, set()
+        for p in mains[:3]:  # newest with a usage row (a just-opened session may have none yet)
+            main_tokens, names = _first_turn_tokens(p)
+            if main_tokens is not None:
+                break
+        subs = []
+        for p in sorted(pdir.glob("*/subagents/*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)[:40]:
+            try:
+                kind = json.loads(p.with_suffix(".meta.json").read_text(encoding="utf-8")).get("agentType", "")
+            except (OSError, ValueError, AttributeError):
+                continue
+            if isinstance(kind, str) and kind.startswith("atlas:"):
+                t, _ = _first_turn_tokens(p)
+                if t is not None:
+                    subs.append(t)
+            if len(subs) >= 5:
+                break
+        if main_tokens is None and not subs:
+            return True, "no Claude Code transcript with usage for this project (n/a)"
+        sub_med = int(statistics.median(subs)) if subs else None
+        counts = {}
+        for n in names:
+            srv = n.split("__")[1] if n.count("__") >= 2 else None
+            if srv:
+                counts[srv] = counts.get(srv, 0) + 1
+        top = ", ".join(f"{s} ({c})" for s, c in sorted(counts.items(), key=lambda kv: -kv[1])[:3])
+        nums = (
+            f"main session {main_tokens if main_tokens is not None else 'unknown'} tokens"
+            f" (limit {FOOTPRINT_MAIN_MAX}), atlas subagent median "
+            f"{sub_med if sub_med is not None else 'unknown'} tokens (limit {FOOTPRINT_SUBAGENT_MAX})"
+        )
+        high = (main_tokens or 0) > FOOTPRINT_MAIN_MAX or (sub_med or 0) > FOOTPRINT_SUBAGENT_MAX
+        if not high:
+            return True, nums
+        return False, (
+            f"{nums} before any work" + (f"; most MCP tool names from: {top}" if top else "")
+            + ". Disable unused MCP servers for this project in /mcp (Claude Code records it per project "
+            "in ~/.claude.json under disabledMcpServers), then update atlas so its agents stop inheriting vendor tools."
+        )
+    except Exception as e:  # a diagnostic must never break the doctor
+        return True, f"context footprint unreadable (n/a): {type(e).__name__}"
+
+
 def fix_context_tooling(root_path=None):
     """--fix only: append the atlas-tooling block to an EXISTING AGENTS.md that
     lacks the marker. Never creates the file, never touches a file that already
@@ -2160,6 +2248,11 @@ def _content_checks(add, ctx, ip, clone, plugin_name):
     # on every unscaffolded repo a user opens.
     tooling_ok, tooling_detail = check_context_tooling()
     add("context-tooling", tooling_ok, tooling_detail, severity="warn")
+
+    # C11a: fixed per-turn prefix of a session and of atlas subagents; WARN
+    # only, and never in --hook output (the hook prints failed non-warn checks).
+    fp_ok, fp_detail = check_context_footprint()
+    add("context-footprint", fp_ok, fp_detail, severity="warn")
 
     # C11b: omp cheap-tier roles; WARN-severity (omp-only, user config).
     mr_ok, mr_detail = check_omp_model_roles()
