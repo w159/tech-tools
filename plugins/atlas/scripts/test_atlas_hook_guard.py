@@ -20,6 +20,9 @@ from unittest import mock
 # forkserver on 3.14+), and forkserver startup broke with BrokenPipeError in CI.
 _MP = multiprocessing.get_context("spawn")
 
+_WORKER_LOCK_TIMEOUT_SECONDS = 60.0
+_JOIN_TIMEOUT_SECONDS = 120
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
@@ -35,6 +38,12 @@ def _should_run_worker(hookstate_dir, session_id, hook_name):
     sys.path.insert(0, HERE)
     import atlas_hook_guard as worker_guard
 
+    # The production 1s fail-open bound is a promise the guard keeps under
+    # load by design (a starved worker proceeds unlocked and loses its write).
+    # These tests prove the lock itself, so lift the bound to avoid asserting
+    # on scheduler luck.
+    worker_guard.LOCK_TIMEOUT_SECONDS = _WORKER_LOCK_TIMEOUT_SECONDS
+
     worker_guard.should_run({"session_id": session_id}, hook_name, window_seconds=None)
 
 
@@ -46,6 +55,12 @@ def _emit_worker(hookstate_dir, session_id, message):
     os.environ["ATLAS_HOOKSTATE_DIR"] = hookstate_dir
     sys.path.insert(0, HERE)
     import atlas_hook_guard as worker_guard
+
+    # The production 1s fail-open bound is a promise the guard keeps under
+    # load by design (a starved worker proceeds unlocked and loses its write).
+    # These tests prove the lock itself, so lift the bound to avoid asserting
+    # on scheduler luck.
+    worker_guard.LOCK_TIMEOUT_SECONDS = _WORKER_LOCK_TIMEOUT_SECONDS
 
     with mock.patch("sys.stdout", io.StringIO()):
         worker_guard.emit({"session_id": session_id}, "nudge", message)
@@ -393,7 +408,7 @@ class ConcurrencyTest(unittest.TestCase):
         for p in procs:
             p.start()
         for p in procs:
-            p.join(timeout=10)
+            p.join(timeout=_JOIN_TIMEOUT_SECONDS)
             self.assertEqual(p.exitcode, 0, "worker process %s failed" % p.pid)
 
         state_path = os.path.join(tmp, session_id + ".json")
@@ -423,7 +438,7 @@ class ConcurrencyTest(unittest.TestCase):
         for p in procs:
             p.start()
         for p in procs:
-            p.join(timeout=10)
+            p.join(timeout=_JOIN_TIMEOUT_SECONDS)
             self.assertEqual(p.exitcode, 0, "worker process %s failed" % p.pid)
 
         state_path = os.path.join(tmp, session_id + ".json")
