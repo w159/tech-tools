@@ -380,6 +380,33 @@ class WorkerReportGateTest(unittest.TestCase):
         self.assertEqual([m.get("exit_code") for m in mem], [0])
         self.assertTrue(all("ended_at" in m for m in mem))
 
+    def test_blocked_stop_still_stamps_member_finished(self):
+        # Round-3 capture: a background explorer's report failed the format check, the hook
+        # blocked, and the host never fired a second stop, so the member stayed running.
+        sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))
+        import atlas_todo as todo
+
+        root = os.path.realpath(tempfile.mkdtemp(dir=WORK))
+        subprocess.run(["git", "-C", root, "init", "-q"], check=True)
+        todo.open_lead_channel(root, "lead-x", ["explorer-ab12"])
+        todo.set_member_agent_id(root, "explorer-ab12", "aae39746167210093")
+        r = self.run_hook(
+            payload(
+                agent_id="aae39746167210093",
+                agent_type="atlas:explorer",
+                cwd=root,
+                last_assistant_message="not the report container",
+            )
+        )
+        self.assertIn('"decision": "block"', r.stdout)
+        mem = [
+            m
+            for c in todo._reg_read(root)["channels"].values()
+            for m in c["members"]
+            if m["name"] == "explorer-ab12"
+        ]
+        self.assertEqual([m.get("exit_code") for m in mem], [0])
+
     def _stop_unmapped(self, names, agent_type="atlas:implementer"):
         # SubagentStop with no recorded agent_id mapping and no report (async launch).
         sys.path.insert(0, os.path.join(os.path.dirname(HOOK), "..", "scripts"))

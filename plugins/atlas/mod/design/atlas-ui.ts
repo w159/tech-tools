@@ -73,9 +73,12 @@ export function asciiMode(env: UiEnv = hostEnv()): boolean {
   return loc !== '' && loc !== 'C.UTF-8' && !/utf-?8/i.test(loc);
 }
 
-/** `none` when NO_COLOR is set and non-empty, `256` unless COLORTERM says truecolor/24bit (or is unset: the hosts are truecolor), else truecolor. */
+/** `none` when NO_COLOR is set and non-empty, `256` inside tmux (TMUX set), `256` unless COLORTERM says truecolor/24bit (or is unset: the hosts are truecolor), else truecolor. */
 export function colorMode(env: UiEnv = hostEnv()): ColorMode {
   if (env.NO_COLOR) return 'none';
+  // Inside tmux the Claude Code host downgrades to 256 colours whatever COLORTERM inherited (live capture 2026-11-20), and its own hex -> index
+  // formula turns the panel #181825 into navy 17; answering '256' hands it the pre-images that land on greys instead.
+  if (env.TMUX) return '256';
   const ct = (env.COLORTERM ?? '').toLowerCase();
   if (ct === 'truecolor' || ct === '24bit') return 'truecolor';
   return /256/.test(env.TERM ?? '') && !ct ? '256' : 'truecolor';

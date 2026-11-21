@@ -323,16 +323,17 @@ def close_board_item(atlas_todo, root, who, msg, report):
     )
 
 
-def reap_member(atlas_todo, root, who, msg=None, report=None):
+def reap_member(atlas_todo, root, who, msg=None, report=None, settle_board=True):
     """Shared by the Claude SubagentStop hook and omp's `member-finish`: settle the board
     item (report, else archived), mark the member finished, drop it from its channels."""
-    close_board_item(atlas_todo, root, who, msg, report)
+    if settle_board:
+        close_board_item(atlas_todo, root, who, msg, report)
     atlas_todo.mark_finished(root, who, 0)
     for ch in list(atlas_todo._reg_read(root)["channels"]):
         atlas_todo.leave(root, ch, who)
 
 
-def finish_member(p, msg=None, report=None):
+def finish_member(p, msg=None, report=None, settle_board=True):
     """Mark the stopping agent's channel member finished and drop it from its channel,
     so channels.json stops accumulating. Fail-open. The payload carries no member name
     for Claude Task subagents, only omp's `agent_name`; agent_id is tried as a fallback.
@@ -353,7 +354,7 @@ def finish_member(p, msg=None, report=None):
                 atlas_todo, root, str(p.get(key) or "")
             )
             if who:
-                reap_member(atlas_todo, root, who, msg, report)
+                reap_member(atlas_todo, root, who, msg, report, settle_board)
                 return
         # No id/name hit (async launch gave no agentId): fall back to the one unfinished,
         # unmapped member whose name is the agent type, starts "<type>-" or ends "-<type>"
@@ -374,7 +375,7 @@ def finish_member(p, msg=None, report=None):
                 )
             }
             if len(cands) == 1:
-                reap_member(atlas_todo, root, cands.pop(), msg, report)
+                reap_member(atlas_todo, root, cands.pop(), msg, report, settle_board)
             elif cands:
                 import atlas_faults
 
@@ -448,6 +449,9 @@ def _stop(p, handed):
     if not marker_claimed(key):
         finish_member(p)  # blocked once already: this is the final report
         return False
+    # A blocked background agent may never fire a second stop (the round-3 capture ended at the
+    # block), so stamp the member now; the board item stays open for a valid retry to settle.
+    finish_member(p, settle_board=False)
     reason = (
         "Your final message is not the atlas report container ("
         + "; ".join(problems)

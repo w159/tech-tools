@@ -96,6 +96,15 @@ test('queuedMembers: an open roster member that is not the lead and not in the s
   expect([...workerStates(s, liveWorkers(s, NOW))]).toEqual([['b-2', 'queued'], ['a-1', 'running']]);
 });
 
+test('queuedMembers: a member whose agent_id matches a host row is listed under another name; an unmatched id stays queued', () => {
+  const sq = (name: string, id: string) => ({ name, id, persona: 'explorer', state: 'running' as const, source: 'task' as const, task: '' });
+  const s = busySnap({ squad: [sq('alpha-explorer', 'ag1'), sq('beta-explorer', 'ag2')], activity: {} });
+  s.members = [{ name: 'explorer-4955', agent_id: 'ag1' }, { name: 'explorer-0488', agent_id: 'ag2' }, { name: 'explorer-8218', agent_id: 'ag9' }];
+  expect(queuedMembers(s)).toEqual(['explorer-8218']);
+  s.members = s.members.slice(0, 2);
+  expect(queuedMembers(s)).toEqual([]);
+});
+
 test('withOwnerStates attaches the owner state to the items whose owner is a listed worker or a queued member', () => {
   const states = new Map([['a-1', 'failed' as const]]);
   expect(withOwnerStates([{ owner: 'a-1', id: 1 }, { owner: 'you', id: 2 }, { id: 3 }], states)).toEqual([{ owner: 'a-1', id: 1, ownerState: 'failed' }, { owner: 'you', id: 2 }, { id: 3 }]);

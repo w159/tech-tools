@@ -189,6 +189,7 @@ export function mergeSquad(
       source: 'colony',
       lastNoteTs: last?.ts,
       paneId: m.pane_id,
+      ...(m.agent_id ? { id: m.agent_id } : {}),
     });
   }
   const byName = new Map<string, SquadAgent>();
@@ -201,10 +202,14 @@ export function mergeSquad(
       source: 'task',
     });
   }
+  // A colony member and a host row for one in-process subagent share the host agent id but not the name
+  // (the host row is labelled from the Agent call, the member from the dispatch hook): one agent, one row.
+  const byId = new Map<string, SquadAgent>();
+  for (const t of byName.values()) byId.set(t.id ?? t.name, t);
   for (const c of colony) {
-    const t = byName.get(c.name);
+    const t = byName.get(c.name) ?? (c.id ? byId.get(c.id) : undefined);
     // Task source is the native, instant one (plan §2); colony only supplements it.
-    byName.set(c.name, t
+    byName.set(t ? t.name : c.name, t
       ? { ...t, paneId: t.paneId ?? c.paneId, lastNoteTs: t.lastNoteTs ?? c.lastNoteTs }
       : c);
   }

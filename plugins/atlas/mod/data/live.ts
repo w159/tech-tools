@@ -117,8 +117,10 @@ export function workerUiState(state: string): UiState {
 /** Dispatched members the host does not list: roster rows still open (no `ended_at`), not the lead, not in the squad. Each is
  * a queued worker on every surface, until the host lists it. */
 export function queuedMembers(s: Pick<LiveSnapshot, 'members' | 'squad'>): string[] {
+  // Same identity rule as mergeSquad: host agent id first, then name (the host row carries the lead's label, the member the hook's).
   const listed = new Set(s.squad.map((a) => a.name));
-  const names = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && x.name !== 'lead' && !x.name.startsWith('lead-') && !listed.has(x.name)).map((x) => x.name);
+  const listedIds = new Set(s.squad.flatMap((a) => (a.id ? [a.id] : [])));
+  const names = s.members.filter((x) => !x.ended_at && x.role !== 'lead' && x.name !== 'lead' && !x.name.startsWith('lead-') && !listed.has(x.name) && !(x.agent_id && listedIds.has(x.agent_id))).map((x) => x.name);
   return [...new Set(names)];
 }
 

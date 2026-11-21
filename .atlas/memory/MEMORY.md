@@ -63,3 +63,9 @@ Assumption to avoid (tech-tools): - **Live check can't pass by skipping:** with 
 Assumption to avoid (tech-tools): - A `--require-live` flag so a live check that didn't run fails instead of skipping.
 §
 Assumption to avoid (tech-tools): because I need the name of the fixture field that `r6_train.jsonl` rows carry. I assumed `fixture`, and the existing gtrain rows have no such field, so they would keep the masked-text grouping. [noted 2026-11-18]
+§
+Assumption to avoid (tech-tools): `test.each` isn't supported by this test shim (1 error, tests didn't run). [noted 2026-11-21]
+§
+Assumption to avoid (tech-tools): That path never ran the cleanup, and no `agent.spawn` follows, so the row stayed. [noted 2026-11-21]
+§
+Assumption to avoid (tech-tools): The index-exact path (`surfaceHex`/`fitHex`/`EXACT_256`, line 174 on) only runs when the mode is `256`, so it never ran. [noted 2026-11-21]

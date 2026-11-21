@@ -10,7 +10,7 @@
 
 </div>
 
-Current versions: atlas 17.34.0, armada 2.5.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
+Current versions: atlas 17.34.1, armada 2.5.0, programmer 1.0.5 (from each `plugins/<name>/.claude-plugin/plugin.json`). Release history: [atlas](plugins/atlas/CHANGELOG.md), [armada](plugins/armada/CHANGELOG.md), [programmer](plugins/programmer/CHANGELOG.md).
 
 Upgrading from 15.x: the 13 vendor MCP connectors moved to the armada plugin in atlas 16.0.0. Install `armada@tech-tools` to keep them, see [plugins/armada/README.md](plugins/armada/README.md#upgrading-connectors-moved-from-atlas-to-armada).
 
@@ -85,38 +85,39 @@ Terms used below: a "colony" is the set of named worker subagents a lead session
 
 ## What it looks like
 
-Pictures marked as renders below are not screenshots of a live session. They are
-drawn by the mod's own view code (`bandTree`, `hudRows`, `sidebarTree` under
-`plugins/atlas/mod/view/`) from the test fixture scenario, with the version string
-17.34.0, then turned into PNG with headless Chrome. The pictures marked "from an
-earlier build" are older captures of the installed plugin. The rendered text of
-each surface is in [plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
+The pictures below are real screenshots of this build (17.34.1). Claude Code (and omp
+for the widget) ran the plugin in a tmux pane on a scratch project, `tmux capture-pane`
+took the screen, and headless Chrome turned it into PNG; the dashboard pictures are
+headless Chrome screenshots of the running Command Center. Each terminal picture is
+cropped above the status line. The text of each surface is in
+[plugins/atlas/README.md](plugins/atlas/README.md#in-terminal-mod).
 
 **Mission Control band.** The band is the row above the prompt: the `◆ ATLAS` pill,
-then the run state with its clock (`◐ working 0:14`, `✓ done 0:14`), `todo N/M`
-with a count of failed items (`todo 2/5 ✗1`), and the agent count (`◐ 3 running`,
-`✓ 2 done · ✗1`). A failing gate adds a chip that opens the gates tab. While a
-run is on, the band reads `working` with a turning circle-quarter spinner
-(`◐◓◑◒`). The run clock starts at your prompt, never steps back, and stops when
+then the run state (`research 1/6` with a segmented phase bar and a turning spinner
+while a run is on, `done 6/6` after it, `idle up 1:26` at rest), a gates pill
+(`1 denied` in red, `gates ok` in green) that opens the gates tab, and the tool rate
+(`tools` with a spark and a per-minute figure). Wider terminals add hook latency and
+context use. The run clock starts at your prompt, never steps back, and stops when
 Claude Code reports its turn idle; a closed run has one total, so the band, run
 card, side panel and board print the same figure. A run that ends with a failed
 worker or a refused stop reads `blocked`, not `idle`, until a new run starts.
 `ATLAS_BAND_RICH=1` draws a tall form with the phase rail.
 
 The HUD under the band draws the TODO and SUBAGENTS boxes. TODO rows share the
-columns `ITEM STATE OWNER TIME`; the title carries a done count and a segmented
-bar (`2/5 · ×1`). SUBAGENTS is a table of `AGENT ROLE STATE NOW / RESULT TIME`.
+columns item, state, owner and time; the title carries a done count and a segmented
+bar (`2/5 · ×1`). SUBAGENTS is a table with one row per agent: name, role, state, the last action or
+result, and time.
 Rows that do not fit are counted on one dim summary row inside the box, and a
 running or failed row is the last to hide. A run holds its HUD height from the
 first frame, so the band keeps its screen row.
 
-![TODO and SUBAGENTS boxes with three workers running (render of the mod view code with fixture data)](img/showcase/mod-band-running.png)
+![Three explorers running: the band, the TODO box with two rows shown and the rest folded, the SUBAGENTS box titled 3 running, and the status tab of the side panel](img/showcase/live-band-running.png)
 
 After the workers end the rows read `done` or `failed` and the box titles count
-them. This render shows the fixture's failed state: two workers done and one
-failed (`✗ 1 failed  ✓ 2 done`).
+them. The run card (`done 5/5 · 3 workers`) sits in the transcript above the band,
+and the status tab lists the plan and the team as done.
 
-![TODO and SUBAGENTS boxes after the workers ended, one of them failed (render of the mod view code with fixture data)](img/showcase/mod-band-finished.png)
+![The same run finished: run card, band done 6/6, TODO and SUBAGENTS boxes all done, status tab](img/showcase/live-band-done.png)
 
 The side panel has four clickable tabs: `health`, `status`, `gates` and `channel`.
 `gates` carries its denial count and `channel` its unread count as badges. Every
@@ -131,36 +132,41 @@ never says `done` while a dispatch is open or a worker runs. The transcript gets
 one-row cards: a finish card per worker, one run card per clean run, and one
 blocked card per blocked spell.
 
-![The four side panel tabs: health, status, gates, channel (render of the mod view code with fixture data)](img/showcase/mod-panel-tabs.png)
+![Health tab: session, context, hook latency, tool rate, denials and the RUNS chart](img/showcase/live-tab-health.png)
 
-An idle session shows live health with history instead of an empty band. A small
-history (last 50 runs, hook latency) is kept in `.atlas/.run/history.json`, so a
-returning project shows its last run and median at idle. Below 144 columns, where
-the host does not dock the side pane at rest, a two-row idle strip above the band
-carries the summary.
+![Gates tab: each gate with a pass mark, and the denial count](img/showcase/live-tab-gates.png)
+
+![Channel tab: the lead's channel with the workers' posts and finish notes, and the composer](img/showcase/live-tab-channel.png)
+
+An idle session shows live health instead of an empty band: the band reads
+`idle up 1:26 | gates ok | tools 0/m`, and the status tab shows the phase rail, the
+last run and the release. The side panel stays docked at 110 columns, where the
+phase rail wraps to two lines.
+
+![Idle session at 150 columns with the side panel docked](img/showcase/live-idle-150.png)
+
+![The same idle session at 110 columns](img/showcase/live-idle-110.png)
+
+A small history (last 50 runs, hook latency) is kept in `.atlas/.run/history.json`,
+so a returning project shows its last run and median at idle.
 
 In paired scoring against btop and htop the mods reach a mean of 5.33 in a fresh
 session and 5.75 with history, against 7.75 for btop; the target of 8 was not met
-([audit](docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). The scoring used the
-earlier build.
+([audit](docs/audits/2026-11-15_atlas-mods-expert-rounds.md)). The scoring used an
+earlier version of the mods.
 
 **Parallel teams.** Two or more workers run side by side in one tmux window,
 each pane headed by its role, with tool and peer chips.
 
-![Three workers tiled in tmux](img/showcase/cc-team.png)
-
-This picture is from an earlier build.
+![A three-member tmux team tiled in one window, each pane headed by its role](img/showcase/live-team-tiles.png)
 
 **Gates in the transcript.** A dispatch that breaks a rule is refused with the
-command that fixes it. A worker's card updates in place when it reports.
+command that fixes it. Here an in-process implementer dispatch is refused by the
+hook with the `ROUTE - this work goes to a tmux team` message; no agent row is
+created: the SUBAGENTS box reads `agents appear here` and the TEAM list reads `no agents yet`.
+The TODO rows are the lead's plan, not agents, and stay queued.
 
-![Scope deny card](img/showcase/cc-scope-deny.png)
-
-This picture is from an earlier build.
-
-![Worker done cards in the transcript, with the band and boxes below](img/showcase/cc-card-done.png)
-
-This picture is from an earlier build.
+![A refused implementer dispatch: the ROUTE message in the transcript and no agent row](img/showcase/live-route-deny.png)
 
 ## What it changes on your machine
 
@@ -316,12 +322,11 @@ tripwire. omp has two extras:
   At the start of each prompt the open items are listed in the context, and a
   stop is refused (up to 3 times per prompt) until each is closed with
   evidence.
-- **Mission Control widget.** The same band as Claude Code, inside omp's
-  widget area.
+- **Mission Control widget.** A three-segment band (state, `todo n/m`, worker
+  counts) inside omp's widget area, with one row per agent, the latest channel
+  message and the gate checks.
 
-![omp widget during a team run](img/showcase/omp-widget.png)
-
-This picture is from an earlier build.
+![omp widget during a team run: todo tree, band, one row per agent, the latest channel message and the gate checks](img/showcase/live-omp-widget.png)
 
 The parity matrix is in [docs/architecture/atlas-harness-parity.md](docs/architecture/atlas-harness-parity.md).
 
@@ -331,9 +336,7 @@ A loopback-only dashboard (`http://127.0.0.1:7421/`), off by default and started
 at session start with `ATLAS_DASHBOARD=on`, is shared by every open terminal. It reads the same telemetry DB, boards and
 channels the hooks write.
 
-![Overview](img/showcase/dashboard-overview.png)
-
-This picture is from an earlier build.
+![Overview](img/showcase/live-dashboard-overview.png)
 
 | Page | What it shows |
 |---|---|
@@ -348,10 +351,8 @@ This picture is from an earlier build.
 | Projects | Pin, mute or hide projects |
 | Settings | Five tabs: Dashboard, Behavior, Models, Integrations, Agents. A saved knob applies on the next hook run |
 
-![Health](img/showcase/dashboard-health.png)
-![Improve](img/showcase/dashboard-improve.png)
-
-This picture is from an earlier build.
+![Health](img/showcase/live-dashboard-health.png)
+![Improve](img/showcase/live-dashboard-improve.png)
 
 Every route checks the `Host` header, content type, origin and, for mutations,
 a per-start token. Details: [docs/architecture/atlas-workboard.md](docs/architecture/atlas-workboard.md).

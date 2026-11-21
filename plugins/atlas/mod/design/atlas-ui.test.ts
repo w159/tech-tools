@@ -4,7 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { world } from '../../contracts/band-world';
 import {
   asciiMode, ATLAS_GLYPHS, capsule, GLYPH5, SPIN_FRAMES, CHIP_W, chip, chipCount, clip, colorMode, contrast, countRuns, easedFrames, easedValue, easeOutCubic,
-  emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, hostTo256, inkFor, stable256Indices, xtermHex, luminance, PALETTES, percent, rail, ribbon,
+  emittedPairs, gauge, gaugeEighths, gaugeParts, gaugeText, glyphTone, hexTo256, hostTo256, inkFor, stable256Indices, surfaceHex, xtermHex, luminance, PALETTES, percent, rail, ribbon,
   runKind, runsCells, runsString, sgrColor, sparkline, spinFrameOf, spinnerFrame, spinnerGlyph, stateChip, stateGlyph, stateRun, STATE_ASCII,
   STATE_GLYPHS, STATE_TOKEN, themeName, toneHex, uiFromEnv, UI_STATES, type Ui,
 } from './atlas-ui';
@@ -58,6 +58,21 @@ describe('environment', () => {
     expect(colorMode({ TERM: 'xterm-256color' })).toBe('256');
     expect(colorMode({ TERM: 'xterm-256color', COLORTERM: 'truecolor' })).toBe('truecolor');
     expect(uiFromEnv({ ATLAS_THEME: 'latte', ATLAS_ASCII: '1', NO_COLOR: '1' })).toEqual({ theme: 'latte', ascii: true, color: 'none' });
+  });
+  test('tmux: the host downgrades to 256 colours even when COLORTERM says truecolor, so the surfaces resolve to the grey ramp, never navy 17', () => {
+    const tmuxEnv = { TMUX: '/tmp/tmux-501/default,123,0', COLORTERM: 'truecolor', TERM: 'tmux-256color' };
+    const ui = uiFromEnv(tmuxEnv);
+    expect(ui.color).toBe('256');
+    for (const tok of ['panel', 'base'] as const) {
+      const index = hostTo256(surfaceHex(tok, ui)); // what the host's own downsampler lands on
+      expect([tok, index >= 232 && index <= 255]).toEqual([tok, true]); // grey ramp, so no blue-only cube index such as 17
+    }
+    expect(colorMode({ ...tmuxEnv, NO_COLOR: '1' })).toBe('none');
+  });
+  test('truecolor outside tmux is unchanged: the panel stays #181825', () => {
+    const ui = uiFromEnv({ COLORTERM: 'truecolor', TERM: 'xterm-256color' });
+    expect(ui.color).toBe('truecolor');
+    expect(surfaceHex('panel', ui)).toBe('#181825');
   });
   test('256-colour indexes and SGR parameters', () => {
     expect(hexTo256('#000000')).toBe(16);

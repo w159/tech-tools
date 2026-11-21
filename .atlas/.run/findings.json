@@ -14628,5 +14628,41 @@
     "verified_at": "2026-11-20T21:57:49+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "round3-subagentstop-finish",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Blocked SubagentStop now stamps member finished (replay of real payload); denied dispatch leaves no rows already holds",
+    "evidence": [
+      "plugins/atlas/hooks/worker_report_gate_core.py:451 (finish_member before block); test_worker_report_gate.py test_blocked_stop_still_stamps_member_finished; pytest 499 passed; bun test 4703 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "replay SubagentStop payload (agent a0c33e5cd0c020e95, handback msg) on HEAD vs worktree hook with ATLAS_REPORT_GATE_DIR temp: HEAD member exit_code absent, worktree stamped",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T01:41:51+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-cc9b"
+  },
+  {
+    "id": "REL-17-34-1",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "pre-push check of atlas 17.34.1",
+    "evidence": [
+      "claims 1-7 pass: no privacy hits in diffs/untracked text, 13 live-*.png opened and clean, versions 17.34.1, README refs exist, check_versions ok, evidence paths exist, no stray files"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff -U0 | grep patterns; Read live-*.png; check_versions.py; release_notes.py 17.34.1",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T02:30:42+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]

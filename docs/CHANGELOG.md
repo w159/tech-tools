@@ -1,5 +1,15 @@
 # Changelog
 
+## atlas 17.34.1, marketplace 5.41.1 - 2026-11-20 -- fixes found by live README captures
+
+Source: real Claude Code sessions run for the README pictures (kept evidence under `.atlas/evidence/2026-11-20_live-capture-phantom-rows/`; raw transcripts and full-screen frames were not committed because they carry the owner's status line and local paths). Details in `plugins/atlas/CHANGELOG.md` (17.34.1).
+
+- Fixed, duplicate subagent rows: the host row and the registry member merge by agent id (`mod/data/herdr.ts`, `mod/data/live.ts`, `mod/data/channels.ts`, `mod/host/agents.ts`, `mod/contract.ts`).
+- Fixed, stuck subagent: a finished in-process subagent is stamped finished and leaves its channel even when its final message fails the report format check (`hooks/worker_report_gate_core.py`).
+- Fixed, tmux colour: the mod paints in 256-colour mode inside tmux, so the panel is grey, not navy (`mod/design/atlas-ui.ts`).
+- Fixed, refused dispatch: an Agent call the hook refused leaves no `done` row or card (`mod/input/routing.ts`).
+- Changed, README pictures: `img/showcase/live-*.png` are live captures of this build; the `mod-*.png` renders and the old dashboard pictures are gone from `README.md` and `plugins/atlas/README.md`.
+
 ## atlas 17.34.0, marketplace 5.41.0 - 2026-11-20 -- friction audit fixes (atlas.db)
 
 Source: audit of atlas.db friction data on 2026-11-20. Details and measurements in `plugins/atlas/CHANGELOG.md` (17.34.0).

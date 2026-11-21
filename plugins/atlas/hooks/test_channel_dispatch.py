@@ -205,6 +205,16 @@ class ChannelDispatchHook(unittest.TestCase):
         self.assertNotIn("updatedInput", spec)
         self.assertFalse((Path(self.root) / ".atlas/.run/channels.json").exists())
 
+    def test_denied_dispatch_leaves_no_board_item_or_member(self):
+        # Round-3 capture: two denied atlas:implementer dispatches left no dispatch todo and no
+        # registry member; the extra TODO rows came from the user prompt's phase scaffold.
+        env = self._orchestrating_env()
+        p, _ = self.pre("A1", env=env)
+        self.assertEqual(json.loads(p.stdout)["hookSpecificOutput"]["permissionDecision"], "deny")
+        run = Path(self.root) / ".atlas/.run"
+        self.assertFalse((run / "todos.json").exists())
+        self.assertFalse((run / "channels.json").exists())
+
     def test_is_deny_recognises_any_json_format(self):
         sys.path.insert(0, os.path.dirname(HOOK))
         import dispatch_tripwire as dt

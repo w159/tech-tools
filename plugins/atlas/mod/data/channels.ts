@@ -159,6 +159,7 @@ function membersOf(members: unknown[]): ChannelMember[] {
 				name: e.name,
 				...(e.role !== undefined ? { role: str(e.role) } : {}),
 				...(e.pane_id !== undefined ? { pane_id: str(e.pane_id) } : {}),
+				...(typeof e.agent_id === 'string' ? { agent_id: e.agent_id } : {}),
 				...(typeof e.pid === 'number' ? { pid: e.pid } : {}),
 				...(e.ended_at !== undefined ? { ended_at: str(e.ended_at) ?? null } : {}),
 				...(typeof e.exit_code === 'number' ? { exit_code: e.exit_code } : {}),

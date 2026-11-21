@@ -1,4 +1,19 @@
 # Changelog
+## 17.34.1 - 2026-11-20
+
+All four fixes below were found by running real Claude Code sessions to capture the README pictures (what is kept of the evidence is under `.atlas/evidence/2026-11-20_live-capture-phantom-rows/`; the raw session transcripts and full-screen frames were not committed because they carry the owner's status line and local paths).
+
+### Fixed
+
+- One row per in-process subagent: the host's row and the registry member are merged by agent id, so a subagent no longer shows twice (`mod/data/herdr.ts`, `mod/data/live.ts`, `mod/data/channels.ts`, `mod/host/agents.ts`, `mod/contract.ts`).
+- A finished in-process subagent is stamped finished and leaves its channel even when its final message fails the report format check; the board item stays open for a valid retry (`hooks/worker_report_gate_core.py`).
+- Inside tmux the mod paints in 256-colour mode, so the panel background is grey and not xterm 17 navy (`mod/design/atlas-ui.ts` `colorMode`; `mod/design/look.ts` now reads `TMUX`, which the first attempt left out). Confirmed in a live tmux session: background indices 234 and 235, no 17.
+- An Agent call the hook refused no longer leaves a `done` row or card: a refusal that comes back as a result, not a throw, drops the provisional row (`mod/input/routing.ts`).
+
+### Changed
+
+- README pictures are live captures of this build (`img/showcase/live-*.png`, taken from real sessions in tmux and from the running Command Center); the three fixture renders `mod-*.png` and the old dashboard pictures are removed, and the band text describes the ribbon the build draws.
+
 ## 17.34.0 - 2026-11-20
 
 ### Fixed

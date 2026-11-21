@@ -210,3 +210,14 @@ test('unknown personas on task agents get derived, and task states pass through 
   expect(out[0]?.state).toBe('spawning');
   expect(out[0]?.source).toBe('task');
 });
+test('a host row and the channel member of one in-process subagent share an agent id: one row, the host state', () => {
+  const ids = ['a39eefd5f905ad926', 'adccb4c8a60ab2b9a', 'a4550a28d721522e5'];
+  const names = ['explorer-a035', 'explorer-5cff', 'explorer-fc14'];
+  const members = names.map((name, i) => member({ name, role: 'subagent', agent_id: ids[i] }));
+  const host = (name: string, id: string): SquadAgent => ({ name, id, persona: 'explorer', state: 'finished', source: 'task' });
+  const out = mergeSquad(members, [], [], [host('list-functions-in', ids[0]!), host('list-functions-in #2', ids[1]!), host('list-functions-in #3', ids[2]!)], NOW);
+  expect(out.map((a) => a.name)).toEqual(['list-functions-in', 'list-functions-in #2', 'list-functions-in #3']);
+  expect(out.every((a) => a.state === 'finished')).toBe(true);
+  // with no agent id on the member the two stay apart (nothing to join on)
+  expect(mergeSquad([member({ name: 'explorer-a035', role: 'subagent' })], [], [], [host('list-functions-in', ids[0]!)], NOW)).toHaveLength(2);
+});

@@ -30,6 +30,12 @@ async function dropProvisional($: EngineInterface, name: string): Promise<void> 
   await update($, orchState, (o) => (o.meta[name] === undefined ? o : { ...o, meta: Object.fromEntries(Object.entries(o.meta).filter(([k]) => k !== name)) }));
 }
 
+/** A tool.call result that is a refusal: `{ deny }`, or an error result whose text starts with the `PreToolUse:<Tool> hook error:` prefix the host adds to any hook's refusal. */
+function isHookRefusal(result: unknown): boolean {
+  const r = (result ?? {}) as { deny?: unknown; isError?: unknown; text?: unknown };
+  return typeof r.deny === 'string' || (r.isError === true && typeof r.text === 'string' && /^PreToolUse:\S+ hook error:/.test(r.text));
+}
+
 export interface RoutingDeps {
   /** Personas of the snapshot read from $.state (null before the first build). */
   getPersonas: (snapshot: AtlasSnapshot | null) => Persona[];
@@ -98,9 +104,7 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
     } catch {
       // name capture and the provisional row never block a dispatch
     }
-    try {
-      return await next(e);
-    } catch (err) {
+    const dropHeld = async (): Promise<void> => {
       try {
         const held = provisional.get(toolUseId);
         provisional.delete(toolUseId);
@@ -108,6 +112,14 @@ export function registerRouting(on: On, deps: RoutingDeps): void {
       } catch {
         // cleanup never masks the denial
       }
+    };
+    try {
+      const result = await next(e);
+      // A PreToolUse hook refusal comes back as a result, not a throw: no agent will spawn, so the provisional row would sit running and later read `done`. One rule on the host's prefix, whatever the hook's wording.
+      if (isHookRefusal(result)) await dropHeld();
+      return result;
+    } catch (err) {
+      await dropHeld();
       throw err;
     }
   });

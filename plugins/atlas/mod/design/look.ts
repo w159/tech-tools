@@ -26,14 +26,14 @@ export async function lookOf($: EngineInterface): Promise<Look> {
 	if (cached) return cached;
 	// $.env.get takes a literal name (the engine lists the variables a module reads), so each read is spelled out. A host or a
 	// stub with no readable `$.env` leaves the variable unset.
-	const [theme, fgbg, ascii, lcAll, lcCtype, lang, noColor, colorterm, term, rich] = await Promise.all([
+	const [theme, fgbg, ascii, lcAll, lcCtype, lang, noColor, colorterm, term, tmux, rich] = await Promise.all([
 		safe(() => $.env.get('ATLAS_THEME')), safe(() => $.env.get('COLORFGBG')), safe(() => $.env.get('ATLAS_ASCII')),
 		safe(() => $.env.get('LC_ALL')), safe(() => $.env.get('LC_CTYPE')), safe(() => $.env.get('LANG')),
-		safe(() => $.env.get('NO_COLOR')), safe(() => $.env.get('COLORTERM')), safe(() => $.env.get('TERM')),
+		safe(() => $.env.get('NO_COLOR')), safe(() => $.env.get('COLORTERM')), safe(() => $.env.get('TERM')), safe(() => $.env.get('TMUX')),
 		safe(() => $.env.get('ATLAS_BAND_RICH')),
 	]);
 	const env: Record<string, string | undefined> = { ...hostEnv() };
-	for (const [k, v] of Object.entries({ ATLAS_THEME: theme, COLORFGBG: fgbg, ATLAS_ASCII: ascii, LC_ALL: lcAll, LC_CTYPE: lcCtype, LANG: lang, NO_COLOR: noColor, COLORTERM: colorterm, TERM: term, ATLAS_BAND_RICH: rich })) if (typeof v === 'string') env[k] = v;
+	for (const [k, v] of Object.entries({ ATLAS_THEME: theme, COLORFGBG: fgbg, ATLAS_ASCII: ascii, LC_ALL: lcAll, LC_CTYPE: lcCtype, LANG: lang, NO_COLOR: noColor, COLORTERM: colorterm, TERM: term, TMUX: tmux, ATLAS_BAND_RICH: rich })) if (typeof v === 'string') env[k] = v;
 	cached = readLook(env);
 	return cached;
 }

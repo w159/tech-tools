@@ -501,6 +501,35 @@ describe('registerRouting provisional row (critique 11 A5)', () => {
     expect(await agentsOf($)).toEqual([]);
   });
 
+  // The exact tool result of the live round-4 capture (Claude Code 2.1.330): the hook refusal arrives as a result, not a throw.
+  const ROUTE = 'PreToolUse:Agent hook error: ROUTE - this work goes to a tmux team: run the command below\n  python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class implement --effort low --task-file /x/.atlas/.run/briefs/implementer-fc9ea19e.md';
+  const implCall = { tool: 'Agent', tool_use_id: 'toolu_01RrVWuXEtrHqsoW45ueaFC9', subagent_type: 'atlas:implementer', description: 'Add docstring to load()', prompt: 'SCOPE: implement/low' };
+
+  const refusals: Array<[string, Record<string, unknown>]> = [
+    ['ROUTE', { result: ROUTE, text: ROUTE, isError: true }],
+    ['DENY', { result: 'x', text: 'PreToolUse:Agent hook error: DENY - nope', isError: true }],
+    ['denied:', { result: 'x', text: 'PreToolUse:Agent hook error: denied: this dispatch to atlas:implementer has no SCOPE', isError: true }],
+    ['bare prefix', { result: 'x', text: 'PreToolUse:Agent hook error:', isError: true }],
+    ['deny result', { deny: ROUTE }],
+  ];
+  for (const [kind, refusal] of refusals) test(`a ${kind} hook refusal returned by next leaves no row`, async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    expect(await pick('tool.call')($c, implCall, () => refusal)).toEqual(refusal);
+    expect(await agentsOf($)).toEqual([]);
+    const orch = (await $.state.get({ plugin: 'atlas', key: 'orch' })).value as { meta: Record<string, unknown> };
+    expect(Object.keys(orch.meta)).toEqual([]);
+  });
+
+  test('an Agent call that ran and returned text keeps its running row', async () => {
+    const { on, pick, $ } = captureOn();
+    registerRouting(on, { getPersonas: () => [persona], logDrift() {} });
+    const $c = { ...$, clock: { now: async () => 1000 } };
+    await pick('tool.call')($c, implCall, () => ({ result: 'did it', text: 'did it' }));
+    expect((await agentsOf($)).map((a) => a.state)).toEqual(['running']);
+  });
+
   test('the snapshot built between tool.call and agent.spawn carries the row, running', async () => {
     const { on, pick, $ } = captureOn();
     registerRouting(on, { getPersonas: () => [persona], logDrift() {} });

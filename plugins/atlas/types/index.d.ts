@@ -57,6 +57,7 @@ export interface ChannelMember {
   name: string;
   role?: string;
   pane_id?: string;
+  agent_id?: string;     // host agent id of an in-process subagent (PostToolUse:Agent stamps it)
   pid?: number;
   ended_at?: string | null;
   exit_code?: number | null;
@@ -78,6 +79,7 @@ export interface SquadAgent {
   persona: string;       // persona name or 'armada-<dept>' or 'unknown'
   state: AgentState;
   source: 'task' | 'colony';
+  id?: string;           // host agent id (task rows): joins the channel member stamped with the same agent_id
   transport?: string;    // atlas_mux.py transport (tmux|herdr|claude-bg) for mux-launched workers
   task?: string;         // todo item content
   item?: string;         // todo item id

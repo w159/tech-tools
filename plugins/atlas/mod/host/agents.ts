@@ -80,6 +80,7 @@ export function mapListed(
 				persona,
 				state: LIST_STATE[a.status] ?? 'running',
 				source: 'task' as const,
+				id: a.id,
 				...(task !== undefined ? { task } : {}),
 				...(spawned?.model ? { model: spawned.model } : {}),
 			},

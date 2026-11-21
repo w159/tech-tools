@@ -657,7 +657,9 @@ class MainTest(Tmp):
                 d["reason"],
             )
             self.assertIn("EVIDENCE:\n1. <command or read-back> -> ", d["reason"])
-            fm.assert_not_called()
+            # The block stamps the member only; the board item waits for a valid retry.
+            fm.assert_called_once_with(self.pl(), settle_board=False)
+            fm.reset_mock()
             self.assertEqual(self.run_main(self.pl()), "")
             fm.assert_called_once_with(self.pl())
 

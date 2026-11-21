@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.34.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.34.1 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -922,6 +922,11 @@ named, not typed by hand; a spinner shows its first frame. In a colour terminal
 each segment, row and rule also carries a fill or a colour that plain text cannot
 show.
 
+The pictures in this section are real screenshots of this build. Claude Code (and omp
+for the widget) ran the plugin in a tmux pane on a scratch project named `demo`;
+`tmux capture-pane` took the screen and headless Chrome turned it into PNG. Each
+picture is cropped above the status line.
+
 **One clock and one glyph key.** A single 100 ms frame loop (`FRAME_MS` in
 `mod/view/band/band-motion.ts`, armed by `armFrameLoop` in `mod/host/frame.ts`) advances one spinner index: at
 most 10 redraws a second, the host's cap. The band, the HUD and the side panel
@@ -942,28 +947,27 @@ steps.
 
 The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`.
 
-**The band.** The band is one row above the prompt, drawn as three filled
-segments after the `◆ ATLAS` pill:
+**The band.** The band is one row above the prompt: the `◆ ATLAS` pill, then slots
+joined by a thin divider (`mod/view/band/band-frame.ts`):
 
 ```
-STATE (glyph, word, clock)  |  PLAN (todo n/m)  |  WORKERS (counts)
+STATE (phase word, n/m, bar)  |  gates pill  |  tool rate  [ | hook p50 | ctx ]
 ```
 
-Rendered from the mod's view code with fixture data (`bandTree`), a run with
-three workers, then the same run after the workers ended with one failed:
+The state slot reads a spinner, the phase word, `n/m` and a segmented bar while a
+run is on (`research 1/6`), `done 6/6` after it, and `idle up 1:26` at rest. The gates
+pill reads `■ 1 denied ›` in red or `✓ gates ok ›` in green and opens the gates tab.
+The tool rate is `tools` with a spark and a per-minute figure (`12/m`). Wider
+terminals add the hook median and the context figure. Every figure is fixed width, so
+the dividers do not move when digits change. A three-segment form (state, `todo n/m`,
+worker counts) is drawn by omp's widget.
 
-```
-◆ ATLAS  ◐ working 0:14 ▌ todo 0/5 ▌ ◐ 3 running
-◆ ATLAS  ✓ done 0:14 ▌ todo 2/5 ✗1 ▌ ✓ 2 done · ✗1
- last run  3 workers · 0:14 · 1 failed
-```
+![Three explorers running: the band, the TODO box with two rows shown and the rest folded, the SUBAGENTS box titled 3 running, and the status tab](img/showcase/live-band-running.png)
 
-The STATE segment reads one of four words (`runStateOf` in
-`mod/view/band/mission-layout.ts`): `working` with a turning spinner, `done`,
-`blocked` or `idle`. The PLAN segment is `todo n/m` with a `✗1` beside it when an
-item failed. The WORKERS segment prints the same counts as the SUBAGENTS title
-(`◐ 3 running`, `✓ 2 done · ✗1`), or `no agents` when there are none. A gate that
-fails while Stop has not refused adds a gate chip; it opens the gates tab.
+![The same run finished: run card, band done 6/6, TODO and SUBAGENTS boxes all done, status tab](img/showcase/live-band-done.png)
+
+The state reads one of four words (`runStateOf` in
+`mod/view/band/mission-layout.ts`): `working`, `done`, `blocked` or `idle`.
 
 Rules the band follows:
 
@@ -999,10 +1003,9 @@ empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The
 band is built from fixed-width slots, so the separators do not move between idle,
 working and done. Its gates chip opens the gates tab and its health chip toggles the
 HEALTH card above the prompt (`BAND_GATES_KEY` and the chip keys in
-`mod/view/band/band-frame.ts`). Below 144 columns the host does not dock the side
-pane at rest, so a two-row idle strip above the band (`mod/view/hud/strip-frame.ts`)
-shows the last run, run count and median, gates, hook p95, context and a spark; a
-click anywhere on it opens the card.
+`mod/view/band/band-frame.ts`). The captures below show the side panel docked at rest at both 150 and 110 columns;
+the two-row idle strip (`mod/view/hud/strip-frame.ts`) appears only when the host
+does not dock the pane.
 
 The health card and the health tab draw the same sections from the same figures
 (`mod/view/hud/status-frame.ts`, `mod/view/panel/health-tab.ts`), so the band, the
@@ -1010,8 +1013,11 @@ card and the panel print one number. History is kept in `.atlas/.run/history.jso
 (project runtime state, written atomically, never under `plugins/`): the last 50
 runs and the last 64 latency samples per hook. A returning project therefore shows
 its last run, run count and median at idle; a missing or corrupt file is an empty
-history. The idle band is not pictured here: the earlier idle screenshots showed the
-old layout.
+history.
+
+![Idle session at 150 columns with the side panel docked](img/showcase/live-idle-150.png)
+
+![The same idle session at 110 columns](img/showcase/live-idle-110.png)
 
 The mods were scored against btop and htop by four Claude models in paired runs; Atlas
 reached a mean of 5.33 in a fresh session and 5.75 with history, btop 7.75, so the
@@ -1053,12 +1059,13 @@ worker). `TIME` is measured from the worker's start on the band's clock and free
 when the worker ends. The title carries the same tally as the band (`3 running`,
 `✗ 1 failed  ✓ 2 done`).
 
-Rendered from the mod's view code with fixture data, three workers running and
-then after the workers ended with one failed:
-
-![TODO and SUBAGENTS boxes with three workers running (render of the mod view code with fixture data)](img/showcase/mod-band-running.png)
-
-![TODO and SUBAGENTS boxes after the workers ended, one of them failed (render of the mod view code with fixture data)](img/showcase/mod-band-finished.png)
+The band and boxes above show three workers running, then the same run done.
+In the running capture the TODO box folds its extra rows into one summary row
+and the SUBAGENTS box shows only its title (`3 running`); the agent rows are in the
+status tab's TEAM section. An in-process subagent is one row: the host row and the
+channel member are joined by agent id, then name. An `Agent` call that a PreToolUse
+hook refuses (the `ROUTE - this work goes to a tmux team` message) leaves no row, card
+or count (`isHookRefusal`, `mod/input/routing.ts`).
 
 The selected row is a full-width bar (xterm 236) with the `▸ ` cursor kept. A done
 plan row whose worker was killed reads `closed · worker killed` in the error
@@ -1111,10 +1118,13 @@ row is open or a worker runs (`currentPhase` in `mod/data/todos.ts`).
   online, the posts and dispatch notes with their times, and at the bottom a
   composer with recipient chips (`@lead`, one chip per agent).
 
-Rendered from the mod's own view code with fixture data, a run with three workers,
-one tab per column:
+The health, gates and channel tabs of the finished run:
 
-![The four side panel tabs: health, status, gates, channel (render of the mod view code with fixture data)](img/showcase/mod-panel-tabs.png)
+![Health tab: session, context, hook latency, tool rate, denials and the RUNS chart](img/showcase/live-tab-health.png)
+
+![Gates tab: each gate with a pass mark, and the denial count](img/showcase/live-tab-gates.png)
+
+![Channel tab: the lead's channel with the workers' posts and finish notes, and the composer](img/showcase/live-tab-channel.png)
 
 **The board.** The board is no tab of the strip. The `toggleTodos` handler opens it
 (`openBoard` in `mod/host/handlers.ts`), and its model is
@@ -1406,7 +1416,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.34.0
+|-- .claude-plugin/plugin.json   manifest, version 17.34.1
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
