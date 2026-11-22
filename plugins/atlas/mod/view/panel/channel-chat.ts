@@ -4,7 +4,7 @@
 import { stateRun, type MarkState, type Run } from '../../design/atlas-ui';
 import { tileOf } from '../../input/clickable';
 import { roleOf } from '../../design/theme';
-import { BLANK, noteState, oneLine, r, type PanelLine, type PanelModel, type PanelNote, type PanelWorker } from './panel-shared';
+import { BLANK, nameOf, noteState, oneLine, r, type PanelLine, type PanelModel, type PanelNote, type PanelWorker } from './panel-shared';
 import { clipUi, g, head, hhmm, padL, roleRun, row, tint, usable, w, wrapWords } from './tab-kit';
 import { channelLabel } from './panel-tabs';
 
@@ -26,6 +26,9 @@ function itemsOf(m: PanelModel): Item[] {
   return [...msgs, ...starts, ...finishes].sort((a, b) => a.ms - b.ms || a.idx - b.idx);
 }
 
+/** The name the TEAM list shows for a worker (nameOf), so a post and its worker's row read the same label; a sender that is no listed worker reads as posted. */
+const labelOf = (m: PanelModel, from: string): string => ((x: PanelWorker | undefined) => (x ? nameOf(x) : from))(m.workers.find((x) => x.name === from));
+
 const roleOfName = (m: PanelModel, name: string, lead: boolean): string => (lead ? 'orchestrator' : ((x: PanelWorker | undefined) => (x?.role && x.role !== 'unknown' ? x.role : roleOf(undefined, name)))(m.workers.find((x) => x.name === name)));
 
 type Block = PanelLine[];
@@ -37,7 +40,7 @@ function blocks(m: PanelModel, items: readonly Item[]): Block[] {
   let prevBlock: Block | undefined;
   for (const it of items) {
     if (it.kind === 'event') {
-      const t = it.text === 'dispatched' ? [r('lead dispatched ', 'muted'), r(it.from, 'sub')] : [r(it.from, 'sub'), r(' finished', 'muted')];
+      const t = it.text === 'dispatched' ? [r('lead dispatched ', 'muted'), r(labelOf(m, it.from), 'sub')] : [r(labelOf(m, it.from), 'sub'), r(' finished', 'muted')];
       const runs = [r(g(ui, '⇢', '->') + ' ', 'muted'), ...t, ...(hhmm(it.at) ? [r(`  ${g(ui, '·', '|')}  ${hhmm(it.at)}`, 'dim')] : [])];
       const pad = Math.max(1, Math.floor((U - w(runs)) / 2) + 1);
       out.push([BLANK, { runs: [r(' '.repeat(pad)), ...runs] }]);
@@ -71,7 +74,7 @@ function blocks(m: PanelModel, items: readonly Item[]): Block[] {
     } else {
       const role = roleOfName(m, it.from, it.lead);
       const glyph = it.lead ? r(`${g(ui, '●', '*')} `, 'accent', { bold: true }) : { ...roleRun(`${g(ui, '◆', '+')} `, role, ui, { bold: true }) };
-      const hdr = row(m, [glyph, roleRun(it.from === 'lead' || it.lead ? 'lead' : it.from, role, ui, { bold: true }), r(`  ${role}`, 'muted')], hhmm(it.at) ? [r(hhmm(it.at), 'dim')] : [], undefined, 0);
+      const hdr = row(m, [glyph, roleRun(it.from === 'lead' || it.lead ? 'lead' : labelOf(m, it.from), role, ui, { bold: true }), r(`  ${role}`, 'muted')], hhmm(it.at) ? [r(hhmm(it.at), 'dim')] : [], undefined, 0);
       const block: Block = [BLANK, hdr, ...body()];
       out.push(block);
       prevBlock = block;
@@ -121,7 +124,7 @@ export function chatRows(m: PanelModel, room: number): PanelLine[] {
   const all = blocks(m, items);
   // typing: a running worker whose last call is under 10 s old
   const typer = m.now === undefined ? undefined : m.workers.find((x) => x.state === 'running' && x.calls?.length && m.now! - x.calls[x.calls.length - 1]! >= 0 && m.now! - x.calls[x.calls.length - 1]! < TYPING_MS);
-  const typing: PanelLine[] = typer ? [{ runs: [r('   '), roleRun(typer.name, roleOfName(m, typer.name, false), ui), r(' is typing ', 'muted'), r(g(ui, '\u2022\u2022\u2022', '...'), 'warn')] }] : [];
+  const typing: PanelLine[] = typer ? [{ runs: [r('   '), roleRun(nameOf(typer), roleOfName(m, typer.name, false), ui), r(' is typing ', 'muted'), r(g(ui, '\u2022\u2022\u2022', '...'), 'warn')] }] : [];
   const fixed = 3 + foot.length + typing.length; // title, blank, divider
   let keep = all.length;
   const rowsOf = (from: number): number => all.slice(from).reduce((n, b) => n + b.length, 0);

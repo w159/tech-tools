@@ -3714,3 +3714,95 @@ class OperatingContractTest(unittest.TestCase):
     def test_empty_pattern_fails(self):
         write_json(self.path, {**self.GOOD, "headerFirstLinePattern": ""})
         self.assertFalse(atlas_doctor.check_operating_contract(self.root)[0])
+
+
+class ContextFootprintTest(unittest.TestCase):
+    """check_context_footprint reads only fixture transcripts under a temp CLAUDE_CONFIG_DIR."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+        patcher = mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": os.path.join(self.tmp, "claude")})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        self.root = "/fx/proj"
+        self.pdir = os.path.join(self.tmp, "claude", "projects", "-fx-proj")
+        os.makedirs(self.pdir)
+
+    @staticmethod
+    def _rows(tokens, names=()):
+        rows = []
+        if names:
+            rows.append({"attachment": {"type": "deferred_tools_delta", "addedNames": list(names)}})
+        rows.append({"message": {"usage": {"input_tokens": 2, "cache_read_input_tokens": 0, "cache_creation_input_tokens": tokens - 2}}})
+        return rows
+
+    def _write(self, path, rows, junk=False):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            if junk:
+                f.write("{not json\n")
+            for r in rows:
+                f.write(json.dumps(r) + "\n")
+
+    def _main(self, tokens, names=()):
+        self._write(os.path.join(self.pdir, "s1.jsonl"), self._rows(tokens, names))
+
+    def _sub(self, name, tokens, agent="atlas:explorer"):
+        base = os.path.join(self.pdir, "s1", "subagents", name)
+        self._write(base + ".jsonl", self._rows(tokens))
+        write_json(base + ".meta.json", {"agentType": agent})
+
+    def test_pass_reports_numbers(self):
+        self._main(60_000)
+        self._sub("a1", 30_000)
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertTrue(ok)
+        self.assertIn("60000", detail)
+        self.assertIn("30000", detail)
+
+    def test_warn_on_main_names_top_servers(self):
+        names = [f"mcp__vanta__t{i}" for i in range(3)] + ["mcp__ramp__x", "Read"]
+        self._main(109_000, names)
+        self._sub("a1", 30_000)
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertFalse(ok)
+        self.assertIn("109000", detail)
+        self.assertIn("vanta (3)", detail)
+        self.assertIn("disabledMcpServers", detail)
+
+    def test_warn_on_subagent_median_ignores_non_atlas(self):
+        self._main(50_000)
+        for i, t in enumerate((72_000, 70_000, 50_000)):
+            self._sub(f"a{i}", t)
+        self._sub("other", 1_000, agent="general-purpose")
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertFalse(ok)
+        self.assertIn("70000", detail)
+
+    def test_not_applicable_without_transcripts(self):
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertTrue(ok)
+        self.assertIn("(n/a)", detail)
+
+    def test_malformed_lines_are_skipped_and_garbage_is_na(self):
+        self._write(os.path.join(self.pdir, "s1.jsonl"), self._rows(60_000), junk=True)
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertTrue(ok)
+        self.assertIn("60000", detail)
+        with open(os.path.join(self.pdir, "s1.jsonl"), "w") as f:
+            f.write("{nope\n[1,2\n")
+        ok, detail = atlas_doctor.check_context_footprint(self.root)
+        self.assertTrue(ok)
+        self.assertIn("(n/a)", detail)
+
+    def test_hook_output_never_carries_the_footprint_warning(self):
+        buf = io.StringIO()
+        with mock.patch.dict(os.environ, {"ATLAS_DOCTOR_HOOK_TTL_MIN": "0"}), mock.patch.object(
+            atlas_doctor, "check_context_footprint", return_value=(False, "FOOTPRINT-MARK")
+        ), contextlib.redirect_stdout(buf):
+            self.assertEqual(atlas_doctor.main(["--hook"]), 0)
+        self.assertNotIn("FOOTPRINT-MARK", buf.getvalue())
+        results, _ = atlas_doctor.run_checks("atlas")
+        fp = [r for r in results if r["check"] == "context-footprint"]
+        self.assertEqual(len(fp), 1)

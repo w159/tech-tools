@@ -14664,5 +14664,149 @@
     "verified_at": "2026-11-21T02:30:42+00:00",
     "verified_by": "atlas:verifier",
     "stamped_by": "lead"
+  },
+  {
+    "id": "td402ce-verify",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Nudge and flaky-test slices: no implementer work exists yet",
+    "evidence": [
+      "git worktree list: both td402ce worktrees at 797821d2 == main; git log main..HEAD empty, git status clean, git diff --stat empty"
+    ],
+    "doc_refs": [],
+    "reproduction": "git -C .atlas/wt/td402ce-implementer-{05fd,54af} log --oneline main..HEAD; status --short; diff --stat",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-21T06:02:37+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-2418"
+  },
+  {
+    "id": "ctxdiet-agents",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "agents slice (4aca7ea2): explorer.md has duplicate omitClaudeMd key and disallowedTools list doubled",
+    "evidence": [
+      "worker/tb6af7f-implementer-4e9d:plugins/atlas/agents/explorer.md lines 9-11 (grep -c omitClaudeMd = 2; Artifact x2); contract tests still pass 131 OK so they miss it"
+    ],
+    "doc_refs": [],
+    "reproduction": "git -C .atlas/wt/tb6af7f-implementer-4e9d show HEAD:plugins/atlas/agents/explorer.md | grep -c omitClaudeMd",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-21T06:08:19+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-8d75"
+  },
+  {
+    "id": "ctxdiet-doctor",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "doctor slice (47ce29c5): footprint check, 218 doctor tests OK, seeded fault fails, --hook output identical except worktree path",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_doctor.py, test_atlas_doctor.py; diff stat only those 2 files"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_doctor.py; atlas_doctor.py --hook before/after diff",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:08:19+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-8d75"
+  },
+  {
+    "id": "ctxdiet-agents",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "agents withhold Artifact and armada servers; explorer omitClaudeMd; no duplicate frontmatter",
+    "evidence": [
+      "test_atlas_contract OK (680 tests with test_prompt_optimizer and test_dispatch_tripwire); grep -c omitClaudeMd explorer.md = 1; probe 63158 to 54674 tokens"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_atlas_contract",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:37:06+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "ctxdiet-doctor",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_doctor context-footprint check",
+    "evidence": [
+      "test_atlas_doctor and test_atlas_hook_guard: Ran 257 OK; live line: main session 109228 tokens, atlas subagent median 75599"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_doctor",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:37:07+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "ctxdiet-nudge",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "route nudge names spawn-team when the team gate routes",
+    "evidence": [
+      "test_prompt_optimizer OK; gate on: nudge contains spawn-team; gate off: old text"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_prompt_optimizer test_dispatch_tripwire",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:37:07+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "ctxdiet-mod-label",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "channel tab and TEAM list share one agent name",
+    "evidence": [
+      "bun test: 6355 pass, 0 fail, including mod/view/panel/channel-team-name.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:37:08+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "ctxdiet-hookguard-tests",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "hook-guard concurrency tests lift lock bound in workers",
+    "evidence": [
+      "test_atlas_hook_guard OK while a second full suite ran concurrently; original flake not reproduced"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_hook_guard",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-21T06:37:08+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

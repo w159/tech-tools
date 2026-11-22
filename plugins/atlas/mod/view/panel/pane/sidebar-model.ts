@@ -1,6 +1,6 @@
 // sidebar-model.ts: the Claude Code SidebarModel as the host-free PanelModel (mod/view/panel/panel-layout.ts).
 import type { ChannelNote } from '../../../contract';
-import { endedAt, liveState, liveWorkers, queuedMembers, type LiveWorker } from '../../../data/live';
+import { endedAt, liveState, liveWorkers, queuedMembers, squadNameOf, type LiveWorker } from '../../../data/live';
 import { isPlanItem, ownPlan, ownTodos, todoState } from '../../../data/todos';
 import { lastText } from '../../../data/lasttext';
 import { DONE_DOUBT, RETURNED, spinClock, type Ui, type UiState } from '../../../design/atlas-ui'; import { lookUi } from '../../../design/look';
@@ -131,7 +131,8 @@ export function panelModelOf(m: SidebarModel, ui: Ui = lookUi(), cols: number = 
 
   const ended = new Set(workers.filter((w) => w.state === 'done' || w.state === 'failed').map((w) => w.name)); // a killed worker never gets an end time in the registry, yet it is not in the channel (stoprun-150-e4a8186a-1: shown 2, true 1)
   const live = workers.filter((w) => !ended.has(w.name)).map((w) => w.name);
-  const notes = s.notes;
+  // A post names its sender by the registry's name; the TEAM list shows the squad row's (the lead's): one name per agent on every surface (data/live squadNameOf).
+  const notes = s.notes.map((n) => ({ ...n, owner: squadNameOf(s, n.owner), ...(n.to ? { to: squadNameOf(s, n.to) } : {}) }));
   const lastLead = notes.map((n) => isLead(n.owner)).lastIndexOf(true);
   const people = new Set([...notes.map((n) => n.owner), ...s.members.filter((x) => !x.ended_at && !ended.has(x.name)).map((x) => x.name), ...live]).size;
   const spoken = new Set(notes.filter((n) => n.kind === 'blocked').map((n) => n.owner)); // a worker that already posted its own block needs no second row

@@ -702,16 +702,14 @@ def _team_blocks(tinput):
     """True when _team_note would deny (route) this dispatch: a working, non-read-only atlas: role with tmux
     on PATH, outside omp and with ATLAS_TEAM_GATE on. Pure: touches no state, so the early checks in
     _pre_tool_use can ask it without counting the dispatch toward the advisory."""
-    import shutil
-
     agent = _norm_agent(tinput.get("subagent_type"))
     if not agent.startswith("atlas:"):
         return False
     if not _is_working_role(agent) or _is_read_only_role(agent):
         return False
-    if os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off" or _omp_harness():
-        return False
-    return bool(shutil.which("tmux"))
+    import atlas_hook_guard  # lazy module: see the PEP 562 note at the top
+
+    return atlas_hook_guard.team_gate_routes()
 
 
 def _team_route(deny, tinput, root, session, run_key, cwd=None):

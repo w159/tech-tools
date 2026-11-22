@@ -1,5 +1,16 @@
 # Changelog
 
+## atlas 17.35.0, marketplace 5.42.0 - 2026-11-21 -- context footprint cuts and friction fixes
+
+Source: `docs/audits/2026-11-21_atlas-context-footprint-audit.md`. An atlas subagent started at about 72,000 input tokens before reading a file.
+
+- Changed, agent tools: all 11 atlas agents withhold `Artifact` and the 12 armada vendor MCP servers; contract tests pin the list to `plugins/armada/.mcp.json` (`plugins/atlas/agents/*.md`, `plugins/atlas/hooks/test_atlas_contract.py`).
+- Changed, explorer: `atlas:explorer` sets `omitClaudeMd: true` (`plugins/atlas/agents/explorer.md`).
+- Added, doctor: `context-footprint` warn check reports first-turn tokens for the project's sessions and atlas subagents and names the heaviest MCP servers (`plugins/atlas/scripts/atlas_doctor.py`).
+- Fixed, route nudge: it names `atlas_mux.py spawn-team` when the team gate will route, one-seat scopes included (`plugins/atlas/hooks/prompt_optimizer_core.py`, `plugins/atlas/scripts/atlas_hook_guard.py` `team_gate_routes`).
+- Fixed, agent names: the channel tab and the TEAM list show the same name (`plugins/atlas/mod/data/live.ts` `squadNameOf`).
+- Fixed, test stability: the two concurrency tests in `plugins/atlas/scripts/test_atlas_hook_guard.py` lift the 1 second lock bound in their workers.
+
 ## atlas 17.34.1, marketplace 5.41.1 - 2026-11-20 -- fixes found by live README captures
 
 Source: real Claude Code sessions run for the README pictures (kept evidence under `.atlas/evidence/2026-11-20_live-capture-phantom-rows/`; raw transcripts and full-screen frames were not committed because they carry the owner's status line and local paths). Details in `plugins/atlas/CHANGELOG.md` (17.34.1).

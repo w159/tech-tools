@@ -101,7 +101,7 @@ route; a full-file Read is not.
 - **Do not grep-then-read when an LSP or lean-ctx call answers it**, because the call returns the exact span without the file body. For an LSP-enabled language (TS, Python via `typescript-lsp`/`pyright-lsp`, etc.), instruct subagents: "use find-references / go-to-definition, not grep + read."
 - **`context7` is mandatory** before any library behavior claim or API-targeted edit. A finding that says "library X is misused" with no doc citation is `unverified`.
 - **`context-mode` for anything noisy.** Bash is only for git/mkdir/rm/mv/navigation and short fixed-output observation.
-- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate.
+- **Read-only stays read-only.** Discovery/verification/DB-probing subagents get `disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit]` so they cannot mutate. Every agent file also adds `Artifact` and the 12 `mcp__plugin_armada_<name>` servers to `disallowedTools` (context cost; see `docs/audits/2026-11-21_atlas-context-footprint-audit.md`).
 - **`isolation: worktree`** only on two subagents that truly must edit the same files in parallel (otherwise crew leases on disjoint files); capped by `max_worktrees`, see `${CLAUDE_PLUGIN_ROOT}/references/git-policy.md`.
 
 ## Cross-surface fault localization (which layer owns the bug?)

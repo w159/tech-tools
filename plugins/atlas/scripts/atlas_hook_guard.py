@@ -234,6 +234,19 @@ def _answers_fresh_stop(state, payload, now):
     return (now - first) < STOP_EVENT_DEDUP_SECONDS
 
 
+def team_gate_routes():
+    """True when the team gate routes in-process working dispatches to a tmux team: tmux on PATH, outside
+    omp and with ATLAS_TEAM_GATE on. One predicate for the tripwire (deny) and the route nudge (advice), so
+    the nudge never names a dispatch the gate then denies."""
+    import shutil
+
+    if os.environ.get("ATLAS_TEAM_GATE", "on").strip().lower() == "off":
+        return False
+    if os.environ.get("ATLAS_HARNESS") == "omp" or os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
+        return False
+    return bool(shutil.which("tmux"))
+
+
 def read_payload():
     """Read stdin once, parse JSON, fail-open to {} on any error."""
     try:

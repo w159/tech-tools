@@ -83,7 +83,7 @@ to invoke atlas-orchestrate. Deliberately conservative (defaults to "trivial") s
 costs more than a false negative - a wrongly-armed session gets denied by the dispatch tripwire.
 Disable with `ATLAS_ENGINE_ARM=off`. The arm path also consults a local decision model unless
 `ATLAS_DECISION=off`, which keeps regex only.
-Once armed, `classify_scope` (a first-match keyword heuristic over the scope-matrix class names and aliases, not the decision model) picks a `<class>/<effort>`, `atlas_resolve.resolve` turns it into a team, and the nudge names the class, effort, seats with models and the next command (`atlas_crew.py run` for a writing class with 2+ working seats, `atlas_mux.py spawn-team` for a read-only one, one in-process `atlas:<role>` call otherwise). The resolved scope is stored per session under `.atlas/.run/atlas-scope/` and read through `resolved_scope()`; a prompt that does not arm clears it. Nudge cap 700 bytes (`_NUDGE_MAX_BYTES`).
+Once armed, `classify_scope` (a first-match keyword heuristic over the scope-matrix class names and aliases, not the decision model) picks a `<class>/<effort>`, `atlas_resolve.resolve` turns it into a team, and the nudge names the class, effort, seats with models and the next command (`atlas_crew.py run` for a writing class with 2+ working seats, `atlas_mux.py spawn-team` for a read-only one or whenever the team gate will route, one-seat scopes included (`atlas_hook_guard.team_gate_routes()`), one in-process `atlas:<role>` call otherwise). The resolved scope is stored per session under `.atlas/.run/atlas-scope/` and read through `resolved_scope()`; a prompt that does not arm clears it. Nudge cap 700 bytes (`_NUDGE_MAX_BYTES`).
 
 Config (env vars, all optional):
 

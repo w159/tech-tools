@@ -187,6 +187,13 @@ Branch `worker/w3-polish` is in flight for the first four; none is verified yet.
   Decision needed: move to `reference/` at repo root, or keep in docs/ as reference material.
   These carry their own nested .git dirs and are not project documentation.
 
+### Atlas context-diet follow-ups (added 2026-11-21)
+
+Shipped in `plugins/atlas/CHANGELOG.md` (Unreleased); measurements: `docs/audits/2026-11-21_atlas-context-footprint-audit.md`
+
+- [planned] `_cwd_slug` in `plugins/atlas/scripts/atlas_colony_model.py` replaces only `/`, so the doctor check `context-footprint` reports not applicable for a project path containing `.` or `_`.
+- [planned] The user's claude.ai connectors cannot be withheld from a plugin agent file (only whole server names can), about 33,000 tokens per turn on the audited machine; only the user can change this in their own settings.
+
 ### Atlas 17.29.0 follow-ups (added 2026-11-18)
 
 Shipped in `plugins/atlas/CHANGELOG.md` (17.29.0); audit and per-finding status: `docs/audits/2026-11-18_atlas-contract-header-mod-audit.md`, section 7.

@@ -66,6 +66,11 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 |---|---|---|---|---|
 | 2026-11-21 | round3-subagentstop-finish | verified | Blocked SubagentStop now stamps member finished (replay of real payload); denied dispatch leaves no rows already holds | [2026-11-21_round3-subagentstop-finish.md](2026-11-21_round3-subagentstop-finish.md) |
 | 2026-11-21 | REL-17-34-1 | verified | pre-push check of atlas 17.34.1 | [2026-11-21_rel-17-34-1.md](2026-11-21_rel-17-34-1.md) |
+| 2026-11-21 | ctxdiet-nudge | verified | route nudge names spawn-team when the team gate routes | [2026-11-21_ctxdiet-nudge.md](2026-11-21_ctxdiet-nudge.md) |
+| 2026-11-21 | ctxdiet-mod-label | verified | channel tab and TEAM list share one agent name | [2026-11-21_ctxdiet-mod-label.md](2026-11-21_ctxdiet-mod-label.md) |
+| 2026-11-21 | ctxdiet-hookguard-tests | verified | hook-guard concurrency tests lift lock bound in workers | [2026-11-21_ctxdiet-hookguard-tests.md](2026-11-21_ctxdiet-hookguard-tests.md) |
+| 2026-11-21 | ctxdiet-doctor | verified | atlas_doctor context-footprint check | [2026-11-21_ctxdiet-doctor.md](2026-11-21_ctxdiet-doctor.md) |
+| 2026-11-21 | ctxdiet-agents | verified | agents withhold Artifact and armada servers; explorer omitClaudeMd; no duplicate frontmatter | [2026-11-21_ctxdiet-agents.md](2026-11-21_ctxdiet-agents.md) |
 | 2026-11-20 | release-17.32.0 | verified | eb5c03a3 CI green and atlas-v17.32.0 released | [2026-11-20_release-17-32-0.md](2026-11-20_release-17-32-0.md) |
 | 2026-11-20 | perf-fixes-test | verified | perf-fixes: 24 test files pass, no ~/.atlas/bin leak, no new ruff errors | [2026-11-20_perf-fixes-test.md](2026-11-20_perf-fixes-test.md) |
 | 2026-11-20 | mod-redesign | verified | Band restyle + motion and side panel health/status/gates/channel chat; suite green, renders match mockups | [2026-11-20_mod-redesign.md](2026-11-20_mod-redesign.md) |

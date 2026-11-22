@@ -1,4 +1,23 @@
 # Changelog
+## 17.35.0 - 2026-11-21
+
+Measured first: `docs/audits/2026-11-21_atlas-context-footprint-audit.md` (an atlas subagent started at about 72,000 input tokens before reading a file, and paid that on every turn).
+
+### Changed
+
+- Every atlas agent withholds the `Artifact` tool (a 37 KB schema no atlas agent called in 1,074 runs) and the 12 armada vendor MCP servers (8,484 tokens per subagent turn in a probe; one call in the same 1,074 runs) through `disallowedTools` (`agents/*.md`). Contract tests keep the armada list equal to `plugins/armada/.mcp.json`, require `Artifact` in every agent, and reject a duplicate frontmatter key or entry (`hooks/test_atlas_contract.py`). The denylist stays a denylist: agents keep every other MCP server they inherit.
+- `atlas:explorer` sets `omitClaudeMd: true` and starts without the CLAUDE.md chain (41 KB in this repo); its dispatch brief already carries what it needs. No other agent sets it: the rest need the project's rules. Needs Claude Code 2.1.271 or later; older versions ignore the key.
+
+### Added
+
+- `atlas_doctor` check `context-footprint` (warn): the first-turn input tokens of this project's newest session (limit 70,000) and the median of its newest atlas subagents (limit 40,000), the three MCP servers offering the most tool names, and the remedy (disable unused servers for the project in `/mcp`). It reads only the head of each transcript and adds nothing to the SessionStart `--hook` text (`scripts/atlas_doctor.py`). Known limit: it reports not applicable for a project whose path contains `.` or `_`, because `_cwd_slug` in `scripts/atlas_colony_model.py` replaces only `/` and has other callers that depend on that.
+
+### Fixed
+
+- The armed route nudge no longer tells the lead to make in-process `atlas:*` dispatches the team gate then denies (41 `dispatch_denied:team` in 14 days, the top friction category). When the gate will route (tmux on PATH, outside omp, `ATLAS_TEAM_GATE` on) the nudge names `atlas_mux.py spawn-team`, for a one-seat scope too; the nudge and the gate now ask one predicate, `atlas_hook_guard.team_gate_routes()` (`hooks/prompt_optimizer_core.py`, `hooks/dispatch_tripwire_core.py`, `scripts/atlas_hook_guard.py`).
+- The channel tab and the TEAM list show the same name for an agent: channel senders, event rows and the typing line map through the squad row (the lead's name, else the registry name), so a worker also no longer gets a second "finished" event beside its own done post (`mod/data/live.ts` `squadNameOf`, `mod/view/panel/channel-chat.ts`, `mod/view/panel/pane/sidebar-model.ts`).
+- The two 16-process concurrency tests in `scripts/test_atlas_hook_guard.py` no longer depend on scheduler luck: the workers lift the guard's 1 second fail-open lock bound, which under load let a starved worker proceed unlocked and lose its write, and the join timeout is 120 seconds. The production bound is unchanged. The original failure was not reproduced; the cause comes from reading the code.
+
 ## 17.34.1 - 2026-11-20
 
 All four fixes below were found by running real Claude Code sessions to capture the README pictures (what is kept of the evidence is under `.atlas/evidence/2026-11-20_live-capture-phantom-rows/`; the raw session transcripts and full-screen frames were not committed because they carry the owner's status line and local paths).
@@ -5188,7 +5207,7 @@ too. Where one mentions the Herd iframe, the tmux Colony page or
     routing, hooks-automation, and atlas-setup install stages.
   - Dashboard behavior knob `ATLAS_FALLOW`; session boot reports fallow presence on JS/TS trees.
 
-## Unreleased
+## 17.35.0 - 2026-11-21
 
 ## [5.22.0] - 2026-09-02
 
@@ -6719,7 +6738,7 @@ independently verified (`docs/.run/findings.json` at repo root); 115/115 tests.
   README hook table, and sextant public-API docs reconciled against the shipped
   code and re-verified claim-by-claim.
 
-## Unreleased
+## 17.35.0 - 2026-11-21
 
 Agent-roster and spec-conformance hardening pass (audit:
 `docs/audits/2026-07-07_atlas-harden/`). No version bump in this pass - release

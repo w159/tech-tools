@@ -62,6 +62,16 @@ const EXPECTED: Record<string, string[]> = {
 	verifier: FULL_READONLY,
 };
 
+// Every agent also withholds Artifact and each armada MCP server by server-level entry (no __tool part).
+const CONTEXT_TRIMS = ["Artifact", ...["auvik", "cipp", "connectwise", "falcon", "knowbe4", "ninjaone", "panos", "paylocity", "sonicwall", "spanning", "threatlocker", "vanta"].map(s => `mcp__plugin_armada_${s}`)];
+for (const name of Object.keys(EXPECTED)) EXPECTED[name] = [...EXPECTED[name], ...CONTEXT_TRIMS];
+
+test("server-level mcp__ entries do not throw or block an unrelated xd:// write", () => {
+	const { call } = harness({ agentsDir: AGENTS_DIR });
+	expect(loadAgentDisallowed("implementer", AGENTS_DIR)).toContain("mcp__plugin_armada_auvik");
+	expect(call(sub("implementer"), "write", { path: "xd://mcp__lean-ctx__ctx_read", content: "{}" })).toBeUndefined();
+});
+
 test("all 14 real agents/*.md parse to exactly the disallowedTools their frontmatter lists", () => {
 	const files = readdirSync(AGENTS_DIR).filter(f => f.endsWith(".md")).map(f => f.slice(0, -3)).sort();
 	expect(files).toEqual(Object.keys(EXPECTED).sort());

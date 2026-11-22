@@ -30,3 +30,6 @@ The trap, stated plainly.
 ```
 
 atlas-audit and atlas-orchestrate write here. atlas-setup only creates it.
+## Index
+
+- `2026-11-21_measure-the-prefix-before-trimming-prompts.md` - measure the fixed prefix before trimming prompts (audit: `docs/audits/2026-11-21_atlas-context-footprint-audit.md`).

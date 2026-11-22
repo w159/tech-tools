@@ -6,7 +6,7 @@ effort: low
 tier_allow: [haiku, sonnet]
 effort_allow: [low, medium]
 color: purple
-disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, NotebookEdit]
+disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, NotebookEdit, Artifact, mcp__plugin_armada_auvik, mcp__plugin_armada_cipp, mcp__plugin_armada_connectwise, mcp__plugin_armada_falcon, mcp__plugin_armada_knowbe4, mcp__plugin_armada_ninjaone, mcp__plugin_armada_panos, mcp__plugin_armada_paylocity, mcp__plugin_armada_sonicwall, mcp__plugin_armada_spanning, mcp__plugin_armada_threatlocker, mcp__plugin_armada_vanta]
 ---
 
 # atlas:docs-curator

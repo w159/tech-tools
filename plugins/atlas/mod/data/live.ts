@@ -124,6 +124,14 @@ export function queuedMembers(s: Pick<LiveSnapshot, 'members' | 'squad'>): strin
   return [...new Set(names)];
 }
 
+/** The one name a surface shows for an agent a channel post names: the squad row's name (the lead's, the TEAM list's), reached by name or, when the
+ * post carries the registry's name, by the host agent id the member and the squad row share; any other name stays as posted. */
+export function squadNameOf(s: Pick<LiveSnapshot, 'members' | 'squad'>, name: string): string {
+  if (s.squad.some((a) => a.name === name)) return name;
+  const id = s.members.find((x) => x.name === name)?.agent_id;
+  return (id ? s.squad.find((a) => a.id === id)?.name : undefined) ?? name;
+}
+
 /** Name -> state word of every worker a surface lists: the host-listed workers and the queued members. */
 export function workerStates(s: Pick<LiveSnapshot, 'members' | 'squad'>, workers: readonly LiveWorker[]): Map<string, UiState> {
   return new Map<string, UiState>([...queuedMembers(s).map((n): [string, UiState] => [n, 'queued']), ...workers.map((w): [string, UiState] => [w.name, liveState(w)])]);

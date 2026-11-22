@@ -1469,6 +1469,45 @@ class NoNestedSubagentsContract(unittest.TestCase):
                     missing.append("%s -> %s" % (path.name, tool))
         self.assertEqual(missing, [], "agents that can still dispatch: %s" % missing)
 
+    def _disallowed(self, path):
+        raw = _frontmatter(path).get("disallowedTools", "")
+        return {t.strip().strip("\"'") for t in raw.strip("[]").split(",") if t.strip()}
+
+    def test_every_agent_withholds_artifact_tool(self):
+        # Artifact's schema is ~37 KB of every subagent's starting context; no atlas role calls it.
+        missing = [p.name for p in _agent_files() if "Artifact" not in self._disallowed(p)]
+        self.assertEqual(missing, [])
+
+    def test_every_agent_withholds_exactly_the_armada_servers(self):
+        # A server-level entry withholds the whole server (~8 KB of schemas per agent turn). A new
+        # armada connector fails here until every agent lists it.
+        servers = json.loads((PLUGIN_ROOT.parent / "armada" / ".mcp.json").read_text(encoding="utf-8"))["mcpServers"]
+        want = {"mcp__plugin_armada_" + k for k in servers}
+        bad = {}
+        for p in _agent_files():
+            got = {t for t in self._disallowed(p) if t.startswith("mcp__plugin_armada_")}
+            if got != want:
+                bad[p.name] = sorted(got ^ want)
+        self.assertEqual(bad, {})
+
+    def test_only_explorer_omits_claude_md(self):
+        # The other roles need the project's CLAUDE.md rules (commit attribution, cache ban).
+        has = {p.name for p in _agent_files() if "omitClaudeMd" in _frontmatter(p)}
+        self.assertEqual(has, {"explorer.md"})
+        self.assertEqual(_frontmatter(PLUGIN_ROOT / "agents" / "explorer.md")["omitClaudeMd"], "true")
+
+    def test_agent_frontmatter_has_no_duplicate_keys_or_disallowed_entries(self):
+        # _frontmatter() builds a dict, which hides a repeated key; read the raw lines instead.
+        bad = []
+        for p in _agent_files():
+            head = p.read_text(encoding="utf-8").split("\n---\n", 1)[0].split("\n")[1:]
+            keys = [l.partition(":")[0] for l in head if ":" in l and not l.startswith((" ", "\t", "#"))]
+            bad += ["%s key %s" % (p.name, k) for k in sorted(set(keys)) if keys.count(k) > 1]
+            raw = [l for l in head if l.startswith("disallowedTools:")]
+            items = [t.strip().strip("\"'") for t in raw[0].partition(":")[2].strip().strip("[]").split(",")] if raw else []
+            bad += ["%s tool %s" % (p.name, t) for t in sorted(set(items)) if items.count(t) > 1]
+        self.assertEqual(bad, [])
+
     def test_omp_workers_and_brief_template_exclude_dispatch(self):
         """omp twin of the disallowedTools check: generated omp agents carry
         `spawns: "none"`, and the brief template tells generic `task` workers

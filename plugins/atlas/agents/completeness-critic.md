@@ -6,7 +6,7 @@ effort: medium
 tier_allow: [sonnet, opus]
 effort_allow: [low, medium, high]
 color: red
-disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__lean-ctx__ctx_patch]
+disallowedTools: [Agent, Task, TaskCreate, TaskGet, TaskList, TaskUpdate, Write, Edit, MultiEdit, NotebookEdit, mcp__lean-ctx__ctx_patch, Artifact, mcp__plugin_armada_auvik, mcp__plugin_armada_cipp, mcp__plugin_armada_connectwise, mcp__plugin_armada_falcon, mcp__plugin_armada_knowbe4, mcp__plugin_armada_ninjaone, mcp__plugin_armada_panos, mcp__plugin_armada_paylocity, mcp__plugin_armada_sonicwall, mcp__plugin_armada_spanning, mcp__plugin_armada_threatlocker, mcp__plugin_armada_vanta]
 ---
 
 # atlas:completeness-critic
