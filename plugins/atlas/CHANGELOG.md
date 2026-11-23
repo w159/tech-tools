@@ -1,5 +1,15 @@
 # Changelog
 
+## 17.36.5 - 2026-11-23
+
+### Fixed
+
+- The omp hook bridge denies a git command when `git_guard.py` times out or is skipped for budget before the tool call, with a message to retry. Before, the command ran with no git policy check. Every other hook timeout still fails open, as does a git_guard timeout on a command that does not invoke git (`omp/hook-bridge.ts`).
+
+### Added
+
+- The maintenance DB pass flags stored `tool_calls` rows that match the 17.36.4 deny markers as denied, in batches of 500, and reports the count as `denied_backfilled`. It never clears a flag (`scripts/atlas_maint.py` `_denied_backfill_batched`).
+
 ## 17.36.4 - 2026-11-23
 
 ### Fixed

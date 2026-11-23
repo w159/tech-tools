@@ -582,6 +582,14 @@ async function transcriptPathOf(deps: BridgeDeps, ctx: BridgeCtx): Promise<strin
 	}
 }
 
+/** Prefix matches git_guard's own denies so atlas_db.is_denied_result counts it as a denial. */
+const GIT_TIMEOUT_DENY = "atlas git policy: the git policy check timed out, so nothing ran. Retry the command.";
+/** True when the command has `git` as a command token (not `.git` or `digit`). */
+const invokesGit = (toolInput: unknown): boolean => {
+	const command = (toolInput as { command?: unknown } | undefined)?.command;
+	return typeof command === "string" && /(^|[\s;&|(`\/])git(\s|$)/.test(command);
+};
+
 export interface BridgeDeps {
 	hooks?: BridgedHook[];
 	run?: HookRunner;
@@ -651,15 +659,17 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 		const runOne = async (hook: BridgedHook): Promise<HookRun | undefined> => {
 			const script = scriptOf(hook.command);
 			const remaining = deadline - now();
+			const gitUnchecked = (): HookRun | undefined => (event === "PreToolUse" && script === "git_guard.py" && invokesGit(payload.tool_input) ? { script, out: { deny: GIT_TIMEOUT_DENY } } : undefined);
 			if (remaining <= 0) {
 				recordFault(script || hook.command, `${event} skipped: bridge budget exhausted`, "BridgeBudget", cwd);
-				return undefined; // out of budget: fail open
+				return gitUnchecked(); // out of budget: fail open, except an unchecked git command
 			}
 			const timeoutMs = Math.min(hookTimeoutMs(hook.timeoutMs, deps.env ?? process.env), remaining);
 			const started = now();
 			const stdout = await withDeadline(run(hook.command, payload, timeoutMs), timeoutMs + HOOK_KILL_GRACE_MS);
 			if (stdout === undefined || now() - started >= timeoutMs) recordFault(script || hook.command, `${event} hook hit its ${timeoutMs} ms slot`, "BridgeTimeout", cwd);
-			return { script, out: parseHookOutput(stdout ?? "") };
+			else return { script, out: parseHookOutput(stdout) };
+			return gitUnchecked() ?? { script, out: parseHookOutput(stdout ?? "") };
 		};
 		return (await Promise.all(selected.map(runOne))).filter((r): r is HookRun => r !== undefined);
 	};

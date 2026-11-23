@@ -96,6 +96,30 @@ def _backfill_batched(conn):
     return n
 
 
+def _denied_backfill_batched(conn, atlas_db):
+    """Flag tool_calls ingested before is_denied_result was widened. Only ever sets
+    denied=1; the snippet is a head of the result text, enough for start-of-text markers."""
+    # ponytail: no progress marker, so each pass rescans is_error=1 AND denied=0 rows
+    # (keyset-paged by id); ceiling is the count of real tool errors, fine to ~1M rows.
+    n = 0
+    last = 0
+    while True:
+        rows = conn.execute(
+            "SELECT id, error_snippet FROM tool_calls WHERE id > ? AND is_error = 1 "
+            "AND denied = 0 AND error_snippet IS NOT NULL ORDER BY id LIMIT ?",
+            (last, BACKFILL_BATCH),
+        ).fetchall()
+        conn.commit()  # end the read snapshot before writing
+        if not rows:
+            return n
+        last = rows[-1][0]
+        ids = [(r[0],) for r in rows if atlas_db.is_denied_result(r[1])]
+        if ids:
+            conn.executemany("UPDATE tool_calls SET denied = 1 WHERE id = ? AND denied = 0", ids)
+            n += len(ids)
+        conn.commit()
+
+
 def _db_part(dry_run, vacuum, min_free_pages=None, min_free_ratio=None):
     min_free_pages = VACUUM_MIN_FREE_PAGES if min_free_pages is None else min_free_pages
     min_free_ratio = VACUUM_MIN_FREE_RATIO if min_free_ratio is None else min_free_ratio
@@ -111,6 +135,11 @@ def _db_part(dry_run, vacuum, min_free_pages=None, min_free_ratio=None):
         out["backfilled"] = _backfill_batched(conn)
         out["improvements_closed"] = atlas_db.close_unmeasurable_improvements(conn)
         conn.commit()
+        try:  # earlier steps are committed; a lock or full disk here must not fail upkeep
+            out["denied_backfilled"] = _denied_backfill_batched(conn, atlas_db)
+        except sqlite3.OperationalError as e:
+            conn.rollback()
+            out["denied_backfill_error"] = str(e)
         free = conn.execute("PRAGMA freelist_count").fetchone()[0]
         total = conn.execute("PRAGMA page_count").fetchone()[0] or 1
         if vacuum or (free >= min_free_pages and free / total >= min_free_ratio):

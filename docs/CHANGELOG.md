@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.36.5, marketplace 5.43.5 - 2026-11-23 -- remaining items from the Nov 16-23 reliability audit
+
+Evidence: `.atlas/evidence/2026-11-23_r1742-remaining.txt`.
+
+- Fixed, omp hook bridge: when `git_guard.py` times out or is skipped for budget on PreToolUse and the command invokes git, the bridge denies the call with "atlas git policy: the git policy check timed out, so nothing ran. Retry the command." (`plugins/atlas/omp/hook-bridge.ts` `GIT_TIMEOUT_DENY`, `invokesGit`). Before, the command ran unchecked; 5 of the 19 bridge timeouts on Nov 18 were git_guard on PreToolUse. Every other hook, every PostToolUse timeout, and a git_guard timeout on a command that does not invoke git still fail open.
+- Added, maintenance: the DB pass sets `denied=1` on stored `tool_calls` rows whose `error_snippet` matches the 17.36.4 deny markers, in batches of 500 with a commit per batch, and reports the count as `denied_backfilled` (`plugins/atlas/scripts/atlas_maint.py` `_denied_backfill_batched`). It never clears a flag. A read-only count on the live database found 492 of 17,820 candidate rows that the first pass will flag.
+- Corrected, 17.36.4 entry below: the "dashboard reaper PermissionError on one Google Drive root" needs no fix. The 112 log lines are 16 stale project roots over 7 reaper ticks, logged between Oct 23 and Nov 13 by a dashboard older than 17.15.0, outside the audit window. The roots are rows in the `projects` table last seen on 2026-07-06, under a leftover `~/Library/CloudStorage/GoogleDrive-...` folder; Google Drive is not in use on the machine. The current `reap_tick` skips any root that is not a project directory and catches the error (`plugins/atlas/scripts/atlas_dashboard.py:3201-3217`).
+
 ## atlas 17.36.4, marketplace 5.43.4 - 2026-11-23 -- fixes from the Nov 16-23 reliability audit
 
 Evidence: `.atlas/evidence/2026-11-23_r1740-audit-fixes.txt`.

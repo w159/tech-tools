@@ -15178,5 +15178,23 @@
     "verified_at": "2026-11-23T11:14:44+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r1742-remaining",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Remaining audit items: git_guard denies git commands on a bridge timeout, maintenance backfills the denied flag, reaper errors were stale",
+    "evidence": [
+      ".atlas/evidence/2026-11-23_r1742-remaining.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T12:13:33+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

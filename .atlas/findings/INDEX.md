@@ -65,6 +65,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-11-23 | tripwire-sanctioned-write-deny | verified | Tripwire no longer denies docs/ and .atlas/ writes at the inline-op limit | [2026-11-23_tripwire-sanctioned-write-deny.md](2026-11-23_tripwire-sanctioned-write-deny.md) |
+| 2026-11-23 | r1742-remaining | verified | Remaining audit items: git_guard denies git commands on a bridge timeout, maintenance backfills the denied flag, reaper errors were stale | [2026-11-23_r1742-remaining.md](2026-11-23_r1742-remaining.md) |
 | 2026-11-23 | r1740-audit-fixes | verified | Audit fixes 1-6 and 8: denial markers, selffix target, tripwire route text and exemptions, maint lock, omp deny text, worker brief, stray roots | [2026-11-23_r1740-audit-fixes.md](2026-11-23_r1740-audit-fixes.md) |
 | 2026-11-23 | r1739-ci-green | verified | 7ae517d3 CI green, atlas-v17.36.3 released and Latest | [2026-11-23_r1739-ci-green.md](2026-11-23_r1739-ci-green.md) |
 | 2026-11-23 | r1738-version-bump | verified | atlas 17.36.2 and marketplace 5.43.2 version strings agree | [2026-11-23_r1738-version-bump.md](2026-11-23_r1738-version-bump.md) |

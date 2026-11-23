@@ -1,0 +1,37 @@
+r1742: remaining audit items (bridge timeout, denied backfill, reaper correction). 2026-11-23, tree at a37f39a8 plus uncommitted changes.
+
+1. Full suites after the last worker finished:
+   $ python3 plugins/atlas/scripts/atlas_test.py run
+   hooks: PASS 86 files
+   scripts: PASS 187 files
+   wall 160.0s, pytest 9.2.0
+
+2. omp bridge and contract tests:
+   $ cd plugins/atlas/omp && bun test hook-bridge contracts
+   97 pass, 0 fail, 921 expect() calls, 5 files
+
+3. Crew verdicts:
+   crew-070832b351 (bridge, backfill)  ok true, check_exit 0
+   crew-071005151a (revert)            ok true, check_exit 0
+   The backfill worker also removed encoding="utf-8", os.makedirs and the off/float/clamp handling in
+   retention_days from atlas_maint.py. Those edits were not asked for and were reverted:
+   $ git diff -- plugins/atlas/scripts/atlas_maint.py | grep -c '^-[^-]'
+   0
+
+4. Backfill dry count on the live database (read-only, nothing written):
+   rows with is_error=1, denied=0, error_snippet not null: 17820; is_denied_result true: 492
+
+5. Bridge timeouts in ~/.atlas/hook-faults.jsonl, all on Nov 18 (19 rows, not 20 as first reported):
+   git_guard PreToolUse 5, dispatch_tripwire PreToolUse 2, bash_advisor PreToolUse 3, edit_read_nudge PreToolUse 1,
+   delegation_prewarn PostToolUse 4, dispatch_tripwire PostToolUse 2, edit_read_nudge PostToolUse 2.
+   Only git_guard changes behavior. dispatch_tripwire PreToolUse still fails open on timeout.
+
+6. Reaper correction, from ~/.atlas/dashboard.log and atlas.db (read-only):
+   112 "reap_tick reap <path>: PermissionError(1, 'Operation not permitted')" lines = 16 roots x 7 ticks,
+   between log lines 19003 and 28716, bracketed by timestamps 2026-10-23 and 2026-11-13, before the
+   17.15.0 dashboard start line. projects table: 646 rows, 19 under GoogleDrive, last_seen 2026-07-06.
+   ~/Library/CloudStorage/GoogleDrive-<account> exists as a folder dated Oct 14; no Google Drive app or process found.
+
+Not verified:
+- The bridge deny in a live omp session; the test injects a runner that never returns.
+- The backfill on the live database; it runs on the next maintenance pass after install.
