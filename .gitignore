@@ -158,6 +158,7 @@ firebase-adminsdk*.json
 !scripts/check_versions.py
 !scripts/assert-dynamics-connector-entra-perms.sh
 !scripts/check_attribution.py
+!scripts/gate.sh
 !scripts/test_*.py
 !scripts/telemetry_report.py
 !scripts/gen_codex_hooks.py
@@ -183,6 +184,9 @@ telemetry/server/.vercel/
 # ---- CI/CD at repo root (if added in future) ----
 !.github/
 !.github/**
+# local git hooks that run scripts/gate.sh
+!.githooks/
+!.githooks/**
 
 # ---- mcp_node — TypeScript SDK client libraries ----
 # Covers: node-auvik, node-ninjaone, node-paylocity,

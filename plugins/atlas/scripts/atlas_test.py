@@ -7,10 +7,10 @@
 `run` with no paths and no --changed runs both full suites. Each test file is its own
 `python -m pytest` process (cwd = its suite dir), so files cannot share interpreter state. The
 interpreter is the first of ATLAS_TEST_PYTHON, <repo>/.venv/bin/python, sys.executable, python3, python3.14..12
-that imports pytest (CI runs pytest too); with none, `run` exits 2 instead of falling back to unittest.
+that imports pytest (the push gate runs pytest too); with none, `run` exits 2 instead of falling back to unittest.
 
-Selection mapping: CI (.github/workflows/tests.yml) has no path filter; its only scoped atlas check is
-hooks/test_atlas_contract.py, which every hooks change selects here too. Everything else below is local.
+Selection mapping: hooks/test_atlas_contract.py is selected by every hooks change; everything else below is local.
+scripts/gate.sh (the git hooks) calls `run <staged paths>` on commit and a full `run` on push.
 """
 import argparse
 import json
@@ -58,7 +58,7 @@ def _js_command(rel, root):
     """Nearest package.json decides: its test script, else bun (bunfig.toml) filtered to this file."""
     p = (Path(root) / rel).parent
     root = Path(root)
-    # CI runs omp and mod from plugins/atlas so its bunfig preloads load; omp/ has its own package.json that would not.
+    # scripts/gate.sh runs omp and mod from plugins/atlas so its bunfig preloads load; omp/ has its own package.json that would not.
     if rel.startswith((f"{ATLAS}/omp/", f"{ATLAS}/mod/")):
         p = root / ATLAS
         return f"cd {ATLAS} && bun test {Path(rel).relative_to(ATLAS).with_suffix('').as_posix().removesuffix('.test')}"

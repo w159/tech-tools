@@ -62,8 +62,9 @@ Run tests, dashboard and scripts from repo paths (`plugins/atlas/scripts/...`,
   in every fresh clone before the first commit.
 - No `Co-Authored-By: Claude`, `Claude-Session:` or "Generated with Claude Code" lines,
   in commits or PR text.
-- `python3 scripts/check_attribution.py origin/main..HEAD` before every push; the
-  `attribution` CI job runs the same check on each push to main and each PR.
+- Run `git config core.hooksPath .githooks` in every fresh clone. The hooks run `scripts/gate.sh`
+  (scoped on commit, everything on push, attribution check included); the `attribution` job on
+  GitHub is the only CI check left.
 
 ---
 

@@ -1,0 +1,34 @@
+r1745: tests move from GitHub Actions to local git hooks. 2026-11-23, tree at af4c37b6 plus uncommitted changes.
+
+1. First full run of the push gate, failed:
+   $ scripts/gate.sh push < /dev/null
+   versions 0s, attribution 0s, root-pytest 6s, telemetry-node 1s, bun-omp-mod 46s, tsc-relative-imports 25s,
+   bun-colony-scripts 14s, leftover-pytest 3s, atlas-py 181s, herdr-web-ui 375s
+   error: The test herdr session "local-8061-1795439360-1" did not start
+   ... herdr.sock: local socket name length exceeds capacity of sun_path
+   gate: step 'herdr-web-ui' failed (exit 1)
+   Cause: mktemp -d under /var/folders on macOS makes the unix socket path longer than sun_path allows.
+   Fix: temp dir from `mktemp -d /tmp/hg.XXXXXX`, session name `g$$`.
+
+2. Second full run, passed:
+   $ scripts/gate.sh push < /dev/null
+   versions                        0s
+   attribution                     0s
+   root-pytest                     7s
+   telemetry-node                  0s
+   bun-omp-mod                    45s
+   tsc-relative-imports           17s
+   bun-colony-scripts             15s
+   leftover-pytest                 3s
+   atlas-py                      171s
+   herdr-web-ui                  206s
+   mod-gate-live                   0s
+   gate exit: 0
+   Total 464 s. The attribution step had no refs on stdin in this manual run ("no refs to push").
+
+3. Live mod gate alone:
+   $ python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live
+   PASS modules-exist, PASS smoke bundle, PASS smoke load+render, PASS live claude plugin test: 1 probe, 1 pass
+   mod gate: PASS (4 pass, 0 fail, 0 skip)
+
+Not verified at the time of writing: the hooks firing from a real `git commit` and `git push`.

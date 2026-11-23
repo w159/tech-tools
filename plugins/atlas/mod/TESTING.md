@@ -52,21 +52,26 @@ From the repo root, `claude plugin test plugins/atlas` loads the plugin the way 
 test file; it exercises the mod (hooks and the rendered native element trees of the band and
 sidebar), not a surface's paint.
 
-## CI tiers
+## Local gate
 
-`.github/workflows/tests.yml` runs these on every pull request and push to main (Bun 1.4.4, from `plugins/atlas`
-so `bunfig.toml` loads the preloads):
+`.github/workflows/tests.yml` holds only the `attribution` job. The suites run locally through `scripts/gate.sh`:
+`scripts/gate.sh commit` (pre-commit) is scoped to staged files, and `scripts/gate.sh push` (pre-push) runs
+everything, cheapest first and stopping at the first failing step. Enable the hooks with
+`git config core.hooksPath .githooks`. The Python suites run through `plugins/atlas/scripts/atlas_test.py`.
 
-| Job | Command |
+| Push step | Command |
 | --- | --- |
-| `atlas-bun` | `bun test omp mod`, then a tsc step that fails when a relative import (`./` or `../`) does not resolve |
-| `atlas-py-fast` | `python -m pytest -q -p no:cacheprovider hooks scripts` with `--ignore=<file>` for each `hooks/` and `scripts/` line of `ci-slow-tests.txt` |
-| `atlas-py-slow` (matrix `hooks`, `scripts`) | `python -m pytest -q -p no:cacheprovider $(grep -E '^<dir>/' ci-slow-tests.txt)` |
-| `atlas-herdr` | in `colony/herdr-web-ui`: `bun run build`, `bun run test:unit`, `bun run test:integration` (checksum-pinned herdr 0.9.3) |
-| `atlas-mod-gate` | `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live` against `@anthropic-ai/claude-code@2.1.325` |
-| `full` (push, schedule, dispatch) | root `python -m pytest -q -p no:cacheprovider`, then `bun test` in `plugins/atlas` |
-
-`scripts/test_ci_tiers.py` proves every `test_*.py` under `hooks/` and `scripts/` is in exactly one Python tier.
+| `versions` | `python scripts/check_versions.py` |
+| `attribution` | `python3 scripts/check_attribution.py <range>` for each pushed ref range |
+| `root-pytest` | `python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests` |
+| `telemetry-node` | in `telemetry/server`: `node --test` |
+| `bun-omp-mod` | in `plugins/atlas`: `bun test omp mod` |
+| `tsc-relative-imports` | in `plugins/atlas`: `tsc --noEmit -p tsconfig.json`, failing when a relative import (`./` or `../`) does not resolve |
+| `bun-colony-scripts` | in `plugins/atlas`: `bun test ./colony ./scripts` |
+| `leftover-pytest` | root `python -m pytest -q -p no:cacheprovider` with `--ignore` for the trees the other pytest steps cover |
+| `atlas-py` | `python3 plugins/atlas/scripts/atlas_test.py run` |
+| `herdr-web-ui` | in `plugins/atlas/colony/herdr-web-ui`: `bun run build`, `bun run test:unit`, `bun run test:integration` |
+| `mod-gate-live` | `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live` |
 
 ## Typecheck
 

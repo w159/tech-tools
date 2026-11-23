@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased -- tests move from GitHub Actions to local git hooks
+
+- Changed, CI: `.github/workflows/tests.yml` keeps only the `attribution` job. The nine test jobs (`tests`, `atlas-py-fast`, `atlas-py-slow`, `telemetry-server`, `atlas-bun`, `atlas-herdr`, `atlas-mod-gate`, `full`) are deleted. A commit made with `--no-verify`, from a clone without the hooks enabled, or by a pull request is no longer tested anywhere.
+- Added, local gate: `scripts/gate.sh commit` and `scripts/gate.sh push`, run by `.githooks/pre-commit` and `.githooks/pre-push`. Enable once per clone with `git config core.hooksPath .githooks`. `commit` runs the version check and only the suites the staged files can affect. `push` runs everything the deleted jobs ran: version check, attribution for the pushed range, the root pytest paths, `node --test` for the telemetry server, `bun test omp mod`, the tsc relative-import check, `bun test ./colony ./scripts`, the leftover root pytest collection, both atlas Python suites through the parallel runner (`plugins/atlas/scripts/atlas_test.py run`), the herdr web UI build with unit and integration tests, and the live mod gate. A tool missing from PATH fails its step.
+- Removed: `plugins/atlas/ci-slow-tests.txt` and `plugins/atlas/scripts/test_ci_tiers.py`. They existed only to split the Python suites into the two CI tiers.
+- Changed, docs: `CLAUDE.md` rule 6 and `plugins/atlas/mod/TESTING.md` describe the hooks in place of the CI jobs. `.gitignore` allows `scripts/gate.sh` and `.githooks/`.
+
 ## Unreleased -- CI: the full job no longer repeats its sibling jobs
 
 - Changed, CI: on a push the `full` job in `.github/workflows/tests.yml` ran the whole root pytest collection in one serial process (907 s) and `bun test` (80 s), repeating what `tests`, `atlas-py-fast`, `atlas-py-slow` and `atlas-bun` run in parallel on the same push. It was 1002 s of a 16 min 45 s workflow; every other job ended within 6 minutes. `full` now ignores the five paths those jobs own and runs `bun test ./colony ./scripts`. Root pytest collects 296 test files; `full` keeps the 5 no sibling runs (`plugins/atlas/skills`, `plugins/atlas/mod`), 161 tests in 2 s locally, and the Bun step runs 59 files in 15 s locally. The sibling jobs now also run on `workflow_dispatch`, so a dispatch covers the same ground as a push. No plugin version change.
