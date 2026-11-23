@@ -80,8 +80,7 @@ def test_lead_files() -> None:
         ),
         lacks=("Decisions stop the line", "(gate o)", "## Length budget"),
     )
-    _check("AGENTS.md", lacks=("for high-impact changes do three",))
-    _check("CLAUDE.md", has=("costs a full context",))
+    _check("AGENTS.md", has=("costs a fresh context",), lacks=("for high-impact changes do three",))
     _check("plugins/atlas/omp/lead-addendum.md", lacks=("Never drop `agent`",))
 
 

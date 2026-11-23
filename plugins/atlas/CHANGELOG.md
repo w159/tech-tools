@@ -1,4 +1,11 @@
 # Changelog
+## 17.36.1 - 2026-11-23
+
+### Fixed
+
+- The Stop gate no longer re-runs text from inside a quoted argument as the session's test command. A Bash call such as `atlas_finding.py ... --evidence "cd x && bun test 6355 pass 0 fail"` was split at the `&&` inside the quotes, and the gate ran the fragment and reported a false test failure. The segment split in `hooks/gate_rerun.py` is now quote aware.
+- The Fable 5.2 guide contract test (`hooks/test_fable52_guide.py`) pins the subagent-cost sentence in `AGENTS.md`. 17.36.0 shortened `CLAUDE.md` and removed the sentence the test looked for there, which failed the `atlas-py-fast` and `full` CI jobs.
+
 ## 17.36.0 - 2026-11-23
 
 Measured after 17.35.0: an `atlas:explorer` now starts at 33,014 to 33,111 input tokens (four runs), against a 14-day average of about 75,800 before. Part of the drop is a smaller MCP tool list in the measuring session (682 names against 1,196).

@@ -14862,5 +14862,113 @@
     "verified_at": "2026-11-23T07:51:08+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-route-corpus",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "routing corpus row for the mis-armed prompt; no router change",
+    "evidence": [
+      "hooks suite test_prompt_optimizer OK, routing corpus 85 of 87"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/hooks -p test_prompt_optimizer.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:57:12+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-held-launch",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "wait launches the held verifier; spawn-team returns at once",
+    "evidence": [
+      "scripts suite test_atlas_team and test_atlas_mux 252 OK; real tmux team tb61399 in a scratch repo"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest discover -s plugins/atlas/scripts -p test_atlas_team.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:57:13+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-version-bump",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.36.0 and marketplace 5.43.0 version strings",
+    "evidence": [
+      "check_versions prints version check ok; test_fix_settings_options 12 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 scripts/check_versions.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:57:13+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-quoted-separator",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Stop gate no longer re-runs text from inside a quoted argument as the test command",
+    "evidence": [
+      "plugins/atlas/hooks/test_gate_rerun.py TranscriptTest.test_separator_inside_a_quoted_argument_does_not_start_a_segment, failed before the fix and passes after"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest plugins/atlas/hooks/test_gate_rerun.py -k TranscriptTest",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T08:10:14+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "fable52-guide-agents-pin",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Fable 5.2 guide contract test pins the subagent-cost sentence in AGENTS.md, fixing atlas-py-fast on 707e0f63",
+    "evidence": [
+      "CI run 45134740629 job atlas-py-fast failed test_lead_files on the CLAUDE.md pin, and the local contract run prints fable52 ok after the edit"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/hooks/test_fable52_guide.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T08:11:42+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1737-version-bump",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.36.1 and marketplace 5.43.1 version strings agree",
+    "evidence": [
+      "scripts/check_versions.py prints version check ok and test_fix_settings_options.py passes 12 tests"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 scripts/check_versions.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T08:14:52+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

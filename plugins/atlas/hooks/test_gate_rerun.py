@@ -220,6 +220,20 @@ class TranscriptTest(unittest.TestCase):
             gate_rerun.last_test_command(str(self.tx), None, self.root), "python3 -m pytest -q 2>&1 | tail -3"
         )
 
+    def test_separator_inside_a_quoted_argument_does_not_start_a_segment(self):
+        # The 17.36.0 release run: an evidence string that reads like a test run was split at the `&&`
+        # inside its quotes, and the gate re-ran `bun test 6355 pass 0 fail" --reproduction "cd ...`.
+        call = (
+            'python3 plugins/atlas/scripts/atlas_finding.py add --id r1 --status verified '
+            '--evidence "cd plugins/atlas && bun test 6355 pass 0 fail" '
+            '--reproduction "cd plugins/atlas/scripts && bun test"'
+        )
+        self.assertIsNone(gate_rerun.runnable_part(call, self.root))
+        self.assertIsNone(gate_rerun.runnable_part("echo 'ok; pytest -q' > note.txt", self.root))
+        self.assertEqual(gate_rerun.runnable_part(call + " && pytest -q", self.root), "pytest -q")
+        self._write(_bash_line("python3 -m pytest -q"), _bash_line(call))
+        self.assertEqual(gate_rerun.last_test_command(str(self.tx), None, self.root), "python3 -m pytest -q")
+
     def test_none_without_test_or_transcript(self):
         self._write(_bash_line("ls"))
         self.assertIsNone(gate_rerun.last_test_command(str(self.tx), None, self.root))

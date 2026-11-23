@@ -1,5 +1,10 @@
 # Changelog
 
+## atlas 17.36.1, marketplace 5.43.1 - 2026-11-23 -- Stop gate re-run and CI contract test fixes
+
+- Fixed, Stop gate: it no longer re-runs text from inside a quoted argument (an evidence string such as `"cd x && bun test ..."`) as the session's test command; the segment split is quote aware (`plugins/atlas/hooks/gate_rerun.py` `_segments`).
+- Fixed, CI: the Fable 5.2 guide contract test (`plugins/atlas/hooks/test_fable52_guide.py`) pins the subagent-cost sentence in `AGENTS.md`, where 17.36.0 left it, which fixes the `atlas-py-fast` failure on 707e0f63.
+
 ## atlas 17.36.0, marketplace 5.43.0 - 2026-11-23 -- lead integration commands, reap and verifier order, shorter CLAUDE.md
 
 Measured after 17.35.0: an `atlas:explorer` starts at about 33,000 input tokens, against about 75,800 before (four runs; the measuring session also offered fewer MCP tool names).

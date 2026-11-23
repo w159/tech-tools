@@ -193,7 +193,9 @@ def _epoch(ts) -> float | None:
         return None
 
 
-_SEG_SPLIT = re.compile(r"\n|&&|;|\|\|")
+# A quoted string is consumed whole; only an unquoted separator (group 1) splits. An unterminated quote
+# matches no string alternative, so it falls back to plain splitting.
+_SEG_TOKEN = re.compile(r"""'[^']*'|"(?:\\.|[^"\\])*"|(\n|&&|;|\|\|)""")
 _CD_ONLY = re.compile(r"^cd\s+(\S+)$")
 # `<<WORD`, `<<-WORD`, `<<'WORD'`, `<< "WORD"`; `<<<` (a here-string) has no body and is skipped.
 _HEREDOC = re.compile(r"(?<!<)<<(?!<)(-?)\s*(['\"]?)([A-Za-z_][\w.-]*)\2")
@@ -215,6 +217,17 @@ def _drop_heredoc_bodies(command: str) -> str:
     return "\n".join(out)
 
 
+def _segments(command: str) -> list:
+    # A separator inside a quoted argument is data, not a command boundary.
+    out, start = [], 0
+    for m in _SEG_TOKEN.finditer(command):
+        if m.group(1) is not None:
+            out.append(command[start:m.start()])
+            start = m.end()
+    out.append(command[start:])
+    return out
+
+
 def runnable_part(command: str, root: Path, ran: bool = False) -> str | None:
     """The allowlisted test command inside a Bash call: the whole call when it is one, else the last
     segment of a compound call (`cat >> CHANGELOG.md <<EOF ... EOF` then `python3 -m pytest -q | tail`)
@@ -225,7 +238,7 @@ def runnable_part(command: str, root: Path, ran: bool = False) -> str | None:
     if normalize(command, root, ran) is not None:
         return command.strip()
     found, cd = None, ""
-    for seg in _SEG_SPLIT.split(_drop_heredoc_bodies(command)):
+    for seg in _segments(_drop_heredoc_bodies(command)):
         seg = seg.strip()
         if not seg:
             continue

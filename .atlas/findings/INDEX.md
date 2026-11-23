@@ -64,9 +64,15 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-23 | r1737-version-bump | verified | atlas 17.36.1 and marketplace 5.43.1 version strings agree | [2026-11-23_r1737-version-bump.md](2026-11-23_r1737-version-bump.md) |
+| 2026-11-23 | r1736-version-bump | verified | atlas 17.36.0 and marketplace 5.43.0 version strings | [2026-11-23_r1736-version-bump.md](2026-11-23_r1736-version-bump.md) |
+| 2026-11-23 | r1736-route-corpus | verified | routing corpus row for the mis-armed prompt; no router change | [2026-11-23_r1736-route-corpus.md](2026-11-23_r1736-route-corpus.md) |
 | 2026-11-23 | r1736-mux | verified | reap skips no-op merge; verifier held until workers exit and launched by wait | [2026-11-23_r1736-mux.md](2026-11-23_r1736-mux.md) |
 | 2026-11-23 | r1736-inline-op | verified | lead integration commands do not count as inline ops | [2026-11-23_r1736-inline-op.md](2026-11-23_r1736-inline-op.md) |
+| 2026-11-23 | r1736-held-launch | verified | wait launches the held verifier; spawn-team returns at once | [2026-11-23_r1736-held-launch.md](2026-11-23_r1736-held-launch.md) |
 | 2026-11-23 | r1736-doctor-slug | verified | context-footprint resolves paths with dot, underscore, space; routing corpus row added; version bump | [2026-11-23_r1736-doctor-slug.md](2026-11-23_r1736-doctor-slug.md) |
+| 2026-11-23 | gate-rerun-quoted-separator | verified | Stop gate no longer re-runs text from inside a quoted argument as the test command | [2026-11-23_gate-rerun-quoted-separator.md](2026-11-23_gate-rerun-quoted-separator.md) |
+| 2026-11-23 | fable52-guide-agents-pin | verified | Fable 5.2 guide contract test pins the subagent-cost sentence in AGENTS.md, fixing atlas-py-fast on 707e0f63 | [2026-11-23_fable52-guide-agents-pin.md](2026-11-23_fable52-guide-agents-pin.md) |
 | 2026-11-21 | round3-subagentstop-finish | verified | Blocked SubagentStop now stamps member finished (replay of real payload); denied dispatch leaves no rows already holds | [2026-11-21_round3-subagentstop-finish.md](2026-11-21_round3-subagentstop-finish.md) |
 | 2026-11-21 | REL-17-34-1 | verified | pre-push check of atlas 17.34.1 | [2026-11-21_rel-17-34-1.md](2026-11-21_rel-17-34-1.md) |
 | 2026-11-21 | ctxdiet-nudge | verified | route nudge names spawn-team when the team gate routes | [2026-11-21_ctxdiet-nudge.md](2026-11-21_ctxdiet-nudge.md) |
