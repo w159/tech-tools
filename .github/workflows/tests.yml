@@ -1,7 +1,10 @@
 name: tests
 
 # Hermetic checks only: no vendor credentials. Every atlas suite (hooks, scripts, mod, omp, herdr) runs on pull
-# requests. The vendored falcon MCP tests are not run here.
+# requests. The vendored falcon MCP tests are not run here. On a push, the sibling jobs (tests, atlas-py-fast,
+# atlas-py-slow, atlas-bun) run in parallel and the full job below runs only what none of them runs (the rest of the
+# root pytest collection and the Bun directories atlas-bun skips). tests, atlas-py-* and atlas-bun also run on
+# workflow_dispatch, so a dispatch covers the same ground as a push.
 on:
   pull_request:
   push:
@@ -13,8 +16,8 @@ permissions:
 
 jobs:
   tests:
-    # the full job below owns dispatch runs on its own
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    # runs on pull_request, push and workflow_dispatch; the full job covers only what is left over
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,7 +33,7 @@ jobs:
   # exactly one tier (a file not on the list is fast). Per-file timings are in that list's header. tmux is used by
   # the colony/mux tests; ubuntu-latest does not guarantee it.
   atlas-py-fast:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -45,7 +48,7 @@ jobs:
           ../../.venv/bin/python -m pytest -q -p no:cacheprovider hooks scripts $ign
 
   atlas-py-slow:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -71,7 +74,8 @@ jobs:
         working-directory: telemetry/server
 
   # Atlas Bun suites: the omp extension and the Claude Code mods (mod/ runs through mod/test-shim.ts, see
-  # mod/TESTING.md). Run from plugins/atlas so bunfig.toml loads the preloads.
+  # mod/TESTING.md). Run from plugins/atlas so bunfig.toml loads the preloads. The other Bun directories (colony,
+  # scripts) run in the full job.
   # Typecheck: tsconfig.json extends .claude-plugin/types/tsconfig.json, which the Claude Code host generates locally and
   # .gitignore excludes (plugins/atlas/.claude-plugin/types), so a checkout has no host types and tsc reports TS5083 plus
   # hundreds of host-type errors. Measured on 2026-11-18 (two identical runs): 890 `error TS` lines, 369 TS2307 (all on
@@ -79,7 +83,7 @@ jobs:
   # ratchet (it moves with the host types and the typescript version), but the relative-specifier TS2307 count is
   # stable at 0 and catches a broken file move, so the step below fails on any unresolved relative import.
   atlas-bun:
-    if: github.event_name == 'pull_request' || github.event_name == 'push'
+    if: github.event_name == 'pull_request' || github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -183,8 +187,12 @@ jobs:
           echo "checking $range"
           python3 scripts/check_attribution.py "$range"
 
-  # Full root pytest suite plus the atlas Bun suites. Slow, so not run on PRs (the jobs above cover the atlas suites
-  # there); push and dispatch keep this as the catch-all.
+  # Catch-all for what no sibling job runs, so a push or dispatch loses no test and repeats none. Not run on PRs (the
+  # jobs above cover the atlas suites there). Pytest: the root collection minus plugins/atlas/hooks, plugins/atlas/scripts
+  # (atlas-py-fast and atlas-py-slow) and scripts, plugins/armada/tests, plugins/programmer/tests (the tests job); what
+  # remains is plugins/atlas/skills and plugins/atlas/mod (5 test files). Bun: the plugins/atlas
+  # test directories atlas-bun does not run (colony and scripts; omp and mod are atlas-bun's; colony/herdr-web-ui is
+  # ignored by bunfig.toml and run by atlas-herdr).
   full:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -198,6 +206,6 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: python3 --version && python3 -m venv .venv && .venv/bin/python -m pip install --quiet pytest
-      - run: .venv/bin/python -m pytest -q -p no:cacheprovider
-      - run: bun test
+      - run: .venv/bin/python -m pytest -q -p no:cacheprovider --ignore=plugins/atlas/hooks --ignore=plugins/atlas/scripts --ignore=scripts --ignore=plugins/armada/tests --ignore=plugins/programmer/tests
+      - run: bun test ./colony ./scripts
         working-directory: plugins/atlas

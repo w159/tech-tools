@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased -- CI: the full job no longer repeats its sibling jobs
+
+- Changed, CI: on a push the `full` job in `.github/workflows/tests.yml` ran the whole root pytest collection in one serial process (907 s) and `bun test` (80 s), repeating what `tests`, `atlas-py-fast`, `atlas-py-slow` and `atlas-bun` run in parallel on the same push. It was 1002 s of a 16 min 45 s workflow; every other job ended within 6 minutes. `full` now ignores the five paths those jobs own and runs `bun test ./colony ./scripts`. Root pytest collects 296 test files; `full` keeps the 5 no sibling runs (`plugins/atlas/skills`, `plugins/atlas/mod`), 161 tests in 2 s locally, and the Bun step runs 59 files in 15 s locally. The sibling jobs now also run on `workflow_dispatch`, so a dispatch covers the same ground as a push. No plugin version change.
+
 ## atlas 17.36.5, marketplace 5.43.5 - 2026-11-23 -- remaining items from the Nov 16-23 reliability audit
 
 Evidence: `.atlas/evidence/2026-11-23_r1742-remaining.txt`.
