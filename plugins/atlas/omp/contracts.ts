@@ -245,6 +245,14 @@ export function explorationOutsideRoot(command: string, root: string, ...contrac
 	});
 }
 
+const OPERATION_WORD: Record<string, string> = {
+	ctx_read: "read",
+	ctx_search: "search",
+	ctx_tree: "list",
+	ctx_glob: "find",
+	ctx_shell: "run",
+};
+
 /** The lean-ctx replacement a session can reach right now (structurally index.ts LeanReplacement). */
 export type ExplorationRoute = { via: "tool"; name: string } | { via: "device"; device: string };
 
@@ -274,6 +282,17 @@ export function explorationDenyReason(
 ): string | undefined {
 	const tool = explorationTool(command, ...contract);
 	if (!tool) return undefined;
-	const how = route.via === "tool" ? `call ${route.name} directly` : `write JSON to ${route.device}`;
-	return `Atlas enforcement: this bash command only reads files, so use lean-ctx ${tool} instead (${how}). Bash stays allowed for tests, git, builds and writes.`;
+	// Tool route: name only the callable route tool; when it differs from the
+	// mapped operation, describe the operation in words so no second tool name
+	// appears. Device route: the one operation plus the device (no tool is called).
+	const verb = OPERATION_WORD[tool] ?? "run";
+	let named = "";
+	let use: string;
+	if (route.via === "tool") {
+		use = route.name === tool ? `call ${route.name} directly` : `call ${route.name} directly to ${verb}`;
+	} else {
+		named = ` ${tool}`;
+		use = `write JSON to ${route.device}`;
+	}
+	return `Atlas enforcement: this bash command only reads files, so use lean-ctx${named} instead (${use}). Bash stays allowed for tests, git, builds and writes.`;
 }

@@ -15142,5 +15142,41 @@
     "status": "verified",
     "verified_at": "2026-11-23T10:29:26+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "r1739-ci-green",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "7ae517d3 CI green, atlas-v17.36.3 released and Latest",
+    "evidence": [
+      "runs 45157323462 release=success, 45157323978 Push on main=success, 45157323525 tests=success; release line: atlas 17.36.3 Latest atlas-v17.36.3 2026-11-23T10:34:57Z"
+    ],
+    "doc_refs": [],
+    "reproduction": "gh release list --limit 2",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T10:51:59+00:00",
+    "verified_by": "verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1740-audit-fixes",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Audit fixes 1-6 and 8: denial markers, selffix target, tripwire route text and exemptions, maint lock, omp deny text, worker brief, stray roots",
+    "evidence": [
+      ".atlas/evidence/2026-11-23_r1740-audit-fixes.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_test.py run --changed",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T11:14:44+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

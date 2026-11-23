@@ -73,10 +73,12 @@ test("exploration verdict fails open without the contract section", () => {
 	}
 });
 
-test("exploration deny names the ctx_* equivalent and the reachable route", () => {
+test("exploration deny names only the reachable route", () => {
 	const tool = { via: "tool", name: "ctx_shell" } as const;
 	const device = { via: "device", device: "xd://mcp__lean_ctx_ctx_shell" } as const;
-	const pick = (cmd: string) => explorationDenyReason(cmd, tool)?.match(/ctx_(read|search|tree|glob|shell)/)?.[0];
+	// The operation is named on the device route; the device URI is not part of the match.
+	const pick = (cmd: string) =>
+		explorationDenyReason(cmd, { via: "device", device: "xd://dev" })?.match(/ctx_(read|search|tree|glob|shell)/)?.[0];
 	for (const cmd of ["cat a", "head -5 a", "tail -3 a"]) expect(pick(cmd)).toBe("ctx_read");
 	for (const cmd of ["grep -rn x .", "rg x", "ag x"]) expect(pick(cmd)).toBe("ctx_search");
 	for (const cmd of ["ls -la", "tree -L 2"]) expect(pick(cmd)).toBe("ctx_tree");
@@ -84,8 +86,13 @@ test("exploration deny names the ctx_* equivalent and the reachable route", () =
 	for (const cmd of ["wc -l a", "stat a", "file a", "less a", "sed -n 1p a", "awk '{print}' a", "cat a | grep b | wc -l"])
 		expect(pick(cmd)).toBe("ctx_shell");
 	expect(pick("cd src && cat a")).toBe("ctx_read"); // leading cd is transparent
-	expect(explorationDenyReason("cat a", tool)).toContain("call ctx_shell directly");
+	expect(explorationDenyReason("cat a", tool)).toContain("call ctx_shell directly to read");
+	expect(explorationDenyReason("grep x .", tool)).toContain("call ctx_shell directly to search");
+	expect(explorationDenyReason("ls", tool)).toContain("call ctx_shell directly to list");
+	expect(explorationDenyReason("fd x", tool)).toContain("call ctx_shell directly to find");
+	expect(explorationDenyReason("wc -l a", tool)).toContain("(call ctx_shell directly)");
 	expect(explorationDenyReason("cat a", device)).toContain("xd://mcp__lean_ctx_ctx_shell");
+	expect(explorationDenyReason("cd src && cat a", tool)).toBeDefined();
 	expect(explorationDenyReason("npm test", tool)).toBeUndefined();
 });
 

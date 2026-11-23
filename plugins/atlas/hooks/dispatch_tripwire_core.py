@@ -1790,11 +1790,28 @@ _SHELL_OPS = {"&&", "||", ";", "|", "&", ";;", "|&"}
 _BOOKKEEPING_SCRIPTS = ("atlas_todo.py", "atlas_finding.py", "atlas_irc.py")
 
 
+def _inline_route(kind):
+    # The route the inline-op deny names. With the team gate active an in-process working dispatch is itself
+    # denied, so name the launcher; the same predicate the team rule uses keeps the two in step.
+    import atlas_hook_guard
+
+    if atlas_hook_guard.team_gate_routes():
+        cmd = (
+            'python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_mux.py" spawn-team --class C --effort E '
+            "--paths P --task-file F"
+        )
+        return f"run edits as a tmux team: {cmd} (task file under .atlas/.run/briefs/)"
+    return "dispatch atlas:implementer (edits)" if kind == "edit" else "dispatch atlas:explorer (investigation) or atlas:implementer (edits)"
+
+
 def _is_bookkeeping_call(tool, tinput):
     """True when a shell call only runs atlas bookkeeping scripts (atlas_todo.py,
     atlas_finding.py, atlas_resolve.py), optionally after `cd` and piped into a filter.
     Such a call is neither an inline op nor a dispatch: not logged, not denied, no reset."""
-    return _team_mux_verb(tool, tinput) in ("bookkeeping", "resolve", "wait", "reap")
+    if _team_mux_verb(tool, tinput) in ("bookkeeping", "resolve", "wait", "reap"):
+        return True
+    command = (tinput or {}).get("command") if _is_shell_tool(tool) else None
+    return isinstance(command, str) and _is_wrapped_exempt(command)
 
 
 def _is_shell_tool(tool):
@@ -1922,6 +1939,8 @@ def _is_integration_call(tool, tinput):
     if not isinstance(command, str):
         return False
     command = _unwrap_lean_ctx(command)
+    if "<<" in command:
+        return _is_wrapped_exempt(command)  # a brief heredoc body may hold any text
     if _SHELL_SUBSTITUTION.search(command):
         return False
     try:  # quote-aware, so `;`, `&&` or `<` inside a commit message is not an operator
@@ -1947,8 +1966,98 @@ def _is_integration_call(tool, tinput):
         if not seg or seg[0] == "cd":
             continue
         if not _integration_segment_ok(seg):
-            return False
+            return _is_wrapped_exempt(command)
         checked += 1
+    return checked > 0 or _is_wrapped_exempt(command)
+
+
+# Shell words that carry no work of their own: loop/branch scaffolding, waits and no-ops.
+_NEUTRAL_WORDS = frozenset({"done", "fi", "break", "continue", "true", ":", "sleep", "for", "cd"})
+_CLAUSE_WORDS = frozenset({"do", "then", "else", "elif", "while", "until", "if", "!"})
+
+
+def _brief_heredoc_only(command):
+    # `cat > .atlas/.run/briefs/X <<'EOF' ... EOF` and nothing else. The delimiter must be quoted (no
+    # expansion in the body) and the path free of `..`, so the only file written is a dispatch brief.
+    lines = command.strip("\n").split("\n")
+    m = re.match(r"^\s*cat\s*>>?\s*(\S+)\s*<<-?\s*(['\"])(\w+)\2\s*$", lines[0])
+    if not m:
+        return False
+    path = m.group(1).strip("'\"")
+    if ".." in path.split("/") or any(c in path for c in "$`;&|<>()* \t"):
+        return False
+    if not (path.startswith(".atlas/.run/briefs/") or "/.atlas/.run/briefs/" in path):
+        return False
+    for i, line in enumerate(lines[1:], 1):
+        if line.strip() == m.group(3):
+            return i == len(lines) - 1  # text after the terminator is another command: not exempt
+    return False
+
+
+def _is_wrapped_exempt(command):
+    # A compound command is exempt only when every segment is exempt or neutral (loops, sleep, cd,
+    # assignments, `timeout N`, env prefixes), or it is a brief heredoc write. Earlier assignments are
+    # substituted so `F=.../atlas_finding.py && python3 $F` is judged by its real target.
+    import shlex
+
+    import atlas_scope
+
+    command = _unwrap_lean_ctx(command)
+    if "<<" in command:
+        return _brief_heredoc_only(command)
+    if _SHELL_SUBSTITUTION.search(command):
+        return False
+    try:
+        lex = shlex.shlex(
+            _HARMLESS_REDIRECT.sub(" ", command).replace("\n", ";"), posix=True, punctuation_chars=True
+        )
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:
+        return False
+    segments, cur = [], []
+    for tok in tokens:
+        if tok in _SHELL_OPS:
+            segments.append(cur)
+            cur = []
+        elif tok and set(tok) <= set("<>&|();"):
+            return False
+        else:
+            cur.append(tok)
+    segments.append(cur)
+    known, checked = {}, 0
+    for seg in segments:
+        seg = [
+            re.sub(r"\$\{?([A-Za-z_]\w*)\}?", lambda m: known.get(m.group(1), m.group(0)), t) for t in seg
+        ]
+        while seg and seg[0] in _CLAUSE_WORDS:
+            seg = seg[1:]
+        assigned = {}
+        while seg and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[0]):
+            k, _, v = seg[0].partition("=")
+            assigned[k] = v
+            seg = seg[1:]
+        if not seg:
+            known.update({k: v for k, v in assigned.items() if "$" not in v})
+            continue
+        if seg[0] == "timeout":
+            seg = seg[1:]
+            while seg and seg[0].startswith("-"):
+                seg = seg[1:]
+            seg = seg[1:]  # the duration
+            if not seg:
+                return False
+        if seg[0] in _NEUTRAL_WORDS:
+            continue
+        cmd = shlex.join(seg)
+        if (
+            _team_mux_verb("Bash", {"command": cmd})
+            or _integration_segment_ok(seg)
+            or atlas_scope.is_verification_command(cmd)
+        ):
+            checked += 1
+            continue
+        return False
     return checked > 0
 
 
@@ -2199,7 +2308,7 @@ def _pre_tool_use(
         _deny(
             "DENY - in this run, target code is edited by a dispatched agent, because "
             "the completion gate checks for a delegated, verified change. "
-            f"Route this {tool} of {path} to atlas:implementer. "
+            f"Route this {tool} of {path}: {_inline_route('edit')}. "
             "(Simple tasks are exempt; this session is not classed as simple: a team or crew "
             "was launched, no scope is resolved, or ATLAS_INLINE_SIMPLE is off.)"
         )
@@ -2240,17 +2349,15 @@ def _pre_tool_use(
             "DENY - tripwire could not verify the inline-op count (transient DB "
             "error, after one retry). This deny is about the infrastructure, not "
             "your op: re-trying the SAME inline op is correct. If it keeps "
-            "failing, dispatch the next step to atlas:explorer (investigation) "
-            "or atlas:implementer (edits) instead of acting inline."
+            f"failing, {_inline_route('count')} instead of acting inline."
         )
         return
     if count >= DENY_THRESHOLD and not _simple_task(conn, root, session, run_id):
         _deny(
             f"DENY - {count} inline ops since your last dispatch. Orchestrators delegate: "
             "the work happens in subagents so this session's context stays clean. "
-            "Dispatch the next step to atlas:explorer (investigation) or "
-            "atlas:implementer (edits). Right-size it - one bounded change is ONE "
-            "implementer dispatch, not a squad. A subagent adds cost, so delegate edits "
+            f"Next step: {_inline_route('count')}. Right-size it - one bounded change is ONE "
+            "worker, not a squad. A subagent adds cost, so delegate edits "
             "and separable investigation; a read-only check does not count here. (Your own docs/ and .atlas/ writes "
             "are not counted here; only unsanctioned inline work is.)"
         )

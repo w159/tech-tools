@@ -1176,6 +1176,7 @@ class InProcessTest(unittest.TestCase):
             "ATLAS_TRIPWIRE": "on",
             "ATLAS_TRIPWIRE_HARD": "on",
             "ATLAS_TRIPWIRE_THRESHOLD": "4",
+            "ATLAS_TEAM_GATE": "off",
         }
         if env:
             e.update(env)

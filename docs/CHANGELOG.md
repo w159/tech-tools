@@ -1,5 +1,19 @@
 # Changelog
 
+## atlas 17.36.4, marketplace 5.43.4 - 2026-11-23 -- fixes from the Nov 16-23 reliability audit
+
+Evidence: `.atlas/evidence/2026-11-23_r1740-audit-fixes.txt`.
+
+- Fixed, denial accounting: `is_denied_result` now recognizes `ROUTE -` redirects, atlas git policy blocks, fallow gate blocks, context-mode over-limit Read blocks and Claude Code auto mode blocks, and strips a `[command hook N]:` segment before matching (`plugins/atlas/scripts/atlas_db.py` `DENY_MARKERS`, `_HOOK_ERROR_PREFIX`). Replaying the 1,069 stored error rows from Nov 16-23 classifies 609 as denied, against 321 stored; no row that was denied before is lost. Rows already stored keep `denied=0`; there is no backfill.
+- Fixed, selffix: `resolve_target` locates the source checkout through `atlas_paths.project_root` when it runs from an install path, never returns a plugin-cache path, and reports "no source checkout reachable from <cwd>" when there is none, in place of "is not a source file" (`plugins/atlas/scripts/atlas_selffix.py`).
+- Fixed, tripwire deny text: when the team gate would deny an in-process working role, the inline deny names the `atlas_mux.py spawn-team` command; it no longer sends the lead to an `atlas:implementer` dispatch that is then denied (`plugins/atlas/hooks/dispatch_tripwire_core.py`).
+- Fixed, tripwire exemptions: compound shell forms of exempt work are exempt when every segment is exempt or neutral: `gh run watch` loops, `sleep N; gh run list`, a variable-expanded `atlas_finding.py` path, env-prefixed and `timeout`-wrapped `atlas_test.py`, and heredoc writes under `.atlas/.run/briefs/` (`plugins/atlas/hooks/dispatch_tripwire_core.py`).
+- Fixed, maintenance lock: the DB pass reclassifies run kinds in batches of 500 sessions and commits each batch, so it no longer holds the SQLite write lock past the hooks' 5 s busy timeout (`plugins/atlas/scripts/atlas_maint.py` `_backfill_batched`).
+- Fixed, omp deny text: the exploration deny names one callable tool. On the tool route it says "call <tool> directly to read|search|list|find"; on the device route it names the one lean-ctx operation and the device (`plugins/atlas/omp/contracts.ts` `explorationDenyReason`).
+- Fixed, worker brief: every team member brief tells the worker to read large files in ranges and to use the lean-ctx read and search tools in place of a read-only shell command (`plugins/atlas/scripts/atlas_mux.py` `team_brief`).
+- Fixed, stray roots: `mark_finished`, the registry update and the board lock skip without writing or raising when the root is HOME, Downloads, a bare temp root, missing or not writable (`plugins/atlas/scripts/atlas_todo.py` `_state_root_ok`). `atlas_paths.project_root` is unchanged.
+- Not changed: the omp hook bridge still fails open on its 10 s timeout, and the dashboard reaper's PermissionError on one Google Drive root was not traced to a line.
+
 ## atlas 17.36.3, marketplace 5.43.3 - 2026-11-23 -- mod core tab shows only the current session
 
 - Fixed, mod core tab: claims and worker offload rows are limited to the current session (`plugins/atlas/mod/data/core.ts` `coreModel`). The board and log directories under `.atlas/.run/` keep every earlier session's files, and `coreModel` limited only verdicts (by `since`) and routes (by `channels`), so the tab listed every `STATUS:` report and every worker log in the project. Claims now come only from reports at or after the session start, and worker rows only from members of a team on this session's channels or from its in-process dispatches. Tests: `plugins/atlas/mod/data/core-scope.test.ts`.

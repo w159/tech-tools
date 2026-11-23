@@ -54,7 +54,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import atlas_paths  # noqa: E402
-from atlas_memory import LockTimeout, _file_lock  # noqa: E402
+from atlas_memory import LockTimeout, _file_lock as _raw_file_lock  # noqa: E402
 
 STATUSES = ("pending", "in_progress", "completed", "blocked")
 _KEEP_ORIGINS = (
@@ -143,6 +143,36 @@ def _resolve_base(root: Optional[str] = None) -> str:
     return base
 
 
+def _state_root_ok(base: str) -> bool:
+    """False when `base` is HOME/Downloads/a bare temp root, is missing, or its nearest state
+    dir is unwritable: board writers then skip quietly instead of creating .atlas there or
+    raising PermissionError. Any other writable dir (a fresh repo, a scratch root) passes."""
+    import atlas_db
+
+    if not base or not os.path.isdir(base) or atlas_db.not_a_project_root(base):
+        return False
+    probe = base
+    for sub in (".atlas", ".atlas/.run"):
+        cand = os.path.join(base, sub)
+        if os.path.isdir(cand):
+            probe = cand
+    return os.access(probe, os.W_OK | os.X_OK)
+
+
+@contextlib.contextmanager
+def _file_lock(path: Path, timeout: Optional[float] = None):
+    """atlas_memory._file_lock, except under a stray/unwritable root: no lock file (and no
+    mkdir) is created, the body runs unlocked and its save() is a no-op."""
+    parts = Path(path).parts
+    if ".atlas" in parts:
+        base = str(Path(*parts[: parts.index(".atlas")]))
+        if not _state_root_ok(base):
+            yield
+            return
+    with _raw_file_lock(path, timeout):
+        yield
+
+
 def board_path(root: Optional[str] = None) -> Path:
     return Path(_resolve_base(root)) / BOARD_DIR / BOARD_NAME
 
@@ -224,6 +254,8 @@ def _refuse_test_write_to_checkout(path: Path) -> None:
 def save(root: Optional[str], board: dict) -> None:
     path = board_path(root)
     _refuse_test_write_to_checkout(path)
+    if not _state_root_ok(str(path.parent.parent.parent)):
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     board["version"] = 1
     board["root"] = str(path.parent.parent.parent)
@@ -1578,6 +1610,8 @@ def _reg_update(root: Optional[str], fn, timeout: Optional[float] = None) -> Any
         out = fn(reg)
         if json.dumps(reg, sort_keys=True) == before:
             return out
+        if not _state_root_ok(str(path.parent.parent.parent)):
+            return out
         # unique temp name in the same dir: two writers must never share one
         path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".", suffix=".tmp")
@@ -1903,6 +1937,8 @@ def mark_finished(root: Optional[str], name: str, exit_code: int) -> int:
     many entries were marked."""
     n = _sanitize_owner(name)
     now = time.time()
+    if not _state_root_ok(_resolve_base(root)):
+        return 0
 
     def fn(reg: dict) -> int:
         hit = 0

@@ -20,6 +20,9 @@ INTERVAL_S = 24 * 3600
 VACUUM_MIN_FREE_PAGES = 25000
 VACUUM_MIN_FREE_RATIO = 0.10
 SWEPT_DIRS = ("logs", "inbox")
+# Sessions reclassified per transaction: keeps each write-lock hold short so
+# other hooks (5 s busy timeout) are never starved by the maintenance pass.
+BACKFILL_BATCH = 500
 
 
 def atlas_home():
@@ -65,6 +68,34 @@ def due(last, now):
         return True
 
 
+def _backfill_chunk(conn, sids):
+    """Same classification as atlas_db.backfill_run_kinds, for one slice of sessions.
+    Commits before returning so the write lock is released between slices."""
+    marks = ",".join("?" * len(sids))
+    n = 0
+    for kind, having in (
+        ("worker", "SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) = 0"),
+        ("orchestrator", "SUM(CASE WHEN is_sidechain=0 THEN 1 ELSE 0 END) >= 1"),
+    ):
+        n += conn.execute(
+            "UPDATE runs SET kind=? WHERE session_id IN ("
+            "SELECT session_id FROM messages WHERE session_id IN (%s) "
+            "GROUP BY session_id HAVING %s)" % (marks, having),
+            (kind, *sids),
+        ).rowcount
+    conn.commit()
+    return n
+
+
+def _backfill_batched(conn):
+    sids = [r[0] for r in conn.execute("SELECT DISTINCT session_id FROM messages")]
+    conn.commit()  # end the read snapshot before writing
+    n = 0
+    for i in range(0, len(sids), BACKFILL_BATCH):
+        n += _backfill_chunk(conn, sids[i : i + BACKFILL_BATCH])
+    return n
+
+
 def _db_part(dry_run, vacuum, min_free_pages=None, min_free_ratio=None):
     min_free_pages = VACUUM_MIN_FREE_PAGES if min_free_pages is None else min_free_pages
     min_free_ratio = VACUUM_MIN_FREE_RATIO if min_free_ratio is None else min_free_ratio
@@ -77,7 +108,7 @@ def _db_part(dry_run, vacuum, min_free_pages=None, min_free_ratio=None):
     try:
         atlas_db.init(conn)
         out = {"pruned": atlas_db.prune_old(conn, atlas_db.retention_days())}
-        out["backfilled"] = atlas_db.backfill_run_kinds(conn)
+        out["backfilled"] = _backfill_batched(conn)
         out["improvements_closed"] = atlas_db.close_unmeasurable_improvements(conn)
         conn.commit()
         free = conn.execute("PRAGMA freelist_count").fetchone()[0]

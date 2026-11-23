@@ -69,3 +69,7 @@ Assumption to avoid (tech-tools): `test.each` isn't supported by this test shim 
 Assumption to avoid (tech-tools): That path never ran the cleanup, and no `agent.spawn` follows, so the row stayed. [noted 2026-11-21]
 §
 Assumption to avoid (tech-tools): The index-exact path (`surfaceHex`/`fitHex`/`EXACT_256`, line 174 on) only runs when the mode is `256`, so it never ran. [noted 2026-11-21]
+§
+Assumption to avoid (tech-tools): - The ponytail-review pre-commit mandate fired and I committed without running it. [noted 2026-11-22]
+§
+User correction (tech-tools): here's what you said you found: [noted 2026-11-23]

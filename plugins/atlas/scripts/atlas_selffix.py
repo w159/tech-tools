@@ -209,6 +209,14 @@ def _surface_file(tp: str) -> str:
     return tp
 
 
+def _source_checkout() -> str | None:
+    import atlas_paths
+
+    root = os.path.realpath(atlas_paths.project_root(os.getcwd()))
+    ok = os.path.isdir(os.path.join(root, "plugins", "atlas"))
+    return root if ok and not _is_cache_path(root) else None
+
+
 def resolve_target(finding) -> tuple[str | None, str | None, str]:
     """(repo_toplevel, abs_target, reason). repo is None when the finding is not fixable."""
     tp = _surface_file((finding.get("target_path") or "").strip())
@@ -218,6 +226,18 @@ def resolve_target(finding) -> tuple[str | None, str | None, str]:
     bases = (
         [os.getcwd()] if os.path.isabs(tp) else [str(plugin.parent.parent), str(plugin)]
     )
+    if not os.path.isabs(tp):
+        # Install layout (plugin cache) holds no source tree; locate a checkout the
+        # way other scripts do (atlas_paths.project_root) and never edit the cache.
+        root = _source_checkout()
+        if root and root not in bases:
+            bases.append(root)
+        if (
+            not root
+            and _is_cache_path(str(plugin))
+            and tp != (finding.get("target_path") or "").strip()
+        ):
+            return None, None, f"no source checkout reachable from {os.getcwd()}"
     for b in bases:
         cand = os.path.realpath(tp if os.path.isabs(tp) else os.path.join(b, tp))
         if not os.path.exists(cand):

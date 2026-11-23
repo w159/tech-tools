@@ -1548,8 +1548,20 @@ DENY_MARKERS = (
     "[atlas gate]",
     "DENY - ",
     "Task execution failed: DENY",
+    # Other policy blocks; each is a start-of-text phrase, never a loose substring.
+    "ROUTE - ",
+    "atlas git policy:",
+    "fallow-gate: blocked",
+    "[context-mode]",
+    "context-mode:",
+    "Permission for this action was denied by the Claude Code",
+    # No verdict means the call never ran: a block, not a tool failure.
+    "The server-side auto mode classifier gave no verdict",
+    "fallow plugin gate: blocked",
 )
-_HOOK_ERROR_PREFIX = lre(r"^\s*PreToolUse:\S+ hook error:\s*")
+_HOOK_ERROR_PREFIX = lre(
+    r"^\s*PreToolUse:\S+ hook error:\s*(?:\[command hook \d+\]:\s*)?"
+)
 
 # error_snippet cap: long enough to carry a gate/exception reason, short enough
 # to keep one row per failed call bounded.

@@ -1,5 +1,20 @@
 # Changelog
 
+## 17.36.4 - 2026-11-23
+
+### Fixed
+
+Fixes from an audit of one week of tool calls, hook faults and maintenance logs.
+
+- Policy blocks are counted as denials, not tool failures: `ROUTE -` redirects, atlas git policy blocks, fallow gate blocks, context-mode over-limit Read blocks and Claude Code auto mode blocks (`scripts/atlas_db.py` `DENY_MARKERS`). Rows stored before this release keep their old flag.
+- Selffix resolves a finding's target from an install path by locating the source checkout, never targets the plugin cache, and reports "no source checkout reachable" when there is none (`scripts/atlas_selffix.py` `resolve_target`).
+- The tripwire's inline deny names the `atlas_mux.py spawn-team` command when the team gate is active, so following it no longer leads to a second deny (`hooks/dispatch_tripwire_core.py`).
+- The tripwire exempts compound shell forms of work the lead may do inline: `gh run watch` loops, `sleep N; gh run list`, a variable-expanded `atlas_finding.py` path, env-prefixed and `timeout`-wrapped `atlas_test.py`, and heredoc writes under `.atlas/.run/briefs/`. A compound command is exempt only when every segment is (`hooks/dispatch_tripwire_core.py`).
+- The maintenance DB pass commits its run-kind backfill in batches of 500 sessions, so hooks with a 5 s busy timeout are not locked out (`scripts/atlas_maint.py`).
+- The omp exploration deny names one callable tool (`omp/contracts.ts` `explorationDenyReason`).
+- Every team member brief states up front to read large files in ranges and to use the lean-ctx read and search tools in place of a read-only shell command (`scripts/atlas_mux.py` `team_brief`).
+- Board writes skip without writing or raising when the root is HOME, Downloads, a bare temp root, missing or not writable (`scripts/atlas_todo.py` `_state_root_ok`).
+
 ## 17.36.3 - 2026-11-23
 
 ### Fixed

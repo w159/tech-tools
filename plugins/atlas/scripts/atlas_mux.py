@@ -2284,7 +2284,9 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         f"Post {cmd} note {flags} --owner {me} --to <who> '<text>'\n"
         f"Read {cmd} notes --to {me} {flags}\n"
         f"Report (STATUS: DONE|FAILED|BLOCKED): {cmd} report {flags} --owner {me} --to {shlex.quote(lead or 'lead')} --file -\n"
-        f"Note {lead} 1st, peers last. End: STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE/NEXT"
+        f"Note {lead} 1st, peers last. End: STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE/NEXT\n"
+        # no tool name: the callable name differs per harness, and a wrong one is worse than none
+        "Read big files in ranges; use lean-ctx, not shell, to read."
     )
 
 

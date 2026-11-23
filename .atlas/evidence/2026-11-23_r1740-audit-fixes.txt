@@ -1,0 +1,27 @@
+r1740: fixes for the Nov 16-23 reliability audit (items 1-6, 8). 2026-11-23, tree at 7ae517d3 plus uncommitted changes.
+
+1. Affected suites, run by the lead after all three crews finished:
+   $ python3 plugins/atlas/scripts/atlas_test.py run --changed
+   hooks: PASS 3 files   (test_atlas_contract, test_dispatch_tripwire, test_dispatch_tripwire_wrapped)
+   scripts: PASS 19 files
+   wall 48.8s, jobs 8, python .venv/bin/python, pytest 9.2.0
+
+2. omp contract tests:
+   $ cd plugins/atlas && bun test omp/contracts
+   21 pass, 0 fail, 494 expect() calls, 2 files
+
+3. Crew verdicts (summary.json under .atlas/.run/crew/<run>/):
+   crew-0604448e9c  wave 1 (db, selffix, tripwire, maint, omp)  ok true, check_exit 0, 525 unittest OK (skipped=3), 21 bun pass
+   crew-0610514716  fix round (db, omp)                          ok true, check_exit 0, 124 unittest OK, 21 bun pass
+   crew-06102788e3  wave 2 (roots, brief)                        ok true, check_exit 0, 328 unittest OK
+
+4. Denial replay on real data (read-only, ~/.atlas/atlas.db, tool_calls where is_error=1, Nov 16-23):
+   errors 1069, stored denied 321, now denied 609, previously denied and now not: 0
+   After wave 1 alone the figure was 574; the fix round added the real auto mode texts.
+   Largest remaining non-denied heads are tool failures: ctx_execute validation errors,
+   Python tracebacks, "Edit without read", and 15 "Path '.../.ua/tmp/enrich-in/" errors (not inspected).
+
+Not verified:
+- Hook behavior in a live session: the installed plugin is still 17.36.3, so the running hooks are the old code.
+- Item 8 (c): the dashboard reaper PermissionError was not traced; no worker reported the raising line.
+- Lock hold time on the real 661 MB database; the test proves a second writer gets in between batches on a fixture DB.
