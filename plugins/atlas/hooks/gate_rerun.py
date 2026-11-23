@@ -9,7 +9,7 @@ The gate now does the independent check itself, which is stronger and cheaper:
 
   1. `last_test_command` reads the transcript (never the model's summary) for the last test-runner
      command the main thread ran during this run.
-  2. `normalize` accepts it only in a strict allowlisted form (pytest, npm/yarn/pnpm/bun test, go test,
+  2. `normalize` accepts it only in a strict allowlisted form (pytest, stdlib unittest, npm/yarn/pnpm/bun test, go test,
      cargo test, make test, npx vitest run/jest; optional `cd <dir inside root> &&`, optional trailing
      `2>&1`, `| tail -N`, `| head -N`; no other shell metacharacters). Anything else is not re-run.
   3. `rerun` executes it in the project root with a timeout, as argv (no shell).
@@ -59,6 +59,8 @@ TAIL_CHARS = 1500
 _RUNNERS = (
     ("python3", "-m", "pytest"),
     ("python", "-m", "pytest"),
+    ("python3", "-m", "unittest"),
+    ("python", "-m", "unittest"),
     ("uv", "run", "pytest"),
     ("uv", "run", "python", "-m", "pytest"),
     ("pytest",),
@@ -406,8 +408,9 @@ def rerun(command: str, root: Path, ran: bool = False) -> dict | None:
             code, out, inconclusive = 124, f"timed out after {limit:.0f}s", True
         except OSError as exc:
             code, out, inconclusive = 127, str(exc), True
-    if code in (4, 5) and any(os.path.basename(a) == "pytest" for a in argv[:4]):
-        # pytest usage error / nothing collected (e.g. `-k` matched nothing): no verdict on the code
+    if code in (4, 5) and any(os.path.basename(a) in ("pytest", "unittest") for a in argv[:4]):
+        # pytest usage error / nothing collected (e.g. `-k` matched nothing; unittest exits 5 on 3.12+
+        # for "NO TESTS RAN"): no verdict on the code
         inconclusive = True
     return {
         "command": command.strip(),

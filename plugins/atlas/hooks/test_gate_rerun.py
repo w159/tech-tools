@@ -113,6 +113,17 @@ class NormalizeTest(unittest.TestCase):
         ):
             self.assertIsNotNone(gate_rerun.normalize(cmd, self.root), cmd)
 
+    def test_accepts_stdlib_unittest(self):
+        for cmd in (
+            "python3 -m unittest discover -s hooks -p test_x.py",
+            "python -m unittest tests.test_a",
+            "python3 -m unittest pkg/test_a.py -k Name -v 2>&1 | tail -5",
+        ):
+            argv, _cwd = gate_rerun.normalize(cmd, self.root)
+            self.assertEqual(argv[:3], [cmd.split()[0], "-m", "unittest"], cmd)
+        self.assertIsNone(gate_rerun.normalize("python3 -m unittestx", self.root))
+        self.assertIsNone(gate_rerun.normalize("python3 -m unittest; rm -rf x", self.root))
+
     def test_cd_inside_root_sets_cwd(self):
         argv, cwd = gate_rerun.normalize(f"cd {self.root / 'pkg'} && python3 -m pytest -q", self.root)
         self.assertEqual(argv, ["python3", "-m", "pytest", "-q"])
@@ -206,6 +217,11 @@ class TranscriptTest(unittest.TestCase):
         self.assertEqual(
             gate_rerun.last_test_command(str(self.tx), now - 10, self.root), "python3 -m pytest -q"
         )
+
+    def test_unittest_command_is_the_last_test_command(self):
+        cmd = "python3 -m unittest discover -s hooks -p test_x.py"
+        self._write(_bash_line(cmd))
+        self.assertEqual(gate_rerun.last_test_command(str(self.tx), None, self.root), cmd)
 
     def test_compound_call_yields_its_test_segment_only(self):
         (self.root / "pkg").mkdir()

@@ -281,6 +281,19 @@ def _is_brief_or_scratch(path):
     )
 
 
+def _is_sanctioned_write_path(path):
+    """docs/, .atlas/ or a URI: exactly what atlas_db.unsanctioned_inline_ops_since_last_dispatch
+    excludes from the count. Deliberately narrower than _is_orchestration_path (which also
+    passes .md files and out-of-root paths that ARE counted), so the deny matches the count."""
+    norm = str(path).replace("\\", "/")
+    return (
+        _is_uri_path(norm)
+        or norm.startswith(("docs/", ".atlas/"))
+        or "/docs/" in norm
+        or "/.atlas/" in norm
+    )
+
+
 def _is_scratch_path(path):
     """Session scratch space (the Claude Code scratchpad, /tmp, TMPDIR) is not target code;
     denying or counting writes there wastes turns. Shared: atlas_scope.is_scratch_path."""
@@ -2202,8 +2215,12 @@ def _pre_tool_use(
         # A team launch/wait/reap is the dispatch path itself, and atlas bookkeeping
         # (_is_bookkeeping_call: todo/finding/resolve) is what the gates demand: never inline drift.
         return
-    if tool in EDIT_TOOLS and path and _is_brief_or_scratch(path):
-        return  # briefs and scratchpad writes are never counted, so never denied for the count
+    if (
+        tool in EDIT_TOOLS
+        and path
+        and (_is_brief_or_scratch(path) or _is_sanctioned_write_path(path))
+    ):
+        return  # uncounted writes (see atlas_db.unsanctioned_inline_ops_since_last_dispatch) are never denied for the count
     # Fail CLOSED on DB error: an unverified count must never let an inline
     # op past the hard limit mid-orchestration. The broad __main__ fail-open
     # covers garbage stdin / connect failures, not this trust decision.

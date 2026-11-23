@@ -1,4 +1,13 @@
 # Changelog
+
+## 17.36.2 - 2026-11-23
+
+### Fixed
+
+- The Stop gate re-runs `python3 -m unittest` and `python -m unittest` commands. Its allowlist had pytest, npm, bun, go and others but not stdlib unittest, so a session that ran unittest suites green was told "Run the project's tests once" on every Stop (`hooks/gate_rerun.py`). A unittest run that collects no tests (exit 5) is inconclusive, like pytest's.
+- The Stop gate's docs-drift check (f) sees a `docs/CHANGELOG.md` change committed since the run started, in addition to uncommitted and staged changes. Before, committing the work before stopping hid the CHANGELOG entry from the gate (`hooks/docs_drift.py`, `hooks/completion_gate_core.py`). Commits count from the first whole second after the run start.
+- The tripwire no longer denies an Edit or Write under `docs/` or `.atlas/` once the inline-op limit is reached. The count already excluded those writes and the deny message said so, but the deny still applied, so the lead could not save the evidence file the Stop gate asked for (`hooks/dispatch_tripwire_core.py`).
+
 ## 17.36.1 - 2026-11-23
 
 ### Fixed

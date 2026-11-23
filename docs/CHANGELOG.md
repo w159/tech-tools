@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.36.2, marketplace 5.43.2 - 2026-11-23 -- Stop gate and tripwire accept work the gate itself asks for
+
+Three hook defects from the 17.36.1 release session, where the Stop gate could not be satisfied by a session that had done everything it asked for.
+
+- Fixed, Stop gate re-run: the allowlist of test commands the gate may re-run now includes `python3 -m unittest` and `python -m unittest` (`plugins/atlas/hooks/gate_rerun.py` `_RUNNERS`). Before, a session whose tests are stdlib unittest was told "Run the project's tests once" on every Stop, although it had run them green.
+- Fixed, Stop gate condition (f): the docs-drift cross-check counts a `docs/CHANGELOG.md` change committed since the run started, in addition to uncommitted and staged changes (`plugins/atlas/hooks/completion_gate_core.py` `_docs_moved_in_git`). Before, committing the work before stopping made the CHANGELOG invisible to the gate. Commits count from the first whole second after the run start, because git commit times are whole seconds.
+- Fixed, tripwire: once the inline-op limit is reached, an Edit or Write under `docs/` or `.atlas/` is no longer denied (`plugins/atlas/hooks/dispatch_tripwire_core.py` `_is_sanctioned_write_path`). The count already excluded those writes and the deny message said so, but the deny still applied, so the lead could not save the evidence file the Stop gate asked for.
+
 ## atlas 17.36.1, marketplace 5.43.1 - 2026-11-23 -- Stop gate re-run and CI contract test fixes
 
 - Fixed, Stop gate: it no longer re-runs text from inside a quoted argument (an evidence string such as `"cd x && bun test ..."`) as the session's test command; the segment split is quote aware (`plugins/atlas/hooks/gate_rerun.py` `_segments`).

@@ -1754,6 +1754,26 @@ class InProcessTest(unittest.TestCase):
         self.assertNotIn("additionalContext", out)
         self.assertEqual(out.count("hookSpecificOutput"), 1)
 
+    def test_docs_and_atlas_writes_pass_the_threshold(self):
+        """The count excludes docs/ and .atlas/ writes, so the deny must not hit them
+        either (the completion gate orders the lead to write them)."""
+        self._docs_project()
+        for _ in range(8):
+            self._run_main(self._post("Bash", {"command": "touch a.txt"}))
+        for p in (
+            os.path.join(self.tmp, ".atlas", "evidence", "proof.md"),
+            os.path.join(self.tmp, "docs", "CHANGELOG.md"),
+            ".atlas/findings/x.md",
+        ):
+            out = self._run_main(self._pre("Write", {"file_path": p}))
+            self.assertNotIn('"permissionDecision": "deny"', out, p)
+        out = self._run_main(self._pre("Bash", {"command": "touch b.txt"}))
+        self.assertIn('"permissionDecision": "deny"', out)
+        out = self._run_main(
+            self._pre("Write", {"file_path": os.path.join(self.tmp, "src", "app.py")})
+        )
+        self.assertIn('"permissionDecision": "deny"', out)
+
     def test_brief_and_scratchpad_writes_pass_the_threshold_and_do_not_count(self):
         """Past the inline-op limit, a Write to <root>/.atlas/.run/briefs/ or the
         session scratchpad is not denied for the count, and scratch writes are not logged."""
@@ -3777,12 +3797,13 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
 
     @unittest.skipIf(_test_isolation.HOME_UNDER_SCRATCH, _test_isolation.HOME_UNDER_SCRATCH_REASON)
     def test_edit_and_write_still_trip_the_deny(self):
-        # Sanctioned (docs/) writes are exempt from the count by design, so use
-        # mutating Bash to reach the threshold, then confirm an Edit/Write is denied.
+        # Sanctioned (docs/, .atlas/) writes are exempt from the count and the deny by
+        # design, so use mutating Bash to reach the threshold, then confirm an Edit/Write
+        # of a counted non-target path (notes.md) is denied.
         for _ in range(8):
             self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
         for tool in ("Edit", "Write"):
-            r = self._call("PreToolUse", tool, {"file_path": "docs/x.md"})
+            r = self._call("PreToolUse", tool, {"file_path": "notes.md"})
             self.assertIn('"permissionDecision": "deny"', r.stdout, tool)
         # Production target code is denied outright, independent of the count.
         for tool in ("Edit", "Write"):

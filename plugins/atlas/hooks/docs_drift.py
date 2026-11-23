@@ -61,8 +61,12 @@ def docs_drift(changed_paths: list) -> bool:
     return nondocs
 
 
-def git_changed_paths(root: Path) -> list:
+def git_changed_paths(root: Path, since: float | None = None) -> list:
     """Return changed file paths from git diff HEAD and the staged index.
+
+    When `since` (epoch seconds) is given, paths touched by commits made on the
+    current branch since then are included too, so work committed during a run
+    (a clean tree) still counts as changed.
 
     Uses the repo root detected from the project root. Fails open on a
     non-repo path or git command error (returns [] so the caller treats it as
@@ -91,6 +95,13 @@ def git_changed_paths(root: Path) -> list:
         ["git", "-C", repo_root, "diff", "--name-only", "--cached"],
         # Untracked, non-ignored files are changes too (a brand-new source file).
         ["git", "-C", repo_root, "ls-files", "--others", "--exclude-standard"],
+        *(
+            # Commit times are whole seconds, so a commit in the start second cannot be told
+            # apart from one made just before the run; start at the next second, not counting it.
+            [["git", "-C", repo_root, "log", "--since=@%d" % (int(since) + 1), "--name-only", "--format="]]
+            if since is not None
+            else []
+        ),
     ):
         try:
             out = subprocess.check_output(args, stderr=subprocess.DEVNULL, timeout=5)

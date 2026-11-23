@@ -862,8 +862,11 @@ def _target_exists(path: str, root: Path | None = None) -> bool:
         return True
 
 
-def _docs_moved_in_git(root: Path) -> bool:
+def _docs_moved_in_git(root: Path, since: float | None = None) -> bool:
     """True when git sees docs/CHANGELOG.md changed, regardless of how it was written.
+
+    Sees the working tree, the index and, when `since` (the run start) is known,
+    commits made since then, so a release commit made during the run still counts.
 
     Condition (f)'s primary signal is `run_changed_paths`, which is fed by tool
     calls carrying a `file_path`. A docs file written by a Bash-invoked script
@@ -878,7 +881,7 @@ def _docs_moved_in_git(root: Path) -> bool:
     that already did the work, which is how a gate teaches people to ignore it.
     """
     try:
-        changed = _git_changed_paths(root)
+        changed = _git_changed_paths(root, since)
     except Exception:
         return False  # git unavailable -> no suppression, primary signal stands
     # Reuse docs_drift's rule: a non-docs sentinel plus the git paths has no drift
@@ -1894,7 +1897,7 @@ def evaluate(data: dict, root: Path, missing_delegation: bool = False) -> dict:
     # Bash-invoked script. Cross-check
     # git before blocking so a run whose docs ARE current is not stopped.
     drift = _docs_drift(run_paths) if docs_check else False
-    if drift and _docs_moved_in_git(root):
+    if drift and _docs_moved_in_git(root, started_early):
         drift = False
     # (g) Law 5 -- verifier coverage. Only when THIS RUN's own writes
     # touched non-docs code: block if implementer dispatches outnumber

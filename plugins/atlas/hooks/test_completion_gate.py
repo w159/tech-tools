@@ -384,13 +384,7 @@ class GateOrchestrationTest(unittest.TestCase):
             ["git", "-C", self.tmp, "commit", "-qm", "base"],
             check=True,
             capture_output=True,
-            env=dict(
-                os.environ,
-                GIT_AUTHOR_NAME="t",
-                GIT_AUTHOR_EMAIL="t@t",
-                GIT_COMMITTER_NAME="t",
-                GIT_COMMITTER_EMAIL="t@t",
-            ),
+            env=_git_env(),
         )
         # A stale, non-docs, uncommitted change left dirty by some other run --
         # NOT logged via _log_run_write, so atlas_db has no record that THIS
@@ -417,13 +411,7 @@ class GateOrchestrationTest(unittest.TestCase):
             ["git", "-C", self.tmp, "commit", "-qm", "base"],
             check=True,
             capture_output=True,
-            env=dict(
-                os.environ,
-                GIT_AUTHOR_NAME="t",
-                GIT_AUTHOR_EMAIL="t@t",
-                GIT_COMMITTER_NAME="t",
-                GIT_COMMITTER_EMAIL="t@t",
-            ),
+            env=_git_env(),
         )
         # Tracked file modified, nothing logged in atlas_db for this run.
         with open(os.path.join(self.tmp, "app.py"), "w") as f:
@@ -1136,6 +1124,9 @@ def _git_env():
         GIT_AUTHOR_EMAIL="t@t",
         GIT_COMMITTER_NAME="t",
         GIT_COMMITTER_EMAIL="t@t",
+        # Baseline commits predate any run, so the gate's "committed since the
+        # run start" cross-check does not mistake the fixture for run work.
+        GIT_COMMITTER_DATE="1000000000 +0000",
     )
 
 
@@ -6352,6 +6343,51 @@ class DocsMovedInGitRealRepoTest(unittest.TestCase):
         (root / "docs").mkdir()
         (root / "docs" / "CHANGELOG.md").write_text("n\n")
         self.assertTrue(completion_gate._docs_moved_in_git(root))
+
+    def _committed_changelog_repo(self, commit_epoch):
+        """Clean tree whose last commit (dated commit_epoch) adds code + CHANGELOG."""
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "t",
+            "GIT_AUTHOR_EMAIL": "t@t",
+            "GIT_COMMITTER_NAME": "t",
+            "GIT_COMMITTER_EMAIL": "t@t",
+        }
+
+        def git(date, *a):
+            e = {**env, "GIT_AUTHOR_DATE": date, "GIT_COMMITTER_DATE": date}
+            subprocess.run(
+                ["git", "-C", tmp, *a], check=True, capture_output=True, env=e
+            )
+
+        git("1000000000 +0000", "init", "-q")
+        git("1000000000 +0000", "commit", "-q", "--allow-empty", "-m", "init")
+        os.makedirs(os.path.join(tmp, "docs"))
+        Path(tmp, "app.py").write_text("x = 1\n")
+        Path(tmp, "docs", "CHANGELOG.md").write_text("# c\n")
+        git("1000000000 +0000", "add", ".")
+        git("%d +0000" % commit_epoch, "commit", "-qm", "release")
+        return Path(tmp)
+
+    def test_changelog_committed_during_run_clears_drift(self):
+        """Workers wrote the CHANGELOG, the lead committed it: tree is clean."""
+        root = self._committed_changelog_repo(2000000100)
+        self.assertTrue(completion_gate._docs_moved_in_git(root, 2000000000.0))
+
+    def test_changelog_committed_in_the_run_start_second_does_not_count(self):
+        """Commit times are whole seconds: same second as the start is not provably in the run."""
+        root = self._committed_changelog_repo(2000000000)
+        self.assertFalse(completion_gate._docs_moved_in_git(root, 2000000000.5))
+
+    def test_changelog_committed_before_run_does_not_clear_drift(self):
+        root = self._committed_changelog_repo(2000000100)
+        self.assertFalse(completion_gate._docs_moved_in_git(root, 2000000200.0))
+
+    def test_no_run_start_keeps_working_tree_only_behavior(self):
+        root = self._committed_changelog_repo(2000000100)
+        self.assertFalse(completion_gate._docs_moved_in_git(root))
 
 
 class GatePassAnalyticsTest(GateOrchestrationTest):

@@ -14970,5 +14970,95 @@
     "verified_at": "2026-11-23T08:14:52+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r1737-ci-green",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "CI green and atlas-v17.36.1 published for 421d0610",
+    "evidence": [
+      "GitHub Actions run 45137086947 tests concluded success on all 10 jobs, release and Push on main succeeded, release atlas-v17.36.1 is Latest"
+    ],
+    "doc_refs": [],
+    "reproduction": "gh run view 45137086947 --json conclusion",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T08:57:24+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "tripwire-sanctioned-write-deny",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Tripwire no longer denies docs/ and .atlas/ writes at the inline-op limit",
+    "evidence": [
+      "test_dispatch_tripwire.py test_docs_and_atlas_writes_pass_the_threshold failed before the fix, whole file 385 tests OK after"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest plugins/atlas/hooks/test_dispatch_tripwire.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T09:35:38+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-unittest-runner",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Stop gate re-run allowlist accepts python -m unittest",
+    "evidence": [
+      "test_gate_rerun.py NormalizeTest.test_accepts_stdlib_unittest and TranscriptTest.test_unittest_command_is_the_last_test_command failed before the fix and pass after"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest plugins/atlas/hooks/test_gate_rerun.py -k NormalizeTest -k TranscriptTest",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T09:35:38+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-docs-drift-committed",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Docs-drift cross-check counts a CHANGELOG committed since the run start, from the next whole second",
+    "evidence": [
+      "test_completion_gate.py DocsMovedInGitRealRepoTest, 786 tests OK, and test_atlas_contract.py 132 tests OK after the boundary fix"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest plugins/atlas/hooks/test_completion_gate.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T09:35:38+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1738-version-bump",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas 17.36.2 and marketplace 5.43.2 version strings agree",
+    "evidence": [
+      "scripts/check_versions.py prints version check ok and test_fix_settings_options.py passes 12 tests"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 scripts/check_versions.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T09:56:05+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]
