@@ -66,6 +66,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 |---|---|---|---|---|
 | 2026-11-23 | tripwire-sanctioned-write-deny | verified | Tripwire no longer denies docs/ and .atlas/ writes at the inline-op limit | [2026-11-23_tripwire-sanctioned-write-deny.md](2026-11-23_tripwire-sanctioned-write-deny.md) |
 | 2026-11-23 | r1738-version-bump | verified | atlas 17.36.2 and marketplace 5.43.2 version strings agree | [2026-11-23_r1738-version-bump.md](2026-11-23_r1738-version-bump.md) |
+| 2026-11-23 | r1738-ci-green | verified | CI green and atlas-v17.36.2 published for 4b1f0eec | [2026-11-23_r1738-ci-green.md](2026-11-23_r1738-ci-green.md) |
 | 2026-11-23 | r1737-version-bump | verified | atlas 17.36.1 and marketplace 5.43.1 version strings agree | [2026-11-23_r1737-version-bump.md](2026-11-23_r1737-version-bump.md) |
 | 2026-11-23 | r1737-ci-green | verified | CI green and atlas-v17.36.1 published for 421d0610 | [2026-11-23_r1737-ci-green.md](2026-11-23_r1737-ci-green.md) |
 | 2026-11-23 | r1736-version-bump | verified | atlas 17.36.0 and marketplace 5.43.0 version strings | [2026-11-23_r1736-version-bump.md](2026-11-23_r1736-version-bump.md) |
@@ -78,6 +79,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | 2026-11-23 | gate-rerun-quoted-separator | verified | Stop gate no longer re-runs text from inside a quoted argument as the test command | [2026-11-23_gate-rerun-quoted-separator.md](2026-11-23_gate-rerun-quoted-separator.md) |
 | 2026-11-23 | gate-docs-drift-committed | verified | Docs-drift cross-check counts a CHANGELOG committed since the run start, from the next whole second | [2026-11-23_gate-docs-drift-committed.md](2026-11-23_gate-docs-drift-committed.md) |
 | 2026-11-23 | fable52-guide-agents-pin | verified | Fable 5.2 guide contract test pins the subagent-cost sentence in AGENTS.md, fixing atlas-py-fast on 707e0f63 | [2026-11-23_fable52-guide-agents-pin.md](2026-11-23_fable52-guide-agents-pin.md) |
+| 2026-11-23 | core-session-scope | verified | Mod core tab lists only this session's claims and worker rows | [2026-11-23_core-session-scope.md](2026-11-23_core-session-scope.md) |
 | 2026-11-21 | round3-subagentstop-finish | verified | Blocked SubagentStop now stamps member finished (replay of real payload); denied dispatch leaves no rows already holds | [2026-11-21_round3-subagentstop-finish.md](2026-11-21_round3-subagentstop-finish.md) |
 | 2026-11-21 | REL-17-34-1 | verified | pre-push check of atlas 17.34.1 | [2026-11-21_rel-17-34-1.md](2026-11-21_rel-17-34-1.md) |
 | 2026-11-21 | ctxdiet-nudge | verified | route nudge names spawn-team when the team gate routes | [2026-11-21_ctxdiet-nudge.md](2026-11-21_ctxdiet-nudge.md) |

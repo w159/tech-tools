@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 17.36.3, marketplace 5.43.3 - 2026-11-23 -- mod core tab shows only the current session
+
+- Fixed, mod core tab: claims and worker offload rows are limited to the current session (`plugins/atlas/mod/data/core.ts` `coreModel`). The board and log directories under `.atlas/.run/` keep every earlier session's files, and `coreModel` limited only verdicts (by `since`) and routes (by `channels`), so the tab listed every `STATUS:` report and every worker log in the project. Claims now come only from reports at or after the session start, and worker rows only from members of a team on this session's channels or from its in-process dispatches. Tests: `plugins/atlas/mod/data/core-scope.test.ts`.
+
 ## atlas 17.36.2, marketplace 5.43.2 - 2026-11-23 -- Stop gate and tripwire accept work the gate itself asks for
 
 Three hook defects from the 17.36.1 release session, where the Stop gate could not be satisfied by a session that had done everything it asked for.

@@ -1,5 +1,11 @@
 # Changelog
 
+## 17.36.3 - 2026-11-23
+
+### Fixed
+
+- The mod's core tab lists only the current session's claims and worker offload rows. `.atlas/.run/board/` and `.atlas/.run/logs/` keep every earlier session's files, and `coreModel` limited only verdicts and routes, so the tab showed every `STATUS:` report and every worker log in the project (`mod/data/core.ts`). Claims now come from reports at or after the session start; worker rows come from members of a team on this session's channels or from its in-process dispatches.
+
 ## 17.36.2 - 2026-11-23
 
 ### Fixed

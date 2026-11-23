@@ -118,13 +118,15 @@ export type CoreInput = {
   sessionId?: string;
   header: Tally;
   openGates: number;
-  /** This session's channels (board, `lead-<sid6>`): when given, only team records on one of them are routes. */
+  /** This session's channels (board, `lead-<sid6>`): when given, only team records on one of them are routes, and only
+   * logs of their members (or of `dispatches`) are worker offload rows. Absent: every record and log counts. */
   channels?: readonly string[];
   /** This session's in-process dispatches; when given they become `in-process` routes. */
   dispatches?: readonly Dispatch[];
-  /** Session start (epoch ms). findings.json is all-time, so without this the ledger shows every refuted row since the
-   * file began. Given: only findings verified at or after it count and list (an undated row cannot be placed in the
-   * session, so it is left out). Absent: every row counts (the caller has scoped the file). */
+  /** Session start (epoch ms). findings.json and the board are all-time, so without this the ledger shows every refuted
+   * row since the file began. Given: only findings verified at or after it count and list (an undated row cannot be
+   * placed in the session, so it is left out), and only reports at or after it are claims. Absent: every row counts
+   * (the caller has scoped the input). */
   since?: number;
 };
 
@@ -365,6 +367,21 @@ const driftOf = (seats: readonly Seat[]): string[] =>
 const lastSegment = (channel: unknown): string =>
   typeof channel === "string" ? channel.split("/").pop() ?? "" : "";
 
+const wantedChannels = (channels?: readonly string[]): Set<string> | null =>
+  channels ? new Set(channels.map(lastSegment).filter(Boolean)) : null;
+
+/** Names of the members of every team record on `channels`. */
+function channelMembers(teams: readonly { text: string }[], channels: readonly string[]): Set<string> {
+  const wanted = wantedChannels(channels)!;
+  const out = new Set<string>();
+  for (const t of teams) {
+    const r = rec(parse(t.text));
+    if (!r || !wanted.has(lastSegment(r.channel))) continue;
+    for (const m of Array.isArray(r.members) ? r.members : []) out.add(str(rec(m)?.name));
+  }
+  return out;
+}
+
 /** One tmux route per team record: the matrix cell the class/effort picked, and the model each member's log shows it
  * ran. With `channels`, a record on none of them (another session's team) is no route. */
 export function routesOf(
@@ -374,7 +391,7 @@ export function routesOf(
   channels?: readonly string[],
 ): Route[] {
   const matrix = parse(matrixText);
-  const wanted = channels ? new Set(channels.map(lastSegment).filter(Boolean)) : null;
+  const wanted = wantedChannels(channels);
   const created = (t: { text: string }): number => num(rec(parse(t.text))?.created);
   return [...teams].sort((x, y) => created(x) - created(y)).flatMap((t): Route[] => {
     const r = rec(parse(t.text));
@@ -480,12 +497,15 @@ export function coreModel(input: CoreInput): CoreModel {
   // session's findings count: parseFindings reads an unparsable verified_at as 0, so `at >= since` drops undated rows too
   const verdicts = latestPerId(entries).filter((v) => since === undefined || v.at >= since);
   const roles = teamRoles(input.teams);
-  const claims = pairClaims(claimsOf(input.reports, roles), entries);
+  // board reports and worker logs are all-time too: `since` scopes the claims, `channels` the workers
+  const reports = since === undefined ? input.reports : input.reports.filter((r) => r.at >= since);
+  const claims = pairClaims(claimsOf(reports, roles), entries);
+  const mine = input.channels && channelMembers(input.teams, input.channels);
+  const dispatched = new Set((input.dispatches ?? []).map((d) => d.name));
   const workers = Object.keys(input.logs)
+    .filter((name) => !mine || mine.has(name) || dispatched.has(name))
     .sort()
-    .map((name) =>
-      offloadOf(name, input.logs[name]!, lastReport(input.reports, name), roles[name]),
-    );
+    .map((name) => offloadOf(name, input.logs[name]!, lastReport(reports, name), roles[name]));
   const kept = workers.reduce((n, w) => n + w.kept, 0);
   const returned = workers.reduce((n, w) => n + w.returned, 0);
   // the plan the band counts (planBasis): dispatch rows, advisor notes and stub rows are not done work to hold evidence

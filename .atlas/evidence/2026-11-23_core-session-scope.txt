@@ -1,0 +1,7 @@
+$ cd plugins/atlas && bun test mod/data/core
+bun test v1.4.2 (744846f84)
+
+ 51 pass
+ 0 fail
+ 114 expect() calls
+Ran 51 tests across 3 files. [21.00ms]

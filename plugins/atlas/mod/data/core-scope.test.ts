@@ -51,3 +51,38 @@ describe("coreModel since scope", () => {
     expect(m.contract.verifiedDone.ok).toBe(1);
   });
 });
+
+describe("coreModel claims and workers scope", () => {
+  const rec = (channel: string, member: string) => ({
+    name: `${channel}.json`,
+    text: JSON.stringify({ class: "fix", effort: "low", channel, created: 1, members: [{ name: member, role: "implementer" }] }),
+  });
+  const base = (extra: Partial<CoreInput>): CoreInput => ({
+    ...input(),
+    teams: [rec("x/lead-aaaaaa", "mine"), rec("x/lead-bbbbbb", "theirs")],
+    logs: { mine: "", theirs: "" },
+    reports: [
+      { owner: "mine", text: "STATUS: DONE old", at: SINCE - 1 },
+      { owner: "theirs", text: "STATUS: DONE new", at: SINCE },
+    ],
+    ...extra,
+  });
+  test("a report before since is not a claim; one at since is", () => {
+    const m = coreModel(base({ since: SINCE }));
+    expect(m.claims.map((c) => c.owner)).toEqual(["theirs"]);
+  });
+  test("no since: both reports are claims", () => {
+    expect(coreModel(base({})).claims.map((c) => c.owner).sort()).toEqual(["mine", "theirs"]);
+  });
+  test("channels keep only this channel's team members as workers", () => {
+    const m = coreModel(base({ channels: ["lead-aaaaaa"] }));
+    expect(m.offload.workers.map((w) => w.name)).toEqual(["mine"]);
+  });
+  test("a dispatch name stays a worker under channels", () => {
+    const m = coreModel(base({ channels: ["lead-aaaaaa"], dispatches: [{ name: "theirs" }] }));
+    expect(m.offload.workers.map((w) => w.name).sort()).toEqual(["mine", "theirs"]);
+  });
+  test("no channels: both logs are workers", () => {
+    expect(coreModel(base({})).offload.workers.map((w) => w.name)).toEqual(["mine", "theirs"]);
+  });
+});
