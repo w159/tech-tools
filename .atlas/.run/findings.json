@@ -14808,5 +14808,59 @@
     "verified_at": "2026-11-21T06:37:08+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-inline-op",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "lead integration commands do not count as inline ops",
+    "evidence": [
+      "test_dispatch_tripwire OK (552 with test_prompt_optimizer); replay: 2315 of 18356 Bash calls, 8 of 163 denials"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/hooks && python3 -m unittest test_dispatch_tripwire",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:51:08+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-mux",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "reap skips no-op merge; verifier held until workers exit and launched by wait",
+    "evidence": [
+      "test_atlas_mux and test_atlas_team: Ran 252 OK; real tmux team tb61399 in scratch repo: verifier launched after both implementers, reap left 0 merge commits"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_team",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:51:08+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "r1736-doctor-slug",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "context-footprint resolves paths with dot, underscore, space; routing corpus row added; version bump",
+    "evidence": [
+      "test_atlas_doctor and test_fix_settings_options: Ran 232 OK; routing corpus 85/87; check_versions ok; bun test 6355 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_doctor test_fix_settings_options",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T07:51:08+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

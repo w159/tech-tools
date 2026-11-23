@@ -241,7 +241,14 @@ def _brief_spawn_team(out: dict) -> str:
             f"max_parallel {team['max_parallel']}, isolation {team['isolation']} ({team.get('isolation_reason', 'n/a')}), "
             f"scope {', '.join(team['file_scope']) or 'whole project'}"
         )
-        return "\n".join([head] + [f"  {m['name']} {m['role']}" for m in team["members"]])
+        late = any(m["role"] not in atlas_provider.VERIFIER_ROLES for m in team["members"])
+        return "\n".join(
+            [head]
+            + [
+                f"  {m['name']} {m['role']}" + (" (starts after the others exit)" if late and m["role"] in atlas_provider.VERIFIER_ROLES else "")
+                for m in team["members"]
+            ]
+        )
     rows = out["members"]
     started = sum(1 for r in rows if r.get("ok"))
     lines = [
@@ -255,6 +262,8 @@ def _brief_spawn_team(out: dict) -> str:
             continue
         branch = (r.get("worktree") or {}).get("branch")
         lines.append(f"  {r['name']} {r['agent']} {r.get('model') or 'default'}" + (f" worktree {branch}" if branch else ""))
+    for n in out.get("held_members") or []:
+        lines.append(f"  {n} starts after the others exit (launched by wait)")
     if out.get("transport_note"):
         lines.append(f"note: {out['transport_note']}")
     if not out.get("wave_logged"):
@@ -277,8 +286,10 @@ def _brief_wait(out: dict) -> str:
         elif m["exit"] is not None:
             state = f"exit {m['exit']}" + (f" {m['duration_s']}s" if m.get("duration_s") is not None else "") + (f" ({m['failure']})" if m.get("failure") else "")
         else:
-            state = "dead without report" if m["dead_without_report"] else "running"
+            state = "dead without report" if m["dead_without_report"] else "waiting" if m.get("waiting") else "running"
         lines.append(f"  {m['name']} {state}" + (f" {m['last_status']}" if m.get("last_status") else ""))
+    if out.get("held_not_launched"):
+        lines.append(f"not launched yet: {', '.join(out['held_not_launched'])} (held until the others exit); run wait again to continue")
     if out.get("notes_worker_to_worker"):
         lines.append(f"worker-to-worker notes: {out['notes_worker_to_worker']}")
     if out.get("killed_on_timeout"):
@@ -295,6 +306,8 @@ def _brief_reap(out: dict) -> str:
     ]
     if out.get("worktrees_merged"):
         lines.append(f"worktrees merged: {', '.join(out['worktrees_merged'])}")
+    if out.get("worktrees_on_base"):
+        lines.append(f"already on base (no merge commit): {', '.join(out['worktrees_on_base'])}")
     for c in out.get("worktrees_conflicted") or []:
         lines.append(f"MERGE CONFLICT: {c['member']} {c['branch']} kept; conflicting files: {', '.join(c['files'])}")
     for k in out.get("worktrees_skipped") or []:
@@ -2256,9 +2269,15 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
     qr, qc = shlex.quote(root), shlex.quote(chan)
     cmd = f"python3 {todo}"
     flags = f"--root {qr} --channel {qc}"
+    # a verifier starts after the workers exit; their commits sit on worker branches, so say where
+    where = "".join(
+        f"Work of {n}: branch {w['branch']}, worktree {w['path']}\n"
+        for n, w in (rec.get("worktrees") or {}).items()
+        if n != me and member["role"] in atlas_provider.VERIFIER_ROLES
+    )
     return (
         f"{me} ({member['role']}{' seat ' + member['seat'] if member.get('seat') else ''}), peers {', '.join(peers) or '-'}.\n"
-        f"{rec.get('member_tasks', {}).get(me) or rec['task']}\nScope: {scope}\n"
+        f"{rec.get('member_tasks', {}).get(me) or rec['task']}\nScope: {scope}\n{where}"
         # the brief is re-sent on every model call, so it stays terse (channel and team id are inside the
         # commands); the rejection detail for a report lacking STATUS lives in atlas_todo.py's
         # report_missing_status error, where the worker meets it
@@ -2386,6 +2405,17 @@ def _git(root: str, *args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
 
 
+def _merge_is_noop(root: str, branch: str) -> bool:
+    """True when merging `branch` into HEAD would leave HEAD's tree unchanged (its content is already on the
+    base, e.g. squash-merged). Uses `git merge-tree --write-tree` (git 2.38+); an older git, a conflict or any
+    failure returns False, so the caller falls through to a real merge."""
+    res = _git(root, "merge-tree", "--write-tree", "HEAD", branch)
+    head_tree = _git(root, "rev-parse", "HEAD^{tree}")
+    if res.returncode != 0 or head_tree.returncode != 0 or not res.stdout.strip():
+        return False
+    return res.stdout.splitlines()[0].strip() == head_tree.stdout.strip()
+
+
 def _merge_back(root: str, rec: dict) -> tuple:
     """(merged members, conflicted rows, skipped rows): merge each worker branch of a team into the lead's
     current branch, one at a time in member-name order. Called from reap, before _reap_worktrees (which then
@@ -2407,6 +2437,9 @@ def _merge_back(root: str, rec: dict) -> tuple:
             continue
         if _git(root, "merge-base", "--is-ancestor", branch, "HEAD").returncode == 0:
             continue  # nothing ahead: _reap_worktrees cleans it
+        if _merge_is_noop(root, branch):  # lead squash-merged the content: a merge commit would be empty
+            rec.setdefault("already_on_base", []).append(member)
+            continue
         theirs = set(_git(root, "diff", "--name-only", f"HEAD...{branch}").stdout.split("\n")) - {""}
         dirty = {ln[3:].split(" -> ")[-1] for ln in _git(root, "status", "--porcelain", "--untracked-files=no").stdout.splitlines()}
         if theirs & dirty:
@@ -2447,6 +2480,8 @@ def _reap_worktrees(root: str, rec: dict) -> tuple:
             ["git", "-C", root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True
         ).returncode == 0
         ahead = _ahead_of_others(root, branch) if has_branch else 0
+        if member in (rec.get("already_on_base") or []):
+            ahead = 0  # its commits are not ancestors of HEAD but its content is: nothing unique to lose
         if dirty or ahead != 0:
             kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty})
             continue
@@ -2470,9 +2505,11 @@ def _team_dir(root: str) -> Path:
 
 def supervise(rec: dict, spawn, is_done, sleep=time.sleep, poll_s: float = 1.0) -> list:
     """Start members under a max_parallel semaphore: never more than that many unfinished at once;
-    the rest start as earlier ones exit. spawn(member)->dict(ok,...); is_done(name)->bool."""
-    pending, live, results = list(rec["members"]), [], []
-    # returns once the last member is started; `wait` covers the remaining runtime
+    the rest start as earlier ones exit. spawn(member)->dict(ok,...); is_done(name)->bool.
+    Members named in rec["held_members"] (verifier roles of a team that has workers) are not started here:
+    `wait` launches them once the workers have exited, so spawn-team returns as soon as the last worker starts."""
+    held = set(rec.get("held_members") or [])
+    pending, live, results = [m for m in rec["members"] if m["name"] not in held], [], []
     while pending:
         live = [n for n in live if not is_done(n)]
         while pending and len(live) < rec["max_parallel"]:
@@ -2694,6 +2731,94 @@ def _record_wait(rec: dict, members: list, finished: bool, timed_out: bool) -> N
         pass
 
 
+def _save_team(path: Path, rec: dict) -> None:
+    """Atomic replace: a concurrent `wait` never reads a half-written team record."""
+    tmp = path.with_name(path.name + f".{os.getpid()}.tmp")
+    tmp.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _launch_member(rec: dict, member: dict, root: str, harness: str, path: Path, chan: str, lead: str) -> dict:
+    """Worktree, brief and window of one team member. The one launch path of spawn-team and `wait`."""
+    wt = rec["worktrees"].get(member["name"])
+    if wt and (err := add_worktree(root, wt)):
+        return {"ok": False, "name": member["name"], "error": f"worktree: {err}"}
+    pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
+    pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
+    ns = argparse.Namespace(
+        run=rec["team_id"],
+        name=member["name"],
+        harness=harness,
+        agent=member["role"],
+        prompt_file=str(pf),
+        model=member["provider_model"] if member.get("provider") == "ollama" else seat_model(member, harness),
+        provider=member.get("provider"),
+        effort=None,
+        thinking=_team_thinking(harness, member["role"]),
+        agents_dir=None,
+        permission_mode=None,
+        tools_profile=member.get("tools_profile"),
+        command_override=None,
+        omp_extension=None,
+        root=root,
+        cwd=wt["path"] if wt else None,  # ATLAS_PROJECT_ROOT stays the main root (shared board)
+        team=rec,
+    )
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        cmd_spawn(ns)
+    try:
+        out = json.loads(buf.getvalue().strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return {"ok": False, "error": buf.getvalue().strip()[-200:]}
+    if wt and isinstance(out, dict):
+        out["worktree"] = wt
+    return out
+
+
+def _claim_held_member(root: str, team_id: str, name: str, failure: str | None = None) -> bool:
+    """Under the team's lock, remove `name` from held_members (True: this caller launches it) or, with
+    `failure`, record the failed launch. Two `wait` processes on one team claim a member once."""
+    path = _team_dir(root) / f"{team_id}.json"
+    with atlas_todo._file_lock(Path(tempfile.gettempdir()) / f"atlas-mux-held-{team_id}"):
+        cur = _load_team(root, team_id)
+        if cur is None:
+            return False
+        if failure is not None:
+            cur.setdefault("failed_members", {})[name] = failure
+        elif name in (cur.get("held_members") or []):
+            cur["held_members"].remove(name)
+        else:
+            return False
+        _save_team(path, cur)
+        return True
+
+
+def _release_held_members(root: str, rec: dict, since, silent: set) -> set:
+    """Launch the held verifier members once every other member has exited, failed to launch or died
+    without a note. Returns the names whose launch failed (never retried)."""
+    cur = _load_team(root, rec["team_id"]) or rec
+    held = [m for m in rec["members"] if m["name"] in (cur.get("held_members") or [])]
+    if not held or not all(
+        m["name"] in {h["name"] for h in held} or _exited(root, m["name"], since) or m["name"] in silent
+        for m in rec["members"]
+    ):
+        return set()
+    # the launch env spawn-team exported: board channel, lead name, transport
+    os.environ["ATLAS_CHANNEL"], os.environ["ATLAS_LEAD_NAME"] = rec["channel"], rec["lead"]
+    os.environ["ATLAS_COLONY_TRANSPORT"] = rec["transport"]
+    failed = set()
+    path = _team_dir(root) / f"{rec['team_id']}.json"
+    for m in held:
+        if not _claim_held_member(root, rec["team_id"], m["name"]):
+            continue  # another `wait` took it
+        res = _launch_member(rec, m, root, rec.get("harness", "claude"), path, rec["channel"], rec["lead"])
+        if not res.get("ok"):
+            failed.add(m["name"])
+            _claim_held_member(root, rec["team_id"], m["name"], failure=str(res.get("error") or "spawn failed"))
+    return failed
+
+
 def cmd_spawn_team(args) -> int:
     root = _root(args)
     task = (
@@ -2777,6 +2902,10 @@ def cmd_spawn_team(args) -> int:
     rec["channel"], rec["transport"], rec["lead"] = chan, chosen, lead
     rec["source"] = _lead_source(root, lead, sid)
     rec["created"] = time.time()
+    # verifier roles wait for the other members: `wait` launches them (see _release_held_members)
+    rec["harness"] = args.harness
+    if any(m["role"] not in atlas_provider.VERIFIER_ROLES for m in rec["members"]):
+        rec["held_members"] = [m["name"] for m in rec["members"] if m["role"] in atlas_provider.VERIFIER_ROLES]
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
     members = ", ".join(f"{m['name']} ({m['role']}{':' + m['seat'] if m.get('seat') else ''})" for m in rec["members"])
@@ -2787,42 +2916,17 @@ def cmd_spawn_team(args) -> int:
     _record_team(rec)
 
     def spawn(member: dict) -> dict:
-        wt = rec["worktrees"].get(member["name"])
-        if wt and (err := add_worktree(root, wt)):
-            return {"ok": False, "name": member["name"], "error": f"worktree: {err}"}
-        pf = path.parent / f"{rec['team_id']}-{member['name']}.prompt"
-        pf.write_text(team_brief(rec, member, root, chan, lead), encoding="utf-8")
-        ns = argparse.Namespace(
-            run=rec["team_id"],
-            name=member["name"],
-            harness=args.harness,
-            agent=member["role"],
-            prompt_file=str(pf),
-            model=member["provider_model"] if member.get("provider") == "ollama" else seat_model(member, args.harness),
-            provider=member.get("provider"),
-            effort=None,
-            thinking=_team_thinking(args.harness, member["role"]),
-            agents_dir=None,
-            permission_mode=None,
-            tools_profile=member.get("tools_profile"),
-            command_override=None,
-            omp_extension=None,
-            root=root,
-            cwd=wt["path"] if wt else None,  # ATLAS_PROJECT_ROOT stays the main root (shared board)
-            team=rec,
-        )
-        buf = io.StringIO()
-        with contextlib.redirect_stdout(buf):
-            cmd_spawn(ns)
-        try:
-            out = json.loads(buf.getvalue().strip().splitlines()[-1])
-        except (ValueError, IndexError):
-            return {"ok": False, "error": buf.getvalue().strip()[-200:]}
-        if wt and isinstance(out, dict):
-            out["worktree"] = wt
-        return out
+        return _launch_member(rec, member, root, args.harness, path, chan, lead)
 
-    results = supervise(rec, spawn, lambda n: _exited(root, n, rec["created"]), poll_s=args.poll)
+    def member_done(n: str) -> bool:
+        # a dead pane with no exit note never reports: do not hold a verifier forever for it
+        if _exited(root, n, rec["created"]):
+            return True
+        return rec["transport"] == "tmux" and any(
+            p["name"] == n and p["dead"] for p in _team_panes(_session(rec["team_id"]))
+        )
+
+    results = supervise(rec, spawn, member_done, poll_s=args.poll)
     wave_logged = _log_wave(
         rec, run_id, results
     )  # after spawn: each member's resolved model is known
@@ -2844,6 +2948,7 @@ def cmd_spawn_team(args) -> int:
             "isolation": rec["isolation"],
             "isolation_reason": rec.get("isolation_reason"),
             "members": results,
+            "held_members": rec.get("held_members") or [],
             "worktrees": rec["worktrees"],
         },
         0 if not failed else 1,
@@ -2874,6 +2979,10 @@ def cmd_wait(args) -> int:
 
     never_launched = set(rec.get("failed_members") or {})
 
+    def held() -> set:
+        # verifier-role members spawn-team has not launched yet: waiting, not silent and not failed
+        return set((_load_team(root, args.team) or rec).get("held_members") or [])
+
     def dead_silent() -> set:
         # a pane whose process is gone with no exit note will never report; do not wait out the timeout for it.
         # A member whose spawn failed has no pane at all and never reports either.
@@ -2887,13 +2996,19 @@ def cmd_wait(args) -> int:
 
     while time.time() - t0 < args.timeout:
         silent = dead_silent()
+        if (failed_now := _release_held_members(root, rec, since, silent)):
+            never_launched |= failed_now
+            rec["failed_members"] = (_load_team(root, args.team) or rec).get("failed_members") or {}
+            silent = dead_silent()
         if all(_exited(root, n, since) or n in silent for n in names):
             break
         if progress_s > 0 and time.time() - last_progress >= progress_s:
             # a long wait used to print nothing for the whole timeout; stderr keeps the --json stdout clean
             last_progress = time.time()
+            waiting = held()
             states = [
-                f"{n} " + ("reported" if _exited(root, n, since) else "dead" if n in silent else "running")
+                f"{n} "
+                + ("reported" if _exited(root, n, since) else "dead" if n in silent else "waiting" if n in waiting else "running")
                 for n in names
             ]
             reported = sum(1 for s in states if s.endswith("reported"))
@@ -2914,6 +3029,7 @@ def cmd_wait(args) -> int:
             )
     allnotes = atlas_todo.notes(root)
     members, w2w = [], 0
+    waiting = held()
     for n in names:
         mine = [r for r in allnotes if str(r.get("owner")) == n]
         text = str(mine[-1].get("text") or "") if mine else ""
@@ -2925,6 +3041,7 @@ def cmd_wait(args) -> int:
                 "name": n,
                 "exit": _num(int, found.group(1), None) if found else None,
                 "dead_without_report": n in silent and not found,
+                **({"waiting": True} if n in waiting and not found else {}),
                 **({"never_launched": True, "launch_error": rec["failed_members"][n]} if n in never_launched else {}),
                 "duration_s": _duration(mine[-1].get("ts"), started) if found else None,
                 "last_status": status,
@@ -2953,6 +3070,7 @@ def cmd_wait(args) -> int:
             else (round(time.time() - started, 1) if started is not None else None),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
             **({"timed_out": True, "timeout_s": args.timeout} if timed_out else {}),
+            **({"held_not_launched": sorted(waiting)} if timed_out and waiting else {}),
         },
         0 if ok else 1,
         _brief_for(args, _brief_wait),
@@ -3111,6 +3229,7 @@ def cmd_reap(args) -> int:
             "channels_reaped": reaped.get("reaped"),
             "prompts_removed": removed,
             "worktrees": rec.get("worktrees") or {},
+            "worktrees_on_base": rec.get("already_on_base") or [],  # content already on HEAD: no merge commit made
             "worktrees_merged": wt_merged,  # merged into the lead branch by reap, then removed below
             "worktrees_conflicted": wt_conflicted,  # merge aborted, lead branch untouched: branch + worktree kept
             "worktrees_skipped": wt_skipped,  # not attempted (dirty worker, dirty lead files, detached HEAD)

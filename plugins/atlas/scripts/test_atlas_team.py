@@ -7,7 +7,10 @@ import json
 import os
 import pathlib
 import tempfile
+import time
+import threading
 import unittest
+from unittest import mock
 
 import _test_isolation  # noqa: F401
 import atlas_mux
@@ -43,6 +46,160 @@ class TeamTests(unittest.TestCase):
         res = atlas_mux.supervise(rec, spawn, lambda n: n in done, sleep, 0)
         self.assertEqual(len(res), len(rec["members"]))
         self.assertLessEqual(peak[0], 2)
+
+    def _supervise(self, roles, max_parallel=4):
+        """Run supervise over members of `roles`; each tick one launched member exits. Returns the launch order."""
+        rec = {"max_parallel": max_parallel, "members": [{"name": f"{r}-{i}", "role": r} for i, r in enumerate(roles)]}
+        done, order = set(), []
+
+        def spawn(m):
+            order.append(m["name"])
+            return {"ok": True}
+
+        def sleep(_):
+            running = [n for n in order if n not in done]
+            if running:
+                done.add(running[0])
+
+        atlas_mux.supervise(rec, spawn, lambda n: n in done, sleep, 0)
+        return order, done
+
+    def test_supervise_leaves_held_members_for_wait(self):
+        rec = {"max_parallel": 4, "held_members": ["verifier-2"], "members": [
+            {"name": "implementer-0", "role": "implementer"},
+            {"name": "implementer-1", "role": "implementer"},
+            {"name": "verifier-2", "role": "verifier"},
+        ]}
+        order = []
+        res = atlas_mux.supervise(rec, lambda m: order.append(m["name"]) or {"ok": True}, lambda n: False, lambda _: None, 0)
+        self.assertEqual(["implementer-0", "implementer-1"], order)
+        self.assertEqual(order, [r["name"] for r in res])
+
+    def test_verifier_only_team_launches_at_once(self):
+        order, done = self._supervise(["verifier", "completeness-critic"])
+        self.assertEqual(["verifier-0", "completeness-critic-1"], order)
+        self.assertEqual(set(), done)  # no tick was needed
+
+    def test_verifier_brief_names_each_workers_branch_and_worktree(self):
+        rec = {
+            "task": "t", "file_scope": [], "members": [
+                {"name": "implementer-0", "role": "implementer"},
+                {"name": "verifier-1", "role": "verifier"},
+            ],
+            "worktrees": {"implementer-0": {"path": "/r/.atlas/wt/t1-implementer-0", "branch": "worker/t1-implementer-0"}},
+        }
+        v = atlas_mux.team_brief(rec, rec["members"][1], "/r", "chan", "lead")
+        self.assertIn("Work of implementer-0: branch worker/t1-implementer-0, worktree /r/.atlas/wt/t1-implementer-0", v)
+        i = atlas_mux.team_brief(rec, rec["members"][0], "/r", "chan", "lead")
+        self.assertNotIn("Work of", i)
+
+    def _held_team(self, failed=None):
+        """A recorded implementer, implementer, verifier team whose verifier is held; returns (root, rec, held)."""
+        root = tempfile.mkdtemp()
+        os.environ["ATLAS_PROJECT_ROOT"] = root
+        rec = atlas_mux.build_team("implement", "medium", None, "x")
+        held = next(m["name"] for m in rec["members"] if m["role"] == "verifier")
+        rec.update(created=0.0, transport="claude-bg", held_members=[held], channel="c", lead="l", worktrees={})
+        if failed:
+            rec["failed_members"] = failed
+        d = pathlib.Path(root) / atlas_mux.TEAMS_REL
+        d.mkdir(parents=True)
+        (d / f"{rec['team_id']}.json").write_text(json.dumps(rec))
+        return root, rec, held
+
+    def _wait(self, root, rec, timeout=2.0):
+        ns = type("N", (), {"root": root, "team": rec["team_id"], "timeout": timeout, "poll": 0.05, "json": True, "kill_on_timeout": False})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_mux.cmd_wait(ns)
+        return json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def _finish(self, root, names):
+        for n in names:
+            atlas_mux.atlas_todo.note(root, n, "STATUS: DONE\nexit 0", to="lead", kind="report")
+
+    def test_wait_launches_the_held_verifier_only_after_both_workers_exit(self):
+        root, rec, held = self._held_team()
+        workers = [m["name"] for m in rec["members"] if m["name"] != held]
+        launched = []
+
+        def launch(rec_, member, *a):
+            launched.append((member["name"], [atlas_mux._exited(root, n, 0.0) for n in workers]))
+            self._finish(root, [member["name"]])
+            return {"ok": True}
+
+        self._finish(root, workers[:1])
+        with mock.patch.object(atlas_mux, "_launch_member", launch):
+            out = self._wait(root, rec, timeout=0.4)  # one worker still running: nothing launches
+            self.assertEqual([], launched)
+            self.assertEqual("timeout", out["outcome"])
+            self._finish(root, workers[1:])
+            out = self._wait(root, rec)
+        self.assertEqual([(held, [True] * len(workers))], launched)
+        self.assertEqual("done", out["outcome"])
+        saved = json.loads((pathlib.Path(root) / atlas_mux.TEAMS_REL / f"{rec['team_id']}.json").read_text())
+        self.assertEqual([], saved["held_members"])
+
+    def test_wait_timeout_says_the_held_member_was_not_launched(self):
+        root, rec, held = self._held_team()
+        out = self._wait(root, rec, timeout=0.3)
+        self.assertEqual([held], out["held_not_launched"])
+        self.assertTrue(next(m for m in out["members"] if m["name"] == held)["waiting"])
+        ns = type("N", (), {"root": root, "team": rec["team_id"], "timeout": 0.2, "poll": 0.05, "json": False, "kill_on_timeout": False})
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            atlas_mux.cmd_wait(ns)
+        self.assertIn(f"not launched yet: {held}", buf.getvalue())
+        self.assertIn("run wait again", buf.getvalue())
+
+    def test_two_overlapping_waits_launch_the_verifier_once(self):
+        root, rec, held = self._held_team()
+        self._finish(root, [m["name"] for m in rec["members"] if m["name"] != held])
+        calls = []
+
+        def launch(rec_, member, *a):
+            calls.append(member["name"])
+            time.sleep(0.3)
+            self._finish(root, [member["name"]])
+            return {"ok": True}
+
+        with mock.patch.object(atlas_mux, "_launch_member", launch):
+            threads = [threading.Thread(target=lambda: self._wait_quiet(root, rec)) for _ in range(2)]
+            [t.start() for t in threads]
+            [t.join() for t in threads]
+        self.assertEqual([held], calls)
+
+    def _wait_quiet(self, root, rec):
+        ns = type("N", (), {"root": root, "team": rec["team_id"], "timeout": 3, "poll": 0.05, "json": True, "kill_on_timeout": False})
+        with contextlib.redirect_stdout(io.StringIO()):
+            atlas_mux.cmd_wait(ns)
+
+    def test_a_worker_that_never_launched_does_not_hold_the_verifier(self):
+        root, rec, held = self._held_team()
+        workers = [m["name"] for m in rec["members"] if m["name"] != held]
+        rec["failed_members"] = {workers[0]: "boom"}
+        (pathlib.Path(root) / atlas_mux.TEAMS_REL / f"{rec['team_id']}.json").write_text(json.dumps(rec))
+        self._finish(root, workers[1:])
+
+        def launch(rec_, member, *a):
+            self._finish(root, [member["name"]])
+            return {"ok": True}
+
+        with mock.patch.object(atlas_mux, "_launch_member", launch):
+            out = self._wait(root, rec)
+        self.assertEqual("never_launched", "never_launched" if out["members"][0].get("never_launched") else "")
+        saved = json.loads((pathlib.Path(root) / atlas_mux.TEAMS_REL / f"{rec['team_id']}.json").read_text())
+        self.assertEqual([], saved["held_members"])
+
+    def test_a_failed_held_launch_is_recorded_and_not_retried(self):
+        root, rec, held = self._held_team()
+        self._finish(root, [m["name"] for m in rec["members"] if m["name"] != held])
+        calls = []
+        with mock.patch.object(atlas_mux, "_launch_member", lambda *a: calls.append(1) or {"ok": False, "error": "nope"}):
+            out = self._wait(root, rec)
+        self.assertEqual(1, len(calls))
+        row = next(m for m in out["members"] if m["name"] == held)
+        self.assertEqual("nope", row["launch_error"])
 
     def test_wait_and_reap(self):
         root = tempfile.mkdtemp()
@@ -246,8 +403,9 @@ class WaveAndChannelTests(unittest.TestCase):
         finally:
             os.environ.pop("ATLAS_SESSION_ID", None)
         levels = {agent: thinking for agent, thinking, _ in seen.values()}
-        # Claude-tier effort per role from the retiered matrix (design 2026-10-20_atlas-tiering-design): critic is medium.
-        self.assertEqual({"explorer": "low", "completeness-critic": "medium"}, levels)
+        # Claude-tier effort per role from the retiered matrix (design 2026-10-20_atlas-tiering-design). The critic
+        # is held for `wait` to launch, so spawn-team starts the explorers only.
+        self.assertEqual({"explorer": "low"}, levels)
         self.assertTrue(all(effort is None for *_, effort in seen.values()))
 
     def test_reap_closes_the_team_channel_while_its_lead_session_lives(self):

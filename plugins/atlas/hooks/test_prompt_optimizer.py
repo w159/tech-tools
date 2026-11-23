@@ -992,8 +992,8 @@ CORPUS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "routing_corpu
 # routing_corpus.jsonl: 45 of 86. Measured by loading `git show d8a7adce:plugins/atlas/hooks/prompt_optimizer_core.py`.
 HEAD_ROUTER_ACCURACY = 45 / 86
 MIN_ACCURACY = 0.85
-MEASURED_CORRECT = 84  # eval_routing on 86 rows, 2026-11-18
-MEASURED_ROWS = 86
+MEASURED_CORRECT = 85  # eval_routing on 87 rows, 2026-11-23
+MEASURED_ROWS = 87
 
 
 class RoutingCorpusTest(unittest.TestCase):

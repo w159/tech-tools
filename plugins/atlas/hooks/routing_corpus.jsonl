@@ -84,3 +84,4 @@
 {"prompt": "audit every module in the repo for hardcoded paths", "class": "audit", "effort": "high"}
 {"prompt": "the build does not pass on windows, find out why and fix", "class": "fix", "effort": "medium"}
 {"prompt": "should we use sqlite or postgres for the dashboard, give me a recommendation", "class": "audit", "effort": "low"}
+{"prompt": "fix remaining issues from last session and begin working on even further improvements and meaningful changes to increase output quality and reducing context/token usage. research, test, and develop improvements that even experts would be shocked with.", "class": "fix", "effort": "medium"}

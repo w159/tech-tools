@@ -1,5 +1,17 @@
 # Changelog
 
+## atlas 17.36.0, marketplace 5.43.0 - 2026-11-23 -- lead integration commands, reap and verifier order, shorter CLAUDE.md
+
+Measured after 17.35.0: an `atlas:explorer` starts at about 33,000 input tokens, against about 75,800 before (four runs; the measuring session also offered fewer MCP tool names).
+
+- Changed, inline-op gate: the lead's integration commands (git add, commit, merge, push, switch, branch, fetch, pull, tag; `atlas_git.py`; read-only `gh run` and `gh release`) do not count as inline work; commands that write file content still do (`plugins/atlas/hooks/dispatch_tripwire_core.py`).
+- Changed, team order: a verifier starts after the working members exit; `spawn-team` returns at once and `wait --team` launches the held verifier (`plugins/atlas/scripts/atlas_mux.py`).
+- Fixed, reap: no empty merge commit for a branch whose content is already on the base (`plugins/atlas/scripts/atlas_mux.py` `_merge_is_noop`).
+- Fixed, doctor: `context-footprint` resolves project paths containing `.`, `_` or a space (`plugins/atlas/scripts/atlas_doctor.py`).
+- Changed, repo instructions: `CLAUDE.md` is 6,459 bytes, down from 13,425; the gate internals moved to one lead-only section that points at `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md` and `laws-and-gates.md`. The token effect was not measured (a scratch-folder probe did not load the files).
+- Tests: the routing corpus has 87 rows (`plugins/atlas/hooks/routing_corpus.jsonl`).
+- Not changed after measuring: the Stop-gate loop cap and the armada server instructions (reasons in `plugins/atlas/CHANGELOG.md`).
+
 ## atlas 17.35.0, marketplace 5.42.0 - 2026-11-21 -- context footprint cuts and friction fixes
 
 Source: `docs/audits/2026-11-21_atlas-context-footprint-audit.md`. An atlas subagent started at about 72,000 input tokens before reading a file.

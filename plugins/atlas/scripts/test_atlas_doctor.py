@@ -3780,6 +3780,23 @@ class ContextFootprintTest(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIn("70000", detail)
 
+    def test_dir_named_by_claude_code_for_non_slash_characters(self):
+        for root, dirname in (
+            ("/fx/p/.atlas/wt/a-b", "-fx-p--atlas-wt-a-b"),
+            ("/fx/my_proj", "-fx-my-proj"),
+            ("/fx/my proj", "-fx-my-proj"),
+        ):
+            with self.subTest(root=root):
+                self._write(os.path.join(self.tmp, "claude", "projects", dirname, "s1.jsonl"), self._rows(60_000))
+                ok, detail = atlas_doctor.check_context_footprint(root)
+                self.assertTrue(ok)
+                self.assertIn("60000", detail)
+
+    def test_unmatched_dot_path_is_not_applicable(self):
+        ok, detail = atlas_doctor.check_context_footprint("/fx/other.dir")
+        self.assertTrue(ok)
+        self.assertIn("(n/a)", detail)
+
     def test_not_applicable_without_transcripts(self):
         ok, detail = atlas_doctor.check_context_footprint(self.root)
         self.assertTrue(ok)

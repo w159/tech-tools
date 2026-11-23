@@ -940,6 +940,15 @@ def _first_turn_tokens(path):
     return None, names
 
 
+def _transcript_dir(cm, root):
+    """Claude Code's transcript dir for `root`: the `_cwd_slug` name first, else
+    the name Claude Code builds (every non-alphanumeric character becomes "-",
+    so "." "_" and spaces count). Either may not exist; the caller globs it."""
+    base = cm._claude_projects_root()
+    first = base / cm._cwd_slug(root)
+    return first if first.is_dir() else base / re.sub(r"[^A-Za-z0-9]", "-", str(root))
+
+
 def check_context_footprint(root_path=None):
     """Report the input tokens a main session and atlas:* subagents carry before
     any work (read from the project's newest Claude Code transcripts) and warn
@@ -951,7 +960,7 @@ def check_context_footprint(root_path=None):
         import atlas_colony_model as cm
 
         root = root_path or _repo_root(os.getcwd())
-        pdir = cm._claude_projects_root() / cm._cwd_slug(root)
+        pdir = _transcript_dir(cm, root)
         mains = sorted(pdir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
         main_tokens, names = None, set()
         for p in mains[:3]:  # newest with a usage row (a just-opened session may have none yet)

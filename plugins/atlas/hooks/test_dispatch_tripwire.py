@@ -3675,8 +3675,8 @@ class ReadOnlyInvestigationTest(unittest.TestCase):
     )
     COUNTED = (
         ("Bash", {"command": "touch a.txt"}),
-        ("Bash", {"command": "git commit -m x"}),
-        ("Bash", {"command": "git branch -D old"}),
+        ("Bash", {"command": "git apply x.patch"}),
+        ("Bash", {"command": "git stash drop"}),
         ("Bash", {"command": "git status > out.txt"}),
         ("Bash", {"command": "git status && touch a.txt"}),
         ("Bash", {"command": "git log | tee out.txt"}),
@@ -5961,6 +5961,98 @@ class InlineOpRuleTest(unittest.TestCase):
         self.assertFalse(self._is_deny(self._call("PreToolUse", "Bash", self.OP)))
         self._call("PostToolUse", "Bash", self.OP)
         self.assertTrue(self._is_deny(self._call("PreToolUse", "Bash", self.OP)))
+
+
+class IntegrationCommandsTest(unittest.TestCase):
+    """The lead's merge/commit/push plumbing is neither counted nor a dispatch; anything that writes file
+    content or discards work, and any mix with such a command, stays counted."""
+
+    setUp = ReadOnlyInvestigationTest.setUp
+    tearDown = ReadOnlyInvestigationTest.tearDown
+    _call = ReadOnlyInvestigationTest._call
+    _count = ReadOnlyInvestigationTest._count
+    _is_deny = InlineOpRuleTest._is_deny
+
+    ALLOWED = (
+        "git add plugins/atlas/hooks/a.py",
+        "git commit -m 'fix: a; b && c'",
+        "cd /repo && git add -A && git commit -m x",
+        "git merge worker/x",
+        "git merge --abort",
+        "git push origin main",
+        "git switch main",
+        "git branch -D worker/x",
+        "git fetch origin",
+        "git pull --ff-only",
+        "git tag v1",
+        "git worktree list",
+        "git worktree prune",
+        "git worktree remove .atlas/wt/x",
+        "git -c user.name=W159 commit -m x",
+        "python3 /p/plugins/atlas/scripts/atlas_git.py allow main",
+        "gh run list --limit 3",
+        "gh run view 123 --log | tail -20",
+        "gh run watch 123",
+        "gh release list",
+        "gh release view v1",
+        "git status && git commit -m x | tail -3",
+        "lean-ctx -c 'git commit -m x'",
+    )
+    COUNTED = (
+        "git apply x.patch",
+        "git am x.mbox",
+        "git checkout main",
+        "git checkout -- a.py",
+        "git restore a.py",
+        "git reset --hard HEAD",
+        "git rm a.py",
+        "git mv a b",
+        "git clean -fd",
+        "git stash",
+        "git rebase main",
+        "git cherry-pick abc",
+        "git revert abc",
+        "git switch -f main",
+        "git worktree add x",
+        "gh pr merge 1",
+        "gh release create v1",
+        "git commit -m x > out.txt",
+        "git commit -F - <<EOF\nmsg\nEOF",
+        "git commit -m x && sed -i s/a/b/ f",
+        "git commit -m $(touch y)",
+        "git commit -m x && touch y",
+    )
+
+    @property
+    def dt(self):
+        import dispatch_tripwire
+
+        return dispatch_tripwire
+
+    def test_integration_shapes_are_recognised(self):
+        for cmd in self.ALLOWED:
+            self.assertTrue(self.dt._is_integration_call("Bash", {"command": cmd}), cmd)
+
+    def test_file_writing_and_mixed_shapes_stay_counted(self):
+        for cmd in self.COUNTED:
+            self.assertFalse(self.dt._is_integration_call("Bash", {"command": cmd}), cmd)
+
+    def test_integration_is_not_logged_and_does_not_reset(self):
+        for _ in range(3):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        for cmd in self.ALLOWED[:6]:
+            self._call("PostToolUse", "Bash", {"command": cmd})
+        self.assertEqual(self._count(), 3)  # neither counted (would be 9) nor reset (would be 0)
+        self._call("PostToolUse", "Bash", {"command": "git apply x.patch"})
+        self.assertEqual(self._count(), 4)
+
+    def test_commit_is_allowed_after_six_ops_but_the_next_edit_is_denied(self):
+        for _ in range(6):
+            self._call("PostToolUse", "Bash", {"command": "touch a.txt"})
+        self.assertFalse(self._is_deny(self._call("PreToolUse", "Bash", {"command": "git commit -m x"})))
+        self.assertFalse(self._is_deny(self._call("PreToolUse", "Bash", {"command": "git push"})))
+        self.assertTrue(self._is_deny(self._call("PreToolUse", "Bash", {"command": "sed -i s/a/b/ f"})))
+        self.assertTrue(self._is_deny(self._call("PreToolUse", "Bash", {"command": "git commit -m x && sed -i s/a/b/ f"})))
 
 
 if __name__ == "__main__":

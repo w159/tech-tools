@@ -1861,6 +1861,84 @@ def _team_mux_verb(tool, tinput):
     return verb
 
 
+# Integration: the lead merging and shipping worker branches. Plain git plumbing writes no file
+# content the lead authored, so it is neither inline work nor a dispatch (no count, no reset).
+# `git checkout` stays counted: `checkout <branch>` and `checkout <path>` cannot be told apart
+# without asking git, and the path form discards work. `switch -f/--discard-changes` likewise.
+_INTEGRATION_GIT = frozenset(
+    {"add", "commit", "merge", "push", "switch", "branch", "fetch", "pull", "tag"}
+)
+_INTEGRATION_GIT_DISCARD = frozenset({"-f", "--force", "--discard-changes"})
+_INTEGRATION_GH = {"run": ("list", "view", "watch"), "release": ("list", "view")}
+
+
+def _integration_segment_ok(seg):
+    """True when one tokenized shell segment is an integration command or read-only."""
+    import shlex
+
+    base = seg[0].rsplit("/", 1)[-1]
+    if base == "git":
+        args = seg[1:]
+        while len(args) > 1 and args[0] in ("-c", "-C"):
+            args = args[2:]  # `git -c k=v <sub>`, `git -C dir <sub>`
+        if not args:
+            return False
+        sub, rest = args[0], args[1:]
+        if sub == "switch":
+            return not any(t in _INTEGRATION_GIT_DISCARD for t in rest)
+        if sub == "worktree":
+            return bool(rest) and rest[0] in ("list", "prune", "remove")
+        if sub in _INTEGRATION_GIT:
+            return True
+    elif re.match(r"^python3?(\.\d+)?$", base):
+        if len(seg) > 1 and seg[1].rsplit("/", 1)[-1] == "atlas_git.py":
+            return True
+    elif base == "gh":
+        if len(seg) > 2 and seg[2] in _INTEGRATION_GH.get(seg[1], ()):
+            return True
+    return _is_read_only_bash(shlex.join(seg))
+
+
+def _is_integration_call(tool, tinput):
+    """True when a shell call is only integration commands (see _INTEGRATION_GIT, atlas_git.py,
+    read-only gh), optionally after `cd`, env prefixes and a `lean-ctx -c` wrapper, mixed only with
+    read-only commands. Any redirect/heredoc, substitution or other command -> False (stays counted)."""
+    import shlex
+
+    command = (tinput or {}).get("command") if _is_shell_tool(tool) else None
+    if not isinstance(command, str):
+        return False
+    command = _unwrap_lean_ctx(command)
+    if _SHELL_SUBSTITUTION.search(command):
+        return False
+    try:  # quote-aware, so `;`, `&&` or `<` inside a commit message is not an operator
+        lex = shlex.shlex(_HARMLESS_REDIRECT.sub(" ", command), posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        tokens = list(lex)
+    except ValueError:
+        return False
+    segments, cur = [], []
+    for tok in tokens:
+        if tok in _SHELL_OPS:
+            segments.append(cur)
+            cur = []
+        elif tok and set(tok) <= set("<>&|();"):
+            return False  # redirect or heredoc left: writes a file
+        else:
+            cur.append(tok)
+    segments.append(cur)
+    checked = 0
+    for seg in segments:
+        while seg and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", seg[0]):
+            seg = seg[1:]
+        if not seg or seg[0] == "cd":
+            continue
+        if not _integration_segment_ok(seg):
+            return False
+        checked += 1
+    return checked > 0
+
+
 def _dispatch_attribution(tinput, session_model=""):
     """Who a dispatch is for: agent, sibling name and the model it would run on
     (an explicit per-call `model`, else the definition's pin, else the parent's)."""
@@ -2116,7 +2194,11 @@ def _pre_tool_use(
     # (a) Too many inline ops with no intervening dispatch. Read-only investigation
     # (Read/Grep/Glob, exploration-only or read-only-git Bash) is neither counted
     # (see _run) nor blocked here: the threshold polices drift into edits, not looking.
-    if _is_read_only_call(tool, tinput or {}) or _team_mux_verb(tool, tinput):
+    if (
+        _is_read_only_call(tool, tinput or {})
+        or _team_mux_verb(tool, tinput)
+        or _is_integration_call(tool, tinput)
+    ):
         # A team launch/wait/reap is the dispatch path itself, and atlas bookkeeping
         # (_is_bookkeeping_call: todo/finding/resolve) is what the gates demand: never inline drift.
         return
@@ -3114,6 +3196,9 @@ def _run(payload):
 
         if tool not in INLINE_TOOLS and tool not in EDIT_TOOLS:
             return
+
+        if _is_integration_call(tool, tinput):
+            return  # the lead's merge/commit/push plumbing: not logged, so no count and no reset
 
         if _is_read_only_call(tool, tinput):
             # Read-only investigation is never logged, so it never counts toward the

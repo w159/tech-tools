@@ -28,7 +28,7 @@ If ANY is yes: your first move is to author a Workflow (see
 `references/workflow-template.md`) OR dispatch a parallel wave in ONE message.
 Unless the task is simple (see law 1) you may not proceed inline. This is a checklist, not a judgment call - the
 `dispatch_tripwire.py` hook advises at 4 inline ops (`ATLAS_TRIPWIRE_THRESHOLD`) and, in orchestration
-sessions, DENIES the 7th unsanctioned inline op since the last dispatch (reads of `.atlas/.run/board` and `.atlas/.run/briefs` with read-only commands, edits under `docs/` and `.atlas/`, and bookkeeping do not count; a shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run` resets that count), or any `Edit`/`Write`/
+sessions, DENIES the 7th unsanctioned inline op since the last dispatch (reads of `.atlas/.run/board` and `.atlas/.run/briefs` with read-only commands, edits under `docs/` and `.atlas/`, and bookkeeping do not count; a shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run` resets that count; lead integration commands neither count nor reset it: `git add`, `commit`, `merge`, `push`, `switch`, `branch`, `fetch`, `pull`, `tag`, `git worktree list|prune|remove`, `atlas_git.py`, `gh run list|view|watch`, `gh release list|view`; `git checkout`, apply, restore, reset, rm, mv, clean, stash, rebase, cherry-pick, revert, redirects and heredocs still count), or any `Edit`/`Write`/
 `NotebookEdit` to non-docs paths (escape: `ATLAS_TRIPWIRE_HARD=off`), regardless. `docs/` and `.atlas/`
 writes and URI writes (`agent://`, `xd://`) are not counted. A simple task (`_simple_task`: one working seat or effort `low`, no team or crew launched, `ATLAS_INLINE_SIMPLE` not `off`) is exempt from all three, and so is a run under `ATLAS_MODE=solo`.
 

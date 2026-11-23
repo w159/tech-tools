@@ -83,3 +83,12 @@ See the 17.35.0 entry in `plugins/atlas/CHANGELOG.md`:
 - One machine, one account, Claude Code 2.1.330. Byte shares will differ elsewhere; the ranking of the parts is likely to hold wherever many MCP servers are connected.
 - Tokens per byte differ by part (tool names cost more tokens per byte than prose), so the byte table in finding 2 understates the tool-name share. The probe numbers in finding 3 are token counts from the API.
 - The effect of withholding `Artifact` in an interactive session is inferred from its schema size and from `disallowedTools` already removing Write and Edit from the same agents; it was not probed.
+
+## Follow-up (2026-11-23)
+
+Measured after 17.35.0:
+
+- Four `atlas:explorer` runs started at 33,014 to 33,111 input tokens.
+- Tool schemas were 11,739 bytes.
+- No `Artifact` tool, no CLAUDE.md chain, 0 armada names.
+- The session offered 682 MCP names against 1,196 in the earlier sample, so not all of the drop is the release.

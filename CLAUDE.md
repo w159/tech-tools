@@ -4,7 +4,7 @@ Claude Code loads this file every session in this repo. `AGENTS.md` is the
 shared canonical rule set; this file is the **hard gate** for Claude Code so
 the marketplace source is never confused with a live install/cache.
 
-Read `AGENTS.md` and `docs/architecture/plugin-development-scope.md` next.
+`AGENTS.md` loads with this file. Read `docs/architecture/plugin-development-scope.md` when scope is unclear.
 
 ---
 
@@ -23,61 +23,36 @@ Read `AGENTS.md` and `docs/architecture/plugin-development-scope.md` next.
 | `.atlas/` (repo root only) | Dogfood runtime state while atlas is loaded here |
 | `~/.claude/plugins/cache/**` | **Consumer install cache - FORBIDDEN to edit** |
 
-When the user says fix/improve/change atlas (or armada/programmer), open files
-under `plugins/<name>/` (and related deps/docs) in **this** tree. Do not open
-or patch the copy under the home-directory cache.
+"Fix/improve/change atlas (or armada/programmer)" means: open files under
+`plugins/<name>/` (and related deps/docs) in **this** tree.
 
 ### 2. NEVER write the Claude install/cache
 
-**Forbidden** (create / modify / delete / rsync / cp / deploy into):
+Never create, modify, delete, rsync, cp or deploy into `~/.claude/plugins/cache/**`,
+`~/.claude/plugins/marketplaces/**` (except this repo if it *is* the working tree), or
+`~/.claude/plugins/installed_plugins.json` and other install metadata.
 
-- `~/.claude/plugins/cache/**`
-- `~/.claude/plugins/marketplaces/**` (except this repo if it *is* the working tree)
-- `~/.claude/plugins/installed_plugins.json` and other install metadata under `~/.claude/plugins/`
-
-Delivery path for consumers:
-
-1. Edit source under `plugins/...` (and deps)
-2. Update versions / CHANGELOG / `.claude-plugin/marketplace.json` when shipping
-3. Commit / push
-4. User reinstalls or updates the plugin from the marketplace
-
-Hot-copying `plugins/atlas/` into the cache is a process defect. If behavior
-must be verified after install, tell the user to reinstall - do not mutate
-their cache.
+Consumers get changes this way: edit source, update versions / CHANGELOG /
+`.claude-plugin/marketplace.json`, commit and push, then the user updates the plugin
+from the marketplace. Hot-copying into the cache is a process defect. To verify
+after install, tell the user to reinstall.
 
 ### 3. Dogfooding atlas here is allowed; product edits stay in source
 
-It is intentional that atlas may be **loaded and running** while you develop
-it in this repo (skills, hooks, dashboard, `.atlas/` dogfood state). That does
-**not** change the edit target:
-
-- Change product behavior -> `plugins/atlas/**` (etc.)
-- Record durable project knowledge -> `docs/**`
-- Ephemeral orchestration scratch -> `.atlas/.run/` (do not invent
-  `plugins/atlas/.atlas/` or other nested install-shaped trees inside source)
-
-Do **not** treat "atlas is active in this session" as permission to operate
-this repo like a customer deploy (department YAML setup, install flows) unless
-the user explicitly asks for dogfood runtime config.
+atlas may be loaded and running while you develop it here. The edit target does not change:
+product behavior goes in `plugins/atlas/**`, durable knowledge in `docs/**`, scratch in
+`.atlas/.run/`. Never create `plugins/**/.atlas/`. Do not operate this repo like a customer
+deploy (department YAML, install flows) unless the user explicitly asks.
 
 ### 4. `docs/` is SSOT - never strip it
 
-- Everything under `docs/` is project documentation.
-- Do not delete, "clean", or gitignore docs content as unused junk.
-- Prefer updating `docs/` when behavior or architecture changes.
-- Full explanation: `docs/architecture/plugin-development-scope.md`.
+Do not delete, "clean" or gitignore docs content. Update `docs/` when behavior or
+architecture changes.
 
 ### 5. Verify from this tree
 
-Run tests, dashboard, and scripts from **repo paths**:
-
-- `plugins/atlas/scripts/...`
-- `plugins/atlas/hooks/...`
-- `python3 -m unittest discover -s plugins/atlas/...`
-
-Do not use `~/.claude/plugins/cache/tech-tools/atlas/<version>/...` as the place
-to implement or "make it take effect."
+Run tests, dashboard and scripts from repo paths (`plugins/atlas/scripts/...`,
+`plugins/atlas/hooks/...`), never from the cache.
 
 ### 6. Commits never credit Claude
 
@@ -101,14 +76,9 @@ to implement or "make it take effect."
 | Update project knowledge | Edit `docs/...` |
 | "Make my install pick this up" | Ship source; tell user to reinstall - **no cache writes** |
 | Ambiguous develop vs operate | Default to **develop source**; confirm only if truly ambiguous |
-| Dispatch any `atlas:*` agent | Put a line-anchored `TOOLS: ToolSearch lean-ctx (ctx_compose, ctx_search, ctx_read); context-mode for noisy output.` line in the prompt when lean-ctx is loadable (omp: `ToolSearch` waived; with no loadable lean-ctx a `TOOLS:` line naming native Grep, Glob, Read passes) or the dispatch is denied (`dispatch_denied:toolkit`) |
 
----
-
-## Permissions intent
-
-Project `.claude/settings.json` denies Read/Edit/Write under the home plugin
-cache paths. Do not ask to bypass those denials for "faster iteration": the denials stop edits to the installed cache, which would break consumers.
+Project `.claude/settings.json` denies Read/Edit/Write under the home plugin cache
+paths. Do not ask to bypass those denials.
 
 <!-- atlas-tooling -->
 See `AGENTS.md`'s Tool Routing section (canonical, shared) for the
@@ -117,31 +87,36 @@ project expects every agent to use. Nothing Claude-Code-specific to add
 here; do not duplicate it.
 <!-- /atlas-tooling -->
 
-## Session gates
+## Atlas gates (lead only; a subagent cannot dispatch and can skip this section)
 
-- Session gates (atlas hooks): the first tool call each session should be one claude-mem search (write JSON args to xd://mcp__claude_mem_mcp_search_search). On Claude Code the recall gate is an advisory: it allows the first other call and shows a reminder once per session (`ATLAS_RECALL_GATE=deny` restores the denial). The inline-op gate prints a routing-note nudge after about 4-6 inline ops and DENIES the 7th unsanctioned inline op since the last dispatch (reads of `.atlas/.run/board` and `.atlas/.run/briefs` with only these read-only commands (`_reads_run_output` in `hooks/dispatch_tripwire_core.py`): `cat`, `ls`, `head`, `tail`, `jq`, `grep`, `wc`, `stat`, `cut`; edits under `docs/` and `.atlas/`, and bookkeeping do not count; a shell call running `atlas_mux.py spawn-team` or `atlas_crew.py run` resets the count; a shell call that only runs `atlas_todo.py`, `atlas_finding.py` or `atlas_resolve.py` is bookkeeping and does not count); separately, an inline Edit of target code is denied outright. A simple task is exempt from all three: when the resolved scope has one working seat or effort `low` and no team or crew was launched in this run, the lead does the work inline with no routing-note nudge and no denial (`_simple_task` in plugins/atlas/hooks/dispatch_tripwire_core.py; `ATLAS_INLINE_SIMPLE=off` restores the gates). Route larger edits and investigation to a tmux team or crew. Task dispatches must NOT pass a `model` param (agents pin @atlas-worker; the gate denies the override).
-- Advisor gate: close each item with `python3 ${CLAUDE_PLUGIN_ROOT}/scripts/atlas_todo.py complete --id <id> --evidence "<proof>"` (syntax: the `complete` subcommand in plugins/atlas/scripts/atlas_todo.py), then re-run `list` and confirm status=completed; a batch close once failed silently.
-- Dispatch gate (`dispatch_denied:toolkit`): every `atlas:*` Task/`task` prompt needs a line-anchored `TOOLS:` block (runs to the next ALL-CAPS label) whose own text contains BOTH `ToolSearch` AND a code-nav token (lean-ctx, ctx_search, ctx_read, any other ctx_* tool, or an xd:// device path). Naming tools elsewhere in the prompt does not count. The gate demands this only when lean-ctx is loadable: the `lean-ctx` binary is on PATH and an MCP server for it is defined and not disabled for the project (`_lean_ctx_reachable`, `_lean_ctx_loadable` in `dispatch_tripwire_core.py`); otherwise a `TOOLS:` line naming native Grep, Glob, Read passes. On omp (`ATLAS_TOOLKIT_LOAD=omp`) the `ToolSearch` requirement is waived. Example: `TOOLS: ToolSearch lean-ctx (ctx_compose, ctx_search, ctx_read); context-mode for noisy output.`
-- Dispatch gate (`dispatch_denied:name`): every `atlas:*` dispatch needs a name (`<role>-<slice>`, e.g. `auth-explorer`). The lead does not need to pass one: the hook names an unnamed dispatch itself (`_inject_name` via `updatedInput`) unless `ATLAS_AUTONAME=off`, which turns the miss into a deny.
-- Dispatch gate (`dispatch_denied:scope`): every `atlas:*` Agent/Task/`task` prompt needs a line-anchored `SCOPE: <class>/<effort>` line (regex `^SCOPE:\s*([\w-]+)/(\w+)\s*$`, `_SCOPE_LINE` in plugins/atlas/hooks/dispatch_tripwire_core.py). Classes: implement, fix, verify, audit, docs, db, ui-test. Efforts are `low`, `medium`, `high`; the gate also normalizes the aliases `lo`, `med` and `hi` (`effort_aliases` in plugins/atlas/contracts/scope-matrix.json, applied where `_SCOPE_LINE` results are normalized in dispatch_tripwire_core.py), and any other spelling is denied. Class aliases resolve too (e.g. `explore`/`research`/`review` -> audit, `build`/`feature`/`refactor` -> implement, `bug` -> fix, `doc` -> docs, `ui` -> ui-test); the matrix also holds `test` and `db-audit` classes. The resolved team must include the dispatched role: check with `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort>` first. A dispatch carries exactly one `SCOPE:` line (a second is denied). Example: `SCOPE: audit/medium` for an atlas:explorer.
-- Dispatch gate (`dispatch_denied:team`): with tmux on PATH every in-process working-role `atlas:*` dispatch is routed, the first one and a one-seat or `low` scope included, also before the session is armed (plugins/atlas/hooks/dispatch_tripwire_core.py `_team_note`, `_team_route`). The deny reads `ROUTE - this work goes to a tmux team` and carries a ready `atlas_mux.py spawn-team --class C --effort E [--paths P] --task-file F` command; the task file under `.atlas/.run/briefs/` holds the dispatch prompt. Run that command, or `atlas_crew.py run`. Closing roles (planner, verifier, completeness-critic, docs-curator, docs-auditor) are exempt. No tmux, omp, or `ATLAS_TEAM_GATE=off`: the 2nd in-process working dispatch of a run whose scope has 2+ working seats gets an advisory.
+Every denial message names its exact fix: read it and do that, do not route around it.
+Full detail: `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md` (dispatch
+contract) and `references/laws-and-gates.md` (session and Stop gates).
 
-## Dispatch contract (all denials: `dispatch_denied:<code>`; canonical list in `plugins/atlas/skills/atlas-orchestrate/references/subagent-kit.md`)
-
-Beyond name, TOOLS and SCOPE above, `hooks/dispatch_tripwire_core.py` also requires: `GOAL:`, `DELIVERABLE(S):`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`, `STOP CONDITIONS:`, `REPORT:` (`REQUIRED_SPEC_BLOCKS`, deny `... is unbounded: missing <labels>`; REPORT alone is auto-injected; first offense per session is an advisory); exactly one `GOAL:` (deny `carries N GOAL: blocks`); numbered `STEPS:` for `atlas:runner` (deny `must carry numbered STEPS:`); no `model` param (deny `overrides model with`); no built-in agent types (deny `uses the built-in agent`). Subagents may not dispatch (`_deny_nested_dispatch`).
-One `GOAL:` per dispatch, written as a single sentence: `GOAL: map the auth call path from login to token refresh.` Two concerns means two dispatches, not two `GOAL:` lines; sub-steps go under `STEPS:` or the body, never as a second `GOAL:` (deny `dispatch_denied:multi_goal`).
-
-## Parallel agents (team rules)
-
-Agents work as a team. Each parallel subagent costs a full context window, so use it only when the files are independent. Cheap-model (haiku/sonnet) read-only agents (`atlas:explorer` and `atlas:db-prober`, exempt because the `model:` pinned in their agent file is haiku or sonnet; the lead passes no `model` param and the hook does not read one) MAY dispatch in parallel to explore several files or directories quickly: the tripwire's concurrent-dispatch deny (`dispatch_denied:mux`) skips them, and the team deny (`dispatch_denied:team`) and gate (s) already do. Do not run multi-file edits in parallel: two writers on the same files corrupt each other, so working roles go through a tmux team with isolated paths, as above. The remaining denials (toolkit, name, scope, spec blocks, STEPS cap of 7 for the runner, mux for editors and for read-only roles whose agent file pins opus or no model, team) and the Stop-gate letters exist for a reason; fix the cause, do not route around them. The gate's identical-block cap (`BLOCK_LOOP_LIMIT`) restarts when new dispatches ran between blocks, and only a repeat with none counts as a loop.
-
-## Completion-gate friction (top blockers, last 14d)
-
-Recurring Stop-gate blocks: (m, the delegation-mandate gate) delegation mandate, (c, d, e: the CHANGELOG, ROADMAP and README presence gates) CHANGELOG/ROADMAP/README
-present but empty (a project that never had the file gets a stderr advisory, not a block), (g, the implementer-coverage gate) implementer dispatches not covered, (i, the open-todos gate) open todos. Before done:
-delegate code changes to an atlas:* agent; keep CHANGELOG, ROADMAP and README
-present and updated with any non-docs change; for each implementer dispatch run an
-atlas:verifier or a real test-runner command (pytest, vitest) and stamp a
-`verified` finding via scripts/atlas_finding.py; flip or drop every open todo;
-run 2+ workers as a tmux team or crew, not in-process (s, the team gate; `ATLAS_TEAM_GATE=off` makes it advisory); a colony counts only through its members' own board or IRC lines (p, the colony-evidence gate);
-open each reply with the `**ATLAS** | <glyph> <phase> | <state>` status header (n, the status-header gate; plain `ATLAS |` still passes, and the header is the first line, split on newline only, that is non-empty after stripping ASCII whitespace).
+- **First call** each session: one claude-mem search (advisory on Claude Code).
+- **Dispatch prompt** for any `atlas:*` agent, each label at the start of a line:
+  `SCOPE: <class>/<effort>` (exactly one; classes implement, fix, verify, audit, docs, db,
+  ui-test, test; efforts low, medium, high; check the team with
+  `python3 plugins/atlas/scripts/atlas_resolve.py <class> <effort>`),
+  `TOOLS: ToolSearch lean-ctx (ctx_compose, ctx_search, ctx_read); context-mode for noisy output.`,
+  one single-sentence `GOAL:`, then `DELIVERABLE:`, `SUCCESS CRITERIA:`, `OUT OF SCOPE:`,
+  `STOP CONDITIONS:`, `REPORT:`. `atlas:runner` also needs numbered `STEPS:` (at most 7).
+  Never pass a `model` param. No built-in agent types. Two concerns are two dispatches.
+- **Working roles go to a tmux team**: with tmux on PATH an in-process working-role
+  dispatch is denied, one-seat scopes included. Run
+  `python3 plugins/atlas/scripts/atlas_mux.py spawn-team --class C --effort E --paths P --task-file F`
+  (brief under `.atlas/.run/briefs/`), then `wait --team T` and `reap --team T`.
+  Closing and read-only roles (planner, verifier, completeness-critic, docs-curator,
+  docs-auditor, explorer, db-prober) may be in-process; explorer and db-prober may run in parallel.
+  Never run two writers on the same files.
+- **Inline work**: the lead may edit `docs/` and `.atlas/` and run tests, bookkeeping
+  (`atlas_todo.py`, `atlas_finding.py`, `atlas_resolve.py`) and integration commands. Other
+  inline shell work is denied at the 7th op since the last dispatch, and an inline Edit of
+  target code is denied outright. A simple task (one working seat or effort `low`, no team
+  launched this run) is exempt.
+- **Before done** (the Stop gate checks these): reply opens with
+  `**ATLAS** | <glyph> <phase> | <state>`; `docs/CHANGELOG.md` records any non-docs change;
+  ROADMAP and README are present; each implementer dispatch is covered by a real test run
+  and a `verified` finding (`plugins/atlas/scripts/atlas_finding.py`); every todo is completed
+  or dropped (close advisor items with `atlas_todo.py complete --id <id> --evidence "<proof>"`,
+  then re-run `list`); worker branches are merged and removed.

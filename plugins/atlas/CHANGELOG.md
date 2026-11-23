@@ -1,4 +1,27 @@
 # Changelog
+## 17.36.0 - 2026-11-23
+
+Measured after 17.35.0: an `atlas:explorer` now starts at 33,014 to 33,111 input tokens (four runs), against a 14-day average of about 75,800 before. Part of the drop is a smaller MCP tool list in the measuring session (682 names against 1,196).
+
+### Changed
+
+- The lead's integration commands no longer count as inline work: `git add|commit|merge|push|switch|branch|fetch|pull|tag`, `git worktree list|prune|remove`, `atlas_git.py`, `gh run list|view|watch` and `gh release list|view`. They neither count nor reset the count. Anything that writes file content still counts (`git apply|am|restore|reset|rm|mv|clean|stash|rebase|cherry-pick|revert|checkout`, a redirect, a heredoc, or a call that mixes in another command). Replayed on 45 days of transcripts: 2,315 of 18,356 main-thread shell calls (12.6%) were such commands, and 8 of 163 inline-op denials refused one directly (`hooks/dispatch_tripwire_core.py` `_is_integration_call`).
+- A team's verifier starts after its working members have exited. `spawn-team` launches the working members, records the verifier under `held_members` and returns; `wait --team` launches it once the others have exited, with each worker's branch and worktree in its brief. Before, the verifier launched with the implementers and judged work that did not exist yet (`scripts/atlas_mux.py`).
+
+### Fixed
+
+- `reap` no longer adds an empty merge commit for a worker branch whose content is already on the base (for example after a squash merge). It checks `git merge-tree --write-tree HEAD <branch>` against `HEAD^{tree}`, skips the merge, and still removes the worktree and branch; the summary says "already on base". An older git falls back to the merge (`scripts/atlas_mux.py` `_merge_is_noop`).
+- `atlas_doctor` `context-footprint` finds the transcript directory for a project path containing `.`, `_` or a space: when the `_cwd_slug` name does not exist it tries the name with every character other than letters and digits replaced by `-` (140 of 142 real directories follow that rule; the other two are a legacy lowercase name and a session filed under a parent folder) (`scripts/atlas_doctor.py` `_transcript_dir`).
+
+### Tests
+
+- The routing corpus gains the prompt that was armed as `test/high` in a real session, expected `fix/medium`; the keyword router scores 85 of 87 (`hooks/routing_corpus.jsonl`). No router change: the decision model path could not be measured, because the model configured on the audited machine does not accept chat requests and so never answers.
+
+### Not changed, by measurement
+
+- The Stop-gate loop cap stays at 3. Over 45 days 47 block streaks were cured on the second block or later (16 on the third or later); a lower cap would cut those short to save about 15 futile blocks.
+- The armada MCP server instructions stay as they are: about 600 to 830 bytes each, so a trim saves under 0.5% of a session's starting context and needs twelve bundle rebuilds.
+
 ## 17.35.0 - 2026-11-21
 
 Measured first: `docs/audits/2026-11-21_atlas-context-footprint-audit.md` (an atlas subagent started at about 72,000 input tokens before reading a file, and paid that on every turn).

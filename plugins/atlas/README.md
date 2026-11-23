@@ -11,7 +11,7 @@ session, so your context window holds reports instead of raw output.
 
 |            |                                                                                                                      |
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| Version    | 17.35.0 (`.claude-plugin/plugin.json`)                                                                              |
+| Version    | 17.36.0 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
 | Ships      | 40 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
@@ -111,7 +111,7 @@ it Atlas falls back to `claude --bg` workers.
 
    Output: `dry-run team <id> build/medium: 3 members, max_parallel 3, isolation
    worktree (auto: paths of implementer-<x> and implementer-<y> overlap), scope
-   src/a.py`, then two `implementer` lines and one `verifier` line. Under the default
+   src/a.py`, then two `implementer` lines and one `verifier` line. `spawn-team` launches only the working members; it records the verifier under `held_members` and returns, and `atlas_mux.py wait --team` launches it after the workers exit, with each worker's branch and worktree in its brief. Under the default
    `auto` the two implementers share a path, so each gets its own worktree; set
    `ATLAS_ISOLATION=shared` for one tree. Add `--json` to
    see each member's `tools_profile` (`edit` for implementers, `exec` for the
@@ -467,7 +467,8 @@ next command). Add `--json` for the full JSON object.
   The choice and its reason print on the spawn-team line. Read-only roles stay
   in the main root. `atlas_mux.py reap` is the merge-back path: it merges each
   worker branch into the lead's current branch one at a time (member-name
-  order) and removes a merged worker's worktree and branch. A conflicting merge
+  order), skips the merge for a branch whose content is already on the base
+  (it says "already on base"), and removes a merged worker's worktree and branch. A conflicting merge
   is aborted, the lead branch is left as it was, and the worker branch and
   worktree are kept; reap reports the conflicting files. Reap never forces,
   pushes or deletes an unmerged branch, and skips a branch whose worktree is
@@ -1416,7 +1417,7 @@ wiring problem.
 
 ```
 atlas/
-|-- .claude-plugin/plugin.json   manifest, version 17.35.0
+|-- .claude-plugin/plugin.json   manifest, version 17.36.0
 |-- agents/                      11 agents (atlas:<role>)
 |-- skills/                      40 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests

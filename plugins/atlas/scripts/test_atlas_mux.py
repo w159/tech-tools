@@ -3177,14 +3177,11 @@ class TeamLiveTmuxTests(unittest.TestCase):
             self.assertEqual(0, code, out)
             code, st = self.run_mux("status", "--team", "tlive", "--root", root)
             self.assertEqual(0, code, st)
-            want = {
-                m["name"]: m["role"]
-                for m in out["members"]
-                and json.loads(
-                    pathlib.Path(root, ".atlas/.run/teams/tlive.json").read_text()
-                )["members"]
+            rec = json.loads(pathlib.Path(root, ".atlas/.run/teams/tlive.json").read_text())
+            want = {  # the held critic is launched by `wait`, not by spawn-team
+                m["name"]: m["role"] for m in rec["members"] if m["name"] not in rec["held_members"]
             }
-            self.assertEqual(3, len(st["panes"]), st)
+            self.assertEqual(2, len(st["panes"]), st)
             self.assertEqual(want, {p["name"]: p["role"] for p in st["panes"]})
             self.assertTrue(
                 all(p["pane_id"].startswith("%") and p["pid"] for p in st["panes"]), st
@@ -4339,7 +4336,7 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
 
         code, out, _ = self._spawn_team()
         self.assertEqual(0, code, out)
-        self.assertEqual(["team.implement.medium", "team.size." + atlas_mux._size_bucket(len(out["members"]))],
+        self.assertEqual(["team.implement.medium", "team.size." + atlas_mux._size_bucket(len(out["members"]) + len(out["held_members"]))],
                          self._events())
 
     def test_explicit_disable_writes_nothing(self):
@@ -4384,6 +4381,7 @@ class TeamAnalyticsTests(WorktreeIsolationTests):
         with mock.patch.dict(os.environ, {"ATLAS_COLONY_TRANSPORT": "claude-bg"}), \
                 mock.patch.object(atlas_mux.atlas_todo, "notes", return_value=notes), \
                 mock.patch.object(atlas_mux, "_exited", lambda root, name, since=None: exit_of(name) is not None), \
+                mock.patch.object(atlas_mux, "_launch_member", lambda *a: {"ok": True}), \
                 contextlib.redirect_stdout(buf):
             wcode = atlas_mux.main(["wait", "--json", "--team", team, "--root", self.repo, "--timeout", timeout, "--poll", "0.01"])
         return wcode, json.loads(buf.getvalue().strip().splitlines()[-1])
@@ -4895,3 +4893,54 @@ class WorktreeMergeBackTests(unittest.TestCase):
         self.assertIn("line 9 lead wip\n", f.read_text())
         self.assertTrue(os.path.isdir(plan["implementer-1"]["path"]))
         self.assertEqual("lead tree has uncommitted changes to files the branch edits", out["worktrees_skipped"][0]["reason"])
+
+    # squash-merged on the lead before reap: commits are not ancestors of HEAD, content is
+    def _squash(self, branch):
+        self.git("merge", "--squash", branch)
+        self.git("commit", "-q", "-m", "squash")
+
+    def _count(self):
+        return int(self.git("rev-list", "--count", "HEAD"))
+
+    def test_squash_merged_branch_gets_no_merge_commit_and_is_removed(self):
+        plan = self._team("ts", {"implementer-1": ("line 2\n", "line 2 A\n")})
+        self._squash(plan["implementer-1"]["branch"])
+        before = self._count()
+        out = self._reap("ts")
+        self.assertEqual(before, self._count())
+        self.assertNotIn("(atlas reap)", self.git("log", "-1", "--format=%s"))
+        self.assertEqual([], out["worktrees_merged"])
+        self.assertEqual(["implementer-1"], out["worktrees_on_base"])
+        self.assertEqual(["implementer-1"], out["worktrees_removed"])
+        self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
+        self.assertEqual(["main"], self.git("branch", "--format=%(refname:short)").split())
+
+    def test_branch_with_content_the_base_lacks_is_still_merged(self):
+        self._team("tn", {"implementer-1": ("line 2\n", "line 2 A\n")})
+        out = self._reap("tn")
+        self.assertEqual(["implementer-1"], out["worktrees_merged"])
+        self.assertEqual([], out["worktrees_on_base"])
+        self.assertIn("(atlas reap)", self.git("log", "-1", "--format=%s"))
+
+    def test_base_moved_on_after_the_squash_still_gets_no_merge_commit(self):
+        plan = self._team("tm2", {"implementer-1": ("line 2\n", "line 2 A\n")})
+        self._squash(plan["implementer-1"]["branch"])
+        f = pathlib.Path(self.repo, "f.txt")
+        f.write_text(f.read_text().replace("line 28\n", "line 28 lead\n"))
+        self.git("commit", "-q", "-am", "unrelated")
+        before = self._count()
+        out = self._reap("tm2")
+        self.assertEqual(before, self._count())
+        self.assertEqual(["implementer-1"], out["worktrees_on_base"])
+        self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
+
+    def test_dirty_worker_worktree_is_kept_even_when_on_base(self):
+        plan = self._team("tdy", {"implementer-1": ("line 2\n", "line 2 A\n")})
+        self._squash(plan["implementer-1"]["branch"])
+        pathlib.Path(plan["implementer-1"]["path"], "scratch.txt").write_text("wip")
+        before = self._count()
+        out = self._reap("tdy")
+        self.assertEqual(before, self._count())
+        self.assertEqual([], out["worktrees_removed"])
+        self.assertTrue(os.path.isdir(plan["implementer-1"]["path"]))
+        self.assertEqual("worker worktree has uncommitted changes", out["worktrees_skipped"][0]["reason"])
