@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Fixed, atlas Stop gate (w): the lead cannot stop while its tmux team runs with no live `atlas_mux wait`; `wait` writes a `.waiter` pid marker (`hooks/completion_gate_core.py`, `scripts/atlas_mux.py`). Cause: the 2026-11-24 atlas-taste session idled 97 minutes after its workers finished.
+- Changed, atlas guidance: `wait` runs as a Monitor command (a background Bash is killed at 120 s by lean-ctx's hook), `reap` instead of `tmux kill-session`, one-file worker briefs, inventory-and-confirm before porting a third-party project (`skills/atlas-orchestrate/SKILL.md`), full pre-push check before the first commit (`references/git-policy.md` rule 10).
+
 ## atlas 17.41.1 -- a stopped team no longer keeps the phase from reaching done
 
 - Fixed, mod: a team whose tmux session was killed without a reap no longer counts as running, so the phase can reach `done` (`mod/data/mux.ts`, test `mod/data/mux.test.ts`).

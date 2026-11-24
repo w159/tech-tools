@@ -3931,6 +3931,91 @@ class InFlightTmuxTeamTest(unittest.TestCase):
         self.assertFalse(self._flight())
 
 
+class UnwatchedTeamTest(InFlightTmuxTeamTest):
+    """(w) A running tmux team with no live `atlas_mux wait` process blocks the Stop:
+    a member's exit wakes no one. Inherits the team-record fixtures."""
+
+    def _waiter(self, text, tid="t111111"):
+        (self.teams / f"{tid}.waiter").write_text(text, encoding="utf-8")
+
+    def _unwatched(self):
+        import atlas_mux
+
+        res = subprocess.CompletedProcess([], 0, "", "")
+        with mock.patch.object(atlas_mux, "_tmux", return_value=res):
+            return completion_gate._unwatched_teams(self.root, self.SID)
+
+    def test_running_team_without_waiter_is_unwatched(self):
+        self._team()
+        self.assertEqual(self._unwatched(), ["t111111"])
+
+    def test_live_waiter_pid_means_watched(self):
+        self._team()
+        self._waiter(str(os.getpid()))
+        self.assertEqual(self._unwatched(), [])
+
+    def test_dead_waiter_pid_is_unwatched(self):
+        self._team()
+        p = subprocess.Popen([sys.executable, "-c", "pass"])
+        p.wait()
+        self._waiter(str(p.pid))
+        self.assertEqual(self._unwatched(), ["t111111"])
+
+    def test_garbage_waiter_is_unwatched(self):
+        self._team()
+        self._waiter("not-a-pid")
+        self.assertEqual(self._unwatched(), ["t111111"])
+
+    def test_finished_team_is_not_reported(self):
+        self._team()
+        self._exit("w-1")
+        self._exit("w-2")
+        self.assertEqual(self._unwatched(), [])
+
+
+class UnwatchedTeamStopTest(GateOrchestrationTest):
+    """End-to-end Stop run. The gate is a subprocess, so a fake `tmux` on PATH (exit 0)
+    stands in for the live `atlas-<id>` session."""
+
+    TID = "t333333"
+
+    def _seed_team(self):
+        # per test, not in setUp: the inherited GateOrchestrationTest cases must not see a running team
+        bindir = os.path.join(self.tmp, "fakebin")
+        os.makedirs(bindir)
+        fake = os.path.join(bindir, "tmux")
+        Path(fake).write_text("#!/bin/sh\nexit 0\n")
+        os.chmod(fake, 0o755)
+        self.env["PATH"] = bindir + os.pathsep + self.env.get("PATH", "")
+        self.teams = Path(self.tmp) / ".atlas" / ".run" / "teams"
+        self.teams.mkdir(parents=True)
+        rec = {
+            "team_id": self.TID,
+            "transport": "tmux",
+            "created": time.time() - 60,
+            "source": {"session": "sess-orch"},
+            "members": [{"name": "w-1"}],
+        }
+        (self.teams / f"{self.TID}.json").write_text(json.dumps(rec), encoding="utf-8")
+
+    def _stop(self):
+        return _run_gate({"session_id": "sess-orch", "cwd": self.tmp}, self.env)
+
+    def test_unwatched_running_team_blocks_with_wait_command(self):
+        self._seed_team()
+        r = self._stop()
+        self.assertIn('"decision": "block"', r.stdout)
+        self.assertIn(f"wait --team {self.TID}", r.stdout)
+        self.assertIn("Monitor", r.stdout)
+
+    def test_watched_running_team_has_no_w_block(self):
+        self._seed_team()
+        (self.teams / f"{self.TID}.waiter").write_text(str(os.getpid()))
+        r = self._stop()
+        self.assertNotIn("wait --team", r.stdout)
+        self.assertNotIn("nothing will wake you", r.stdout)
+
+
 class InFlightDispatchOrchestrationTest(GateOrchestrationTest):
     """End-to-end: an orchestrating session with everything else missing must
     still pass silently while a dispatched subagent is in flight."""

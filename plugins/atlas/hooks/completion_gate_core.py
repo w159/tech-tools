@@ -1184,16 +1184,40 @@ TEAM_IN_FLIGHT_MAX_AGE_S = 6 * 3600
 
 
 def _team_in_flight(root, session_id: str, now: float | None = None) -> bool:
-    """True when a tmux team launched by this session still has a running member.
+    """True when a tmux team launched by this session still has a running member."""
+    return bool(_teams_in_flight(root, session_id, now))
+
+
+def _unwatched_teams(root, session_id: str) -> list:
+    """In-flight tmux teams of this session with no live `atlas_mux wait` process.
+
+    A member's exit wakes no one: a lead that stops with such a team idles until the
+    user speaks (2026-11-24: four workers done at 17:02, lead idle until 18:39)."""
+    try:
+        import atlas_mux
+
+        # --team-id is free text; only NAME_RE ids may be quoted in the (w) block reason.
+        return [
+            t
+            for t in _teams_in_flight(root, session_id)
+            if atlas_mux.NAME_RE.match(t) and not atlas_mux.team_watched(str(root), t)
+        ]
+    except Exception:  # noqa: BLE001 -- a probe failure must never block
+        return []
+
+
+def _teams_in_flight(root, session_id: str, now: float | None = None) -> list:
+    """Ids of the tmux teams launched by this session that still have a running member.
 
     Reads the record `atlas_mux wait` trusts: `.atlas/.run/teams/<id>.json` (reap
     archives it, so archived records are ignored), a live tmux session
     `atlas-<id>`, and each member's last board note (`atlas_mux._exited`, scoped to
     the record's `created`). Ignores: another session's team, a record older than
     TEAM_IN_FLIGHT_MAX_AGE_S, a dead tmux session, a team whose members all exited.
-    Missing/unreadable record or any error -> False (never fail open)."""
+    Missing/unreadable record or any error -> no team (never fail open)."""
+    found: list = []
     if not session_id:
-        return False
+        return found
     try:
         import atlas_mux
         import atlas_todo
@@ -1218,12 +1242,12 @@ def _team_in_flight(root, session_id: str, now: float | None = None) -> bool:
                     not atlas_mux._exited(str(root), m["name"], float(created))
                     for m in team.get("members") or []
                 ):
-                    return True
+                    found.append(tid)
             except (OSError, ValueError, TypeError, KeyError, AttributeError):
                 continue
     except Exception:  # noqa: BLE001 -- a probe failure must read as "not in flight"
-        return False
-    return False
+        return []
+    return found
 
 
 def _has_in_flight_dispatch(data: dict, root=None) -> bool:
@@ -2283,6 +2307,29 @@ def _main() -> int:
             # completion claim yet, so every condition stays silent except
             # (n). The header is a property of the reply text, so like (r) it
             # is checked here, under the same loop cap and block wording.
+            unwatched = _unwatched_teams(root, str(data.get("session_id") or ""))
+            if unwatched:
+                count, loop_exhausted = _block_loop_state(session, ["w"], continuation)
+                if loop_exhausted:
+                    _note_loop_allowed(count, ["w"])
+                else:
+                    _record_gate_block(session, ["w"])
+                    _STOP["letters"] = ["w"]
+                    _record_analytics("gate.w.block")
+                    mux = Path(__file__).resolve().parent.parent / "scripts" / "atlas_mux.py"
+                    w_reason = (
+                        f"Team {', '.join(unwatched)} is still running and nothing will wake you when it ends: "
+                        "a tmux member's exit does not notify this session. Before you stop, run "
+                        + " ; ".join(f'python3 "{mux}" wait --team {t} --progress 60' for t in unwatched)
+                        + " as the command of a Monitor (timeout_ms 1800000; ToolSearch select:Monitor) so its exit "
+                        "re-invokes you, then reap and continue. A background Bash call is the fallback only: "
+                        "a Bash hook such as lean-ctx kills it at 120 s."
+                    )
+                    notice = _block_loop_notice(count, ["w"])
+                    if notice:
+                        w_reason += "\n" + notice
+                    _print_decision({"decision": "block", "reason": w_reason})
+                    return 0
             if not _reply_lacks_header(data):
                 if _reply_has_header(data):  # a fail-open allow proves nothing
                     _block_loop_reset(session, "n")

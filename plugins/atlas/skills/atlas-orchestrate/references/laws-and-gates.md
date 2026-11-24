@@ -87,6 +87,13 @@ The `completion_gate.py` Stop hook (full list in `references/hooks-automation.md
 
 Related switches: `ATLAS_GATE=off` disables the whole gate; `ATLAS_GATE_REPORT=off` disables the `worker_report_gate.py` SubagentStop check that every `atlas:*` worker's final message is the `REPORT:` container.
 
+## Team waits and brief size
+
+- Run `atlas_mux.py wait --team T` as the command of a Monitor (`timeout_ms` 1800000, re-arm on expiry). A background Bash call can be killed at 120 s by a Bash hook such as lean-ctx (exit 137), and a worker's exit wakes no one. The Stop gate's (w) block refuses a stop while a team of this session runs with no live wait (`.atlas/.run/teams/<id>.waiter`).
+- Stop a team with `atlas_mux.py reap --team T`, never a bare `tmux kill-session`.
+- Give each worker brief one file or one small group, so progress shows per worker.
+- Before porting a third-party project, inventory it (file count, what it hard-codes) and confirm scope with the user before any implement dispatch.
+
 ## omp agent guard
 
 On omp, `omp/agent-guard.ts` blocks a subagent's file-editing tools when the matching Claude tool is in that agent's `disallowedTools` (read from `agents/<name>.md`; mapping in `contracts/tool-names.json` -> `agentGuard`). `write` is blocked only for non-`scheme://` paths, so `xd://`, `agent://` and `local://` writes still work. **Writes made through the `bash` tool (`sed -i`, `tee`, `>` redirects) are NOT covered**: omp has no per-agent shell policy, so the guard narrows the file-editing tools and is not a sandbox. It does not block the lead, because the lead owns the run; `ATLAS_TRIPWIRE_HARD=off` disables it.

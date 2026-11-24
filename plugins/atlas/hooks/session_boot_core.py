@@ -490,7 +490,9 @@ def team_flow_line():
     return (
         f'Team flow (absolute paths, use verbatim): python3 "{root}/scripts/atlas_resolve.py" '
         f'<class> <effort> --paths a,b ; {mux} spawn-team --class C --effort E --paths a,b --task "..." ; '
-        f"{mux} wait --team T ; {mux} reap --team T"
+        f"{mux} wait --team T ; {mux} reap --team T. "
+        "Run wait as the command of a Monitor (timeout_ms 1800000): a worker's exit wakes no one, "
+        "and its exit is what re-invokes you (a background Bash can be killed at 120 s by a Bash hook)."
     )
 
 

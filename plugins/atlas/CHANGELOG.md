@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Fixed, Stop gate (`hooks/completion_gate_core.py`, new letter (w)): a lead can no longer end its turn while a tmux team it launched is still running and no `atlas_mux wait` process is alive. A member's exit notifies no one, so on 2026-11-24 four workers finished at 17:02 and the lead sat idle until the user asked at 18:39. `atlas_mux wait` now writes `.atlas/.run/teams/<id>.waiter` (its pid) and removes it on exit; `atlas_mux.team_watched()` reads it. The block names the exact `wait --team <id>` command to run in the background. Loop-capped like the other letters.
+- Changed, session boot team-flow line and `atlas-orchestrate` dispatch flow: run `wait` as the command of a Monitor; stop a team with `reap`, not `tmux kill-session`; one file or small group per worker brief; inventory a third-party project and confirm scope before porting it.
+- Changed, `references/git-policy.md` rule 10: run the repo's full pre-push check once before the first commit of work you intend to push.
+
 ## 17.41.1 - 2026-11-24
 
 - Fixed, mod (`mod/data/mux.ts` `parseMuxStatus`): a spawn-team member whose tmux session is gone (`atlas_mux.py status` reports `"tmux": false`) and that left no exit note now reads `failed`, not `running`. Before, a team stopped without `atlas_mux reap` kept the phase at `verify` (never `done`) for hours with nothing running. Nothing is merged or reaped automatically. Test: `mod/data/mux.test.ts` (fails with the change reverted).

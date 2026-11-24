@@ -561,6 +561,26 @@ class WorkerHandbackAndWait(unittest.TestCase):
             code = mux.main(["wait", "--json", "--team", "kw", "--root", tempfile.mkdtemp(), "--poll", "0.01", *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1]), err.getvalue()
 
+    def test_wait_holds_a_waiter_marker_for_its_own_pid_and_removes_it_on_return(self):
+        root = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, root, True)
+        mux._team_dir(root).mkdir(parents=True)
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux"}
+        seen = {}
+
+        def fake_wait(args, root_, rec_):
+            seen["watched"] = mux.team_watched(root_, "kw")
+            seen["pid"] = mux._waiter_path(root_, "kw").read_text()
+            raise RuntimeError("wait died")  # the marker must go even when the wait raises
+
+        with mock.patch.object(mux, "_load_team", return_value=rec), mock.patch.object(mux, "_wait_team", fake_wait):
+            with self.assertRaises(RuntimeError):
+                mux.cmd_wait(argparse.Namespace(root=root, team="kw"))
+        self.assertTrue(seen["watched"])
+        self.assertEqual(seen["pid"], str(os.getpid()))
+        self.assertFalse(mux._waiter_path(root, "kw").exists())
+        self.assertFalse(mux.team_watched(root, "kw"))
+
     def test_t4_a_missing_or_zero_start_time_yields_no_duration(self):
         import time
 

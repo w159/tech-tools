@@ -14,6 +14,8 @@ Every atlas skill, agent and hook follows this file. It is enforced by `hooks/gi
 8. **Close-out order.** Verify, `atlas_wt.py merge <name>` (one branch at a time), then `atlas_wt.py prune` / `atlas_git.py clean`. Pushing still needs its own user yes.
 9. **Subagents** (implementer, runner, verifier, reviewers) never create branches, worktrees or PRs and never push. They commit only when the brief says so, only on the branch or worktree the brief names, and stop and report if the current branch is protected.
 
+10. **Run the push check before the first commit.** Before committing work you intend to push, run the repo's full pre-push check once (the command `.githooks/pre-push`, `.husky/pre-push` or CI runs) and fix every failure it lists in one pass. A pre-commit hook runs a smaller set, so committing first and letting the push find the rest costs one commit-fix-push round per failure (2026-11-24: three push attempts, six failures found one or two at a time).
+
 ## Config
 
 Resolution order: built-in defaults < `~/.atlas/git-policy.json` < `<repo>/.atlas/git-policy.json` < env `ATLAS_GIT_<KEY>` (upper case key).

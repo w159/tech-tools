@@ -471,7 +471,7 @@ edit code; fresh agents start without the leader's assumptions. Source:
 
 ## Hooks
 
-Wired in `plugins/atlas/hooks/hooks.json`: 19 hook programs / 25 bindings.
+Wired in `plugins/atlas/hooks/hooks.json`: 20 hook programs / 26 bindings.
 The file holds 15 commands; two are `event_dispatch.py`, which runs 11 hooks
 in-process, so the bindings are the 13 other commands plus those 11. They fire
 on 9 lifecycle events (SessionStart, UserPromptSubmit,
@@ -490,6 +490,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `bash_advisor.py` | PreToolUse (Bash) | Warns on catastrophic commands; one ponytail-before-commit nudge per session. Advisory only. | n/a |
 | `git_guard.py` | PreToolUse (Bash, Write, Agent, Task, mcp__*); PostToolUse (Bash) | Keeps commits and pushes off protected branches while other branches are in use, caps local branches and linked worktrees, and turns every pull-request creation into a permission prompt. After a person approves a protected commit or push and it succeeds, the PostToolUse path grants that branch for `approval_grant_minutes` (default 30, 0 = off). Policy: `.atlas/git-policy.json`. | `ATLAS_GIT_GUARD=off` |
 | `edit_read_nudge.py` | PreToolUse (Edit) + PostToolUse (Read, ctx_read) | Nudges when an edit targets a file read only through `ctx_read`. | n/a |
+| `standards_nudge.py` | PreToolUse (Edit, Write, MultiEdit, NotebookEdit, ctx_patch) | Injects the `## Rule` section of a `docs/standards/*.md` whose `applies_to:` glob matches the edited file, once per session per agent; never denies. | n/a (no `docs/standards/`: no-op) |
 | `fallow_gate.py` | PreToolUse (Bash) | On `git commit`/`git push`, runs `fallow audit`; denies on `verdict: fail`. Fail-open when the CLI is absent. | `ATLAS_FALLOW=off` |
 | `dispatch_tripwire.py` | PreToolUse + PostToolUse + SubagentStart | Denies covered in [the operating contract](#the-operating-contract); mirrors dispatch state. | `ATLAS_TRIPWIRE_HARD=off`, `ATLAS_TRIPWIRE=off` |
 | `todo_capture.py` | PostToolUse (TodoWrite, TaskCreate, TaskUpdate, Agent, Task, Bash) | Mirrors every plan into `<project>/.atlas/.run/todos.json`. | `ATLAS_TODO=off` |
@@ -497,7 +498,7 @@ stdlib Python. Most fail open on internal errors; `dispatch_tripwire.py`,
 | `docs_drift_watch.py` | PostToolUse (Edit/Write) | Inline docs-drift warning. | `ATLAS_GATE=off` |
 | `delegation_prewarn.py` | PostToolUse (Edit/Write) | Once per session, warns that an inline code edit will trip gate condition (m). | `ATLAS_GATE=off` |
 | `connector_credential_watch.py` | PostToolUse (connector tools) | On the first 401/403 from a known connector, says to restart the server instead of sweeping endpoints. | `ATLAS_CONNECTOR_WATCH=off` |
-| `completion_gate.py` | Stop | Definition-of-done gate, conditions (a)-(s) and (v). | `ATLAS_GATE=off` (plus `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`, `ATLAS_WT_GATE` and `ATLAS_TEAM_GATE` for single conditions) |
+| `completion_gate.py` | Stop | Definition-of-done gate, conditions (a)-(s), (v) and (w) (a tmux team of this session still running with no live `atlas_mux wait`). | `ATLAS_GATE=off` (plus `ATLAS_GATE_HEADER`, `ATLAS_GATE_PHASES`, `ATLAS_GATE_COLONY`, `ATLAS_WT_GATE` and `ATLAS_TEAM_GATE` for single conditions) |
 | `stop_tail.py` | Stop | Runs `ingest_session.py`, `chronicle_facet.py`, `memory_capture.py` and `nudge.py` in one interpreter. | n/a (each hosted hook keeps its own switch) |
 | `ingest_session.py` | SubagentStop, SessionEnd, PreCompact (and Stop via `stop_tail.py`) | Mirrors the transcript into the observability DB. | `ATLAS_INGEST=off` |
 | `worker_report_gate.py` | SubagentStop, PostToolUse (SubagentHandback) | Blocks an `atlas:*` subagent whose final message is not the fixed report container (`contracts/worker-protocol.json`); once per agent, fail-open. | n/a |
@@ -512,7 +513,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 91 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 92 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -994,8 +995,8 @@ tech-tools/
 |  |  |- package.json        # omp.extensions entry
 |  |  |- skills/             # 27 skills
 |  |  |- agents/             # 11 agents
-|  |  |- hooks/              # 19 hook programs / 25 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 91 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- hooks/              # 20 hook programs / 26 bindings (19 in hooks/; atlas_doctor.py, the 20th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
+|  |  |- scripts/            # 92 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator
