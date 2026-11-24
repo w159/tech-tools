@@ -4268,7 +4268,8 @@ class WorktreeReapTests(unittest.TestCase):
         fail = subprocess.CompletedProcess([], 1, "", "")
         # merge-back (reap merging committed branches into the lead) is covered by WorktreeMergeBackTests
         with mock.patch.object(atlas_mux, "_tmux", return_value=fail), mock.patch.object(atlas_mux, "_kill_notes"), \
-                mock.patch.object(atlas_mux, "_merge_back", return_value=([], [], [])), contextlib.redirect_stdout(buf):
+                mock.patch.object(atlas_mux, "_merge_back", return_value=([], [], [])), \
+                mock.patch.object(atlas_mux, "_autocommit_worktrees", return_value=[]), contextlib.redirect_stdout(buf):
             self.assertEqual(0, atlas_mux.main(["reap", "--json", "--team", "tr", "--root", self.repo]))
         out = json.loads(buf.getvalue().strip().splitlines()[-1])
 
@@ -4934,13 +4935,12 @@ class WorktreeMergeBackTests(unittest.TestCase):
         self.assertEqual(["implementer-1"], out["worktrees_on_base"])
         self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
 
-    def test_dirty_worker_worktree_is_kept_even_when_on_base(self):
+    def test_dirty_worker_worktree_is_autocommitted_even_when_on_base(self):
         plan = self._team("tdy", {"implementer-1": ("line 2\n", "line 2 A\n")})
         self._squash(plan["implementer-1"]["branch"])
         pathlib.Path(plan["implementer-1"]["path"], "scratch.txt").write_text("wip")
-        before = self._count()
         out = self._reap("tdy")
-        self.assertEqual(before, self._count())
-        self.assertEqual([], out["worktrees_removed"])
-        self.assertTrue(os.path.isdir(plan["implementer-1"]["path"]))
-        self.assertEqual("worker worktree has uncommitted changes", out["worktrees_skipped"][0]["reason"])
+        self.assertEqual(["implementer-1"], out["worktrees_autocommitted"])
+        self.assertEqual([], out["worktrees_kept"])
+        self.assertEqual("wip", pathlib.Path(self.repo, "scratch.txt").read_text())
+        self.assertFalse(os.path.exists(plan["implementer-1"]["path"]))
