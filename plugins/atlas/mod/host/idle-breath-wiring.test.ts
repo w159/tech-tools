@@ -154,7 +154,7 @@ describe('wire-expert: the pulse', () => {
 });
 
 describe('wire-expert: idle breathing', () => {
-  test('(b) at idle with the band drawn, one second of 100 ms beats redraws about 10 times; with nothing drawn none', async () => {
+  test('(b) at idle, with the band drawn or not, one second redraws nothing', async () => {
     const b = await boot();
     await b.advance(20_000); // the boot run ends and rests, nothing drawn
     const before = b.rec.tickWrites;
@@ -165,8 +165,7 @@ describe('wire-expert: idle breathing', () => {
     const start = seen;
     await b.advance(1000, async () => { if (b.rec.tickWrites !== seen) { seen = b.rec.tickWrites; await b.band(); } }); // the host redraws on every write
     const redraws = b.rec.tickWrites - start;
-    expect(redraws).toBeGreaterThanOrEqual(8);
-    expect(redraws).toBeLessThanOrEqual(11); // the pill breathes at 10 Hz (round W L)
+    expect(redraws).toBe(0); // at rest the frame loop is stopped: the pill no longer breathes at 10 Hz (idle CPU), a finished run drew its idle word once
   });
 });
 

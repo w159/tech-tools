@@ -38,7 +38,7 @@ import { folderOf, headerTallyOf } from './agents';
 import { GATES_MS, gitBranch, HERDR_MS, herdrTick, MUX_MS, muxTick, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
 import { buildCore, coreTick, gateGroups, leadMessages, resetCore } from './core-tick';
 import { atlasSlot, bandHandlers, effectiveRows, healthInOf, publishHudState, readStatuslineRows, sidebarHandlers } from './handlers';
-import { armFrameLoop, easeTick, ensureFrameLoop, heldFinal, heldWork, hostTurnRunning, isWorkingNow, motionTick, originOf, runBandModel, STOP_SETTLE_MS, syncHistory, TICK_MS, verdictFast } from './frame';
+import { armFrameLoop, armTick, easeTick, ensureFrameLoop, heldFinal, heldWork, hostTurnRunning, isWorkingNow, motionTick, originOf, runBandModel, STOP_SETTLE_MS, syncHistory, verdictFast, wakeLoops } from './frame';
 import { resetReads } from '../data/readinfo';
 
 const isModOn = atom({ plugin: 'atlas', key: 'isModOn' } as const, true); // ATLAS_MOD kill switch, set at session.start
@@ -160,17 +160,15 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 			S.lastBeatMs = await $.clock.now();
 			armFrameLoop($);
 			// The slow tick: gauges, motion and the Stop verdict, plus the loop's watchdog.
-			S.tickTimer?.cancel();
-			S.tickTimer = $.clock.every(TICK_MS, () => {
-				void (async () => {
-					await ensureFrameLoop($);
-					const snap = await read($, snapshotState);
-					if (!snap) return;
-					await easeTick($, snap as LiveSnapshot);
-					await motionTick($, snap as LiveSnapshot);
-					await syncHistory($, await $.clock.now());
-					if (isWorkingNow(snap as LiveSnapshot, S.hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
-				})().catch(() => undefined);
+			// TICK_MS while anything animates, IDLE_TICK_MS at rest; wakeLoops (hook events, a working host turn) brings it back at once.
+			armTick($, async () => {
+				await ensureFrameLoop($);
+				const snap = await read($, snapshotState);
+				if (!snap) return;
+				await easeTick($, snap as LiveSnapshot);
+				await motionTick($, snap as LiveSnapshot);
+				await syncHistory($, await $.clock.now());
+				if (isWorkingNow(snap as LiveSnapshot, S.hostWorking)) await verdictFast($, snap as LiveSnapshot); // the Stop hook runs inside a busy turn: read its write on this tick
 			});
 		}
 	} catch (err) {
@@ -223,6 +221,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		S.stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		S.stopRefused = false;
 		const opening = dockOnPrompt($);
+		void wakeLoops($).catch(() => undefined);
 		const at = await hookStamp($);
 		noteHook('prompt.submit', at);
 		if ((e as { origin?: { kind?: string } }).origin?.kind !== 'task-notification') { S.armedAt = await $.clock.now().catch(() => null); S.resumedAt = null; } // a background task's notification is not the person's prompt: it starts no run
@@ -352,6 +351,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (e.props.isWorking === false) S.stopSeen = false; // the host's flag fell: its own word is the turn's end again
 		const turnOn = hostTurnRunning(e.props.isWorking, S.stopSeen);
 			S.hostWorking = turnOn; // noted for the tick: the host's turn runs even when no worker is listed
+			if (turnOn && !S.frameTimer) void wakeLoops($).catch(() => undefined); // a working turn on screen needs its spinner beat
 		S.hostKnown = typeof e.props.isWorking === 'boolean';
 		hostFlag = e.props.isWorking;
 		// The HUD takes what the band leaves (the band keeps BAND_MIN_ROWS), and never less than its compact form: the band shrinks first.
