@@ -65,6 +65,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-11-24 | worktree-hygiene | verified | reap auto-commits dirty workers, snapshot base for a dirty lead, reap-stale at boot; team t033ece merged and removed itself | [2026-11-24_worktree-hygiene.md](2026-11-24_worktree-hygiene.md) |
+| 2026-11-24 | unwatched-team-gate | verified | Stop gate (w) blocks a stop while this session tmux team runs with no live atlas_mux wait | [2026-11-24_unwatched-team-gate.md](2026-11-24_unwatched-team-gate.md) |
 | 2026-11-24 | standards-feature | verified | Project standards: docs/standards + standards_nudge hook + curator/auditor/review/setup | [2026-11-24_standards-feature.md](2026-11-24_standards-feature.md) |
 | 2026-11-24 | skills-consolidation | verified | atlas skills 40 -> 26 (21 menu, 5 model-only), /atlas-say removed, full gate green | [2026-11-24_skills-consolidation.md](2026-11-24_skills-consolidation.md) |
 | 2026-11-24 | root-readme-counts | verified | README skills row 27 fixes test_readme_table; no other root count drift | [2026-11-24_root-readme-counts.md](2026-11-24_root-readme-counts.md) |

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 17.41.2 - 2026-11-24
 
 - Fixed, Stop gate (`hooks/completion_gate_core.py`, new letter (w)): a lead can no longer end its turn while a tmux team it launched is still running and no `atlas_mux wait` process is alive. A member's exit notifies no one, so on 2026-11-24 four workers finished at 17:02 and the lead sat idle until the user asked at 18:39. `atlas_mux wait` now writes `.atlas/.run/teams/<id>.waiter` (its pid) and removes it on exit; `atlas_mux.team_watched()` reads it. The block names the exact `wait --team <id>` command to run in the background. Loop-capped like the other letters.
 - Changed, session boot team-flow line and `atlas-orchestrate` dispatch flow: run `wait` as the command of a Monitor; stop a team with `reap`, not `tmux kill-session`; one file or small group per worker brief; inventory a third-party project and confirm scope before porting it.
