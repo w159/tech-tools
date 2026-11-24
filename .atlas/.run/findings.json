@@ -15636,5 +15636,23 @@
     "status": "verified",
     "verified_at": "2026-11-24T18:40:52+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "root-readme-counts",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "README skills row 27 fixes test_readme_table; no other root count drift",
+    "evidence": [
+      "ls skills/*/SKILL.md=27; git diff README.md one row; root_pytest 191 passed"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/armada/tests plugins/programmer/tests",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T18:59:08+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
   }
 ]
