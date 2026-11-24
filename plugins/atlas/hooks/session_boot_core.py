@@ -1148,6 +1148,35 @@ def git_hygiene_boot(cwd, now=None):
     )
 
 
+def prune_boot(cwd):
+    """Start `atlas_prune.py` detached (closed crews, boards, team records, dirty snapshots under
+    .atlas/.run; the mod's per-poll stat cost grows with them). Same kill switches as the git clean,
+    plus ATLAS_PRUNE=off. Returns True when started."""
+    off = ("off", "0", "false")
+    if any(os.environ.get(k, "").lower() in off for k in ("ATLAS_GIT_GUARD", "ATLAS_PRUNE")):
+        return False
+    if os.environ.get("ATLAS_GIT_AUTOCLEAN", "").lower() == "off":
+        return False
+    root = _git_main_root(cwd)
+    if not root or not os.path.isdir(os.path.join(root, ".atlas", ".run")):
+        return False
+    import subprocess
+
+    subprocess.Popen(
+        [
+            sys.executable,
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "scripts", "atlas_prune.py"),
+            "--root",
+            root,
+        ],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    return True
+
+
 def _optional_boot_text(module, func, *args):
     """str returned by module.func(*args), or None when the module/function is absent or raises.
     Fail-open by design: companion modules may not be installed in every tree."""
@@ -1628,6 +1657,8 @@ def main():
         hygiene = git_hygiene_boot(_cwd)
         if hygiene:
             lines.append(hygiene)
+    with contextlib.suppress(Exception):  # best-effort; never block boot
+        prune_boot(_cwd)
     # claude-mem recall mandate: armed only when the claude-mem plugin (its MCP
     # search server) is enabled; a bare CLI/module cannot be called as a tool.
     recall = (
