@@ -194,16 +194,34 @@ export async function readCrew(fs: FsLike, root: string, now: number): Promise<C
 	return { agents, notes };
 }
 
-/** Change signature of every crew run: run.json, summary.json, irc/log.jsonl and the exit/pid/logs dirs (their mtime moves on add). */
-export async function crewSig(fs: FsLike, root: string): Promise<string> {
+/** `mtimes` follow SIG_FILES: a run is over once summary.json exists, history once its run.json / log / summary are all older than RECENT_MS. */
+const isOver = (mtimes: number[], now: number): boolean => {
+	const touched = Math.max(mtimes[0]!, mtimes[1]!, mtimes[2]!);
+	return mtimes[1]! > 0 || (touched > 0 && now - touched > RECENT_MS);
+};
+const SIG_FILES = ['run.json', 'summary.json', 'irc/log.jsonl', 'exit', 'pid', 'logs'];
+
+/**
+ * Change signature of every live crew run: run.json, summary.json, irc/log.jsonl and the exit/pid/logs dirs (their mtime moves on add).
+ * A run that is over (summary.json written) or history (every file older than RECENT_MS, so readCrew hides it) never changes again:
+ * its path goes into `done` and costs no stat on later passes, so the cost follows the live runs, not the runs on disk.
+ * The caller keeps `done` between passes (a fresh Set re-learns it with one pass of stats).
+ */
+export async function crewSig(fs: FsLike, root: string, done: Set<string> = new Set(), now: number = Date.now()): Promise<string> {
 	const crewDir = `${root.replace(/\/+$/, '')}/.atlas/.run/crew`;
-	const sig = async (p: string): Promise<string> => {
+	const sig = async (p: string): Promise<{ text: string; mtimeMs: number }> => {
 		const s = await fs.stat(p).catch(() => undefined);
-		return s ? `${s.mtimeMs}:${s.size}` : '-';
+		return { text: s ? `${s.mtimeMs}:${s.size}` : '-', mtimeMs: s?.mtimeMs ?? 0 };
 	};
+	const one = async (id: string): Promise<string> => {
+		const dir = `${crewDir}/${id}`;
+		if (done.has(dir)) return `${id}=done`;
+		const sigs = await Promise.all(SIG_FILES.map((f) => sig(`${dir}/${f}`)));
+		if (isOver(sigs.map((x) => x.mtimeMs), now)) done.add(dir);
+		return SIG_FILES.map((f, i) => `${id}/${f}=${sigs[i]!.text}`).join(',');
+	};
+	const ids = await names(fs, crewDir);
 	const parts: string[] = [];
-	for (const id of await names(fs, crewDir)) {
-		for (const f of ['run.json', 'summary.json', 'irc/log.jsonl', 'exit', 'pid', 'logs']) parts.push(`${id}/${f}=${await sig(`${crewDir}/${id}/${f}`)}`);
-	}
+	for (let i = 0; i < ids.length; i += 16) parts.push(...(await Promise.all(ids.slice(i, i + 16).map(one)))); // concurrent, bounded
 	return parts.join(',');
 }

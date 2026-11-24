@@ -79,6 +79,9 @@ export function eventMinutes(): { m: number; n: number }[] {
   return [...minutes].map(([m, n]) => ({ m, n })).sort((a, b) => a.m - b.m);
 }
 
+/** Engine clock of the newest event noted this session (-Infinity before the first): the poll's idle backoff snaps back on it. */
+export const lastHookAt = (): number => newest;
+
 /** Record one event the handlers saw, at the engine clock `at` (ms); an event with no clock reading is not recorded. */
 export function noteHook(label: string, at: number | undefined): void {
   if (at === undefined || !Number.isFinite(at)) return;

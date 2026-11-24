@@ -6,8 +6,10 @@ import { noteEnded, notifiedEnds } from '../data/live';
 import type { GateGroup } from '../view/panel/pane/sidebar';
 import type { GateLine } from '../view/panel/pane/sidebar-types';
 import { crewSig } from '../data/crew';
+import { boardOwners } from '../data/channels';
 import { gatesError, parseGates } from './gates';
 import { noteUsage } from './usage';
+import { lastHookAt } from './hook-log';
 import { noteHeaderPattern } from '../view/transcript/restyle';
 import { isOlder } from './notify';
 import { placeFinished } from '../view/transcript/placed';
@@ -23,6 +25,9 @@ const WT_MS = 5000;
 export const MUX_MS = 5000;
 export const HERDR_MS = 5000;
 export const GATES_MS = 30_000; // the backstop run; a change to a gate file runs the gates on the next poll instead
+export const IDLE_AFTER_MS = 10_000; // nothing moved and nothing runs for this long: the timers stretch
+export const IDLE_POLL_MS = 5000; // the fingerprint poll while idle (a hook event or a fingerprint change snaps it back to POLL_MS)
+export const IDLE_TICK_MS = 30_000; // the WT, mux, herdr and core ticks while idle
 const GATES_MIN_MS = 5000; // the shortest gap between two gate runs (a hook writes the gate DB on every tool call; a run spawns python)
 
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
@@ -37,19 +42,44 @@ const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
 
 let herdrStdout = '';
 let lastFingerprint = '';
+const crewDone = new Set<string>(); // crew run dirs that are over or history: crewSig stats them no more
 let rebuildRun: Promise<void> | null = null; // the rebuild in flight (see rebuild)
 let rebuildFollow: Promise<void> | null = null; // the one queued run behind it
+let movedAt = -Infinity; // clock ms of the last fingerprint change
+let busy = false; // a host turn, a running agent or a worker's tool call was seen by the last fingerprint
+const lastRun = new Map<string, number>(); // key -> clock ms of the last tick that ran while idle
 let rebuildSeq = 0; // stamped on each snapshot; never reset, so a re-boot's snapshots stay newer than any late write
 
+/** Forget the idle state (a new session starts awake). */
+export function resetPollIdle(): void {
+	movedAt = -Infinity;
+	busy = false;
+	lastRun.clear();
+}
+
+/** True when this tick of `key` should be skipped: the session is idle (no turn or live work, no hook event and no fingerprint move for IDLE_AFTER_MS)
+ * and the last run was less than `gapMs` ago. Awake, it never skips, so the first tick after a hook event runs at once. */
+export async function idleSkip($: EngineInterface, key: string, gapMs: number): Promise<boolean> {
+	const now = await $.clock.now();
+	if (busy || S.hostWorking || now - Math.max(movedAt, lastHookAt()) < IDLE_AFTER_MS) {
+		lastRun.set(key, now);
+		return false;
+	}
+	if (now - (lastRun.get(key) ?? -Infinity) < gapMs) return true;
+	lastRun.set(key, now);
+	return false;
+}
+
 /** Todos + channels + board note-file fingerprint: what a rebuild is due on. */
-async function dataFingerprint($: EngineInterface): Promise<string> {
+export async function dataFingerprint($: EngineInterface): Promise<string> {
 	// The host's agent list moves without any data file changing (a subagent
 	// finishing writes nothing), so its id:status pairs belong in the fingerprint,
 	// or the pane keeps showing a finished agent as running.
+	let agentRunning = false;
 	const agentSig = await Promise.resolve()
 		.then(() => $.agent.list())
 		// A running subagent's transcript tail moves with no data file: re-bucket every 5 s while any runs.
-		.then(async (rows) => `${rows.map((a) => `${a.id}:${a.status}`).join(',')}${rows.some((a) => a.status === 'running') ? `@${Math.floor((await $.clock.now()) / MUX_MS)}` : ''}`)
+		.then(async (rows) => (agentRunning = rows.some((a) => a.status === 'running'), `${rows.map((a) => `${a.id}:${a.status}`).join(',')}${rows.some((a) => a.status === 'running') ? `@${Math.floor((await $.clock.now()) / MUX_MS)}` : ''}`))
 		.catch(() => '-');
 	// Usage, header phase and header misses move on session.measure / turn.complete
 	// with no file change; they feed the snapshot, so they belong here too.
@@ -59,23 +89,23 @@ async function dataFingerprint($: EngineInterface): Promise<string> {
 	const orch = await read($, orchState);
 	const acts = Object.entries(orch.activity);
 	const orchSig = `${orch.comms.length}:${acts.map(([k, a]) => `${k}=${a.tool ?? ''}${a.toolCount}${a.mood}`).join(',')}:${acts.some(([, a]) => a.tool !== null) ? Math.floor((await $.clock.now()) / 5000) : 0}`;
-	const root = (await read($, snapshotState))?.root;
+	busy = agentRunning || acts.some(([, a]) => a.tool !== null);
+	const snap = await read($, snapshotState);
+	const root = snap?.root;
 	if (root === undefined || root === null || root === '') return `no-root|${agentSig}|${liveSig}`;
 	const base = `${root.replace(/\/+$/, '')}/.atlas/.run`;
-	const parts = [agentSig, liveSig, orchSig, await statSig($, `${base}/todos.json`), await statSig($, `${base}/channels.json`), await statSig($, `${base}/findings.json`)];
-	try {
-		const files = await $.fs.list(`${base}/board`);
-		for (const file of files) parts.push(`${file.name}=${await statSig($, `${base}/board/${file.name}`)}`);
-	} catch {
-		parts.push('no-board');
-	}
-	parts.push(await crewSig(engineFs($), root));
+	const stats = [`${base}/todos.json`, `${base}/channels.json`, `${base}/findings.json`, `${base}/board`]; // the board dir moves when a new owner's file appears
+	// Only the board files the snapshot can show (a note by anyone else is picked up by the 5 s bucket below while work runs), never every file on disk.
+	for (const owner of boardOwners(snap ?? {})) stats.push(`${base}/board/${owner}.jsonl`);
+	const parts = [agentSig, liveSig, orchSig, ...(await Promise.all(stats.map((p) => statSig($, p))))];
+	if (busy || S.hostWorking) parts.push(`w${Math.floor((await $.clock.now()) / MUX_MS)}`);
+	parts.push(await crewSig(engineFs($), root, crewDone, await $.clock.now()));
 	return parts.join('|');
 }
 
 /** `atlas_wt.py status` rows, re-run at most every WT_MS (git is the slow part). */
 async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
-	if (now - S.wtAt >= WT_MS) {
+	if (now - S.wtAt >= WT_MS && !(await idleSkip($, 'wt', IDLE_TICK_MS))) {
 		S.wtAt = now;
 		const root = (await read($, snapshotState))?.root;
 		const out = root ? await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_wt.py`, '--root', root, 'status']).catch(() => undefined) : undefined;
@@ -188,15 +218,12 @@ export async function dockTick($: EngineInterface): Promise<void> {
 	void noteUsage($, 'mod.open.dock');
 }
 
-/** Signature of what atlas_gates.py reads: the board files under <root>/.atlas/.run and the gate DB (ATLAS_DB, else
- * $ATLAS_HOME/atlas.db, else ~/.atlas/atlas.db) with its WAL, where the hooks record every check. */
+/** Signature of the files that mark the gates stale: todos.json and findings.json under <root>/.atlas/.run. */
 async function gatesSigOf($: EngineInterface, root: string): Promise<string> {
 	const run = `${root.replace(/\/+$/, '')}/.atlas/.run`;
-	// $.env.get takes a literal name (the engine lists the variables a module reads), so each read is spelled out.
-	const home = (await $.env.get('ATLAS_HOME').catch(() => undefined)) || undefined;
-	const user = (await $.env.get('HOME').catch(() => undefined)) || undefined;
-	const db = (await $.env.get('ATLAS_DB').catch(() => undefined)) || (home ? `${home}/atlas.db` : user ? `${user}/.atlas/atlas.db` : '');
-	const paths = [`${run}/todos.json`, `${run}/findings.json`, ...(db ? [db, `${db}-wal`] : [])];
+	// The gate DB and its WAL are not inputs here: a hook writes the WAL on every tool call, so watching it re-ran python at the throttle rate for as long as the session lived.
+	// The DB-backed checks refresh at Stop / turn.complete and on the backstop while a turn runs (hooks.ts).
+	const paths = [`${run}/todos.json`, `${run}/findings.json`];
 	return (await Promise.all(paths.map((p) => statSig($, p)))).join('|');
 }
 
@@ -251,16 +278,19 @@ async function gatesPoll($: EngineInterface): Promise<void> {
 export async function rebuildTick($: EngineInterface): Promise<void> {
 	await dockTick($);
 	if (S.builder === null) return;
+	if (await idleSkip($, 'poll', IDLE_POLL_MS)) return;
 	await gatesPoll($).catch(() => undefined);
 	const fingerprint = await dataFingerprint($);
 	if (fingerprint === lastFingerprint && (await read($, snapshotState)) !== null) return;
 	lastFingerprint = fingerprint;
+	movedAt = await $.clock.now();
 	await rebuild($);
 }
 
 /** 5 s tick: herdr pane status, only once the pane was opened. */
 export async function herdrTick($: EngineInterface): Promise<void> {
 	if (!(await read($, paneOpenedState)) || (await read($, snapshotState)) === null) return;
+	if (await idleSkip($, 'herdr', IDLE_TICK_MS)) return;
 	const out = await $.process
 		.run(['python3', `${$.plugin.root}/scripts/atlas_herdr.py`, 'status'])
 		.catch(() => undefined);
@@ -275,6 +305,7 @@ export async function muxTick($: EngineInterface): Promise<void> {
 	const snap = await read($, snapshotState);
 	const root = rootOf(snap);
 	if (root === '' || snap === null) return;
+	if (await idleSkip($, 'mux', IDLE_TICK_MS)) return;
 	// No early return on zero runs: a reaped team (record archived, no board channel) must clear its lanes, not freeze them.
 	const { runs, own } = await muxRuns($, root, snap);
 	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r.id)));

@@ -108,6 +108,11 @@ export class NoteReader {
 	}
 }
 
+/** Board files (`<owner>.jsonl`) the snapshot can show: owners of the channel's members, squad and notes. Every other board file is history. */
+export function boardOwners(snap: { members?: { name: string }[]; squad?: { name: string }[]; notes?: { owner: string }[] }): Set<string> {
+	return new Set([...(snap.members ?? []).map((m) => m.name), ...(snap.squad ?? []).map((a) => a.name), ...(snap.notes ?? []).map((n) => n.owner)].filter(Boolean));
+}
+
 /**
  * Roster for the first candidate channel present in <root>/.atlas/.run/channels.json
  * (`channels[name].members[]`); `{channel: null, members: []}` when nothing matches or the file is unreadable.

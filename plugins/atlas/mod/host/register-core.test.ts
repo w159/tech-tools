@@ -164,8 +164,9 @@ describe('coreTick', () => {
   test('board reports with one timestamp keep a stable order whatever the listing order', async () => {
     const s = await session(false);
     const note = (owner: string) => JSON.stringify({ kind: 'report', owner, text: 'STATUS: DONE', ts: 100 });
-    s.files[`${RUN}/board/z.jsonl`] = note('implementer-2');
-    s.files[`${RUN}/board/a.jsonl`] = note('implementer-1a');
+    s.files[`${RUN}/board/implementer-2.jsonl`] = note('implementer-2'); // a board file is `<owner>.jsonl`; only the owners the snapshot shows are read
+    s.files[`${RUN}/board/implementer-1a.jsonl`] = note('implementer-1a');
+    await s.state.set({ plugin: 'atlas', key: 'snapshot' }, { root: ROOT, todos: [], sessionId: 'abcdef1234', channel: 'proj@main', members: [{ name: 'implementer-2' }, { name: 'implementer-1a' }] });
     await coreTick(s.$);
     const core = (await s.state.get({ plugin: 'atlas', key: 'core' })).value as { claims: { owner: string }[] };
     expect(core.claims.map((c) => c.owner)).toEqual(['implementer-1a', 'implementer-2']);
