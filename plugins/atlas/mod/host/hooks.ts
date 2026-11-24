@@ -35,7 +35,7 @@ import { hoverStyle } from '../input/clickable';
 import type { LiveSnapshot } from '../orchestra-types';
 import { BOARD_ID, engineFs, flipsOf, PANE_DOCK, PANE_ID, reportFailure, rootOf, S, shouldDockAsked, shouldDockRest, shownFailures, toastUnplaced } from './atoms';
 import { folderOf, headerTallyOf } from './agents';
-import { GATES_MS, gitBranch, HERDR_MS, herdrTick, MUX_MS, muxTick, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
+import { GATES_MS, gitBranch, HERDR_MS, herdrTick, IDLE_TICK_MS, idleSkip, MUX_MS, muxTick, resetPollIdle, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
 import { buildCore, coreTick, gateGroups, leadMessages, resetCore } from './core-tick';
 import { atlasSlot, bandHandlers, effectiveRows, healthInOf, publishHudState, readStatuslineRows, sidebarHandlers } from './handlers';
 import { armFrameLoop, easeTick, ensureFrameLoop, heldFinal, heldWork, hostTurnRunning, isWorkingNow, motionTick, originOf, runBandModel, STOP_SETTLE_MS, syncHistory, TICK_MS, verdictFast } from './frame';
@@ -127,6 +127,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		S.muxFirstSeen = {};
 		S.muxCalls = {};
 		resetCore();
+		resetPollIdle();
 		await update($, headerTallyState, () => ({ ok: 0, total: 0 }));
 		forgetDrawnHeaders(); // a new session starts its own tally
 		const envRoot = await $.env.get('ATLAS_PROJECT_ROOT');
@@ -148,10 +149,10 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				});
 				$.clock.every(MUX_MS, () => {
 					void muxTick($);
-					void coreTick($);
+					void idleSkip($, 'core', IDLE_TICK_MS).then((skip) => (skip ? undefined : coreTick($)));
 				});
 				$.clock.every(GATES_MS, () => {
-					void runGates($);
+					if (S.hostWorking) void runGates($); // the backstop runs only while a turn does; Stop / turn.complete mark the gates stale themselves
 				});
 			}
 			void runGates($);
@@ -258,6 +259,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('classic.Stop', async ($, e, next) => {
 		const at = await hookStamp($);
 		noteHook('classic.Stop', at);
+		S.gatesDirty = true; // the DB-backed checks changed during the turn: the next poll re-runs the gates
 		await hookDone($, 'classic.Stop', at);
 		const r = await next(e);
 		if (!(r && typeof (r as { block?: unknown }).block === 'string') && (await read($, isModOn))) {
@@ -309,7 +311,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	on('turn.complete', { reason: 'answer' }, async ($, e, next) => {
 		let at: number | undefined;
 		try {
-			if (e.agentId === undefined) noteHook('turn.complete', (at = await hookStamp($)));
+			if (e.agentId === undefined) { noteHook('turn.complete', (at = await hookStamp($))); S.gatesDirty = true; }
 			if (!(await read($, isModOn))) return next(e);
 			for (const msg of pendingDrift.splice(0)) $.ui.log(msg, { to: 'debug' });
 			if (e.agentId === undefined) {

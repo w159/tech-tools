@@ -109,20 +109,26 @@ describe('step 2: the snapshot is current one poll after a todos.json write', ()
 });
 
 describe('step 3: a gate file change re-runs the gates on the next poll', () => {
-  test('findings.json, todos.json and the gate DB each invalidate the gates; a quiet poll does not', async () => {
+  test('findings.json and todos.json each invalidate the gates; the gate DB and its WAL do not; a quiet poll does not', async () => {
     const s = stubEngine();
     await boot(s);
     await poll(s); // first sight records the signature
     const base = s.gateRuns.length;
     for (let i = 0; i < 4; i++) await poll(s); // 2 s of quiet polls (inside the gap)
     expect(s.gateRuns.length).toBe(base);
-    for (const [path, text] of [[FINDINGS, '[{"id":"a"}]'], [TODOS, items(2)], [DB, 'db1-longer']] as const) {
+    for (const [path, text] of [[FINDINGS, '[{"id":"a"}]'], [TODOS, items(2)]] as const) {
       s.write(path, text);
       await poll(s);
       s.advance(5000); // past the 5 s minimum gap between two runs
       await poll(s);
     }
-    expect(s.gateRuns.length - base).toBe(3);
+    expect(s.gateRuns.length - base).toBe(2);
+    // A hook writes the DB on every tool call: that must not re-run python at the throttle rate.
+    s.write(DB, 'db1-longer');
+    await poll(s);
+    s.advance(5000);
+    await poll(s);
+    expect(s.gateRuns.length - base).toBe(2);
   });
 
   test('a new Stop verdict runs the gates on that very poll, inside the minimum gap (critique 9: BLOCKED lagged Stop by 3.5 s)', async () => {
@@ -152,10 +158,10 @@ describe('step 3: a gate file change re-runs the gates on the next poll', () => 
     s.advance(5000);
     await poll(s);
     const base = s.gateRuns.length;
-    s.write(DB, 'db-a');
+    s.write(FINDINGS, '[{"id":"a"}]');
     await poll(s);
     expect(s.gateRuns.length - base).toBe(1); // the change is seen on this very poll
-    s.write(DB, 'db-bb');
+    s.write(FINDINGS, '[{"id":"a"},{"id":"b"}]');
     await poll(s);
     expect(s.gateRuns.length - base).toBe(1); // inside the gap: held, not dropped
     s.advance(5000);

@@ -1,6 +1,7 @@
 // host/core-tick.ts: the Atlas core poll: reads, core model, toasts.
 // Split out of mod/register.ts (plan docs/plans/2026-11-18_atlas-mod-reorg-plan.md section 7); no behavior change.
 import { atom, type EngineInterface, read, update } from 'claude-code';
+import type { AtlasSnapshot } from '../contract';
 import type { GateGroup } from '../view/panel/pane/sidebar';
 import { planBasis } from '../data/todos';
 import { headerGroup, openGateCount } from './gates';
@@ -9,6 +10,7 @@ import { drawnHeaderTally } from '../view/transcript/restyle';
 import { EMPTY_ORCH } from '../data/orchestration';
 import { reportFailure, S } from './atoms';
 import { noteRoutesRead } from '../data/readinfo';
+import { boardOwners } from '../data/channels';
 
 const isModOn = atom({ plugin: 'atlas', key: 'isModOn' } as const, true); // ATLAS_MOD kill switch, set at session.start
 const isInteractive = atom({ plugin: 'atlas', key: 'isInteractive' } as const, false);
@@ -100,6 +102,14 @@ export async function leadMessages($: EngineInterface): Promise<{ role: string; 
 	}
 }
 
+/** `report` notes of the board files the snapshot can show (`<owner>.jsonl` of its members, squad, notes and this session's dispatches); the rest of board/ is history. */
+async function boardReports($: EngineInterface, base: string, snap: AtlasSnapshot): Promise<ReportNote[]> {
+	const owners = boardOwners(snap);
+	for (const name of Object.keys((await read($, orchState)).meta)) owners.add(name);
+	const boards = await namesIn($, `${base}/board`, (n) => n.endsWith('.jsonl') && owners.has(n.slice(0, -'.jsonl'.length)));
+	return (await Promise.all(boards.map(async (n) => reportsOf(await readGrown($, `${base}/board/${n}`))))).flat();
+}
+
 /** The core model from the run scratch under the snapshot root; null without a board root. Reads only. */
 export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	const snap = await read($, snapshotState);
@@ -112,8 +122,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	const logNames = await namesIn($, `${base}/logs`, (n) => n.endsWith('.log') && n !== 'atlas_mux.log');
 	const logs: Record<string, string> = {};
 	for (const n of logNames) logs[n.replace(/\.log$/, '')] = await readGrown($, `${base}/logs/${n}`);
-	const boards = await namesIn($, `${base}/board`, (n) => n.endsWith('.jsonl'));
-	const reports = (await Promise.all(boards.map(async (n) => reportsOf(await readGrown($, `${base}/board/${n}`))))).flat();
+	const reports = await boardReports($, base, snap);
 	const findings = await readCached($, `${base}/findings.json`);
 	coreFindingsOk = findings !== null && (findings.trim() === '' || parses(findings)); // a partial write keeps the seen set
 	const matrixRead = await readCached($, `${$.plugin.root}/contracts/scope-matrix.json`);
