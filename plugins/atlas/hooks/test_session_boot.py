@@ -1771,7 +1771,13 @@ class GitHygieneBootTest(unittest.TestCase):
     def test_missing_stamp_spawns_a_detached_local_clean(self):
         line, popen = self._boot()
         self.assertIsNone(line)
-        popen.assert_called_once()
+        self.assertEqual(popen.call_count, 2)
+        reap = popen.call_args_list[0]
+        self.assertEqual(reap.args[0][1:], [reap.args[0][1], "reap-stale", "--root", self.repo])
+        self.assertTrue(reap.args[0][1].endswith(os.path.join("scripts", "atlas_mux.py")))
+        self.assertTrue(reap.kwargs["start_new_session"])
+        for stream in ("stdin", "stdout", "stderr"):
+            self.assertEqual(reap.kwargs[stream], subprocess.DEVNULL)
         argv = popen.call_args.args[0]
         self.assertEqual(argv[0], sys.executable)
         self.assertTrue(argv[1].endswith(os.path.join("scripts", "atlas_git.py")))
@@ -1787,14 +1793,14 @@ class GitHygieneBootTest(unittest.TestCase):
 
     def test_stale_stamp_spawns_fresh_stamp_does_not(self):
         self._stamp(at=int(time.time()) - 7 * 3600)
-        self.assertEqual(self._boot()[1].call_count, 1)
+        self.assertEqual(self._boot()[1].call_count, 2)  # reap-stale + clean
         self._stamp(at=int(time.time()) - 3600)
         self.assertEqual(self._boot()[1].call_count, 0)
 
     def test_stale_threshold_follows_the_policy(self):
         self._stamp(at=int(time.time()) - 3600)
         with mock.patch.dict(os.environ, {"ATLAS_GIT_AUTO_CLEAN_HOURS": "1"}):
-            self.assertEqual(self._boot()[1].call_count, 1)
+            self.assertEqual(self._boot()[1].call_count, 2)
 
     def test_kill_switches_and_non_repos_never_spawn(self):
         for env in (
@@ -1835,7 +1841,7 @@ class GitHygieneBootTest(unittest.TestCase):
             fh.write("{nope")
         line, popen = self._boot()
         self.assertIsNone(line)
-        self.assertEqual(popen.call_count, 1)
+        self.assertEqual(popen.call_count, 2)
 
     def test_clean_writes_the_counts_boot_reads(self):
         import atlas_git
