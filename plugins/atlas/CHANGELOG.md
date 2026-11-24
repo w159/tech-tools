@@ -1,5 +1,11 @@
 # Changelog
 
+## 17.41.0 - 2026-11-24
+
+- Added, `skills/atlas-taste/` (27 skills): a project-driven design-system skill that ships no palette, font, icon set, scale or voice. `init` records the project's brand and tokens in `docs/standards/design-system.md` and asks for anything missing; `component` extracts repeated UI into shared components with a `docs/standards/` entry each; `scripts/taste_check.py` (stdlib, tests in `scripts/test_taste_check.py`) flags off-token colors, off-scale spacing and radius, and a second icon library; a frontmatter Stop hook (`taste_check.py --gate`) blocks finishing while armed, at most 5 rounds; `scripts/taste_browser.mjs` exits 3 unless `--allow-browser` is passed after the user agrees. Method adapted from MIT taste-skill (commit 6c0b5c7), no code copied. Changed, `atlas-frontend`: the fixed "shadcn/ui, Tailwind, Radix only" rule is replaced by the project's own design system; its references and `templates/component.seed.tsx` no longer prescribe Tailwind/shadcn classes, breakpoints, motion timings, folder layout or copy tone (accessibility minimums and behavior thresholds stay).
+- Added, project standards (`docs/standards/*.md`): one living doc per cross-cutting convention (a UI pattern, naming, an API shape) with `applies_to:` globs in its frontmatter, so it works for any stack. New PreToolUse hook `hooks/standards_nudge.py` (Edit, Write, MultiEdit, NotebookEdit, ctx_patch) injects a matching standard's `## Rule` section (capped at 800 chars, wrapped in the untrusted-text fence because teammates and agents write those files) before the edit, once per session per agent, so subagents get their own copy; it never denies and does nothing without `docs/standards/`. Tests: `hooks/test_standards_nudge.py` (12). docs-curator now creates or updates a standard in place when a verified change or a user correction sets a cross-file rule (bumps `last_updated`, appends to its Decision log); docs-auditor marks a standard `stale` when a glob matches no file or its `reference` is gone, and reports `missing` for a convention seen in 3+ files with no standard; the atlas-review standards persona reads matching standards; `atlas-setup` scaffolds `docs/standards/README.md` with the template; `docs-ssot.md` lists the folder, its owner, and adds standards to docs-current.
+- Output style: "Deliver the literal ask" now says to answer a question in the state line in the form asked (a count, a name, yes or no); "Scope is what was named" now says a question gets an answer, not edits. Applied from atlas-doctor findings 27525, 26520, 26519, 26173 (literal_ask_delivered, baseline 27-62% per project) and 26221, 26176 (scope_drift, 31-58%); remeasure after 5 runs. Style stays under its 7000-character budget (6969) by trimming three repeated phrases.
+
 ## 17.40.0 - 2026-11-24
 
 ### Changed
@@ -529,7 +535,7 @@ Round 4 answers the outside critics' list of gaps (audit: [2026-11-15_atlas-roun
 
 ## 17.23.0 - 2026-11-15
 
-The mods show a live health summary when idle, every control looks and acts clickable, and no key hints are printed. Before this, an idle session drew an empty-looking band (`todo - | no agents`), an empty side panel and a row of `r: status  t: team ...` keys that do not work in Claude Code. Evidence: `docs/audits/2026-11-14-idle-health.md`.
+The mods show a live health summary when idle, every control looks and acts clickable, and no key hints are printed. Before this, an idle session drew an empty-looking band (`todo - | no agents`), an empty side panel and a row of `r: status  t: team ...` keys that do not work in Claude Code. Evidence: `docs/audits/2026-11-14_idle-health.md`.
 
 ### Idle health
 
@@ -599,7 +605,7 @@ Round 3: decision models in routing and verification, Ollama as a worker provide
 
 ## 17.21.1 - 2026-11-14
 
-Fix: the Atlas hooks module did not load in 17.19.0, 17.20.0 and 17.21.0, so no mod surface drew (no band, TODO, SUBAGENTS or side panel). Startup printed `atlas: hooks module did not load: .../mod/usage.ts ...`. Evidence: `docs/audits/2026-11-14-mod-load.md`.
+Fix: the Atlas hooks module did not load in 17.19.0, 17.20.0 and 17.21.0, so no mod surface drew (no band, TODO, SUBAGENTS or side panel). Startup printed `atlas: hooks module did not load: .../mod/usage.ts ...`. Evidence: `docs/audits/2026-11-14_mod-load.md`.
 
 - Cause: `mod/usage.ts` (added in 17.19.0) broke two host loader rules. `$.env.get(name)` passed a variable name where the host needs a quoted literal at each call site, and `typeof $.clock.after` read a `$` member as a value instead of calling it.
 - Fix: `envGet` now spells every variable out as a literal `$.env.get('NAME')` call, and the `typeof $.clock.after` guard is gone, so `$.clock.after(...)` is only called. No other behavior changed.
@@ -740,7 +746,7 @@ Two regressions reported on 17.15.0, both from the wave 31 and 32 slot, fixed at
 
 - Empty rows between the mod and the prompt: `composeFixed` in `mod/slot.ts` padded the slot to the host's whole budget (half the screen less the rows below it) with blank rows under the HUD, from commit 0a2fba13 (wave 31), and made the slot the whole budget in wave 32. At 150x45 a three-row plan left 8 blank rows under the mod; in the inline renderer 29. The slot is now exactly the rows drawn: the band row, then the HUD rows, no pad and no lead (`pad` and `lead` stay 0). The host anchors the slot above the prompt, so a shorter slot is a band that sits lower, not a hole. Tests: `mod/gap-statusline.test.ts`; `wave30-hud.test.ts` and `wave32-hud.test.ts` no longer pin a budget-tall slot or a band that keeps one screen row.
 - Status line shrunk to one row: the mod published `starved` in `.atlas/.run/hud-state.json` whenever the HUD wanted more rows than the slot gave it, and `atlas_statusline.py` then printed one row instead of its grid. The 17.15.0 HUD (SUBAGENTS table, fixed TODO columns) wants 13 to 15 rows with three to five agents, so that happened in ordinary runs. `starved` is now always `false` (`publishHudState`, `mod/register.ts`); a plan longer than the slot folds inside the HUD. `hudStarvedAtFullLine` is removed. `atlas_statusline.py` is unchanged and still honours the flag if an older mod writes it.
-- Evidence: `docs/audits/2026-11-13-gap-statusline.md` (live captures before and after at 150x45 and 110x40, and the bisect).
+- Evidence: `docs/audits/2026-11-13_gap-statusline.md` (live captures before and after at 150x45 and 110x40, and the bisect).
 
 ## 17.15.0 - 2026-11-13
 

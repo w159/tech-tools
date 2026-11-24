@@ -13,12 +13,12 @@ The authoritative spec is
 plugins/atlas/skills/atlas-setup/references/mastery-framework.md (moved here
 when atlas-olympus was merged into atlas-setup in 5.0.0).
 
-As of atlas 17.37.0 (2026-11-24) the plugin ships 26 skills under
-plugins/atlas/skills/. Twenty-one show in the / menu: atlas-audit,
+As of atlas 17.41.0 (2026-11-24) the plugin ships 27 skills under
+plugins/atlas/skills/. Twenty-two show in the / menu: atlas-audit,
 atlas-brainstorm, atlas-debug, atlas-doctor, atlas-frontend, atlas-handoff,
 atlas-orchestrate, atlas-plan, atlas-prompt, atlas-prototype, atlas-readme,
 atlas-refactor, atlas-review, atlas-run-watch, atlas-security, atlas-setup,
-atlas-ship, atlas-status, atlas-testing, atlas-ux-test, atlas-wiki. Five are
+atlas-ship, atlas-status, atlas-taste, atlas-testing, atlas-ux-test, atlas-wiki. Five are
 model-only (`user-invocable: false`): atlas-bakeoff, atlas-compound,
 atlas-explain, atlas-harden, atlas-worktree. The 17.37.0 consolidation folded
 fourteen skills into modes of others (see docs/CHANGELOG.md).

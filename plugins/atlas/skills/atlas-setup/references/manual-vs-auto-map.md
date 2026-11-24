@@ -1,6 +1,6 @@
 # Manual vs Auto Map
 
-The inventory of the 26 atlas skills. atlas-setup uses this table to tell the user what just came online.
+The inventory of the 27 atlas skills. atlas-setup uses this table to tell the user what just came online.
 
 ## Trigger model
 
@@ -11,7 +11,7 @@ Two frontmatter flags decide who can start a skill:
 
 Every other skill is both in the menu and model-invocable. Many skills carry several modes (for example atlas-orchestrate: autopilot, crew, loop). The first argument or the ask selects the mode, and each SKILL.md names its modes near the top.
 
-## Menu skills (21)
+## Menu skills (22)
 
 | Skill | Trigger | Modes folded in |
 |---|---|---|
@@ -33,6 +33,7 @@ Every other skill is both in the menu and model-invocable. Many skills carry sev
 | atlas-setup | MANUAL | onboard, install, repair, gitignore |
 | atlas-ship | MANUAL | commit, push, PR |
 | atlas-status | auto | status rollup, announce, pulse, live TUI |
+| atlas-taste | auto | project design system: tokens, brand, icons, shared components, consistency check |
 | atlas-testing | auto | test planning, any language, Xcode simulator |
 | atlas-ux-test | auto | persona swarm, dogfood (diff and smoke) |
 | atlas-wiki | auto | docs/wiki diagrams |
@@ -43,7 +44,7 @@ atlas-bakeoff, atlas-compound, atlas-explain, atlas-harden, atlas-worktree. Hidd
 
 ## Count check
 
-- Atlas skills: 26 (2 manual, 5 model-only, 19 menu and auto)
+- Atlas skills: 27 (2 manual, 5 model-only, 20 menu and auto)
 - Manual skills: atlas-setup, atlas-ship
 
 ## Armada (separate plugin)

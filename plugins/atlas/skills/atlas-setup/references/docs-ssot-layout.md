@@ -21,6 +21,8 @@ docs/
   specs/                  requirements and specifications
   features/               per-feature specs-as-built
   lessons/                durable lessons, gotchas, postmortems
+  standards/              living cross-cutting conventions; `applies_to` globs in
+                           frontmatter, injected on edit by the standards_nudge hook
   wiki/                   rendered graphify diagrams + understand-anything wiki
   api/                    PROJECT-ADAPTIVE: only when an API is detected
                            (OpenAPI file, routes/controllers dir, web framework)
@@ -43,9 +45,9 @@ docs/
 ```
 
 Subfolders under `docs/` are project-adaptive: a project with no HTTP API
-has no `docs/api/`; a project with one does. `docs/standards/`,
-`docs/glossary.md`, and `docs/reference/` are created on demand by the
-curator, not by the scaffold. `.atlas/findings/` is the dated, durable
+has no `docs/api/`; a project with one does. `docs/glossary.md` and
+`docs/reference/` are created on demand by the curator, not by the scaffold.
+`docs/standards/` is scaffolded with a `README.md` holding the standard template. `.atlas/findings/` is the dated, durable
 learning ledger agents consult before non-trivial work; `.atlas/decisions/`
 is where atlas's own dated operating decisions land, including the
 tooling-activation record install mode writes (`references/install.md`).

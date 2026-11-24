@@ -233,7 +233,7 @@ Shipped in `plugins/atlas/CHANGELOG.md` (17.25.0); audit: `docs/audits/2026-11-1
 
 ### Atlas 17.23.0 follow-ups (added 2026-11-15)
 
-Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14-idle-health.md`.
+Shipped in `plugins/atlas/CHANGELOG.md` (17.23.0); audit: `docs/audits/2026-11-14_idle-health.md`.
 
 - [planned] The `ATLAS` pill on the band is kept as it was; whether it should say more at idle is undecided.
 - [planned] Host-drawn, not changeable from the plugin: tmux PgUp/PgDn scrolling and the weekly-limit line under the band.

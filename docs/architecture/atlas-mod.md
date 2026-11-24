@@ -263,7 +263,7 @@ this section wins. Paths are under `plugins/atlas/`.
 
 ## Idle health and clickable controls (17.23.0)
 
-Evidence: `docs/audits/2026-11-14-idle-health.md`. Paths are under `plugins/atlas/`.
+Evidence: `docs/audits/2026-11-14_idle-health.md`. Paths are under `plugins/atlas/`.
 
 - Idle health model: `mod/data/idle-health.ts` builds one `Health` value (gates, uptime, context, hook stats, branch, version) that the band, the HEALTH card and the side panel status view all read, so a fact is drawn once per surface. The band at idle is `◖ ◆ ATLAS ◗ ○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health`; at 110 columns with no pane a second row adds `last run none · 1 event`; with the side panel open the band is `... ○ idle ▌ ▸ health` and drops its tab chips because the panel shows them.
 - Context figure: `session.measure` gives `e.context.tokens` and `e.context.percent` (and `window`); these are the last response's input tokens over the model window, not a session total. The card says so.

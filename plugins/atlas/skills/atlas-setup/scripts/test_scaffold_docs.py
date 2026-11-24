@@ -16,6 +16,7 @@ DOCS_BASE_SUBFOLDERS = (
     "specs",
     "features",
     "lessons",
+    "standards",
     "wiki",
 )
 

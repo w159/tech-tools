@@ -1,5 +1,11 @@
 # Changelog
 
+## atlas 17.41.0 -- each project's own design system (atlas-taste) and project standards
+
+- Added, `atlas-taste` skill (27 skills): builds and enforces each project's own design system (init from existing tokens and brand, asking the user for missing decisions; shared components recorded as `docs/standards/`; static `taste_check.py`; Stop finish gate while armed; browser audit only with `--allow-browser` after asking). Changed, `atlas-frontend`: follows the project's `design-system.md` instead of a fixed shadcn/Tailwind/Radix rule. Design: `docs/architecture/atlas-taste.md`.
+- Added, atlas project standards: `docs/standards/*.md` docs with `applies_to:` globs; the new `standards_nudge.py` PreToolUse hook injects a matching standard's Rule section before an edit (once per session per agent, never denies); docs-curator keeps standards current, docs-auditor and the atlas-review standards persona check them, `atlas-setup` scaffolds the folder. Design: `docs/architecture/project-standards.md`. Evidence: `.atlas/evidence/2026-11-24_project-standards.txt`.
+- Output style: "Deliver the literal ask" now says to answer a question in the state line in the form asked (a count, a name, yes or no); "Scope is what was named" now says a question gets an answer, not edits. Applied from atlas-doctor findings 27525, 26520, 26519, 26173 (literal_ask_delivered, baseline 27-62% per project) and 26221, 26176 (scope_drift, 31-58%); remeasure after 5 runs. Style stays under its 7000-character budget (6969) by trimming three repeated phrases.
+
 ## atlas 17.40.0 -- at rest atlas does nothing; while working it checks only what is in use
 
 Measured (`.atlas/evidence/2026-11-24_battery-rest-measure.txt`, 120 s idle with this repo's 1,284 board files): atlas on 0.88 CPU-seconds, atlas mod off 0.81, and no extra child process. For comparison, 17.38.0 used 56.1 CPU-seconds per minute.
@@ -427,7 +433,7 @@ Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries b
 
 ## atlas 17.23.0 - 2026-11-15
 
-- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets health rows (hooks, gates, session, last run), a `recent` hook-event list and a pinned `atlas <version> · hooks loaded` footer. Every control is a visible chip or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14-idle-health.md`.
+- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets health rows (hooks, gates, session, last run), a `recent` hook-event list and a pinned `atlas <version> · hooks loaded` footer. Every control is a visible chip or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14_idle-health.md`.
 - Moved from ROADMAP (17.23.0, 2026-11-15): idle band, HUD and side panel show a live health summary (gates, uptime, context, last run, recent hook events) with a clickable `▸ health` expand and a HEALTH card; verified with real SGR mouse clicks in tmux on Claude Code 2.1.325.
 - Moved from ROADMAP (17.23.0, 2026-11-15): no empty placeholder boxes at idle: `no plan yet · 0 agents`, `no workers yet`, dim one-separator phase chain.
 - Moved from ROADMAP (17.23.0, 2026-11-15): the side panel middle is no longer empty on a fresh session (commit cad6fe65): `● waiting for first prompt`, a `checks` section and a context gauge fill it; blank rows above the footer at 150 by 45 went from 19 to 10.
@@ -441,7 +447,7 @@ Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries b
 
 ## atlas 17.22.0 - 2026-11-14
 
-- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets a `● waiting for first prompt` line, health rows (hooks, gates, session, branch, last run), a `recent` list in words (`session started`, `prompt sent`, `tool call Bash`, `turn finished · 3 events`; same-second events collapse, at most three), a `checks` section with one row per gate, a context gauge (`context ▕█░░░░░░░░░▏ 6%`) once the host has measured context, and a pinned `atlas <version> · hooks loaded` footer; the run duration is said once (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`) and an idle 150 by 45 panel has 10 blank rows above the footer instead of 19. Every control is a visible chip (one cell apart, no underline row) or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14-idle-health.md`.
+- atlas 17.23.0: the mods show a live health summary when idle. The band reads `○ idle ▌ ● gates 4/4 ▌ up 0:09 ▌ ▸ health` and `▸ health` opens a HEALTH card (gate state and pass counts, session tokens and window); the side panel status view gets a `● waiting for first prompt` line, health rows (hooks, gates, session, branch, last run), a `recent` list in words (`session started`, `prompt sent`, `tool call Bash`, `turn finished · 3 events`; same-second events collapse, at most three), a `checks` section with one row per gate, a context gauge (`context ▕█░░░░░░░░░▏ 6%`) once the host has measured context, and a pinned `atlas <version> · hooks loaded` footer; the run duration is said once (`phase ◒ working 0:01`, then `last run 0:05 · ended 12s ago`) and an idle 150 by 45 panel has 10 blank rows above the footer instead of 19. Every control is a visible chip (one cell apart, no underline row) or `▸`/`▾` toggle; the printed key hints (`r: status ... ctrl+x tab`, `Enter sends`) and the dead tab hotkeys are gone. Empty states read `no plan yet · 0 agents` and `no workers yet` instead of blank boxes. The context figure is the last response's input tokens over the model window (host `session.measure`), not a session total. Real SGR mouse clicks in tmux verified. Audit: `docs/audits/2026-11-14_idle-health.md`.
 - Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
 
 ## marketplace 5.27.0 - 2026-11-14
@@ -450,7 +456,7 @@ Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries b
 
 ## atlas 17.21.1 - 2026-11-14
 
-- atlas 17.21.1: the hooks module loads again. In 17.19.0, 17.20.0 and 17.21.0 `mod/usage.ts` broke two host loader rules (`$.env.get` with a variable name; `typeof $.clock.after` reading a `$` member as a value), so Claude Code refused the module and no mod surface drew. Fixed in usage.ts, with two new static checks (rules 5 and 6 in `host-load-rules.test.ts`) over every mod and omp source, and a clean `tsc -p mod/tsconfig.json`. Audit: `docs/audits/2026-11-14-mod-load.md`.
+- atlas 17.21.1: the hooks module loads again. In 17.19.0, 17.20.0 and 17.21.0 `mod/usage.ts` broke two host loader rules (`$.env.get` with a variable name; `typeof $.clock.after` reading a `$` member as a value), so Claude Code refused the module and no mod surface drew. Fixed in usage.ts, with two new static checks (rules 5 and 6 in `host-load-rules.test.ts`) over every mod and omp source, and a clean `tsc -p mod/tsconfig.json`. Audit: `docs/audits/2026-11-14_mod-load.md`.
 - Update: `claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools`
 
 ## marketplace 5.26.1 - 2026-11-14
@@ -501,7 +507,7 @@ Version bump for the audit fixes; the "17.28.0 (unreleased additions)" entries b
 
 ## atlas 17.15.1 - 2026-11-13
 
-- atlas 17.15.1: the mod slot is exactly the rows drawn (no blank rows between the mod and the prompt) and the mod no longer asks the status line to shrink to one row. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-13-gap-statusline.md](audits/2026-11-13-gap-statusline.md).
+- atlas 17.15.1: the mod slot is exactly the rows drawn (no blank rows between the mod and the prompt) and the mod no longer asks the status line to shrink to one row. See [plugins/atlas/CHANGELOG.md](../plugins/atlas/CHANGELOG.md) and [docs/audits/2026-11-13_gap-statusline.md](audits/2026-11-13_gap-statusline.md).
 
 ## marketplace 5.20.1 - 2026-11-13
 

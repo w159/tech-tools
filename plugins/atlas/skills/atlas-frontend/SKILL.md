@@ -1,7 +1,7 @@
 ---
 name: atlas-frontend
-description: "Builds, refactors or polishes UI on shadcn/ui, Tailwind and Radix, verified in a browser. Use when creating or reworking screens or components, polishing the UI, or building async components (build, component or polish mode)."
-when_to_use: "build a screen, polish the UI, shadcn, Tailwind, Radix, async component"
+description: "Builds, refactors or polishes UI on the project's own design system, verified in a browser. Use when creating or reworking screens or components, polishing the UI, or building async components (build, component or polish mode)."
+when_to_use: "build a screen, polish the UI, design system, async component"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
 argument-hint: '[build|component|polish] [project] [screens/flows] [design intent]'
@@ -21,6 +21,8 @@ Read `${CLAUDE_SKILL_DIR}/references/frontend-states.md` and apply the loading/e
 
 # `atlas-frontend`
 
+Routing: a project's design system (tokens, brand, icons, shared components, consistency check) belongs to `atlas-taste`. This skill builds screens and must follow the project's `docs/standards/design-system.md`.
+
 Three modes, picked from the first argument or the ask:
 
 | Mode | When | Detail |
@@ -33,7 +35,7 @@ For component or polish mode, read the named reference and follow it; the build 
 
 Build or refactor the UI described in `$ARGUMENTS` on one design system, then prove it works in the browser.
 
-Inputs to read from `$ARGUMENTS`: the project (name, what it is), scope (screens, flows, or components to build or refactor), and design intent (tone, density, brand). Pull brand colors and fonts from the project's own design token file; never hardcode them. If a required input is missing or ambiguous, ask once for it, then proceed.
+Inputs to read from `$ARGUMENTS`: the project (name, what it is), scope (screens, flows, or components to build or refactor), and design intent (tone, density, brand). Pull brand colors and fonts from the project's own design token file; never hardcode them. If a required input is missing or ambiguous, ask once for it with AskUserQuestion, then proceed.
 
 ## Pre-flight
 - Read the existing component structure, the central token file, and the routing setup, and match the conventions already in use.
@@ -50,10 +52,10 @@ Dispatch all independent jobs in ONE message (multiple Agent calls in a single m
 - atlas:verifier: independently confirm the claims hold.
 
 ## Build rules
-- One design system: shadcn/ui components, Tailwind utilities, Radix primitives. Do not mix in MUI, Bootstrap, or Chakra.
+- Use the project's own design system as recorded in `docs/standards/design-system.md`. If none exists, run `atlas-taste` init first. Never introduce a component or icon library the project does not already use without asking.
 - Central tokens for color, spacing, and typography. No magic values scattered in components.
 - Every async surface handles loading, empty, error, and success. No dead screen during latency.
-- Inline validation on inputs. Mobile-first; verify at a narrow width.
+- Inline validation on inputs. Responsive per the project's breakpoint tokens or recorded decision; verify at a narrow width.
 - Accessibility: keyboard reachable, visible focus, labeled controls, sufficient contrast.
 
 ## VERIFY (evidence required)

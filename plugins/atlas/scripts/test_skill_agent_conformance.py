@@ -698,23 +698,36 @@ def _skill_meta(skill_md: pathlib.Path) -> dict:
     ``>``/``|``, folded continuation lines) raises, so a future frontmatter
     shape fails the suite loudly instead of being half-parsed and passing a
     rule by accident.
+
+    One exception: a top-level ``hooks:`` key with an empty value (the documented
+    Claude Code skill hooks block) owns the indented lines that follow it; they
+    are stored as the key's raw text, unparsed.
     """
     import json
 
     text = skill_md.read_text(encoding="utf-8")
     block = text.split("---", 2)[1]
     meta: dict = {}
+    in_hooks = False
     for raw in block.split("\n"):
         if not raw.strip() or raw.lstrip().startswith("#"):
             continue
         if raw[0] in " \t":
-            raise AssertionError(
-                f"{skill_md}: continuation line not supported: {raw!r}"
-            )
+            if not in_hooks:
+                raise AssertionError(
+                    f"{skill_md}: continuation line not supported: {raw!r}"
+                )
+            meta["hooks"] += raw + "\n"
+            continue
+        in_hooks = False
         key, sep, value = raw.partition(":")
         if not sep or not key.strip():
             raise AssertionError(f"{skill_md}: not a 'key: value' line: {raw!r}")
         key, value = key.strip(), value.strip()
+        if key == "hooks" and not value:
+            in_hooks = True
+            meta[key] = ""
+            continue
         if value in (">", ">-", "|", "|-"):
             raise AssertionError(f"{skill_md}: block scalar not supported for {key!r}")
         if value.startswith('"'):
@@ -744,6 +757,26 @@ def _skill_resource_files(skill_dir: pathlib.Path):
         if path.suffix in _IGNORED_SUFFIXES:
             continue
         yield path
+
+
+class TestSkillMetaHooksBlock(unittest.TestCase):
+    def _parse(self, frontmatter: str) -> dict:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = pathlib.Path(tmp) / "SKILL.md"
+            path.write_text(f"---\n{frontmatter}---\nbody\n", encoding="utf-8")
+            return _skill_meta(path)
+
+    def test_hooks_block_parses_as_raw_text(self):
+        meta = self._parse(
+            "name: x\nhooks:\n  Stop:\n    - hooks:\n        - type: command\n"
+            "description: d\n"
+        )
+        self.assertIn("Stop:", meta["hooks"])
+        self.assertEqual(meta["description"], "d")
+
+    def test_indented_line_under_other_key_still_raises(self):
+        with self.assertRaises(AssertionError):
+            self._parse("name: x\ndescription: d\n  folded: more\n")
 
 
 class TestAnthropicSkillChecklist(unittest.TestCase):

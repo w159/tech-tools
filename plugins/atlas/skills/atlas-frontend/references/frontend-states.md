@@ -18,10 +18,10 @@ is a real user condition that occurs on every async surface.
 
 ### Loading
 
-- Skeleton mirrors the real content layout. No spinners in content
-  areas. No layout shift when the content arrives.
-- Skeleton must match the real content dimensions within 5%. A
-  skeleton for a 3-row table has 3 skeleton rows.
+- Use the loading pattern recorded in the project's design system
+  (skeleton, spinner, or other). No layout shift when the content
+  arrives.
+- A placeholder must match the real content dimensions within 5%.
 - Never show a skeleton for longer than 5 seconds. If loading
   exceeds 5 seconds, transition to the extended-progress pattern.
 - For instant operations (<300ms), skip the skeleton. Optimistic
@@ -29,18 +29,20 @@ is a real user condition that occurs on every async surface.
 
 ### Empty
 
-- Contextual message plus an actionable CTA. Not "No data found."
+- Contextual message plus an actionable CTA. Wording follows the
+  project's copy tone.
 - Distinguish first-run empty (user has never had data) from
   filtered-empty (user filtered out all data). Each gets its own
   message.
-- The CTA advances the user's goal. "Create your first project" not
-  "OK."
+- The CTA advances the user's goal and is worded per the project's
+  copy tone.
 
 ### Error
 
 - Human-readable message plus a retry action plus an error reference
-  code.
-- Never raw stack trace in the UI. Never just "Error."
+  code, worded per the project's copy tone.
+- Never raw stack trace in the UI. Never a bare "Error" with no
+  explanation.
 - The retry action re-issues the failed request. It does not reload
   the page.
 - The error reference code maps to a log line the operator can find.
@@ -52,7 +54,8 @@ is a real user condition that occurs on every async surface.
 - Optimistic updates for instant operations (<300ms). Roll back on
   failure.
 - Success state is visible long enough to read, then dismissed. A
-  toast that vanishes in 800ms is a defect.
+  toast that vanishes before it can be read is a defect; use the
+  project's toast duration.
 
 ## Accessibility (WCAG 2.1 AA)
 
@@ -62,7 +65,8 @@ These are mandatory, not aspirational.
   components.
 - Keyboard reachable. Every interactive element is reachable in
   logical tab order. No mouse-only interactions.
-- Focus ring visible. `ring-2 ring-ring ring-offset-2`. Never remove
+- Focus ring visible, styled with the project's focus-ring token
+  (for example `var(--focus-ring)`). Never remove
   the focus outline without replacing it.
 - Accessible name on every interactive element. `aria-label` or
   `aria-labelledby` when the visible text is not sufficient.
@@ -79,7 +83,8 @@ These are mandatory, not aspirational.
 ## Responsive
 
 - Mobile-first. Design at 320px first, then widen.
-- Breakpoints: sm 640, md 768, lg 1024, xl 1280, 2xl 1536.
+- Breakpoints come from the project's breakpoint tokens in
+  `docs/standards/design-system.md`.
 - No horizontal scroll on any viewport 320px or wider.
 - Test at mobile width in the browser, not just in the story.
 
@@ -88,23 +93,21 @@ These are mandatory, not aspirational.
 - All animation serves a purpose: guide attention, communicate state
   change, or maintain spatial context. Decorative animation is a
   defect.
-- Modal enter: fadeIn plus translateY(8px to 0), 220ms, ease-out.
-- Modal exit: fadeOut plus translateY(0 to 6px), 160ms, ease-in.
-- Step complete: crossfade from spinner to checkmark, 200ms.
-- Progress bar: width transition 400ms ease-in-out.
+- Distance, duration and easing for every transition (modal enter
+  and exit, step complete, progress bar) come from the project's
+  motion tokens (for example `var(--motion-duration)`,
+  `var(--motion-easing)`).
 - Suppress all motion when `prefers-reduced-motion: reduce` is
-  active. No animation exceeds 500ms unless it is a continuous
-  indicator.
+  active.
 
 ## Design system discipline
 
-- One design system per project. Default: shadcn/ui plus Tailwind
-  plus Radix. Do not mix in MUI, Bootstrap, or Chakra.
+- One design system per project, the one in `docs/standards/design-system.md`.
+  Do not add a second component or icon library without asking.
 - Central tokens for color, spacing, typography. No magic values
-  scattered in components. `text-foreground`, `bg-primary`,
-  `border-border`, not `text-[#3a7fc2]`.
-- `components/ui/` is the shadcn directory. Do not modify those files
-  directly. Wrap and extend.
+  scattered in components. Use the project's token names, not raw hex.
+- Vendored primitive directories (for example a generated `components/ui/`)
+  are not edited directly. Wrap and extend.
 - Brand colors come from the project token file, never hardcoded.
 
 ## Verify in the browser

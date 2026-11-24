@@ -15,7 +15,7 @@ SSOT contract (see atlas-orchestrate/references/docs-ssot.md, authoritative):
   docs/        -- the project wiki. Minimum: CHANGELOG.md, ROADMAP.md,
                   AGENTS.md, plus always-applicable base subfolders
                   (architecture/, decisions/, plans/, specs/, features/,
-                  lessons/, wiki/). Project-adaptive: api/ + endpoints.md,
+                  lessons/, standards/, wiki/). Project-adaptive: api/ + endpoints.md,
                   created only when an API signal is detected.
   .atlas/      -- atlas's own auditable operational state for self-improvement:
                   evidence/, findings/ (+ INDEX.md), audits/, decisions/,
@@ -51,6 +51,7 @@ DURABLE_ENTRIES = [
     ("specs", True),
     ("features", True),
     ("lessons", True),
+    ("standards", True),
     ("wiki", True),
 ]
 
@@ -61,6 +62,7 @@ DOCS_SEEDED_FILES = [
     "specs/README.md",
     "features/README.md",
     "lessons/README.md",
+    "standards/README.md",
     "wiki/README.md",
 ]
 

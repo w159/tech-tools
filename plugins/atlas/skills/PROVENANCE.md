@@ -12,6 +12,7 @@ Source notes for reference files are listed at the end of this file.
 - **atlas-plan**: Ports Compound Engineering's ce-plan; ce-doc-review is replaced by atlas:completeness-critic, and CE's solutions corpus and pack resolver by atlas's lessons store and atlas_packs.py.
 - **atlas-proof**: Ports Compound Engineering's ce-proof (publish and annotate markdown through a hosted collaborative editor over a bespoke HTTP/agent API); generalized to native surfaces. Boundaries section derives from CE's credential and delete rules.
 - **atlas-refactor**: Its diff mode (formerly a separate skill) is ported from Compound Engineering's ce-simplify-code; adapted to atlas dispatch, verification and artifact conventions.
+- **atlas-taste**: Adapted from an upstream design skill (MIT, commit 6c0b5c7), method only: the one-strict-system rules, the consistency check and the finish gate. No palettes, fonts, icons, photos, effects or voice are carried over; every value comes from the project.
 - **atlas-worktree**: Mechanics port from Compound Engineering's ce-worktree; CE's 'prefer the harness's native worktree tool and stop' does not port, atlas uses the .atlas/.run/worktrees.json ledger instead.
 
 ## Reference files

@@ -51,6 +51,10 @@ Deferred MCP tools are absent until fetched. **First action:** one `ToolSearch` 
   9. **Archive (no live noise).** Move retired, superseded or fixed one-off notes to `.atlas/archive/<YYYY-MM-DD>_<slug>-<status>.md` instead of deleting them. Live `docs/` and `.atlas/findings/` hold current truth only: no "fixed" or "done" duplicate narratives next to the canonical CHANGELOG entry.
   10. **Knowledge graph refresh.** If a published graph exists (`docs/wiki/graph.json`) and the change touched source files, regenerate it with the `graphify` skill (or the command in `docs/AGENTS.md`), then republish per step 6; never treat `graphify-out/` as a source of truth. If graphify is not installed, note the stale graph in your report; do not install anything.
 
+## Project standards (docs/standards/)
+
+When a verified change or a user correction sets or changes a rule that applies across files (UI pattern, naming, API shape, error handling), create or update the matching `docs/standards/<kebab-name>.md` in place, never a duplicate. Use the template in docs-ssot.md: keep `applies_to` globs accurate, bump `last_updated`, and append a dated line to the Decision log. A rule only one file needs is not a standard.
+
 ## Release notes
 
 `.github/workflows/release.yml` publishes a GitHub release from `plugins/atlas/CHANGELOG.md` on every `plugin.json` version bump. On each shipped change:

@@ -1,0 +1,11 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas
+command: cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas && ../../.venv/bin/python -m pytest -q -p no:cacheprovider hooks/test_atlas_contract.py hooks/test_standards_nudge.py hooks/test_event_dispatch.py hooks/test_event_dispatch_units.py hooks/test_codex_parity.py skills/atlas-setup/scripts/test_scaffold_docs.py hooks/test_fable52_guide.py --deselect hooks/test_atlas_contract.py::DocsTellTheTruthContract::test_reference_counts_and_tables_match_disk 2>&1 | tail -1
+exit: 0
+seconds: 20.1
+--- output tail ---
+..............................sss......................... [ 17%]
+.................................................................................................................................................................................................................................................. [ 89%]
+...................................                                                                                                                                                                        [100%]
+332 passed, 3 skipped, 1 deselected, 306 subtests passed in 19.88s
+

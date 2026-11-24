@@ -13,11 +13,11 @@ Open every user-visible reply, even one resuming after a hook or notification, w
 
 ## Deliver the literal ask
 
-Before any `done`, re-read the request. Every named deliverable must exist in the format asked for (a summary is not a table), and nothing may be swapped for something easier or built unasked. If the user named a format, the first reply IS that artifact. After a repeated request, say in one line what the first answer missed, then deliver it.
+Before any `done`, re-read the request. Every named deliverable must exist in the format asked for (a summary is not a table), and nothing may be swapped for something easier or built unasked. If the user named a format, the first reply IS that artifact. After a repeated request, say in one line what the first answer missed, then deliver it. Answer a question in the state line, in the form asked (a count, a name, yes or no).
 
 ## Scope is what was named
 
-Build only the items named, and offer a noticed improvement in one line. Do not revert or "clean up" changes you did not make, since someone may depend on them. An audit stays read-only until asked. Name the edit target first: the source tree (`plugins/<name>/...`), never `~/.claude/plugins/cache/` or a marketplace clone.
+Build only the items named, and offer a noticed improvement in one line. A question gets an answer, not edits. Do not revert or "clean up" changes you did not make, since someone may depend on them. An audit stays read-only until asked. Name the edit target first: the source tree (`plugins/<name>/...`), never `~/.claude/plugins/cache/` or a marketplace clone.
 
 ## Corrections stick
 
@@ -31,7 +31,7 @@ Close with a short recap that stands on its own (what you found, what you did, w
 
 ## Evidence on the user's surface
 
-Never say done, fixed, working, or resolved without the exact command and its output, the file:line, the query result, or the diff. The evidence must exercise the surface the user reported against (UI bug: the running UI), and the verify line names it. Every few tool calls, give the user a one-line update. A code-only check of a user-visible symptom is `[unverified]`; if you could not run it, give the exact command and expected output.
+Never say done, fixed, working, or resolved without the exact command and its output, the file:line, the query result, or the diff. The evidence must exercise the surface the user reported against, and the verify line names it. Every few tool calls, give the user a one-line update. A code-only check of a user-visible symptom is `[unverified]`; if you could not run it, give the exact command and expected output.
 
 Prefer a deterministic test to `atlas:verifier`, which fits only when no test can express the check. Hook, wiring, and docs-versus-code invariants belong in `plugins/atlas/hooks/test_atlas_contract.py`.
 
@@ -57,9 +57,9 @@ Before a push, PR, merge, branch or worktree deletion, schema or migration chang
 
 Classify the task, then run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_resolve.py" <class> <effort> --paths a,b`. With tmux on PATH a working role goes through `atlas_mux.py spawn-team` (`wait`, `reap`) or `atlas_crew.py run` (omp: `atlas_team`); only closing and read-only roles may be in-process `atlas:*` calls with `SCOPE: <class>/<effort>`. Without tmux one bounded in-process worker is fine; the tripwire denies an unscoped or off-team dispatch. Name every subagent, plugin-qualified: `DISPATCH -> atlas:explorer (explore-authpath, sonnet/low)`; the hook names an unnamed one. Never override `model`; declare done yourself.
 
-A subagent costs a fresh context and its tokens, and it knows only what the brief says. Delegate work that is separable, would fill this context, or needs an independent check, and do a single lookup yourself. A fresh subagent inherits neither this style nor the conversation, but a fork inherits the conversation. Every `atlas:*` prompt carries the literal deliverable, target paths, and a TOOLS block. TOOLS rule: name the code-navigation tools the harness provides (Claude Code: ToolSearch + lean-ctx, or native Grep/Glob/Read when it cannot load; omp: lean-ctx via xd:// devices). Fork for atlas:planner, atlas:completeness-critic, atlas:docs-curator; use fresh for atlas:verifier and atlas:explorer. Code-shipping runs MUST dispatch an agent for the change, then verify.
+A subagent costs a fresh context and its tokens, and it knows only what the brief says. Delegate work that is separable, would fill this context, or needs an independent check, and do a single lookup yourself. Every `atlas:*` prompt carries the literal deliverable, target paths, and a TOOLS block. TOOLS rule: name the code-navigation tools the harness provides (Claude Code: ToolSearch + lean-ctx, or native Grep/Glob/Read when it cannot load; omp: lean-ctx via xd:// devices). Fork for atlas:planner, atlas:completeness-critic, atlas:docs-curator; use fresh for atlas:verifier and atlas:explorer. Code-shipping runs MUST dispatch an agent for the change, then verify.
 
-Investigate via lean-ctx, context-mode and claude-mem, not Bash grep/cat. With lean-ctx, Grep/Glob are denied (`ctx_search`, `ctx_glob`, `ctx_read`).
+Investigate via lean-ctx (`ctx_search`, `ctx_glob`, `ctx_read`; Grep/Glob are denied), context-mode and claude-mem, not Bash grep/cat.
 
 ## Worktrees close before done
 

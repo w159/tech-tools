@@ -88,7 +88,7 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 24 of the 26 skills
+followed by what you want, or just describe the work: 25 of the 27 skills
 auto-trigger from their description. The two manual skills,
 `/atlas:atlas-setup` and `/atlas:atlas-ship`, you invoke
 yourself (Claude Code prefixes a plugin skill with the plugin name; omp takes
@@ -407,6 +407,7 @@ Source: `plugins/atlas/skills/`.
 | `atlas-refactor` | code works but is messy, or a change was just implemented and needs a behavior-preserving simplify pass before review or commit | `atlas-refactor extract the pricing rules into a module` (or `atlas-refactor` with no argument for the fresh diff) |
 | `atlas-frontend component` | creating a progress modal, upload widget, job panel or other async component | `atlas-frontend component add a cancellable file uploader` |
 | `atlas-frontend` | creating, reworking or polishing frontend UI | `atlas-frontend build the dashboard page` |
+| `atlas-taste` | setting up or changing a project's design system (tokens, brand, icons, shared components), or checking UI consistency across screens | `atlas-taste init` or `atlas-taste check the taxonomy tables` |
 | `atlas-setup` gitignore | starting a repo or hardening an existing .gitignore | `atlas-setup gitignore harden for node + terraform` |
 | `atlas-handoff` | at a checkpoint before context fills, before a break, or handing work to another session | `/atlas:atlas-handoff` |
 | `atlas-harden` | remediating or enforcing an endpoint setting at scale | `atlas-harden remediate unencrypted drives for RMM` |
@@ -991,7 +992,7 @@ tech-tools/
 |  |  |- .claude-plugin/     # plugin.json (userConfig: `atlas_mod_sound` plus 8 decision, Ollama and analytics keys mapped to ATLAS_* by scripts/atlas_env.py; connector keys live in armada)
 |  |  |- (no .mcp.json or mcp/: the 12 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
-|  |  |- skills/             # 26 skills
+|  |  |- skills/             # 27 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 25 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 91 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets

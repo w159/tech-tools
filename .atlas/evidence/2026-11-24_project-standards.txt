@@ -1,0 +1,16 @@
+# project standards feature, 2026-11-24 (main @ bc4ebd8e + merged team tbfb0cb)
+
+$ cd plugins/atlas && ../../.venv/bin/python -m pytest -q -p no:cacheprovider hooks/test_atlas_contract.py hooks/test_standards_nudge.py hooks/test_event_dispatch.py hooks/test_event_dispatch_units.py hooks/test_codex_parity.py skills/atlas-setup/scripts/test_scaffold_docs.py hooks/test_fable52_guide.py
+FAILED hooks/test_atlas_contract.py::DocsTellTheTruthContract::test_reference_counts_and_tables_match_disk
+1 failed, 332 passed, 3 skipped, 306 subtests passed in 20.14s
+Known HEAD failure: fails at bc4ebd8e without this change (recorded in 2026-11-24_doctor-style-literal-ask-scope.txt).
+
+$ ruff check plugins/atlas/hooks/standards_nudge.py plugins/atlas/hooks/test_standards_nudge.py
+All checks passed!
+
+Manual payloads against hooks/standards_nudge.py, temp git repo with docs/standards/ui-data-tables.md (applies_to ["src/pages/**", "src/components/**/*Table*"]):
+- lead Edit src/pages/Holdings.tsx -> additionalContext "docs/standards/ui-data-tables.md governs src/pages/Holdings.tsx:\n- Row: type icon, hover token, pencil then trash. Row click opens the object's form modal.\n\nFollow it. ..."
+- same session again -> 0 bytes
+- same session, agent_id a1 -> injected again
+
+Verifier verifier-0df2: initial verdict rejected solely for plugins/atlas/README.md counts (19/25). Lead fixed to 20 programs / 26 bindings plus a standards_nudge.py hook row; contract README tests now pass (run above). Verifier also confirmed scaffold creates docs/standards/README.md and the event_dispatch path injects.

@@ -3,7 +3,7 @@
 ## Contents
 
 - [Props interface](#props-interface)
-- [className via cn()](#classname-via-cn)
+- [className merging](#classname-merging)
 - [The six interaction states](#the-six-interaction-states)
 - [Backend resilience](#backend-resilience)
 - [Accessibility](#accessibility)
@@ -33,10 +33,12 @@ every screen that uses it.
   states unrepresentable through discriminated unions and required
   fields.
 
-## className via cn()
+## className merging
 
-- `className` is always accepted and merged via the project's `cn()`
-  helper, never string-concatenated.
+- `className` is always accepted and merged with the project's own
+  class-merge helper (the one its existing components use), never
+  string-concatenated. If the project has no styling class prop, follow
+  its existing convention.
 - Remaining props are spread to the root element. Never pick and
   choose which DOM props to forward.
 - The component's own classes are stable; the caller's `className`
@@ -49,10 +51,10 @@ Every interactive element defines all six. Missing one is a defect.
 | State | Treatment |
 |---|---|
 | Default | Base styling. |
-| Hover | Subtle background shift or shadow increase. Never change layout. |
-| Focus | Visible ring: `ring-2 ring-ring ring-offset-2`. Obvious for keyboard users. |
-| Active | Slight scale `active:scale-[0.98]` or darkened background. |
-| Disabled | `opacity-50`, `cursor-not-allowed`. No hover effects. |
+| Hover | Visible change using the project's hover treatment. Never change layout. |
+| Focus | Visible focus indicator from the project's focus-ring token (for example `var(--focus-ring)`), meeting the 3:1 contrast minimum. Obvious for keyboard users. |
+| Active | The project's pressed-state treatment. |
+| Disabled | The project's disabled treatment, still distinguishable and not relying on color alone. No hover effects. |
 | Loading | Replace content with spinner. Maintain element dimensions. |
 
 For data-driven components, also handle the four data states: idle,
@@ -102,16 +104,16 @@ Every component file follows this shape:
 
 ```tsx
 // COMPONENT: StatCard
-interface StatCardProps extends React.ComponentProps<typeof Card> {
+interface StatCardProps extends React.ComponentProps<typeof ProjectRoot> {
   title: string;
   value: string | number;
 }
 
 function StatCard({ title, value, className, ...props }: StatCardProps) {
   return (
-    <Card className={cn("transition-shadow hover:shadow-md", className)} {...props}>
+    <ProjectRoot className={mergeClasses("<project token class>", className)} {...props}>
       ...
-    </Card>
+    </ProjectRoot>
   );
 }
 
@@ -122,20 +124,17 @@ export type { StatCardProps };
 Rules the pattern encodes:
 
 - Props interface always explicitly typed and exported.
-- `className` always accepted and merged via `cn()`.
+- `className` always accepted and merged via the project's class-merge helper.
 - Remaining props always spread to the root element.
 - Section comments at logical breakpoints.
 
 ## Component file location
 
-- atoms/ for stateless pure UI: Button, Badge, Icon.
-- molecules/ for composed atoms: FormField, SearchInput, StatCard.
-- organisms/ for complex sections with local state: DataTable, Modal,
-  SideNav.
-- templates/ for page scaffolding.
-- pages/ for route-level components. Only data fetching happens here.
-- `components/ui/` is the shadcn directory. Do not modify directly.
-  Wrap and extend.
+- Put the file where the project's existing structure puts components
+  (see `docs/standards/design-system.md`). If the project has no
+  convention, ask the user with AskUserQuestion before choosing a layout.
+- Vendored primitive directories (for example a generated UI-kit
+  directory) are not edited directly. Wrap and extend.
 
 ## What this pattern is not
 

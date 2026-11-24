@@ -184,7 +184,7 @@ class WiringContract(unittest.TestCase):
         """Saved dashboard knobs must reach already-running sessions: each entry applies
         the Atlas store before it imports any atlas module (core modules read knobs)."""
         entries = sorted({p for p in _script_paths() if p.suffix == ".py"})
-        self.assertEqual(len(entries), 19, [p.name for p in entries])
+        self.assertEqual(len(entries), 20, [p.name for p in entries])
         call = "atlas_env.apply_store_env()"
         bad = []
         for path in entries:

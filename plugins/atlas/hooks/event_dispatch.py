@@ -63,6 +63,7 @@ BINDINGS = {
         ("bash_advisor", "Bash", 8),
         ("git_guard", "Bash|Write|Agent|Task|mcp__.*", 8),
         ("edit_read_nudge", "Edit|edit|MultiEdit", 8),
+        ("standards_nudge", "Edit|Write|MultiEdit|NotebookEdit|mcp__.*ctx_patch", 8),
         (
             "dispatch_tripwire",
             "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task|collaboration\\.spawn_agent",

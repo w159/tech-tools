@@ -4,7 +4,7 @@ Read `${CLAUDE_SKILL_DIR}/references/component-pattern.md` and follow the props,
 
 Build the single reusable component described in `$ARGUMENTS`, defining its contract first and proving every state renders.
 
-Inputs to read from `$ARGUMENTS`: the component (name and purpose), the props contract (props with types), and the backend contract it consumes (endpoints, payload shape, polling vs stream, cancel semantics). If a required input is missing or ambiguous, ask once for it, then proceed.
+Inputs to read from `$ARGUMENTS`: the component (name and purpose), the props contract (props with types), and the backend contract it consumes (endpoints, payload shape, polling vs stream, cancel semantics). If a required input is missing or ambiguous, ask once for it with AskUserQuestion, then proceed.
 
 ## Pre-flight
 - Read the existing component library structure and match its conventions (file layout, prop typing, token usage).
@@ -20,7 +20,7 @@ Inputs to read from `$ARGUMENTS`: the component (name and purpose), the props co
 - Define the contract first: props and events before any implementation. Make it framework-agnostic in shape.
 - Resilient to backend behavior: slow responses, mid-flight cancellation, and partial failure each get an explicit visual state. Leave no state unhandled.
 - Accessible: focus management, ARIA roles and labels, keyboard escape where it applies, reduced-motion respected.
-- On-brand using the project's design tokens. No hardcoded colors, spacing, or fonts.
+- On-brand using the project's design tokens (`docs/standards/design-system.md`). No hardcoded colors, spacing, or fonts.
 
 ## VERIFY (evidence required)
 - Render each state in a harness or story: idle, in-flight, success, cancelled, error, and partial. Show how each was triggered.

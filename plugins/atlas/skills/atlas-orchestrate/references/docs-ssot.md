@@ -79,11 +79,12 @@ subdirs present.
 | `docs/lessons/` | `<YYYY-MM-DD>_<slug>.md` gotchas and patterns learned. | yes |
 | `docs/wiki/` | Rendered, human-facing graphify diagrams and the published understand-anything wiki. | yes |
 | `docs/api/` | **Only if the project has an API.** OpenAPI/Swagger specs (`*.json`/`*.yaml`) and `docs/endpoints.md`. Absent for projects with no API. | yes |
-| `docs/standards/`, `docs/glossary.md`, `docs/reference/` | Org/coding standards, business-term-to-code mapping, reference material. Created when the project needs them. | yes |
+| `docs/standards/` | Living, undated, one file per cross-cutting convention (UI pattern, naming, API shape, error handling). Frontmatter `applies_to` globs; the `standards_nudge` hook injects a matching standard when an agent edits a governed file. `README.md` is not a standard. | yes |
+| `docs/glossary.md`, `docs/reference/` | Business-term-to-code mapping, reference material. Created when the project needs them. | yes |
 
 `atlas-setup` scaffolds `CHANGELOG.md`, `ROADMAP.md`, and the always-applicable base
 subfolders (`architecture/`, `decisions/`, `plans/`, `specs/`, `features/`,
-`lessons/`, `wiki/`) each with a placeholder `README.md`. Project-adaptive subfolders
+`lessons/`, `standards/`, `wiki/`) each with a placeholder `README.md`. Project-adaptive subfolders
 (`api/`, `endpoints.md`) are created only when atlas-setup detects the relevant signal
 (an OpenAPI file, a routes/controllers directory, or a web framework). The curator
 adds any other subfolder the moment the project first needs it.
@@ -122,7 +123,8 @@ changed, when, and why, and so a bug fixed once is not reintroduced:
 - Lessons/specs: `docs/lessons/<YYYY-MM-DD>_<slug>.md`, `docs/specs/<YYYY-MM-DD>_<slug>.md`.
 
 Before starting non-trivial work, agents consult `.atlas/findings/INDEX.md` and
-`docs/lessons/` for prior art on the same area. The understand-anything and graphify
+`docs/lessons/` for prior art on the same area, and follow every `docs/standards/`
+doc whose `applies_to` globs match the files they edit. The understand-anything and graphify
 skills feed this loop: their knowledge graphs and diagrams (working data in
 `.atlas/understand-anything/` and `.atlas/graphify/`, published output in `docs/wiki/`)
 are how a project stays continuously understandable as it grows.
@@ -161,6 +163,7 @@ the re-exclusion block comes last and wins.
 | `.atlas/understand-anything/*`, `.atlas/graphify/*` | The understand-anything and graphify skills | Working data; the curator publishes rendered output to `docs/wiki/`. |
 | `.atlas/self-improvement/*`, `.atlas/memory/*` | Atlas hooks and self-improvement scripts | Written by the atlas infrastructure itself. |
 | `docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md` | `atlas:docs-curator` | Orchestrator may also update directly when a curator pass is overkill. |
+| `docs/standards/*` | `atlas:docs-curator` | Creates or updates a standard in place when a change or user correction sets a cross-file rule; `atlas:docs-auditor` flags stale or missing ones. |
 | `docs/` subfolders (`architecture/`, `plans/`, `specs/`, `features/`, `audits/`, `lessons/`, `wiki/`, `api/`, etc.) | `atlas:docs-curator` | Write-capable, confined to `docs/`. Creates subfolders on demand as the project needs them. |
 | `.gitignore` | `atlas-setup` skill (gitignore mode) / `atlas:docs-curator` maintenance | Kept zero-trust and current as new tracked paths appear. |
 
@@ -261,7 +264,7 @@ A shipping change is **docs-current** only when all of the following are true:
 
 1. `docs/CHANGELOG.md` has a newest-first entry for the change (completed and verified as working/implemented).
 2. `docs/ROADMAP.md` is reconciled: completed items moved out, new follow-ups added, in-flight items still listed.
-3. Every affected `docs/` subfolder is updated (a new feature adds `docs/features/`; a design shift adds `docs/architecture/`; a gotcha adds `docs/lessons/` - each created on demand if it does not yet exist).
+3. Every affected `docs/` subfolder is updated (a new feature adds `docs/features/`; a design shift adds `docs/architecture/`; a gotcha adds `docs/lessons/` - each created on demand if it does not yet exist). A change that sets or alters a cross-cutting convention updates its `docs/standards/` doc.
 4. Evidence for the change is committed under `.atlas/evidence/` and referenced from its finding.
 5. Verified findings are distilled into `.atlas/findings/<YYYY-MM-DD>_<slug>.md` so the fix is discoverable next session.
 
@@ -325,6 +328,28 @@ Statuses: `planned | in-progress | blocked | deferred | done`. Move `done` items
 
 ## Glossary
 - transaction: a single ledger movement. Same noun across API, DB table, and UI types.
+```
+
+### docs/standards/ entry
+
+One file per convention, lowercase-kebab name, no date in the name. `applies_to` may also be inline: `applies_to: ["a/**", "b/*.tsx"]`. `reference` is optional. Update in place; never duplicate.
+
+```markdown
+---
+title: Data tables for taxonomy objects
+applies_to:
+  - "src/pages/**"
+  - "src/components/**/*Table*"
+reference: src/components/HoldingsTable.tsx:12
+last_updated: 2026-11-24
+---
+## Rule
+- Every row: type icon, hover background token, pencil then trash at row end.
+- Row click opens that object's form modal.
+## Why
+## Example
+## Decision log
+- 2026-11-24: <what changed, who decided, link>
 ```
 
 ## Relationship to the rest of the skill

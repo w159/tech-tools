@@ -803,6 +803,7 @@ class BindingSliceSecondsTest(unittest.TestCase):
             "bash_advisor": 8,
             "git_guard": 8,
             "edit_read_nudge": 8,
+            "standards_nudge": 8,
             "dispatch_tripwire": 14,
         },
         "PostToolUse": {

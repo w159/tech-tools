@@ -55,7 +55,7 @@ The atlas fleet:
  6. Task skills        -- atlas-debug, atlas-refactor,
                           atlas-frontend (build, component, polish), atlas-audit,
                           atlas-handoff, atlas-harden,
-                          atlas-prompt, atlas-readme, atlas-wiki
+                          atlas-prompt, atlas-readme, atlas-taste (design system), atlas-wiki
     Modes of one skill: atlas-audit act, atlas-ux-test smoke, atlas-ship commit-only,
     atlas-status announce, atlas-brainstorm analyze, atlas-bakeoff verdict,
     atlas-brainstorm strategy, atlas-run-watch pr:<N>, atlas-setup tour

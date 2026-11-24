@@ -32,6 +32,7 @@ FORMER = (
     ("PreToolUse", "Bash|Write|Agent|Task|mcp__.*", "git_guard"),  # added after the split; same table
     ("PreToolUse", "Bash", "fallow_gate"),
     ("PreToolUse", "Edit|edit|MultiEdit", "edit_read_nudge"),
+    ("PreToolUse", "Edit|Write|MultiEdit|NotebookEdit|mcp__.*ctx_patch", "standards_nudge"),
     (
         "PreToolUse",
         "Edit|Write|MultiEdit|NotebookEdit|Read|Grep|Glob|Bash|Agent|Task|collaboration\\.spawn_agent",

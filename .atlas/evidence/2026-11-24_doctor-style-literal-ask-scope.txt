@@ -1,0 +1,5 @@
+atlas-doctor 2026-11-24: style edits for findings 27525 26520 26519 26173 26221 26176
+$ .venv/bin/python -m pytest -q plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/hooks/test_fable52_guide.py plugins/atlas/scripts/test_turn_scoring.py --deselect <pre-existing test_reference_counts_and_tables_match_disk>
+151 passed, 3 skipped, 1 deselected, 193 subtests passed in 8.57s
+style chars:     6969 (budget 7000)
+baselines: improvements 120-125 recorded before edit; remeasure after 5 runs

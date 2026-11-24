@@ -1,0 +1,10 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools
+command: .venv/bin/python -m pytest -q plugins/atlas/hooks/test_atlas_contract.py plugins/atlas/hooks/test_fable52_guide.py plugins/atlas/scripts/test_turn_scoring.py --deselect plugins/atlas/hooks/test_atlas_contract.py::DocsTellTheTruthContract::test_reference_counts_and_tables_match_disk 2>&1 | tail -2
+exit: 0
+seconds: 8.91
+--- output tail ---
+..............................sss...................... [ 35%]
+...................................................................................................                                            [100%]
+151 passed, 3 skipped, 1 deselected, 193 subtests passed in 8.67s
+

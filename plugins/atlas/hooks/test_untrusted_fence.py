@@ -39,6 +39,7 @@ EMITTERS: dict[str, str] = {
     "prompt_optimizer_core.py": "A",  # rewrite of the user's own prompt, authoritative by design
     "recall_gate.py": "A",  # fixed text
     "session_boot_core.py": "B",  # recalled memory and the resume block (prompts from past sessions)
+    "standards_nudge.py": "B",  # docs/standards/*.md Rule text, written by teammates or agents
     "todo_capture.py": "A",  # fixed text plus the script path and session id
     "worker_inbox.py": "B",  # board messages from other agents
 }
@@ -57,6 +58,7 @@ SITES: dict[str, int] = {
     "prompt_optimizer_core.py": 1,
     "recall_gate.py": 1,
     "session_boot_core.py": 1,
+    "standards_nudge.py": 1,
     "todo_capture.py": 1,
     "worker_inbox.py": 1,
 }
@@ -148,11 +150,33 @@ def _emit_session_boot() -> str:
     return json.loads(stdout.getvalue())["hookSpecificOutput"]["additionalContext"]
 
 
+def _emit_standards_nudge() -> str:
+    import standards_nudge
+
+    root = tempfile.mkdtemp()
+    os.makedirs(os.path.join(root, ".git"))
+    os.makedirs(os.path.join(root, "docs", "standards"))
+    with open(os.path.join(root, "docs", "standards", "x.md"), "w", encoding="utf-8") as fh:
+        fh.write(f'---\napplies_to: ["src/**"]\n---\n## Rule\n{PAYLOAD}\n')
+    payload = {
+        "session_id": "fence-standards",
+        "tool_name": "Edit",
+        "cwd": root,
+        "hook_event_name": "PreToolUse",
+        "tool_input": {"file_path": os.path.join(root, "src", "a.py")},
+    }
+    out = io.StringIO()
+    with mock.patch("sys.stdin", new=io.StringIO(json.dumps(payload))), mock.patch("sys.stdout", new=out):
+        standards_nudge.main()
+    return json.loads(out.getvalue())["hookSpecificOutput"]["additionalContext"]
+
+
 # file -> (driver returning the emitted additionalContext, (open regex, close regex))
 TABLE = {
     "crew_worker.py": (_emit_crew_worker, RECALLED),
     "worker_inbox.py": (_emit_worker_inbox, BOARD),
     "session_boot_core.py": (_emit_session_boot, RECALLED),
+    "standards_nudge.py": (_emit_standards_nudge, RECALLED),
 }
 
 

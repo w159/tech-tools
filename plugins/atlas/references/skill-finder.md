@@ -37,6 +37,7 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Build a feature end to end across UI, API, and data | atlas-orchestrate | Auto | Parallel dispatch of the atlas squad with an independent verifier closing it |
 | Run a multi-step or whole-codebase job as a coordinated agent run | atlas-orchestrate | Auto | The engine: decomposed subagent dispatches, execution evidence, independent verification, docs kept current |
 | Build or refactor screens and flows on one design system | atlas-frontend | Auto | Design-system-consistent UI, every state handled, verified live in the browser |
+| Set up or change a project's design system (tokens, brand, icons, shared components) or check UI consistency across screens | atlas-taste | Auto | `docs/standards/design-system.md`, shared components and a consistency check that passes |
 | Build one UI component that survives latency, cancellation, and failure | atlas-frontend component | Auto | A reusable component rendering all six interaction states |
 | Fix a reproducible bug, exception, or bad output | atlas-debug | Auto | Root-cause fix with evidence, not a symptom patch |
 | Make existing code cleaner without changing behavior | atlas-refactor | Auto | Behavior-preserving restructure with before/after evidence |

@@ -21,7 +21,7 @@ Phase 3 of `atlas-review`. The roster is a judgment about risk in THIS diff, not
 | learnings | a matching entry under `docs/lessons/` exists for the touched area, or a declared Compound Pack covers it | does the change violate a recorded lesson or repeat a documented root cause? |
 | adversarial | diff is large, OR touches persistence/auth/payment/event-publishing/retry/concurrency/external-API code, OR adds a silent-pass path (catch-and-continue, default-allow, fail-open) | assumes malicious input and adversarial timing; hunts for what the other reviewers' framings let through |
 | previous-comments | the PR/branch carries prior review comments (human or bot) | verify each prior comment is actually addressed, not just replied to; flag re-introduced regressions |
-| standards | repo declares coding standards that apply to the diff: `CODING_STANDARDS.md`, `CLAUDE.md`, `AGENTS.md`, `docs/architecture/` conventions | conventions defined by those files only - a standards reviewer with no standards source is skipped, not invented |
+| standards | repo declares coding standards that apply to the diff: `CODING_STANDARDS.md`, `CLAUDE.md`, `AGENTS.md`, `docs/architecture/` conventions, `docs/standards/*.md` whose `applies_to` matches a diff file | conventions defined by those files only - a standards reviewer with no standards source is skipped, not invented |
 
 ## Roster judgment rules
 
