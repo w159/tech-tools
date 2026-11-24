@@ -28,6 +28,7 @@ import { gateGroups } from './core-tick';
 
 /** How long the Stop hook waits after it wrote the refusal: one redraw frame and a margin. */
 export const STOP_SETTLE_MS = FRAME_MS + 40;
+export const IDLE_TICK_MS = 5000; // the slow tick at rest
 export const TICK_MS = 250; // the slow tick: gauges, motion and the Stop verdict (the spinner has its own beat, FRAME_MS in band-motion.ts, and waits for none of this)
 const EASE_STEP_MS = Math.round(EASE_MS / EASE_FRAMES); // a gauge glide redraws at its frame rate, only until it lands
 
@@ -189,8 +190,18 @@ async function frameBeat($: EngineInterface): Promise<void> {
 	if (beatDue({ working, shown: S.shownKind, open: S.runClock.startMs !== null, ended, flip, idleLive, idleBeat: S.beatN })) await update($, spinnerTickState, (n) => { S.beatFrame = n + 1; return n + 1; });
 	await observeBlocked($); // after the bump: the band's redraw is already asked for when the panel's clock starts
 	if (cardsDue()) await placeFinished($, snap as LiveSnapshot, snap as LiveSnapshot); // the run card and the blocked card, on the beat after the band drew the state they name
+	if (!framesWanted(snap as LiveSnapshot, now)) { S.frameTimer?.cancel(); S.frameTimer = null; } // at rest: no timer until wakeLoops or the poll's watchdog finds work
 }
 let verdictBusy = false;
+
+/** Something on screen moves or is about to change: a working turn or agent, the working word still drawn, an open run clock, a prompt just armed, or a finished run that has not yet flipped to `idle`.
+ * At rest none of these hold, and the frame loop and the fast tick stop (an idle session spent ~60 CPU-s a minute on 10 redraws a second of an unchanging band). The idle breath is not kept alive: it is the one thing that moved at rest. */
+export function framesWanted(snap: LiveSnapshot | null, now: number): boolean {
+	if (S.runClock.startMs !== null || S.armedAt !== null || S.shownKind === 'working') return true;
+	if (restSecsOf(S.runClock, now) !== undefined && !S.idleFlipped) return true;
+	return snap !== null && isWorkingNow(snap, S.hostWorking, S.hostKnown && !S.hostWorking);
+}
+
 /** (Re)start the frame loop. `$.clock.every` ends when the host refuses a period, so the slow tick and the poll call this when the beat went stale. */
 export function armFrameLoop($: EngineInterface): void {
 	S.frameTimer?.cancel();
@@ -198,13 +209,36 @@ export function armFrameLoop($: EngineInterface): void {
 		void frameBeat($).catch(() => undefined);
 	});
 }
-/** The watchdog: a loop that stopped beating is armed again. */
+/** The watchdog: a loop that stopped beating is armed again, and a stopped loop is armed once something wants frames. */
 export async function ensureFrameLoop($: EngineInterface): Promise<void> {
 	if (!S.tickTimer) return; // the session ended: nothing re-arms the loop behind it
-	if (!S.frameTimer || beatStale(S.lastBeatMs, await $.clock.now())) {
-		S.lastBeatMs = await $.clock.now();
+	const now = await $.clock.now();
+	if (!S.frameTimer ? framesWanted((await read($, snapshotState)) as LiveSnapshot | null, now) : beatStale(S.lastBeatMs, now)) {
+		S.lastBeatMs = now;
 		armFrameLoop($);
 	}
+}
+/** A hook event or a host turn says work starts: restart the frame loop and the fast tick now, not at the next slow tick. */
+export async function wakeLoops($: EngineInterface): Promise<void> {
+	if (!S.tickTimer) return;
+	if (!S.frameTimer) { S.lastBeatMs = await $.clock.now(); armFrameLoop($); }
+	if (tickMs !== TICK_MS) armTick($, undefined, TICK_MS);
+}
+
+/** The slow tick runs at TICK_MS while anything animates and every IDLE_TICK_MS at rest; its body is the caller's (it reads gauges, motion and the Stop verdict). */
+let tickBody: (() => Promise<void>) | null = null;
+let tickMs = TICK_MS;
+export function armTick($: EngineInterface, body?: () => Promise<void>, ms = TICK_MS): void {
+	if (body) tickBody = body;
+	tickMs = ms;
+	S.tickTimer?.cancel();
+	S.tickTimer = $.clock.every(ms, () => {
+		void (async () => {
+			await tickBody?.();
+			const want = S.frameTimer || S.easeTimer ? TICK_MS : IDLE_TICK_MS;
+			if (S.tickTimer && want !== tickMs) armTick($, undefined, want);
+		})().catch(() => undefined);
+	});
 }
 /** The spinner tick's look at the Stop verdict: the fast path of gatesPoll, plus the urgent gate run it queues (gatesPoll would start it on the next 500 ms poll). */
 export async function verdictFast($: EngineInterface, snap: LiveSnapshot): Promise<void> {
