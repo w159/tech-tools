@@ -221,7 +221,7 @@ class StatusLineTest(DisplayBase):
         self.fix()
         sl = self.read()["statusLine"]
         self.assertEqual(sl["type"], "command")
-        self.assertEqual(sl["refreshInterval"], 60)
+        self.assertNotIn("refreshInterval", sl)
         self.assertEqual(sl["command"], 'python3 "%s"' % os.path.join(self.ahome, "bin", "atlas_statusline_launch.py"))
         self.assertTrue(os.path.isfile(os.path.join(self.ahome, "bin", "atlas_statusline_launch.py")))
         self.assertEqual(self.read()["theme"], "dark")
@@ -236,21 +236,26 @@ class StatusLineTest(DisplayBase):
         self.fix()
         self.assertEqual(self.read()["statusLine"], foreign)
 
-    def test_live_atlas_line_gains_refresh_interval_and_keeps_user_keys(self):
+    def test_live_atlas_line_keeps_user_keys_and_gets_no_refresh_interval(self):
         script = os.path.join(self.root, "scripts", "atlas_statusline.py")
         self.write({"statusLine": {"type": "command", "command": 'python3 "%s"' % script, "padding": 2}})
         self.fix()
         sl = self.read()["statusLine"]
-        self.assertEqual((sl["refreshInterval"], sl["padding"]), (60, 2))
+        self.assertEqual(sl["padding"], 2)
+        self.assertNotIn("refreshInterval", sl)
 
-    def test_launcher_with_old_five_second_poll_is_healed_and_a_longer_one_kept(self):
+    def test_launcher_refresh_interval_of_any_value_is_removed(self):
         cmd = 'python3 "%s"' % os.path.join(self.ahome, "bin", "atlas_statusline_launch.py")
-        self.write({"statusLine": {"type": "command", "command": cmd, "refreshInterval": 5}, "env": dict(BOTH)})
+        for iv in (5, 60, 120):
+            self.write({"statusLine": {"type": "command", "command": cmd, "refreshInterval": iv}, "env": dict(BOTH)})
+            self.fix()
+            self.assertNotIn("refreshInterval", self.read()["statusLine"])
+
+    def test_foreign_statusline_refresh_interval_is_left_alone(self):
+        foreign = {"type": "command", "command": "~/bin/my-line.sh", "refreshInterval": 10}
+        self.write({"statusLine": foreign, "env": dict(BOTH)})
         self.fix()
-        self.assertEqual(self.read()["statusLine"]["refreshInterval"], 60)
-        self.write({"statusLine": {"type": "command", "command": cmd, "refreshInterval": 120}, "env": dict(BOTH)})
-        self.fix()
-        self.assertEqual(self.read()["statusLine"]["refreshInterval"], 120)
+        self.assertEqual(self.read()["statusLine"], foreign)
 
     def test_stale_atlas_path_repointed(self):
         self.write({"statusLine": {"type": "command", "command": 'python3 "/gone/0.0.1/scripts/atlas_statusline.py"'}})

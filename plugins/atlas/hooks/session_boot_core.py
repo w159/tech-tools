@@ -1148,10 +1148,14 @@ def git_hygiene_boot(cwd, now=None):
     )
 
 
-def prune_boot(cwd):
+PRUNE_EVERY_S = 6 * 3600  # one detached prune per repo per this window, not one per session start
+
+
+def prune_boot(cwd, now=None):
     """Start `atlas_prune.py` detached (closed crews, boards, team records, dirty snapshots under
-    .atlas/.run; the mod's per-poll stat cost grows with them). Same kill switches as the git clean,
-    plus ATLAS_PRUNE=off. Returns True when started."""
+    .atlas/.run; the mod's per-poll stat cost grows with them) at most once per PRUNE_EVERY_S per repo
+    (mtime of .atlas/.run/prune-stamp). Same kill switches as the git clean, plus ATLAS_PRUNE=off.
+    Returns True when started."""
     off = ("off", "0", "false")
     if any(os.environ.get(k, "").lower() in off for k in ("ATLAS_GIT_GUARD", "ATLAS_PRUNE")):
         return False
@@ -1159,6 +1163,17 @@ def prune_boot(cwd):
         return False
     root = _git_main_root(cwd)
     if not root or not os.path.isdir(os.path.join(root, ".atlas", ".run")):
+        return False
+    now = time.time() if now is None else now
+    stamp = os.path.join(root, ".atlas", ".run", "prune-stamp")
+    with contextlib.suppress(OSError):
+        if now - os.path.getmtime(stamp) < PRUNE_EVERY_S:
+            return False
+    try:  # claim the slot before spawning so a burst of sessions starts one prune
+        with open(stamp, "w", encoding="utf-8") as fh:
+            fh.write(str(int(now)))
+        os.utime(stamp, (now, now))
+    except OSError:
         return False
     import subprocess
 

@@ -1835,6 +1835,17 @@ class GitHygieneBootTest(unittest.TestCase):
         self.assertIn("atlas_git.py status", line)
         self.assertEqual(line.count("\n"), 0)
 
+    def test_prune_runs_once_per_window_then_again_after_it(self):
+        os.makedirs(os.path.join(self.repo, ".atlas", ".run"), exist_ok=True)
+        t0 = time.time()
+        with mock.patch("subprocess.Popen") as popen:
+            self.assertTrue(session_boot.prune_boot(self.repo, now=t0))
+            self.assertFalse(session_boot.prune_boot(self.repo, now=t0 + 60))
+            self.assertFalse(session_boot.prune_boot(self.repo, now=t0 + session_boot.PRUNE_EVERY_S - 60))
+            self.assertEqual(popen.call_count, 1)
+            self.assertTrue(session_boot.prune_boot(self.repo, now=t0 + session_boot.PRUNE_EVERY_S + 60))
+            self.assertEqual(popen.call_count, 2)
+
     def test_corrupt_stamp_is_treated_as_missing(self):
         os.makedirs(os.path.dirname(self.stamp))
         with open(self.stamp, "w", encoding="utf-8") as fh:

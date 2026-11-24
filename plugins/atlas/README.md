@@ -1087,8 +1087,10 @@ inside the HUD. The status line prints its full grid whenever it is configured;
 `atlas_statusline.py` still prints one row (folder, timer, model, `· ctx N%`)
 when it reads a fresh file with `starved` set, which only an older mod writes.
 `atlas_statusline.py install` and
-`atlas_doctor.py --fix` set `refreshInterval: 60` on the statusLine entry (other
-keys are kept) so the switch lands within seconds. `atlas_doctor.py` reports this
+`atlas_doctor.py --fix` write the statusLine entry with no `refreshInterval` (other
+keys are kept; `--fix` removes an atlas-written one): a timed refresh starts a python
+process per open session even at rest, so the line refreshes on assistant messages and
+the compact switch lands on the next one. `atlas_doctor.py` reports this
 and the other display settings as `display-` checks (`display-hud` flags
 `ATLAS_HUD=off`; `display-omp-todo` flags `todo.enabled=false` in omp settings),
 and `atlas_doctor.py --fix` sets both env flags and the status line, removes
