@@ -1,5 +1,16 @@
 # Changelog
 
+## 17.40.0 - 2026-11-24
+
+### Changed
+
+- At rest atlas does nothing; while working it checks only what is in use. Measured over 120 idle seconds with 1,284 board files: 0.88 CPU-seconds with atlas on, 0.81 with the mod off, no extra child process (17.38.0 used 56.1 CPU-seconds per minute).
+- Mod (`mod/host/rest.ts`): at rest (no turn, agent, worker, team or crew, nothing animating, nothing moved for 10 s) every repeating timer is cancelled: board poll, panel and team status, gates, core rebuild, slow tick. An engine event (prompt, hook, turn, render, command, button) wakes them. Test: `mod/host/rest-idle.test.ts`.
+- Gates' 30 s backstop runs only while a turn runs; otherwise they rerun on todo, finding or Stop-verdict changes and at turn end.
+- Statusline: atlas writes no `refreshInterval`; it refreshes on assistant messages. `atlas_doctor.py --fix` removes an atlas-written interval and leaves a hand-written statusLine alone.
+- Session boot: the clean, reap-stale and prune jobs run at most once per 6 hours per repo.
+- History is written only when its content changes, never for elapsed time alone.
+
 ## 17.39.0 - 2026-11-24
 
 ### Changed

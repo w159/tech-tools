@@ -1,0 +1,4 @@
+idle 120 s, classic Claude Code, scratch project with this repo's .atlas/.run copy (1,284 boards), installed atlas disabled; child_pids_seen = distinct child processes of claude sampled every 0.2 s (MCP servers included)
+rest pid=65027 cpu_120s=.88 child_pids_seen=16 bands=1
+off2 pid=67684 cpu_120s=.81 child_pids_seen=18 bands=0
+earlier (60 s): 17.38.0 cpu 56.11, 17.39.0 cpu 0.84, mod off 0.52

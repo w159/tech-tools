@@ -15450,5 +15450,24 @@
     "verified_at": "2026-11-24T10:11:12+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "battery-drain-rest",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas at rest costs what the mod-off session costs: 0.88 vs 0.81 CPU-s per 120 s, no extra child process; no repeating mod timer at rest",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_battery-rest-measure.txt",
+      "plugins/atlas/mod/host/rest-idle.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "scratchpad idle-cpu.sh rest|off2 <plugin> on|off 120",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T12:59:49+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

@@ -1,10 +1,15 @@
 # Changelog
 
-## Unreleased -- an idle atlas session fires no mod timer
+## atlas 17.40.0 -- at rest atlas does nothing; while working it checks only what is in use
 
-- Changed, mod (`mod/host/rest.ts`, `hooks.ts`, `poll.ts`, `frame.ts`, `hook-log.ts`): one rest decision (`atRest`) replaces the always-on timers. At rest (no host turn, armed prompt, frame loop, gauge glide, pending dock, live agent or worker, and no event for 10 s) the poll, herdr, mux and gates timers and the slow tick are cancelled: no callback fires, no process is spawned, no file is read. Every hook event, band or pane render, and `/atlas-*` command wakes them once. A finished run keeps them on until its `done` clock has flipped to idle (60 s), because that flip is drawn.
-- Changed, `poll.ts`: `atlas_wt.py status` runs only while `.atlas/wt/` holds a worktree record.
-- Added, `mod/host/rest-idle.test.ts` (fake clock: zero callbacks, spawns and fs reads over 10 minutes at rest; a prompt wakes the poll; the timers sleep again after the turn).
+Measured (`.atlas/evidence/2026-11-24_battery-rest-measure.txt`, 120 s idle with this repo's 1,284 board files): atlas on 0.88 CPU-seconds, atlas mod off 0.81, and no extra child process. For comparison, 17.38.0 used 56.1 CPU-seconds per minute.
+
+- Changed, mod (`mod/host/rest.ts`): one rest decision. At rest (no host turn, no armed prompt, no live agent, worker, team or crew, nothing animating, nothing moved for 10 s) every repeating timer is cancelled: the board poll, panel and team status, gates, core rebuild and the slow tick. Nothing is spawned, read or written until an engine event (a prompt, hook, turn, render, command or button press) wakes them. Test: `mod/host/rest-idle.test.ts` (10 simulated minutes at rest: 0 timer callbacks, 0 spawns, 0 reads).
+- Changed: the gates' 30 s backstop runs only while a turn runs; otherwise gates rerun on todos, findings or Stop-verdict changes and at turn end.
+- Changed, statusline: atlas writes no `refreshInterval`; the statusline refreshes on assistant messages. `atlas_doctor.py --fix` removes an atlas-written interval and leaves a hand-written statusLine alone.
+- Changed, session boot: the detached clean, reap-stale and prune jobs run at most once per 6 hours per repo, not at every session start.
+- Changed: history is written only when its content changes, never for elapsed time alone.
+- Changed, `poll.ts`: `atlas_wt.py status` runs only while `.atlas/wt/` holds a worktree record. A finished run keeps the timers on until its `done` clock has flipped to idle (60 s), because that flip is drawn.
 
 ## atlas 17.39.0 -- an idle atlas session no longer drains the battery
 
