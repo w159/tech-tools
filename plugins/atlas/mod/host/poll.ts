@@ -27,7 +27,7 @@ export const HERDR_MS = 5000;
 export const GATES_MS = 30_000; // the backstop run; a change to a gate file runs the gates on the next poll instead
 export const IDLE_AFTER_MS = 10_000; // nothing moved and nothing runs for this long: the timers stretch
 export const IDLE_POLL_MS = 5000; // the fingerprint poll while idle (a hook event or a fingerprint change snaps it back to POLL_MS)
-export const IDLE_TICK_MS = 30_000; // the WT, mux, herdr and core ticks while idle
+export const IDLE_BACKOFF_MS = 30_000; // the WT, mux, herdr and core ticks while idle
 const GATES_MIN_MS = 5000; // the shortest gap between two gate runs (a hook writes the gate DB on every tool call; a run spawns python)
 
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
@@ -105,7 +105,7 @@ export async function dataFingerprint($: EngineInterface): Promise<string> {
 
 /** `atlas_wt.py status` rows, re-run at most every WT_MS (git is the slow part). */
 async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
-	if (now - S.wtAt >= WT_MS && !(await idleSkip($, 'wt', IDLE_TICK_MS))) {
+	if (now - S.wtAt >= WT_MS && !(await idleSkip($, 'wt', IDLE_BACKOFF_MS))) {
 		S.wtAt = now;
 		const root = (await read($, snapshotState))?.root;
 		const out = root ? await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_wt.py`, '--root', root, 'status']).catch(() => undefined) : undefined;
@@ -290,7 +290,7 @@ export async function rebuildTick($: EngineInterface): Promise<void> {
 /** 5 s tick: herdr pane status, only once the pane was opened. */
 export async function herdrTick($: EngineInterface): Promise<void> {
 	if (!(await read($, paneOpenedState)) || (await read($, snapshotState)) === null) return;
-	if (await idleSkip($, 'herdr', IDLE_TICK_MS)) return;
+	if (await idleSkip($, 'herdr', IDLE_BACKOFF_MS)) return;
 	const out = await $.process
 		.run(['python3', `${$.plugin.root}/scripts/atlas_herdr.py`, 'status'])
 		.catch(() => undefined);
@@ -305,10 +305,11 @@ export async function muxTick($: EngineInterface): Promise<void> {
 	const snap = await read($, snapshotState);
 	const root = rootOf(snap);
 	if (root === '' || snap === null) return;
-	if (await idleSkip($, 'mux', IDLE_TICK_MS)) return;
+	if (await idleSkip($, 'mux', IDLE_BACKOFF_MS)) return;
 	// No early return on zero runs: a reaped team (record archived, no board channel) must clear its lanes, not freeze them.
-	const { runs, own } = await muxRuns($, root, snap);
-	const outs = await Promise.all(runs.map((r) => muxStatus($, root, r.id)));
+	const { runs, own, live } = await muxRuns($, root, snap);
+	// No team record and no board member: no pane can be running, so skip the python status spawn (the board run alone has nothing to report).
+	const outs = live ? await Promise.all(runs.map((r) => muxStatus($, root, r.id))) : runs.map(() => '');
 	const agents = await withPaneTools($, root, ownRows(outs.flatMap((o, i) => parseMuxStatus(o, runs[i]!.members)), own));
 	const sig = `${outs.join('\n')}|${agents.map((a) => `${a.tool ?? ''}${a.lastTool ?? ''}${a.target ?? ''}${a.uses ?? ''}`).join(',')}`;
 	if (sig === S.muxStdout) return;
@@ -326,15 +327,32 @@ async function muxStatus($: EngineInterface, root: string, run: string): Promise
 /** Status runs: the board channel's, plus each `.atlas/.run/teams/<id>.json` team on the board channel or on this
  * session's lead channel (`<folder>@<branch>/lead-<session6>`, which the board channel need not be). `own`: the
  * worker names this session may show (team members and board members). */
-async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): Promise<{ runs: { id: string; members: string[] }[]; own: Set<string> }> {
+async function muxRuns($: EngineInterface, root: string, snap: AtlasSnapshot): Promise<{ runs: { id: string; members: string[] }[]; own: Set<string>; live: boolean }> {
 	const dir = `${root.replace(/\/+$/, '')}/.atlas/.run/teams`;
 	const names = (await $.fs.list(dir).catch(() => [])).map((e) => e.name).filter((n) => n.endsWith('.json'));
-	const records = await Promise.all(names.map(async (name) => ({ name, text: (await $.fs.read(`${dir}/${name}`).catch(() => undefined)) ?? '' })));
+	const records = await Promise.all(names.map(async (name) => ({ name, text: (await readByStat($, `${dir}/${name}`, teamTexts)) ?? '' })));
 	const board = snap.channel ?? '';
 	const teams = teamsOf(records, [board, `lead-${snap.sessionId.slice(0, 6)}`]);
 	const runs = [...(board ? [{ id: board.split('/').pop() ?? board, members: [] }] : []), ...teams];
-	return { runs, own: new Set([...teams.flatMap((t) => t.members), ...snap.members.map((m) => m.name)]) };
+	return { runs, own: new Set([...teams.flatMap((t) => t.members), ...snap.members.map((m) => m.name)]), live: teams.length > 0 || snap.members.length > 0 };
 }
+/** `path`'s text, re-read only when its size or mtime moved (one stat per call); undefined when missing. */
+async function readByStat($: EngineInterface, path: string, cache: Map<string, { key: string; text: string }>): Promise<string | undefined> {
+	const st = await $.fs.stat(path).catch(() => undefined);
+	if (st === undefined) {
+		cache.delete(path);
+		return undefined;
+	}
+	const key = `${st.size}:${st.mtimeMs}`;
+	const hit = cache.get(path);
+	if (hit?.key === key) return hit.text;
+	const text = await $.fs.read(path).catch(() => undefined);
+	if (text === undefined) return undefined;
+	cache.set(path, { key, text });
+	return text;
+}
+const teamTexts = new Map<string, { key: string; text: string }>(); // team records by path
+const paneLogs = new Map<string, { key: string; text: string }>(); // running workers' pane logs by path
 
 /** Tool uses that appeared in a pane log since the last read become calls at `now` (the first read is the baseline). */
 function paneCalls(name: string, uses: number, now: number): number[] {
@@ -345,8 +363,8 @@ function paneCalls(name: string, uses: number, now: number): number[] {
 }
 
 /** Running team workers get their tool / last tool / target from their pane log (the pane feed writes stream-json there)
- * and a first-seen start, so the lane's age counts up. ponytail: reads each running worker's whole log every MUX_MS;
- * tail-read if logs grow past a few MB. */
+ * and a first-seen start, so the lane's age counts up. The log is re-read only when its size or mtime moved (the host
+ * fs has no ranged read, and `uses` counts the whole log, so a tail window would break the call history). */
 async function withPaneTools($: EngineInterface, root: string, agents: SquadAgent[]): Promise<(SquadAgent & TeamTool)[]> {
 	const logs = `${root.replace(/\/+$/, '')}/.atlas/.run/logs`;
 	const now = await $.clock.now();
@@ -354,7 +372,7 @@ async function withPaneTools($: EngineInterface, root: string, agents: SquadAgen
 		agents.map(async (a) => {
 			const startedAt = (S.muxFirstSeen[a.name] ??= now);
 			if (a.state !== 'running') return a;
-			const log = (await $.fs.read(`${logs}/${a.name}.log`).catch(() => undefined)) ?? '';
+			const log = (await readByStat($, `${logs}/${a.name}.log`, paneLogs)) ?? '';
 			const pane = paneTool(log);
 			return { ...a, state: paneExit(log) ?? a.state, startedAt, ...pane, calls: paneCalls(a.name, pane.uses ?? 0, now) };
 		}),

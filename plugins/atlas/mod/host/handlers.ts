@@ -79,7 +79,7 @@ let lastHudSig: string | undefined;
 /** Test seam: forget the last written state. */
 export const resetHudStateSig = (): void => { lastHudSig = undefined; };
 
-/** Writes `.atlas/.run/hud-state.json` ({ts, maxRows, wanted, shown, fullscreen, starved}) for the Claude Code status line. 17.15.1: `starved` is always false. The mod never asks the status line to shrink to one row; the user's status line prints in full whenever it is configured, and a plan longer than the slot folds inside the HUD (hud-surface fitRows). The field stays in the file for status line scripts that read it. Skips an unchanged state; temp file + mv, fail soft, never throws out of render. */
+/** Writes `.atlas/.run/hud-state.json` ({ts, maxRows, wanted, shown, fullscreen, starved}) for the Claude Code status line. 17.15.1: `starved` is always false. The mod never asks the status line to shrink to one row; the user's status line prints in full whenever it is configured, and a plan longer than the slot folds inside the HUD (hud-surface fitRows). The field stays in the file for status line scripts that read it. Skips an unchanged state; fail soft, never throws out of render. */
 export async function publishHudState($: EngineInterface, root: string | null | undefined, state: HudState): Promise<void> {
 	try {
 		if (root === undefined || root === null || root === '') return;
@@ -88,8 +88,7 @@ export async function publishHudState($: EngineInterface, root: string | null | 
 		if (sig === lastHudSig) return;
 		lastHudSig = sig;
 		const path = `${root.replace(/\/+$/, '')}/.atlas/.run/hud-state.json`;
-		await $.fs.write(`${path}.tmp`, JSON.stringify({ ts: now, ...state, starved: false }));
-		await $.process.run(['mv', '-f', `${path}.tmp`, path]);
+		await $.fs.write(path, JSON.stringify({ ts: now, ...state, starved: false })); // the Python reader treats a half file as no state, so no temp + mv fork
 	} catch {
 		lastHudSig = undefined;
 	}

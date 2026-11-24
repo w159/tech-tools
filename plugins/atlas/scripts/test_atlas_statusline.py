@@ -251,7 +251,7 @@ class StatuslineTest(unittest.TestCase):
             json.dump({"statusLine": {"type": "command", "command": "x", "padding": 3}}, f)
         self.run_main(["install", "--settings", settings, "--home", self.tmp])
         sl_cfg = jload(settings)["statusLine"]
-        self.assertEqual(sl_cfg["refreshInterval"], 5)
+        self.assertEqual(sl_cfg["refreshInterval"], 60)
         self.assertEqual(sl_cfg["padding"], 3)
         self.assertIn("atlas_statusline_launch.py", sl_cfg["command"])
 

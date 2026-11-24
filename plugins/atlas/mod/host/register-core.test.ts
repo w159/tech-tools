@@ -109,6 +109,32 @@ describe('coreTick', () => {
     expect(s.rec.toasts).toEqual([]);
   });
 
+  test('a second tick with no file change parses no board lines, reads no file, and stats only this channel logs', async () => {
+    const s = await session(false);
+    const note = JSON.stringify({ kind: 'report', owner: 'implementer-1', text: 'STATUS: DONE', ts: 1 });
+    s.files[`${RUN}/board/implementer-1.jsonl`] = `${Array(300).fill(note).join('\n')}\n`;
+    s.files[`${RUN}/logs/implementer-1.log`] = Array.from({ length: 300 }, (_, i) => assistant(`m${i}`, i)).join('\n');
+    s.files[`${RUN}/logs/stranger-9.log`] = assistant('z', 1); // another session's worker: never stat-ed
+    const stats: string[] = [];
+    const stat = s.$.fs.stat.bind(s.$.fs);
+    (s.$.fs as { stat: typeof stat }).stat = async (p: string) => { stats.push(p); return stat(p); };
+    let parsed = 0;
+    const parse = JSON.parse;
+    JSON.parse = ((t: string, r?: never) => { parsed++; return parse(t, r); }) as typeof JSON.parse;
+    try {
+      await coreTick(s.$);
+      expect(parsed).toBeGreaterThan(0);
+      const readsAfterFirst = s.rec.reads.length;
+      parsed = 0;
+      await coreTick(s.$);
+      expect(s.rec.reads.length).toBe(readsAfterFirst);
+      // 300 board lines and 300 log lines are not re-parsed: what is left is the small fixed files (findings, team record, matrix)
+      expect(parsed).toBeLessThan(30);
+    } finally {
+      JSON.parse = parse;
+    }
+    expect(stats.some((p) => p.endsWith('stranger-9.log'))).toBe(false);
+  });
   test('an unchanged log is not read again', async () => {
     const s = await session(false);
     for (let i = 0; i < 4; i++) await coreTick(s.$);

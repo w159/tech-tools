@@ -137,7 +137,7 @@ export async function loadHistory($: EngineInterface, root: string | null | unde
   seedHookLatency(base.lat);
 }
 
-/** Write the history atomically (temp file, then `mv`) when it changed: at most every WRITE_EVERY_MS unless `force`. Skips a project that has no `.atlas` directory (nothing is created in a repo that never used Atlas). Fail soft. */
+/** Write the history (no fork; a half file reads as empty history) when it changed: at most every WRITE_EVERY_MS unless `force`. Skips a project that has no `.atlas` directory (nothing is created in a repo that never used Atlas). Fail soft. */
 export async function flushHistory($: EngineInterface, root: string | null | undefined, now: number, force = false): Promise<void> {
   try {
     if (root === undefined || root === null || root === '') return;
@@ -147,12 +147,10 @@ export async function flushHistory($: EngineInterface, root: string | null | und
     const dir = dirOf(root);
     if (dirFor !== dir) {
       if (!(await $.fs.exists(`${root.replace(/\/+$/, '')}/.atlas`))) return;
-      await $.process.run(['mkdir', '-p', dir]);
-      dirFor = dir;
+      dirFor = dir; // fs.write creates the missing directories
     }
     const path = `${dir}/${HISTORY_FILE}`;
-    await $.fs.write(`${path}.tmp`, text);
-    await $.process.run(['mv', '-f', `${path}.tmp`, path]);
+    await $.fs.write(path, text);
     lastWritten = text;
     wroteAt = now;
   } catch {

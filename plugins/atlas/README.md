@@ -1087,7 +1087,7 @@ inside the HUD. The status line prints its full grid whenever it is configured;
 `atlas_statusline.py` still prints one row (folder, timer, model, `· ctx N%`)
 when it reads a fresh file with `starved` set, which only an older mod writes.
 `atlas_statusline.py install` and
-`atlas_doctor.py --fix` set `refreshInterval: 5` on the statusLine entry (other
+`atlas_doctor.py --fix` set `refreshInterval: 60` on the statusLine entry (other
 keys are kept) so the switch lands within seconds. `atlas_doctor.py` reports this
 and the other display settings as `display-` checks (`display-hud` flags
 `ATLAS_HUD=off`; `display-omp-todo` flags `todo.enabled=false` in omp settings),

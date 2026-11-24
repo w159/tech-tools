@@ -122,7 +122,7 @@ function fakeEngine(files: Files) {
 }
 
 describe('Y1a: reading and writing the file under the project root', () => {
-  test('loads the file at start, writes it atomically (temp file, then mv) and a second session reads what the first wrote', async () => {
+  test('loads the file at start, writes it in place (no fork) and a second session reads what the first wrote', async () => {
     resetHookLog();
     const files: Files = { '/p/.atlas/todos': '' };
     const a = fakeEngine(files);
@@ -132,8 +132,7 @@ describe('Y1a: reading and writing the file under the project root', () => {
     noteHookMs('tool.call Bash', AT, AT + 4);
     noteHistoryRun({ secs: 30, ok: true, tools: 2, at: AT + 100 });
     await flushHistory(a.$, '/p', AT + 200, true);
-    expect(a.writes).toEqual(['/p/.atlas/.run/history.json.tmp']); // the temp file is what the engine wrote; mv put it in place
-    expect(Object.keys(files)).not.toContain('/p/.atlas/.run/history.json.tmp');
+    expect(a.writes).toEqual(['/p/.atlas/.run/history.json']);
     const onDisk = parseHistory(files['/p/.atlas/.run/history.json']);
     expect(onDisk.runs.map((r) => r.secs)).toEqual([30]);
     expect(onDisk.lat['tool.call']).toEqual([4]);

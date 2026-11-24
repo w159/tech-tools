@@ -1,5 +1,20 @@
 # Changelog
 
+## 17.39.0 - 2026-11-24
+
+### Changed
+
+- An idle atlas session no longer drains the battery. Measured in a project with 1,273 board files and 324 MB of `.atlas/.run`: 56.1 CPU-seconds per minute on 17.38.0, 0.84 on 17.39.0, 0.52 with the mod off.
+- Mod poll (`mod/host/poll.ts`, `mod/data/crew.ts`): the fingerprint stats only todos, channels, findings, the board folder and boards of owners on screen, concurrently. Finished crews cost nothing.
+- Idle backoff: after 10 quiet seconds the poll, worktree, team and panel ticks back off to seconds; any hook event, turn or fingerprint change snaps them back. The frame loop stops at rest.
+- Gates no longer rerun on `atlas.db` or its `-wal`; todos, findings and the Stop verdict still do.
+- Core rebuild parses board reports, worker offload and team records only when their file changed.
+- Statusline `refreshInterval` 5 s -> 60 s and fallow cache 60 s -> 300 s. `atlas_doctor.py --fix` raises an atlas-written value below 60; a person-written statusLine is left alone.
+- Mod writes go through the engine fs API instead of forking `mkdir` and `mv`.
+- New `scripts/atlas_prune.py`, started detached at session boot (`ATLAS_PRUNE=off` disables): prunes finished crews, old boards of closed channels, reaped team records and dirty snapshots beyond the newest 5. Never touches findings, todos, live crews or live teams.
+- `atlas_mux.py reap` auto-commits a dirty worker with `--no-verify` and reports failures; `scripts/gate.sh` finds the main checkout's `.venv` from a linked worktree.
+- Not changed yet: `.atlas/.run` still lives in the repo, so a synced folder still syncs atlas runtime writes.
+
 ## 17.38.0 - 2026-11-24
 
 ### Changed

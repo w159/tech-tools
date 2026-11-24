@@ -35,7 +35,7 @@ import { hoverStyle } from '../input/clickable';
 import type { LiveSnapshot } from '../orchestra-types';
 import { BOARD_ID, engineFs, flipsOf, PANE_DOCK, PANE_ID, reportFailure, rootOf, S, shouldDockAsked, shouldDockRest, shownFailures, toastUnplaced } from './atoms';
 import { folderOf, headerTallyOf } from './agents';
-import { GATES_MS, gitBranch, HERDR_MS, herdrTick, IDLE_TICK_MS, idleSkip, MUX_MS, muxTick, resetPollIdle, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
+import { GATES_MS, gitBranch, HERDR_MS, herdrTick, IDLE_BACKOFF_MS, idleSkip, MUX_MS, muxTick, resetPollIdle, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
 import { buildCore, coreTick, gateGroups, leadMessages, resetCore } from './core-tick';
 import { atlasSlot, bandHandlers, effectiveRows, healthInOf, publishHudState, readStatuslineRows, sidebarHandlers } from './handlers';
 import { armFrameLoop, armTick, easeTick, ensureFrameLoop, heldFinal, heldWork, hostTurnRunning, isWorkingNow, motionTick, originOf, runBandModel, STOP_SETTLE_MS, syncHistory, verdictFast, wakeLoops } from './frame';
@@ -149,7 +149,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				});
 				$.clock.every(MUX_MS, () => {
 					void muxTick($);
-					void idleSkip($, 'core', IDLE_TICK_MS).then((skip) => (skip ? undefined : coreTick($)));
+					void idleSkip($, 'core', IDLE_BACKOFF_MS).then((skip) => (skip ? undefined : coreTick($)));
 				});
 				$.clock.every(GATES_MS, () => {
 					if (S.hostWorking) void runGates($); // the backstop runs only while a turn does; Stop / turn.complete mark the gates stale themselves

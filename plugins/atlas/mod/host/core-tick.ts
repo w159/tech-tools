@@ -5,7 +5,7 @@ import type { AtlasSnapshot } from '../contract';
 import type { GateGroup } from '../view/panel/pane/sidebar';
 import { planBasis } from '../data/todos';
 import { headerGroup, openGateCount } from './gates';
-import { coreModel, type CoreModel, hasCore, type ReportNote } from '../data/core';
+import { channelMembers, coreModel, type CoreModel, hasCore, type ReportNote } from '../data/core';
 import { drawnHeaderTally } from '../view/transcript/restyle';
 import { EMPTY_ORCH } from '../data/orchestration';
 import { reportFailure, S } from './atoms';
@@ -27,6 +27,7 @@ const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, 
 let coreSeen: Set<string> | null = null; // verdict `id:status` seen by the last coreTick; null until its first (baseline) read
 let coreFinished: Record<string, boolean> = {}; // worker -> its offload had finished at the last coreTick
 let coreFiles: Record<string, { key: string; text: string }> = {}; // core inputs keyed by path, re-read only when size or mtime moved
+let reportMemo: Record<string, { text: string; notes: ReportNote[] }> = {}; // parsed board reports per path; re-parsed only when the cached text changed
 let coreTouched = new Set<string>(); // paths read by the build in progress; the rest are evicted after it
 let coreFindingsOk = true; // findings.json was readable in the last buildCore
 
@@ -42,6 +43,7 @@ export function resetCore(): void {
 	coreSeen = null;
 	coreFinished = {};
 	coreFiles = {};
+	reportMemo = {};
 	coreTouched = new Set();
 	coreFindingsOk = true;
 	S.wtAt = -Infinity;
@@ -92,6 +94,13 @@ function reportsOf(text: string): ReportNote[] {
 	});
 }
 
+function reportsMemo(path: string, text: string): ReportNote[] {
+	const hit = reportMemo[path];
+	if (hit?.text === text) return hit.notes;
+	const notes = reportsOf(text);
+	reportMemo[path] = { text, notes };
+	return notes;
+}
 /** The lead's transcript rows; empty when the host gives none. */
 export async function leadMessages($: EngineInterface): Promise<{ role: string; text: string }[]> {
 	try {
@@ -107,9 +116,20 @@ async function boardReports($: EngineInterface, base: string, snap: AtlasSnapsho
 	const owners = boardOwners(snap);
 	for (const name of Object.keys((await read($, orchState)).meta)) owners.add(name);
 	const boards = await namesIn($, `${base}/board`, (n) => n.endsWith('.jsonl') && owners.has(n.slice(0, -'.jsonl'.length)));
-	return (await Promise.all(boards.map(async (n) => reportsOf(await readGrown($, `${base}/board/${n}`))))).flat();
+	return (await Promise.all(boards.map(async (n) => reportsMemo(`${base}/board/${n}`, await readGrown($, `${base}/board/${n}`))))).flat();
 }
 
+/** This channel's member and dispatch logs by worker name; coreModel drops every other log, so only these are stat-ed (`logs/` holds hundreds). */
+async function memberLogs($: EngineInterface, base: string, snap: AtlasSnapshot, teams: { text: string }[]) {
+	const channels = [snap.channel ?? '', `lead-${(snap.sessionId ?? '').slice(0, 6)}`]; // a snapshot without a session id (older fixtures) matches no lead channel
+	const dispatches = Object.values((await read($, orchState)).meta);
+	const mine = channelMembers(teams, channels);
+	for (const d of dispatches) if (d.name) mine.add(d.name);
+	const names = await namesIn($, `${base}/logs`, (n) => n.endsWith('.log') && mine.has(n.slice(0, -'.log'.length)));
+	const logs: Record<string, string> = {};
+	for (const n of names) logs[n.replace(/\.log$/, '')] = await readGrown($, `${base}/logs/${n}`);
+	return { channels, dispatches, logs };
+}
 /** The core model from the run scratch under the snapshot root; null without a board root. Reads only. */
 export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	const snap = await read($, snapshotState);
@@ -119,9 +139,7 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 	coreTouched = new Set();
 	const teamReads = await Promise.all((await namesIn($, `${base}/teams`, (n) => n.endsWith('.json'))).map(async (name) => ({ name, text: await readCached($, `${base}/teams/${name}`) }))); // null = stat or read failed
 	const teams = teamReads.map((t) => ({ name: t.name, text: t.text ?? '' }));
-	const logNames = await namesIn($, `${base}/logs`, (n) => n.endsWith('.log') && n !== 'atlas_mux.log');
-	const logs: Record<string, string> = {};
-	for (const n of logNames) logs[n.replace(/\.log$/, '')] = await readGrown($, `${base}/logs/${n}`);
+	const { channels, dispatches, logs } = await memberLogs($, base, snap, teams);
 	const reports = await boardReports($, base, snap);
 	const findings = await readCached($, `${base}/findings.json`);
 	coreFindingsOk = findings !== null && (findings.trim() === '' || parses(findings)); // a partial write keeps the seen set
@@ -139,8 +157,8 @@ export async function buildCore($: EngineInterface): Promise<CoreModel | null> {
 		header: ((t, d) => ({ ok: Math.max(t.ok, d.ok), total: Math.max(t.total, d.total) }))(await read($, headerTallyState), drawnHeaderTally()), // the transcript draws a chip per text block; turn.complete counts one answer per turn
 		openGates: openGateCount(await gateGroups($)),
 			// same channels teamsOf gets in muxRuns; dispatches are the orchestration spawn rows this mod already holds
-			channels: [snap.channel ?? '', `lead-${(snap.sessionId ?? '').slice(0, 6)}`], // a snapshot without a session id (older fixtures) matches no lead channel
-			dispatches: Object.values((await read($, orchState)).meta),
+			channels, // a snapshot without a session id (older fixtures) matches no lead channel
+			dispatches,
 		...(S.sessionStartMs !== null ? { since: S.sessionStartMs } : {}), // the ledger counts this session's findings, not the file lifetime
 	});
 }

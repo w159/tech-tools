@@ -2476,10 +2476,17 @@ def _autocommit_worktrees(root: str, rec: dict) -> list:
         path = wt["path"]
         if not Path(path).is_dir() or not _git(path, "status", "--porcelain").stdout.strip():
             continue
-        if _git(path, "add", "-A").returncode == 0 and _git(
-            path, *_identity_args(path), "commit", "-q", "-m", f"atlas reap: {member} uncommitted work"
-        ).returncode == 0:
+        # --no-verify: bookkeeping commit on the worker's private branch; the repo pre-commit gate can
+        # fail inside a worktree (no .venv) and the lead's gate verifies the merged result.
+        r = _git(path, "add", "-A")
+        if r.returncode == 0:
+            r = _git(path, *_identity_args(path), "commit", "-q", "--no-verify", "-m",
+                     f"atlas reap: {member} uncommitted work")
+        if r.returncode == 0:
             done.append(member)
+        else:
+            tail = " | ".join((r.stderr or r.stdout or "").strip().splitlines()[-3:])
+            print(f"auto-commit failed: {member}: {tail}")
     return done
 
 

@@ -29,7 +29,6 @@ const counts = new Map<string, number>();
 let optedOut: boolean | undefined;
 let lastWriteMs = -Infinity;
 let trailing: { cancel(): void } | null = null;
-let dirMade = false;
 let seq = 0;
 let chain: Promise<unknown> = Promise.resolve();
 
@@ -117,14 +116,9 @@ async function writeDelta($: EngineInterface): Promise<void> {
 	const snapshot = new Map(counts);
 	if (snapshot.size === 0) return;
 	const dir = `${home}/analytics/mod`;
-	if (!dirMade) {
-		await $.process.run(['mkdir', '-p', dir]); // fs.write does not create parents
-		dirMade = true;
-	}
 	const rand = Math.random().toString(36).slice(2, 8).padEnd(6, '0');
 	const path = `${dir}/${sid}-${seq}-${rand}.json`;
-	await $.fs.write(`${path}.tmp`, JSON.stringify({ v: 2, counts: Object.fromEntries(snapshot) }));
-	await $.process.run(['mv', '-f', `${path}.tmp`, path]);
+	await $.fs.write(path, JSON.stringify({ v: 2, counts: Object.fromEntries(snapshot) })); // fs.write creates parents; the folder reads a half file as no counts and retries it next start
 	seq += 1;
 	for (const [k, n] of snapshot) {
 		const left = (counts.get(k) ?? 0) - n;
@@ -169,7 +163,6 @@ export const resetUsageForTest = (): void => {
 	lastWriteMs = -Infinity;
 	trailing?.cancel();
 	trailing = null;
-	dirMade = false;
 	seq = 0;
 	chain = Promise.resolve();
 };

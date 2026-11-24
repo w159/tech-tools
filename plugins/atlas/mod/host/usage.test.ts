@@ -50,7 +50,7 @@ function stub(o: Opts = {}) {
 }
 
 const parsed = (s: { last(): { text: string } | undefined }) => JSON.parse(s.last()!.text);
-const DELTA = /^\/[^ ]+\/analytics\/mod\/([A-Za-z0-9_-]+)-(\d+)-([a-z0-9]{6})\.json\.tmp$/;
+const DELTA = /^\/[^ ]+\/analytics\/mod\/([A-Za-z0-9_-]+)-(\d+)-([a-z0-9]{6})\.json$/;
 const sum = (ws: Array<{ text: string }>) => {
   const t: Record<string, number> = {};
   for (const w of ws) for (const [k, n] of Object.entries(JSON.parse(w.text).counts as Record<string, number>)) t[k] = (t[k] ?? 0) + n;
@@ -81,17 +81,15 @@ describe('usage counters', () => {
     expect(parsed(s)).toEqual({ v: 2, counts: { 'mod.error.boot': 1 } });
   });
 
-  test('path: $ATLAS_HOME/analytics/mod/<sid>-<seq>-<rand>.json, else $HOME/.atlas/...; temp file then mv', async () => {
+  test('path: $ATLAS_HOME/analytics/mod/<sid>-<seq>-<rand>.json, else $HOME/.atlas/...; written in place with no fork', async () => {
     const a = stub({ env: { ATLAS_HOME: '/atlas-home', HOME: '/home/u' }, sid: 'abc_1-2' });
     await noteUsage(a.$, 'mod.command.atlas-todo');
-    const tmp = a.last()!.path;
-    expect(tmp).toMatch(/^\/atlas-home\/analytics\/mod\/abc_1-2-0-[a-z0-9]{6}\.json\.tmp$/);
-    expect(a.runs).toContainEqual(['mkdir', '-p', '/atlas-home/analytics/mod']);
-    expect(a.runs).toContainEqual(['mv', '-f', tmp, tmp.replace(/\.tmp$/, '')]);
+    expect(a.last()!.path).toMatch(/^\/atlas-home\/analytics\/mod\/abc_1-2-0-[a-z0-9]{6}\.json$/);
+    expect(a.runs).toHaveLength(0);
     resetUsageForTest();
     const b = stub({ env: { HOME: '/home/u' } });
     await noteUsage(b.$, 'mod.command.atlas-todo');
-    expect(b.last()!.path).toMatch(/^\/home\/u\/\.atlas\/analytics\/mod\/sess-1-0-[a-z0-9]{6}\.json\.tmp$/);
+    expect(b.last()!.path).toMatch(/^\/home\/u\/\.atlas\/analytics\/mod\/sess-1-0-[a-z0-9]{6}\.json$/);
   });
 
   test('DO_NOT_TRACK=1 writes nothing; DO_NOT_TRACK=0 does not opt out', async () => {
@@ -168,7 +166,7 @@ describe('usage counters', () => {
     await pick('prompt.submit')(s.$, { text: 'go' }, noopNext);
     expect(s.opens).toHaveLength(1);
     await new Promise((r) => later(r)); // noteUsage is fire-and-forget on this path
-    const usage = s.writes.filter((w) => /\/real-path-\d+-[a-z0-9]{6}\.json\.tmp$/.test(w.path));
+    const usage = s.writes.filter((w) => /\/real-path-\d+-[a-z0-9]{6}\.json$/.test(w.path));
     expect(usage.length).toBeGreaterThan(0);
     expect(sum(usage)).toEqual({ 'mod.open.dock': 1 });
   });

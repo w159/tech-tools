@@ -35,8 +35,11 @@ fi
 # Hooks export git's repo vars; tests that build fixture repos must not inherit them (commit mode unsets after reading the index).
 [ "$mode" = commit ] || unset GIT_INDEX_FILE GIT_DIR GIT_WORK_TREE GIT_PREFIX GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
 
-if [ -x .venv/bin/python ]; then PY=.venv/bin/python; else PY=python3; fi
-if [ "$PY" = python3 ]; then PYABS="$(command -v python3 || echo python3)"; else PYABS="$root/$PY"; fi
+# A linked worktree has no .venv (gitignored); fall back to the main checkout's.
+mainvenv="$(dirname "$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)")/.venv/bin/python"
+if [ -x .venv/bin/python ]; then PY=.venv/bin/python; PYABS="$root/$PY"
+elif [ -x "$mainvenv" ]; then PY="$mainvenv"; PYABS="$mainvenv"
+else PY=python3; PYABS="$(command -v python3 || echo python3)"; fi
 ATLAS=plugins/atlas
 JOBS=8
 START=$SECONDS

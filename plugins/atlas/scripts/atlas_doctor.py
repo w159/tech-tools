@@ -1501,6 +1501,9 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
     return rows
 
 
+STATUSLINE_REFRESH_MIN_S = 60  # keep equal to atlas_statusline.STATUSLINE_REFRESH_S
+
+
 def _atomic_write_json(path, data):
     text = json.dumps(data, indent=2) + "\n"
     json.loads(text)
@@ -1611,12 +1614,17 @@ def fix_display(settings_path=None, env=None, plugin_root=None, project_dir=None
             atlas_statusline.write_launcher(ahome)
             if is_launcher and cfg.get("command") == want:
                 new = dict(cfg)
-                new.setdefault("refreshInterval", 5)
+                cur_iv = new.get("refreshInterval")
+                # An atlas-written 5 s poll (older installs) costs a python start every 5 s per idle session: heal it. A
+                # user-chosen value of 60 or more stays.
+                if not isinstance(cur_iv, (int, float)) or isinstance(cur_iv, bool) or cur_iv < STATUSLINE_REFRESH_MIN_S:
+                    new["refreshInterval"] = STATUSLINE_REFRESH_MIN_S
             else:
-                new = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=want, refreshInterval=5)
+                new = dict(cfg if isinstance(cfg, dict) else {}, type="command", command=want,
+                           refreshInterval=STATUSLINE_REFRESH_MIN_S)
             if new != cfg:
                 data["statusLine"] = new
-                notes.append(f"set statusLine to {want} (refreshInterval 5) in {path}")
+                notes.append(f"set statusLine to {want} (refreshInterval {new['refreshInterval']}) in {path}")
                 changed = True
         except Exception as e:
             notes.append(f"SKIP statusLine launcher: {e}")

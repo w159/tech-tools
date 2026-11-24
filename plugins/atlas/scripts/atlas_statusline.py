@@ -261,7 +261,7 @@ def load_cfg():
 # ---------- fallow ----------
 
 
-FALLOW_CACHE_S = 60
+FALLOW_CACHE_S = 300
 FALLOW_LOCK_S = 15  # no second refresh is spawned while one may still be running
 
 
@@ -350,7 +350,7 @@ def refresh_fallow(cwd, home):
 HUD_STATE_FILE = os.path.join(".atlas", ".run", "hud-state.json")
 ROWS_FILE = os.path.join(".atlas", ".run", "statusline-rows.json")
 HUD_FRESH_S = 15
-STATUSLINE_REFRESH_S = 5  # seconds; lets the compact switch land without waiting for an assistant turn
+STATUSLINE_REFRESH_S = 60  # seconds; lets the compact switch land without waiting for an assistant turn
 
 
 def _hud_root(cwd):

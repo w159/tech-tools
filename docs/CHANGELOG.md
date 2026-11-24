@@ -1,5 +1,20 @@
 # Changelog
 
+## atlas 17.39.0 -- an idle atlas session no longer drains the battery
+
+Measured (`.atlas/evidence/2026-11-24_battery-drain.txt`): an idle Claude Code session with the atlas mod, in a project holding 1,273 board files and 324 MB of `.atlas/.run`, used 56.1 CPU-seconds per minute on 17.38.0 (about one core, roughly 32% battery an hour reported), 0.84 on 17.39.0, and 0.52 with the mod off.
+
+- Fixed, mod poll (`mod/host/poll.ts`, `mod/data/crew.ts`): the 500 ms fingerprint stat-ed every board file and six paths of every crew, live or finished, one at a time (about 1,600 stats per poll, so the loop never slept). It now stats todos, channels, findings, the board folder and only the boards of owners on screen, concurrently; finished crews cost nothing.
+- Fixed, idle backoff: after 10 quiet seconds the poll, worktree, team and panel status ticks back off to seconds; any hook event, turn or fingerprint change snaps them back. The team status spawn is skipped when no team exists, the panel status when the panel is closed.
+- Fixed, gates: `atlas.db` and its `-wal` (written on every tool call, by every session) no longer trigger a gate rerun; todos, findings and the Stop verdict do.
+- Fixed, animation (`mod/host/frame.ts`): the 100 ms frame loop stops at rest and the 250 ms tick stretches to 5 s; both restart on the next prompt or working turn. The idle bar no longer breathes.
+- Fixed, core rebuild and team status (`mod/host/core-tick.ts`, `mod/data/core.ts`): board reports, worker offload and team records are parsed only when their file changed, and only this channel's worker logs are read.
+- Changed, statusline (`scripts/atlas_statusline.py`): refreshInterval 5 s -> 60 s (it still refreshes after every assistant message) and the fallow line cache 60 s -> 300 s. `atlas_doctor.py --fix` raises an atlas-written refreshInterval below 60 to 60; a statusLine the person wrote is left alone.
+- Changed, mod writes (hud-state, history, usage) go straight through the engine's fs API instead of forking `mkdir` and `mv`.
+- Added, `scripts/atlas_prune.py`, started detached at session boot (`ATLAS_PRUNE=off` disables): prunes finished crews, old boards of closed channels, reaped team records and dirty snapshots beyond the newest 5. Never touches findings, todos, live crews or live teams.
+- Fixed, `atlas_mux.py reap`: the auto-commit of a dirty worker uses `--no-verify` (the repo's pre-commit gate failed inside worktrees, which have no `.venv`) and reports any failure; `scripts/gate.sh` finds the main checkout's `.venv` from a linked worktree.
+- Not changed yet: `.atlas/.run` still lives in the repo, so a synced folder (MEGA, iCloud, OneDrive) still syncs atlas runtime writes.
+
 ## atlas 17.38.0 -- team worktrees and worker branches are always merged back and deleted
 
 - Fixed, `atlas_mux.py reap`: a worker that exits with uncommitted edits no longer strands its worktree. Reap commits the edits onto the worker's own branch, then merges and deletes as before. Seen live: all 3 worktree workers of one team left their work uncommitted, so their worktrees stayed behind.

@@ -15414,5 +15414,41 @@
     "verified_at": "2026-11-24T09:17:31+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "battery-drain",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "battery-drain: implementer branches not yet reaped into lead tree",
+    "evidence": [
+      "git log main..worker/t2d9c75-implementer-{2532,6713,c148} each show 1 unmerged commit; plugins/atlas/scripts/atlas_prune.py absent in lead tree"
+    ],
+    "doc_refs": [],
+    "reproduction": "ls plugins/atlas/scripts/atlas_prune.py; git log --oneline main..worker/t2d9c75-implementer-c148",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-24T09:52:02+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-359d"
+  },
+  {
+    "id": "battery-drain",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "idle atlas session 56.1 -> 0.84 CPU-s per minute (mod off 0.52): scoped fingerprint, idle backoff, frame loop stops at rest, parse caches, statusline 60 s, pruning",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_battery-drain.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "scratchpad idle-cpu.sh: ps -o time= over 60 s of an idle session",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T10:11:12+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

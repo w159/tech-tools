@@ -85,6 +85,20 @@ class HygieneTests(unittest.TestCase):
         self.assertFalse(os.path.exists(rec["worktrees"]["implementer-1"]["path"]))
         self.assertEqual(["main"], self.branches())
 
+    def test_autocommit_survives_a_failing_pre_commit_hook(self):
+        hooks = os.path.join(self.tmp, "hooks")
+        os.mkdir(hooks)
+        hook = pathlib.Path(hooks, "pre-commit")
+        hook.write_text("#!/bin/sh\nexit 1\n")
+        hook.chmod(0o755)
+        self.git("config", "core.hooksPath", hooks)
+        rec = self.team("tc", {"implementer-1": ("line 2\n", "line 2 H\n", False)})
+        out = self.run_cmd("reap", "--json", "--team", "tc")
+        self.assertEqual(["implementer-1"], out["worktrees_autocommitted"])
+        self.assertEqual(["implementer-1"], out["worktrees_merged"])
+        self.assertIn("line 2 H\n", pathlib.Path(self.repo, "f.txt").read_text())
+        self.assertFalse(os.path.exists(rec["worktrees"]["implementer-1"]["path"]))
+
     def test_dirty_lead_gets_snapshot_base_and_worker_diff_is_applied(self):  # RC2
         head = self.git("rev-parse", "HEAD")
         rec = self.team("tb", {"implementer-1": ("line 28\n", "line 28 W\n", True)}, dirty_lead=("line 2\n", "line 2 L\n"))

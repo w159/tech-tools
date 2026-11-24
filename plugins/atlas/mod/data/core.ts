@@ -371,7 +371,7 @@ const wantedChannels = (channels?: readonly string[]): Set<string> | null =>
   channels ? new Set(channels.map(lastSegment).filter(Boolean)) : null;
 
 /** Names of the members of every team record on `channels`. */
-function channelMembers(teams: readonly { text: string }[], channels: readonly string[]): Set<string> {
+export function channelMembers(teams: readonly { text: string }[], channels: readonly string[]): Set<string> {
   const wanted = wantedChannels(channels)!;
   const out = new Set<string>();
   for (const t of teams) {
@@ -490,6 +490,15 @@ function teamRoles(teams: readonly { text: string }[]): Record<string, string> {
   return out;
 }
 
+/** offloadOf per worker, re-run only when its log, report or role changed (the log string is the cached read, so an unchanged log compares by reference). */
+const offloadCache = new Map<string, { log: string; report: string; role: string | undefined; out: Offload }>();
+function offloadMemo(name: string, log: string, report: string, role: string | undefined): Offload {
+  const hit = offloadCache.get(name);
+  if (hit && hit.log === log && hit.report === report && hit.role === role) return hit.out;
+  const out = offloadOf(name, log, report, role);
+  offloadCache.set(name, { log, report, role, out });
+  return out;
+}
 export function coreModel(input: CoreInput): CoreModel {
   const entries = parseFindings(input.findings);
   const since = input.since;
@@ -505,7 +514,7 @@ export function coreModel(input: CoreInput): CoreModel {
   const workers = Object.keys(input.logs)
     .filter((name) => !mine || mine.has(name) || dispatched.has(name))
     .sort()
-    .map((name) => offloadOf(name, input.logs[name]!, lastReport(reports, name), roles[name]));
+    .map((name) => offloadMemo(name, input.logs[name]!, lastReport(reports, name), roles[name]));
   const kept = workers.reduce((n, w) => n + w.kept, 0);
   const returned = workers.reduce((n, w) => n + w.returned, 0);
   // the plan the band counts (planBasis): dispatch rows, advisor notes and stub rows are not done work to hold evidence

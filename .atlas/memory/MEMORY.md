@@ -79,3 +79,5 @@ Assumption to avoid (tech-tools): The worker said they were already there before
 Assumption to avoid (tech-tools): Only the changelog landed; the seds didn't run. [noted 2026-11-24]
 §
 Assumption to avoid (tech-tools): I didn't run the generator or diff the pair, so I don't know whether the omp copy was regenerated or hand-edited, or why `bun test omp` passes now. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): s refresh, the fallow 60 s cache, and the `mkdir -p` / `mv -f` forks per write. I assumed implementer-56c2 has them. [noted 2026-11-24]

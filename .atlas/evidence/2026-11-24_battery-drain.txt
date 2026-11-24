@@ -1,0 +1,17 @@
+idle CPU-seconds per 60 s wall, Claude Code classic, scratch project with this repo's .atlas/.run copy (1,273 boards, 324 MB), installed atlas disabled:
+old pid=55301 cpu_60s=56.11 bands=1
+new pid=57228 cpu_60s=1.06 bands=1
+off pid=64360 cpu_60s=.52 bands=0
+new2 pid=82660 cpu_60s=.84 bands=1
+
+ 3913 pass
+ 0 fail
+---py
+97 passed in 6.95s
+---gate
+gate exit 0
+total 22s
+---measure
+new2 pid=82660 cpu_60s=.84 bands=1
+
+[exited with code 0]

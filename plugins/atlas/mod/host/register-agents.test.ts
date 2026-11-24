@@ -293,23 +293,23 @@ describe('spawn model and name reach the HUD agent', () => {
 describe('hud-state.json writer', () => {
   function writerEngine(clock: { t: number }) {
     const files = new Map<string, string>();
-    const cmds: string[][] = [];
+    const cmds: string[][] = []; // one entry per fs.write; the writer must fork nothing
     const $ = {
       clock: { now: async () => clock.t },
-      fs: { write: async (p: string, t: string) => { files.set(p, t); } },
-      process: { run: async (argv: string[]) => { cmds.push(argv); if (argv[0] === 'mv') { files.set(argv[3]!, files.get(argv[2]!) ?? ''); files.delete(argv[2]!); } return { exitCode: 0, stdout: '', stderr: '' }; } },
+      fs: { write: async (p: string, t: string) => { cmds.push([p]); files.set(p, t); } },
+      process: { run: async () => { throw new Error('the hud-state writer must not fork'); } },
     };
     return { $: $ as unknown as EngineInterface, files, cmds };
   }
   const path = '/tmp/proj/.atlas/.run/hud-state.json';
 
-  test('writes {ts,maxRows,wanted,shown,fullscreen} atomically and skips an unchanged state', async () => {
+  test('writes {ts,maxRows,wanted,shown,fullscreen} in place and skips an unchanged state', async () => {
     resetHudStateSig();
     const clock = { t: 1_760_000_000_000 };
     const { $, files, cmds } = writerEngine(clock);
     await publishHudState($, '/tmp/proj/', { maxRows: 12, wanted: 7, shown: 7, fullscreen: true });
     expect(JSON.parse(files.get(path)!)).toEqual({ ts: 1_760_000_000_000, maxRows: 12, wanted: 7, shown: 7, fullscreen: true, starved: false });
-    expect(files.has(`${path}.tmp`)).toBe(false);
+    expect(cmds).toEqual([[path]]);
     clock.t += 60_000;
     await publishHudState($, '/tmp/proj/', { maxRows: 12, wanted: 7, shown: 7, fullscreen: true });
     expect(cmds.length).toBe(1); // satisfied HUD: no rewrite however old
@@ -355,7 +355,7 @@ describe('the mod never marks the status line starved (17.15.1)', () => {
 	test('publishHudState writes starved false even with the HUD short of rows (the status line prints in full whenever it is configured)', async () => {
 		resetHudStateSig();
 		const files = new Map<string, string>();
-		const $ = { clock: { now: async () => 5 }, fs: { write: async (p: string, t: string) => { files.set(p, t); } }, process: { run: async (a: string[]) => { files.set(a[3]!, files.get(a[2]!) ?? ''); return {}; } } } as unknown as EngineInterface;
+		const $ = { clock: { now: async () => 5 }, fs: { write: async (p: string, t: string) => { files.set(p, t); } }, process: { run: async () => { throw new Error('no fork'); } } } as unknown as EngineInterface;
 		await publishHudState($, '/tmp/p', { maxRows: 7, wanted: 15, shown: 6, fullscreen: true });
 		expect(JSON.parse(files.get('/tmp/p/.atlas/.run/hud-state.json')!)).toMatchObject({ maxRows: 7, wanted: 15, shown: 6, starved: false });
 	});
