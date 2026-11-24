@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## atlas 17.41.1 -- a stopped team no longer keeps the phase from reaching done
 
 - Fixed, mod: a team whose tmux session was killed without a reap no longer counts as running, so the phase can reach `done` (`mod/data/mux.ts`, test `mod/data/mux.test.ts`).
 

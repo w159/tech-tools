@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 17.41.1 - 2026-11-24
 
 - Fixed, mod (`mod/data/mux.ts` `parseMuxStatus`): a spawn-team member whose tmux session is gone (`atlas_mux.py status` reports `"tmux": false`) and that left no exit note now reads `failed`, not `running`. Before, a team stopped without `atlas_mux reap` kept the phase at `verify` (never `done`) for hours with nothing running. Nothing is merged or reaped automatically. Test: `mod/data/mux.test.ts` (fails with the change reverted).
 
