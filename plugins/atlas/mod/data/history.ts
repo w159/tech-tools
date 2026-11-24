@@ -142,6 +142,8 @@ export async function flushHistory($: EngineInterface, root: string | null | und
   try {
     if (root === undefined || root === null || root === '') return;
     if (!force && now - wroteAt < WRITE_EVERY_MS) return;
+    // At rest the only drift is old minutes aging out of the window: compare at the last write's clock, so aging alone never writes.
+    if (!force && lastWritten !== '' && Number.isFinite(wroteAt) && serializeHistory(composeHistory(wroteAt)) === lastWritten) return;
     const text = serializeHistory(composeHistory(now));
     if (text === lastWritten) return;
     const dir = dirOf(root);
