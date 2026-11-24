@@ -245,13 +245,13 @@ class StatuslineTest(unittest.TestCase):
         self.assertGreater(len(self.rows(self.project(8, 0, raw='{"ts": 1}'))), 3)
         self.assertGreater(len(self.rows(full_fixture())), 3)
 
-    def test_install_writes_refresh_interval_and_keeps_user_keys(self):
+    def test_install_writes_no_refresh_interval_and_keeps_user_keys(self):
         settings = os.path.join(self.tmp, "settings.json")
         with open(settings, "w") as f:
-            json.dump({"statusLine": {"type": "command", "command": "x", "padding": 3}}, f)
+            json.dump({"statusLine": {"type": "command", "command": "x", "padding": 3, "refreshInterval": 60}}, f)
         self.run_main(["install", "--settings", settings, "--home", self.tmp])
         sl_cfg = jload(settings)["statusLine"]
-        self.assertEqual(sl_cfg["refreshInterval"], 60)
+        self.assertNotIn("refreshInterval", sl_cfg)
         self.assertEqual(sl_cfg["padding"], 3)
         self.assertIn("atlas_statusline_launch.py", sl_cfg["command"])
 

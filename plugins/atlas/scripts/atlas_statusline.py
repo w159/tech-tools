@@ -350,7 +350,8 @@ def refresh_fallow(cwd, home):
 HUD_STATE_FILE = os.path.join(".atlas", ".run", "hud-state.json")
 ROWS_FILE = os.path.join(".atlas", ".run", "statusline-rows.json")
 HUD_FRESH_S = 15
-STATUSLINE_REFRESH_S = 60  # seconds; lets the compact switch land without waiting for an assistant turn
+# No refreshInterval: a timed refresh costs a python start per open session per tick even at rest. The numbers
+# change on assistant messages, which Claude Code refreshes on; a compact switch lands on the next one.
 
 
 def _hud_root(cwd):
@@ -815,8 +816,8 @@ def install(settings, home):
     entry.update(
         type="command",
         command='python3 "%s"' % launcher,
-        refreshInterval=STATUSLINE_REFRESH_S,
     )
+    entry.pop("refreshInterval", None)  # atlas wrote one in older installs; at rest it must not poll
     cfg["statusLine"] = entry
     _save(settings, cfg)
     return "installed statusLine in %s (previous saved to %s)" % (settings, prev)

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased -- atlas at rest does nothing (statusline and boot jobs)
+
+- Changed, statusline: atlas no longer writes `refreshInterval` (it cost a python start per open session per minute at rest); the line refreshes on assistant messages, so the compact switch lands on the next one. `atlas_doctor.py --fix` removes an atlas-written `refreshInterval` of any value from an atlas launcher statusLine and leaves a user-written statusLine alone.
+- Changed, boot (`hooks/session_boot_core.py`): the detached `atlas_prune.py` runs at most once per 6 h per repo (`.atlas/.run/prune-stamp`), not on every session start. `atlas_git clean` and `atlas_mux reap-stale` were already gated by the clean stamp (`auto_clean_hours`, 6).
+
 ## atlas 17.39.0 -- an idle atlas session no longer drains the battery
 
 Measured (`.atlas/evidence/2026-11-24_battery-drain.txt`): an idle Claude Code session with the atlas mod, in a project holding 1,273 board files and 324 MB of `.atlas/.run`, used 56.1 CPU-seconds per minute on 17.38.0 (about one core, roughly 32% battery an hour reported), 0.84 on 17.39.0, and 0.52 with the mod off.
