@@ -15377,5 +15377,42 @@
     "verified_at": "2026-11-24T08:58:03+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "worktree-hygiene",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "worktree hygiene: code+tests pass in worker worktrees; final reap/gate state not yet observable",
+    "evidence": [
+      "worker/t033ece-implementer-3a3c 3f68cf9d (atlas_mux.py), worker/t033ece-implementer-3c29 f45bbe38 (session_boot_core.py); unittest 235 OK + 148 OK"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd .atlas/wt/t033ece-implementer-3a3c/plugins/atlas/scripts && python3 -m unittest test_atlas_mux_worktree_hygiene test_atlas_mux; cd ../../../../t033ece-implementer-3c29/plugins/atlas/hooks && python3 -m unittest test_session_boot",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-24T09:12:55+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-81bb"
+  },
+  {
+    "id": "worktree-hygiene",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "reap auto-commits dirty workers, snapshot base for a dirty lead, reap-stale at boot; team t033ece merged and removed itself",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_worktree-hygiene-gate.txt",
+      "plugins/atlas/scripts/test_atlas_mux_worktree_hygiene.py: 5 pass; autocommit off -> 2 fail; spawn snapshot off -> 1 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q plugins/atlas/scripts/test_atlas_mux_worktree_hygiene.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T09:17:31+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

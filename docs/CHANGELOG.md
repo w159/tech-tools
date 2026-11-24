@@ -1,5 +1,13 @@
 # Changelog
 
+## atlas 17.38.0 -- team worktrees and worker branches are always merged back and deleted
+
+- Fixed, `atlas_mux.py reap`: a worker that exits with uncommitted edits no longer strands its worktree. Reap commits the edits onto the worker's own branch, then merges and deletes as before. Seen live: all 3 worktree workers of one team left their work uncommitted, so their worktrees stayed behind.
+- Fixed, `atlas_mux.py spawn-team`: when the lead tree has uncommitted changes, each worktree starts from a snapshot of that tree (built through a temp index; the lead's files and index are untouched), not from a stale HEAD. Reap applies each worker's diff onto the lead tree with `git apply --3way`, then deletes the worktree and branch.
+- Added: `atlas_mux.py reap-stale` reaps every team whose tmux session is gone. Session boot starts it detached beside the merged-only `atlas_git.py clean`; the kill switches `ATLAS_GIT_GUARD=off` and `ATLAS_GIT_AUTOCLEAN=off` cover both.
+- Unchanged safety: a real conflict keeps the worktree and branch and names the files; nothing that is not on the lead branch is ever deleted; nothing is pushed.
+- Tests: `plugins/atlas/scripts/test_atlas_mux_worktree_hygiene.py` (5 tests, each failing when its fix is removed) and `plugins/atlas/hooks/test_session_boot.py`. Lifecycle documented in `atlas-orchestrate/references/subagent-kit.md`, `atlas-worktree/SKILL.md` and `docs/architecture/atlas-channels.md`.
+
 ## atlas 17.37.0 -- 26 skills instead of 40; the / menu lists only skills a person starts
 
 - Changed, atlas skills: 40 -> 26. Twenty-one stay in the / menu (audit, brainstorm, debug, doctor, frontend, handoff, orchestrate, plan, prompt, prototype, readme, refactor, review, run-watch, security, setup, ship, status, testing, ux-test, wiki). Five are model-only (`user-invocable: false`): bakeoff, compound, explain, harden, worktree. atlas-setup and atlas-ship are manual (`disable-model-invocation: true`) because they install or commit.

@@ -1,5 +1,18 @@
 # Changelog
 
+## 17.38.0 - 2026-11-24
+
+### Changed
+
+- Team worktrees and worker branches no longer pile up. `reap` auto-commits a worker's uncommitted edits onto its own branch before merging back.
+- A team spawned while the lead tree has uncommitted changes starts each worktree from a snapshot of that tree (temp index, lead untouched). `reap` applies each worker's diff onto the lead tree with `git apply --3way`, then deletes the worktree and branch.
+- New `atlas_mux.py reap-stale` reaps teams whose tmux session is gone. Session boot starts it detached. Kill switches: `ATLAS_GIT_GUARD=off`, `ATLAS_GIT_AUTOCLEAN=off`.
+- Unchanged: a real conflict keeps the worktree and branch and names the files. Nothing unmerged is ever deleted.
+
+### Tests
+
+- `plugins/atlas/scripts/test_atlas_mux_worktree_hygiene.py` (5 tests).
+
 ## 17.37.0 - 2026-11-24
 
 ### Changed

@@ -64,6 +64,7 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-24 | worktree-hygiene | verified | reap auto-commits dirty workers, snapshot base for a dirty lead, reap-stale at boot; team t033ece merged and removed itself | [2026-11-24_worktree-hygiene.md](2026-11-24_worktree-hygiene.md) |
 | 2026-11-24 | skills-consolidation | verified | atlas skills 40 -> 26 (21 menu, 5 model-only), /atlas-say removed, full gate green | [2026-11-24_skills-consolidation.md](2026-11-24_skills-consolidation.md) |
 | 2026-11-24 | core-bar-pane-controls | verified | Core bar carries open/tabs/close pane chips; /atlas-cc removed | [2026-11-24_core-bar-pane-controls.md](2026-11-24_core-bar-pane-controls.md) |
 | 2026-11-24 | classic-menu-gap-host | verified | Blank rows after the / menu in classic mode are Claude Code's renderer: same 17-row gap with ATLAS_MOD=off | [2026-11-24_classic-menu-gap-host.md](2026-11-24_classic-menu-gap-host.md) |

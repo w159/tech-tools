@@ -119,6 +119,32 @@ class HygieneTests(unittest.TestCase):
         self.assertIn("line 5 L\n", text)  # lead file untouched, no markers
         self.assertNotIn("<<<<<<<", text)
 
+    def test_spawn_team_bases_worktrees_on_dirty_lead_snapshot(self):  # RC2 through the real spawn path
+        head = self.git("rev-parse", "HEAD")
+        f = pathlib.Path(self.repo, "f.txt")
+        f.write_text(f.read_text().replace("line 2\n", "line 2 L\n"))  # uncommitted lead edit
+        seen = []
+
+        def fake_spawn(ns):
+            seen.append(ns)
+            print(json.dumps({"ok": True, "name": ns.name}))
+            return 0
+
+        real = atlas_mux.atlas_resolve.resolve  # shipped cells are isolation=shared; opt in to worktrees
+        env = {"ATLAS_COLONY_TRANSPORT": "claude-bg", "ATLAS_MUX": "on", "ATLAS_ISOLATION": ""}
+        with mock.patch.object(atlas_mux.atlas_resolve, "resolve", lambda *a, **k: dict(real(*a, **k), isolation="worktree")), \
+                mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
+                mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-hy")), \
+                contextlib.redirect_stdout(io.StringIO()):
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
+                                   "--team-id", "te", "--root", self.repo])
+        self.assertEqual(0, code)
+        rec = json.loads(pathlib.Path(self.repo, ".atlas/.run/teams/te.json").read_text())
+        self.assertNotEqual(head, rec["base"])
+        self.assertEqual(head, self.git("rev-parse", rec["base"] + "^"))
+        wt = next(iter(rec["worktrees"].values()))["path"]
+        self.assertIn("line 2 L\n", pathlib.Path(wt, "f.txt").read_text())
+
     def test_reap_stale_reaps_a_team_whose_session_is_gone(self):  # RC3
         rec = self.team("td", {"implementer-1": ("line 2\n", "line 2 A\n", False)}, created=time.time() - 1000)
         out = self.run_cmd("reap-stale", "--json")
