@@ -1110,6 +1110,15 @@ def git_hygiene_boot(cwd, now=None):
         import pathlib
         import subprocess
 
+        # reap teams whose lead session died (their worktrees/branches hold unmerged work, which the
+        # merged-only clean below never touches); atlas_mux merges or keeps-and-reports, never discards
+        subprocess.Popen(
+            [sys.executable, os.path.join(scripts, "atlas_mux.py"), "reap-stale", "--root", root],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
         subprocess.Popen(
             [
                 sys.executable,

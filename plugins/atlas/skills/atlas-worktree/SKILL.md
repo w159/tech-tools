@@ -156,6 +156,8 @@ chat otherwise). Never skip the confirmation, and do not retry alternative paths
 
 ## TEARDOWN - close worktrees out at wave end
 
+Team workers (`atlas_mux.py`): workers commit their own work in their worktree before exit. `atlas_mux.py reap` auto-commits any leftovers, then merges the branch back (clean lead tree) or applies the worker diff on top of the lead tree with --3way (dirty lead tree, snapshot base), and deletes the worktree and branch. A real conflict keeps the worktree and branch and is reported with the files; unmerged work is never force-removed. Session boot also starts a detached `atlas_mux.py reap-stale --root <repo>` (kill switches `ATLAS_GIT_GUARD=off`, `ATLAS_GIT_AUTOCLEAN=off`) that reaps teams whose lead session died.
+
 Closing worktrees is part of done, not cleanup garnish (completion-gate condition (j)). For each
 tree, in dependency order:
 
