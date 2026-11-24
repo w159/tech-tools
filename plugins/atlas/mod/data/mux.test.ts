@@ -77,6 +77,20 @@ test('a tiled team (one window named after its session, workers are panes) reach
   expect(parseMuxStatus('', ['explorer-a'])).toEqual([]); // no status output (team gone): no phantom lanes
 });
 
+// a team stopped without a reap: its tmux session is gone, so a member with no exit note must not stay running
+const goneStatus = (tmux: boolean, board: object[] = []) => JSON.stringify({ ok: true, transport: 'tmux', tmux, workers: [], board });
+const memberState = (out: string) => parseMuxStatus(out, ['verifier-a'])[0]!.state;
+
+test('tmux session gone: a member with no exit note is failed, not running', () => {
+  expect(memberState(goneStatus(false))).toBe('failed');
+});
+test('tmux session present: a member without a row stays running', () => {
+  expect(memberState(goneStatus(true))).toBe('running');
+});
+test('tmux session gone: a member with exit 0 stays finished', () => {
+  expect(memberState(goneStatus(false, [{ name: 'verifier-a', exit: 0 }]))).toBe('finished');
+});
+
 test('mux workers reach liveWorkers with working/blocked/failed/done', () => {
   const s = busySnap();
   s.squad = parseMuxStatus(STDOUT).map((a) => ({ ...a, source: 'task' as const }));

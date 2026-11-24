@@ -83,3 +83,7 @@ Assumption to avoid (tech-tools): I didn't run the generator or diff the pair, s
 Assumption to avoid (tech-tools): s refresh, the fallow 60 s cache, and the `mkdir -p` / `mv -f` forks per write. I assumed implementer-56c2 has them. [noted 2026-11-24]
 §
 Assumption to avoid (tech-tools): The final grep never ran, because `.venv` was missing from the worktree and the command failed. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): team (`t718d64`) by killing its tmux session and deleting its branches by hand. I never ran `atlas_mux reap`, the command that closes a team's record. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): **Three push attempts.** I didn't run the full pre-push check before the first commit. [noted 2026-11-24]

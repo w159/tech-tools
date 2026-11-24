@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed, mod (`mod/data/mux.ts` `parseMuxStatus`): a spawn-team member whose tmux session is gone (`atlas_mux.py status` reports `"tmux": false`) and that left no exit note now reads `failed`, not `running`. Before, a team stopped without `atlas_mux reap` kept the phase at `verify` (never `done`) for hours with nothing running. Nothing is merged or reaped automatically. Test: `mod/data/mux.test.ts` (fails with the change reverted).
+
 ## 17.41.0 - 2026-11-24
 
 - Added, `skills/atlas-taste/` (27 skills): a project-driven design-system skill that ships no palette, font, icon set, scale or voice. `init` records the project's brand and tokens in `docs/standards/design-system.md` and asks for anything missing; `component` extracts repeated UI into shared components with a `docs/standards/` entry each; `scripts/taste_check.py` (stdlib, tests in `scripts/test_taste_check.py`) flags off-token colors, off-scale spacing and radius, and a second icon library; a frontmatter Stop hook (`taste_check.py --gate`) blocks finishing while armed, at most 5 rounds; `scripts/taste_browser.mjs` exits 3 unless `--allow-browser` is passed after the user agrees. Method adapted from MIT taste-skill (commit 6c0b5c7), no code copied. Changed, `atlas-frontend`: the fixed "shadcn/ui, Tailwind, Radix only" rule is replaced by the project's own design system; its references and `templates/component.seed.tsx` no longer prescribe Tailwind/shadcn classes, breakpoints, motion timings, folder layout or copy tone (accessibility minimums and behavior thresholds stay).

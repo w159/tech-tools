@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed, mod: a team whose tmux session was killed without a reap no longer counts as running, so the phase can reach `done` (`mod/data/mux.ts`, test `mod/data/mux.test.ts`).
+
 ## atlas 17.41.0 -- each project's own design system (atlas-taste) and project standards
 
 - Added, `atlas-taste` skill (27 skills): builds and enforces each project's own design system (init from existing tokens and brand, asking the user for missing decisions; shared components recorded as `docs/standards/`; static `taste_check.py`; Stop finish gate while armed; browser audit only with `--allow-browser` after asking). Changed, `atlas-frontend`: follows the project's `design-system.md` instead of a fixed shadcn/Tailwind/Radix rule. Design: `docs/architecture/atlas-taste.md`.

@@ -17,7 +17,7 @@ function stateOf(w: { name?: unknown; dead?: unknown; state?: unknown }, exit: n
  * own is running until its board exit note says otherwise. */
 export function parseMuxStatus(stdout: string, members: readonly string[] = []): SquadAgent[] {
   try {
-    const data = JSON.parse(stdout) as { transport?: unknown; workers?: unknown; board?: unknown };
+    const data = JSON.parse(stdout) as { transport?: unknown; tmux?: unknown; workers?: unknown; board?: unknown };
     if (!Array.isArray(data.workers)) return [];
     const exits = new Map<string, number | null>();
     for (const b of Array.isArray(data.board) ? (data.board as { name?: unknown; exit?: unknown }[]) : []) {
@@ -26,9 +26,13 @@ export function parseMuxStatus(stdout: string, members: readonly string[] = []):
     const transport = typeof data.transport === 'string' ? data.transport : 'mux';
     const rows = (data.workers as { name?: unknown; dead?: unknown; state?: unknown }[]).filter((w) => typeof w?.name === 'string' && w.name);
     const listed = new Set(rows.map((w) => w.name));
-    return [...rows, ...members.filter((m) => !listed.has(m)).map((name) => ({ name }))].map((w) => ({
-      name: w.name as string, persona: 'unknown', state: stateOf(w, exits.get(w.name as string)), source: 'colony' as const, transport,
-    }));
+    // tmux session gone (stopped without a reap): a member with no exit note can never finish, so it must not hold the phase open
+    const sessionGone = data.transport === 'tmux' && data.tmux === false;
+    return [...rows, ...members.filter((m) => !listed.has(m)).map((name) => ({ name }))].map((w) => {
+      const exit = exits.get(w.name as string);
+      const state = sessionGone && typeof exit !== 'number' ? 'failed' : stateOf(w, exit);
+      return { name: w.name as string, persona: 'unknown', state, source: 'colony' as const, transport };
+    });
   } catch {
     return [];
   }
