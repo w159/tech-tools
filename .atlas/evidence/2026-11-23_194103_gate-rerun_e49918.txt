@@ -1,0 +1,9 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools
+command: .venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/atlas/scripts/test_fix_settings_options.py plugins/atlas/scripts/test_atlas_test.py
+exit: 0
+seconds: 1.88
+--- output tail ---
+.............................................                                                                                                       [100%]
+45 passed, 11 subtests passed in 1.64s
+

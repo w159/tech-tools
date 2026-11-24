@@ -50,8 +50,8 @@ def _run_under_mock(listing, isdir_names):
 class TestLintSkillNames(unittest.TestCase):
     def test_all_conform_prints_success_and_exits_clean(self) -> None:
         out, exit_exc = _run_under_mock(
-            ["atlas-foo", "atlas-db-audit"],
-            {"atlas-foo", "atlas-db-audit"},
+            ["atlas-foo", "atlas-bar-baz"],
+            {"atlas-foo", "atlas-bar-baz"},
         )
         self.assertIsNone(exit_exc, "conformant names must not exit nonzero")
         self.assertIn("all skill names conform", out)

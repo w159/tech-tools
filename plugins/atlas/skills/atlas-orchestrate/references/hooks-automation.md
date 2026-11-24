@@ -33,7 +33,7 @@ hook that may *deny* a tool call, and only when fallow audit returns `verdict: f
 
 The dispatch tripwire, completion gate, and nudge additionally gate on the per-session
 orchestration marker. The tripwire sets that marker automatically when an orchestration
-skill (atlas-orchestrate, atlas-audit, atlas-ux-test, atlas-loop) is invoked or an `atlas:*` subagent is dispatched; `mark-orchestrating`
+skill (atlas-orchestrate, atlas-audit, atlas-ux-test) is invoked or an `atlas:*` subagent is dispatched; `mark-orchestrating`
 remains as a manual fallback. The gates stay inert in ordinary non-orchestration sessions.
 The tripwire's `PreToolUse` deny tier is independently switchable from its `PostToolUse`
 advisory tier: `ATLAS_TRIPWIRE=off` silences drift coaching only (the nested-dispatch deny and the native-tool

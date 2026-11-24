@@ -1,8 +1,8 @@
 ---
 name: atlas-audit
-description: "Audits a repo in CODE (quality, security, dead code, docs drift), ARCHITECTURE (maps, duplication), SELF (atlas run health) or ACT (remediate one finding by id) mode. Use when auditing a whole repo or acting on an audit finding; GitHub alerts go to atlas-security."
-when_to_use: "OWASP review, codebase audit, architecture map, coverage gaps, run health forensics, pick a finding, remediate audit finding, open a remediation session"
-argument-hint: '[act [finding-id]]'
+description: "Audits a repo, its architecture, a live database or a plugin, or remediates one finding. Use when auditing a repo (code quality, security, dead code, docs drift), mapping architecture, running a database audit before a schema change, validating a plugin, or acting on a finding by id; GitHub alerts go to atlas-security."
+when_to_use: "OWASP review, codebase audit, architecture map, coverage gaps, run health forensics, database audit, schema drift, privilege review, validate plugin, manifest validity, plugin.json audit, pick a finding, remediate audit finding, open a remediation session"
+argument-hint: '[act [finding-id] | db <repo> <connection> | validate [plugin]]'
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion, Workflow
 ---
 
@@ -16,16 +16,18 @@ If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/opera
 
 # atlas-audit
 
-Four modes; pick by the ask, never by question:
+Six modes; pick by the ask, never by question:
 
 | Mode | Trigger | Where |
 |---|---|---|
 | code (default) | "audit this", quality/security review | this file |
 | architecture | "map the architecture", duplication hunt, pre-refactor | `references/architecture-map.md` |
 | self | atlas run health, context/asset waste, session forensics | `references/self-telemetry.md` |
+| database | read-only live-database audit before a schema or permission change ("database audit", schema drift, privilege review) | `references/db-audit.md` (workflow `references/db-audit-workflow.md`, queries `scripts/read-only-catalog-queries.sql`) |
+| validate | "validate plugin", manifest validity, a plugin believed complete | `references/validate.md` (gate `references/validate-gate.md`) |
 | act | `act [finding-id]`: remediate one finding from the latest audit hub; no id lists the actionable findings | `references/act-on-finding.md` |
 
-For act mode, read `${CLAUDE_SKILL_DIR}/references/act-on-finding.md` and follow it. The rest of this file is the code mode.
+For act mode, read `${CLAUDE_SKILL_DIR}/references/act-on-finding.md` and follow it. For database mode read `${CLAUDE_SKILL_DIR}/references/db-audit.md`; for validate mode read `${CLAUDE_SKILL_DIR}/references/validate.md`; follow it. The rest of this file is the code mode.
 
 Discovery-first, comprehensive audit swarm. You supply no arguments. The survey builds a knowledge graph of the codebase, aims every dimension reviewer at the hottest nodes that graph surfaces, verifies every finding adversarially, and delivers a prioritized, file:line-anchored report under docs/audits/atlas-audit-<date>/.
 

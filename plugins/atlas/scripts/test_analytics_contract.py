@@ -51,7 +51,7 @@ CALL_SITES = {
     "command.{skill}": [("hooks/event_dispatch.py", '"command." +')],
     "fault.{component}.{errclass}": [("scripts/atlas_faults.py", '"fault.')],
     "mod.open.{surface}": [("mod/host/usage.ts", "'mod.open.dock'"), ("scripts/atlas_analytics.py", 'k.startswith("mod.")')],
-    "mod.command.{modcmd}": [("mod/host/usage.ts", "'mod.command.atlas-cc'")],
+    "mod.command.{modcmd}": [("mod/host/usage.ts", "'mod.command.atlas-core'")],
     "mod.error.{moderr}": [("mod/host/usage.ts", "'mod.error.rebuild'")],
     "crew.workers.{size}": [("scripts/atlas_crew.py", "crew.workers.")],
     "crew.outcome.{crewoutcome}": [("scripts/atlas_crew.py", "crew.outcome.")],

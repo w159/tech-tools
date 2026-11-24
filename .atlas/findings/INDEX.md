@@ -64,7 +64,11 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-24 | skills-consolidation | verified | atlas skills 40 -> 26 (21 menu, 5 model-only), /atlas-say removed, full gate green | [2026-11-24_skills-consolidation.md](2026-11-24_skills-consolidation.md) |
+| 2026-11-24 | core-bar-pane-controls | verified | Core bar carries open/tabs/close pane chips; /atlas-cc removed | [2026-11-24_core-bar-pane-controls.md](2026-11-24_core-bar-pane-controls.md) |
+| 2026-11-24 | classic-menu-gap-host | verified | Blank rows after the / menu in classic mode are Claude Code's renderer: same 17-row gap with ATLAS_MOD=off | [2026-11-24_classic-menu-gap-host.md](2026-11-24_classic-menu-gap-host.md) |
 | 2026-11-23 | tripwire-sanctioned-write-deny | verified | Tripwire no longer denies docs/ and .atlas/ writes at the inline-op limit | [2026-11-23_tripwire-sanctioned-write-deny.md](2026-11-23_tripwire-sanctioned-write-deny.md) |
+| 2026-11-23 | r1746-fast-gate | verified | Git hooks run the fast test set in 23 s; slow set runs on demand with scripts/gate.sh full; two useless tests deleted | [2026-11-23_r1746-fast-gate.md](2026-11-23_r1746-fast-gate.md) |
 | 2026-11-23 | r1745-local-gate | verified | Test jobs moved from GitHub Actions to local git hooks (scripts/gate.sh); tests.yml keeps only attribution | [2026-11-23_r1745-local-gate.md](2026-11-23_r1745-local-gate.md) |
 | 2026-11-23 | r1742-remaining | verified | Remaining audit items: git_guard denies git commands on a bridge timeout, maintenance backfills the denied flag, reaper errors were stale | [2026-11-23_r1742-remaining.md](2026-11-23_r1742-remaining.md) |
 | 2026-11-23 | r1740-audit-fixes | verified | Audit fixes 1-6 and 8: denial markers, selffix target, tripwire route text and exemptions, maint lock, omp deny text, worker brief, stray roots | [2026-11-23_r1740-audit-fixes.md](2026-11-23_r1740-audit-fixes.md) |

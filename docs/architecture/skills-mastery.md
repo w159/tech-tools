@@ -13,17 +13,15 @@ The authoritative spec is
 plugins/atlas/skills/atlas-setup/references/mastery-framework.md (moved here
 when atlas-olympus was merged into atlas-setup in 5.0.0).
 
-Counts are verified by plugins/atlas/skills/atlas-setup/scripts/plugin-health.py,
-which reports `skills: actual=21` and `agents: actual=12`, both PASS against
-the atlas manifest. The 21 atlas skills are: atlas, atlas-audit,
-atlas-frontend component, atlas-db-audit, atlas-debug, atlas-doctor, atlas-orchestrate,
-atlas-frontend, atlas-gitignore, atlas-handoff, atlas-harden, atlas-audit act,
-atlas-loop, atlas-orchestrate, atlas-prompt, atlas-readme, atlas-refactor,
-atlas-setup, atlas-ux-test, atlas-validate, atlas-wiki (atlas-m365 and
-atlas-vendor-assessment removed 2026-07-21; see docs/CHANGELOG.md and
-.atlas/findings/2026-07-21-remove-m365-vendor-assessment.md; atlas-doctor,
-absent since the pre-5.0.0 rebuild, was re-added 2026-08-05 as the
-interactive self-improvement skill -- see docs/CHANGELOG.md 2026-08-05).
+As of atlas 17.37.0 (2026-11-24) the plugin ships 26 skills under
+plugins/atlas/skills/. Twenty-one show in the / menu: atlas-audit,
+atlas-brainstorm, atlas-debug, atlas-doctor, atlas-frontend, atlas-handoff,
+atlas-orchestrate, atlas-plan, atlas-prompt, atlas-prototype, atlas-readme,
+atlas-refactor, atlas-review, atlas-run-watch, atlas-security, atlas-setup,
+atlas-ship, atlas-status, atlas-testing, atlas-ux-test, atlas-wiki. Five are
+model-only (`user-invocable: false`): atlas-bakeoff, atlas-compound,
+atlas-explain, atlas-harden, atlas-worktree. The 17.37.0 consolidation folded
+fourteen skills into modes of others (see docs/CHANGELOG.md).
 The 11 core agents live in plugins/atlas/agents/: completeness-critic, db-prober,
 docs-auditor, docs-curator, explorer, implementer, planner, runner,
 test-engineer, ui-runtime-tester, verifier.
@@ -48,19 +46,12 @@ mastery-framework.md; the summary:
 Required on every skill: name, description (third-person, what plus when,
 key use first, under 1024 characters), when_to_use (trigger phrases).
 
-Trigger control: `disable-model-invocation: true` marks a skill manual. In
-the 5.0.0 atlas plugin, 11 skills are manual. Verified by
-`grep -rl 'disable-model-invocation: true' plugins/atlas/skills/`, which
-returns exactly: atlas-frontend component, atlas-db-audit, atlas-frontend,
-atlas-harden, atlas-m365, atlas-prompt, atlas-readme, atlas-refactor,
-atlas-setup, atlas-vendor-assessment, atlas-wiki (each at
-plugins/atlas/skills/<name>/SKILL.md, plus three reference files under
-atlas-setup/references/). The pre-5.0.0 claim that only atlas-olympus and
-atlas-doctor were manual is obsolete: atlas-olympus was merged into
-atlas-setup, and atlas-doctor (re-added 2026-08-05) auto-triggers rather
-than requiring manual invocation -- it carries no `disable-model-invocation`
-field (`plugins/atlas/skills/atlas-doctor/SKILL.md:1-6`). Every non-manual
-skill auto-triggers from its description.
+Trigger control: `disable-model-invocation: true` marks a skill manual (menu
+only, never auto-invoked); `user-invocable: false` marks it model-only (hidden
+from the menu). In 17.37.0 two skills are manual, atlas-setup and atlas-ship,
+because both change state (install, commit); five are model-only as listed
+above. Check with
+`grep -l -e 'disable-model-invocation: true' -e 'user-invocable: false' plugins/atlas/skills/*/SKILL.md`.
 
 The atlas-invented `triggers:` field is NOT a real Claude Code frontmatter
 field. The harness ignores it. Auto-trigger behavior comes only from the

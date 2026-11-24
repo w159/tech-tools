@@ -1,6 +1,6 @@
 ---
 name: atlas-frontend
-description: "Builds, refactors or polishes UI on one design system (shadcn/ui, Tailwind, Radix), verified live in a browser, in build, component or polish mode. Use when creating or reworking screens or components."
+description: "Builds, refactors or polishes UI on shadcn/ui, Tailwind and Radix, verified in a browser. Use when creating or reworking screens or components, polishing the UI, or building async components (build, component or polish mode)."
 when_to_use: "build a screen, polish the UI, shadcn, Tailwind, Radix, async component"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 paths: ["**/*.tsx", "**/*.css", "**/*.scss", "components/**"]
@@ -40,7 +40,7 @@ Inputs to read from `$ARGUMENTS`: the project (name, what it is), scope (screens
 - Look up any unfamiliar UI library or framework API via Context7 (or Microsoft Learn for Microsoft services) before using it.
 
 ## Pick the shape: loop or single pass
-- If this work is recurring or iterative (a sweep across many screens or components, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
+- If this work is recurring or iterative (a sweep across many screens or components, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-orchestrate` skill in loop mode to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
 
 ## Execute through the squad (parallel where independent)
 Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, before integrating results.

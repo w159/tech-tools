@@ -17,7 +17,7 @@ Follow it in order; each phase's check must pass before the next.
 - Look up any unfamiliar API, framework, or SDK via Context7 (or Microsoft Learn for Microsoft services) before using it. No memory-based API calls.
 
 ## Pick the shape: loop or single pass
-- If this work is recurring or iterative (a sweep across many endpoints or screens, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
+- If this work is recurring or iterative (a sweep across many endpoints or screens, a build-fix cycle, an until-dry discovery pass, a migration, or a review round), read `references/loop.md` (loop mode) to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise dispatch the squad directly for a single pass.
 
 ## Execute through the squad (parallel where independent)
 Dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently; keep roughly 4-6 in flight. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, before integrating results.

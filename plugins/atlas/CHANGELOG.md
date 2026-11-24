@@ -1,5 +1,16 @@
 # Changelog
 
+## 17.37.0 - 2026-11-24
+
+### Changed
+
+- Skills consolidated from 40 to 26: 21 in the menu and 5 model-only (bakeoff, compound, explain, worktree, harden). Merges: autopilot, crew and loop into orchestrate; db-audit and validate into audit; optimize into debug; proof into plan; pulse and tui into status; resolve-pr-feedback into run-watch; sweep into brainstorm; gitignore into setup; test-xcode into testing; dogfood into ux-test.
+- The core bar gains open, tabs and close pane chips.
+
+### Removed
+
+- The `/atlas-cc` and `/atlas-say` commands.
+
 ## 17.36.5 - 2026-11-23
 
 ### Fixed

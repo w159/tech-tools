@@ -73,4 +73,4 @@ python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_finding.py" --id strategy-<YYYY-MM-
 
 ## Boundary
 
-atlas-brainstorm strategy owns: the repo model, the interview, the stress test, and the strategy doc. It does NOT own: features/requirements (`atlas-brainstorm`), implementation planning (`atlas-plan`), execution (`atlas-orchestrate` + atlas agents), the roadmap or issue tracker, telemetry facts (`atlas-pulse` reads the doc for product name and metrics but owns its own reports), or any git action - it never commits, pushes, or opens a PR.
+atlas-brainstorm strategy owns: the repo model, the interview, the stress test, and the strategy doc. It does NOT own: features/requirements (`atlas-brainstorm`), implementation planning (`atlas-plan`), execution (`atlas-orchestrate` + atlas agents), the roadmap or issue tracker, telemetry facts (`atlas-status` reads the doc for product name and metrics but owns its own reports), or any git action - it never commits, pushes, or opens a PR.

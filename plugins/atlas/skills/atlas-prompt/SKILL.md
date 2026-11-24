@@ -1,6 +1,6 @@
 ---
 name: atlas-prompt
-description: "Rewrites a rough prompt or request into a clear, right-sized prompt for a coding agent or chat model, then has a judge confirm every goal and limit survived. Use when asked to rewrite, improve, optimize, tighten, shorten or sharpen a prompt (even a one-line prompt pasted inline), whether a prompt is good, or to turn a rough idea into a spec or brief for an agent. Not for doing the task itself."
+description: "Rewrites a rough prompt into a right-sized prompt for a coding agent or chat model, judge-checked. Use when asked to rewrite, improve, optimize, tighten or sharpen a prompt (even a one-line prompt pasted inline), whether a prompt is good, or to turn a rough idea into a spec or brief for an agent. Not for doing the task itself."
 when_to_use: "rewrite this prompt, make this a better prompt, optimize my prompt, is this a good prompt, turn this into a spec for an agent, write me a prompt for ChatGPT, /atlas-prompt"
 allowed-tools: Read, Glob, Grep, Bash, Write, AskUserQuestion
 argument-hint: '<the prompt or request to rewrite>'

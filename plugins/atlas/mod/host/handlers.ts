@@ -106,7 +106,7 @@ function noteArgv($: EngineInterface, who: string, note: string, snapshot: Atlas
 	return res.kind === 'cli' ? { argv: res.argv } : { error: 'no board in view' };
 }
 
-/** Post the draft to the selected member (the lead when none) through the same note intent /atlas-say uses. */
+/** Post the draft to the selected member (the lead when none) through the note intent. */
 async function sendNote($: EngineInterface, text: string): Promise<void> {
 	const note = text.trim();
 	if (note === '') return;
@@ -174,7 +174,7 @@ export async function openBoard($: EngineInterface): Promise<void> {
 	void rebuild($); // the board draws the snapshot; refresh it so a press never shows a stale list
 }
 
-/** Band footer presses: open (or focus) the pane on a view, as /atlas-cc does, or open the Board pane. */
+/** Band presses: open (or focus) the pane on a view, close it, or open the Board pane. */
 /** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured, whether the card is open. */
 export async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthIn> {
 	const usage = await read($, usageState);
@@ -213,7 +213,8 @@ export function bandHandlers($: EngineInterface): BandHandlers {
 				await update($, paneOpenedState, () => true);
 				toastUnplaced($, await opened);
 			}),
-		toggleTodos: () => guarded(() => openBoard($)),
+		closePane: () => guarded(async () => { await $.ui.close({ id: PANE_ID }); }), // the engine then runs the ui.close hook, which clears paneOpenedState
+			toggleTodos: () => guarded(() => openBoard($)),
 		toggleHealth: () => guarded(() => { S.healthOpenNow = !S.healthOpenNow; return update($, spinnerTickState, (n) => { S.beatFrame = n + 1; return n + 1; }); }),
 	};
 }

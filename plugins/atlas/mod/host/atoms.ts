@@ -10,8 +10,8 @@ import type { TeamTool } from '../orchestra-types';
 import type { WtRow } from '../data/orchestration';
 
 export const PANE_ID = 'atlas';
-// The auto open (first render with a viewport) is docked only and asks no keyboard; /atlas-cc opens a
-// 12-row pane on demand, takes focus, and Esc closes it.
+// The auto open (first render with a viewport) is docked only and asks no keyboard; the band's `open` chip opens a
+// 12-row pane on demand, takes focus, and Esc or the `close` chip closes it.
 export const PANE_DOCK = { id: PANE_ID, title: 'Atlas', columns: 56 } as const;
 export const PANE_ON_DEMAND = { id: PANE_ID, title: 'Atlas', rows: 12, closeOnEscape: true, focus: true } as const;
 // The Board (key `o` in the band and the sidebar): its own pane, so the key always has somewhere to draw (L19: the old key

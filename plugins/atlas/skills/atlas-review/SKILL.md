@@ -1,6 +1,6 @@
 ---
 name: atlas-review
-description: "Reviews a diff, branch or PR with risk-selected personas; P0/P1 findings verified, report-only verdict (Ready, Ready-with-fixes, Not-ready). Use when a change needs review before merge."
+description: "Reviews a diff, branch or PR with risk-selected personas and a report-only verdict. Use when asked to review a PR, do a code review, look over a branch for bugs, or decide go or no-go before merge; P0/P1 findings are verified (Ready, Ready-with-fixes, Not-ready)."
 when_to_use: "review this PR, code review, look over my branch for bugs, pre-merge review, go or no-go, ready to merge"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[base-ref | PR-number | diff spec] [depth:full|auto] [apply:local]'
@@ -57,7 +57,7 @@ Run phases 1-3 inline (they are orchestrator judgment over the diff). Phases 4-6
 
 ## Queue mode (batch review of multiple PRs)
 
-When the invocation names more than one changeset - a PR-number/URL list, or an org query like "review the team's open PRs" - run queue mode instead of a single-PR review: assemble the queue (capped at 10 by default), confirm the whole batch with ONE gate, run the exact per-PR pipeline above once per item (each with its own run-id, reviewer roster, verifier validation, and `findings.json` rows), then emit one cross-PR triage table (PR, verdict, worst open severity, open P0/P1 counts, run-id) ranked by merge-blocking risk - Not-ready first. Each item still renders its full standard report; the table summarizes, it does not replace the reports. Still report-only: no pushes, no CI watching (`atlas-run-watch`), no thread resolution (`atlas-resolve-pr-feedback`). Full protocol, confirmation format, ranking rules, and failure handling: `references/batch-mode.md`.
+When the invocation names more than one changeset - a PR-number/URL list, or an org query like "review the team's open PRs" - run queue mode instead of a single-PR review: assemble the queue (capped at 10 by default), confirm the whole batch with ONE gate, run the exact per-PR pipeline above once per item (each with its own run-id, reviewer roster, verifier validation, and `findings.json` rows), then emit one cross-PR triage table (PR, verdict, worst open severity, open P0/P1 counts, run-id) ranked by merge-blocking risk - Not-ready first. Each item still renders its full standard report; the table summarizes, it does not replace the reports. Still report-only: no pushes, no CI watching (`atlas-run-watch`), no thread resolution (`atlas-run-watch` pr-feedback mode). Full protocol, confirmation format, ranking rules, and failure handling: `references/batch-mode.md`.
 
 ## Persona prompt assets
 

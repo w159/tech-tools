@@ -9,8 +9,6 @@ export const USAGE_KEYS = [
 	'mod.open.dock',
 	'mod.open.ondemand',
 	'mod.open.board',
-	'mod.command.atlas-cc',
-	'mod.command.atlas-say',
 	'mod.command.atlas-core',
 	'mod.command.atlas-todo',
 	'mod.error.boot',

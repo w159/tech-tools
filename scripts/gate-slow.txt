@@ -1,0 +1,116 @@
+# Slow test files: the one list scripts/gate.sh reads. The git hooks (`gate.sh commit|push`) skip every file
+# listed here; `scripts/gate.sh full` runs them all. A test file that is not listed is fast.
+# Paths are repo-relative, one per line; `#` starts a comment.
+# Threshold: Python files that took 2 s or more in a pytest process of their own (8 parallel jobs);
+#            bun files that took 1 s or more (omp, mod) or 1.5 s or more (scripts) per file.
+# Re-measure:
+#   Python: time `python3 -m pytest -q -p no:cacheprovider <file>` per file from plugins/atlas/hooks and
+#           plugins/atlas/scripts (8 at a time), list the files at 2 s or more.
+#   bun:    cd plugins/atlas && bun test omp mod ./scripts ./colony --reporter=junit --reporter-outfile=<tmp.xml>
+#           and read the `time` of each <testsuite name="path">; list the files at 1 s or more.
+# Keep this file sorted by suite; if `gate.sh push` goes over 30 s, lower the threshold and add the slowest files.
+
+# ---- Python: plugins/atlas/hooks ----
+plugins/atlas/hooks/test_atlas_contract.py
+plugins/atlas/hooks/test_atlas_gates.py
+plugins/atlas/hooks/test_atlas_wt.py
+plugins/atlas/hooks/test_atlas_wt_more.py
+plugins/atlas/hooks/test_channel_dispatch.py
+plugins/atlas/hooks/test_codex_parity.py
+plugins/atlas/hooks/test_completion_gate.py
+plugins/atlas/hooks/test_connector_credential_watch.py
+plugins/atlas/hooks/test_dispatch_tripwire.py
+plugins/atlas/hooks/test_docs_drift_watch.py
+plugins/atlas/hooks/test_done_claim.py
+plugins/atlas/hooks/test_event_dispatch.py
+plugins/atlas/hooks/test_fix_contract_boot_isolated.py
+plugins/atlas/hooks/test_fix_dispatch_arming.py
+plugins/atlas/hooks/test_fix_inline_bookkeeping.py
+plugins/atlas/hooks/test_fix_simple_inline.py
+plugins/atlas/hooks/test_gate_rerun.py
+plugins/atlas/hooks/test_git_guard.py
+plugins/atlas/hooks/test_hook_hardening.py
+plugins/atlas/hooks/test_hook_perf.py
+plugins/atlas/hooks/test_payload_guards.py
+plugins/atlas/hooks/test_prompt_decision.py
+plugins/atlas/hooks/test_prompt_optimizer.py
+plugins/atlas/hooks/test_session_boot.py
+plugins/atlas/hooks/test_telemetry_wiring.py
+plugins/atlas/hooks/test_todo_capture.py
+plugins/atlas/hooks/test_validate_readonly_query.py
+plugins/atlas/hooks/test_worker_inbox.py
+plugins/atlas/hooks/test_worker_report_gate.py
+
+# ---- Python: plugins/atlas/scripts ----
+plugins/atlas/scripts/test_atlas_analytics.py
+plugins/atlas/scripts/test_atlas_channels.py
+plugins/atlas/scripts/test_atlas_collab.py
+plugins/atlas/scripts/test_atlas_colony_model.py
+plugins/atlas/scripts/test_atlas_control.py
+plugins/atlas/scripts/test_atlas_crew.py
+plugins/atlas/scripts/test_atlas_crew_hardening.py
+plugins/atlas/scripts/test_atlas_dash_agents.py
+plugins/atlas/scripts/test_atlas_dash_colony.py
+plugins/atlas/scripts/test_atlas_dash_insights.py
+plugins/atlas/scripts/test_atlas_dash_irc.py
+plugins/atlas/scripts/test_atlas_dash_term.py
+plugins/atlas/scripts/test_atlas_dashboard.py
+plugins/atlas/scripts/test_atlas_dashboard_live.py
+plugins/atlas/scripts/test_atlas_dashboard_more.py
+plugins/atlas/scripts/test_atlas_done_claim_positives.py
+plugins/atlas/scripts/test_atlas_doctor.py
+plugins/atlas/scripts/test_atlas_doctor_hardening.py
+plugins/atlas/scripts/test_atlas_doctor_layout.py
+plugins/atlas/scripts/test_atlas_git.py
+plugins/atlas/scripts/test_atlas_herdr.py
+plugins/atlas/scripts/test_atlas_integrations.py
+plugins/atlas/scripts/test_atlas_irc_speculate.py
+plugins/atlas/scripts/test_atlas_isolation_bench.py
+plugins/atlas/scripts/test_atlas_mod_gate.py
+plugins/atlas/scripts/test_atlas_mutate.py
+plugins/atlas/scripts/test_atlas_mux.py
+plugins/atlas/scripts/test_atlas_mux_more.py
+plugins/atlas/scripts/test_atlas_parity_rig_more.py
+plugins/atlas/scripts/test_atlas_provider.py
+plugins/atlas/scripts/test_atlas_remote.py
+plugins/atlas/scripts/test_atlas_rig.py
+plugins/atlas/scripts/test_atlas_scorecard.py
+plugins/atlas/scripts/test_atlas_scorecard_core.py
+plugins/atlas/scripts/test_atlas_security.py
+plugins/atlas/scripts/test_atlas_selffix_more.py
+plugins/atlas/scripts/test_atlas_skillgraph.py
+plugins/atlas/scripts/test_atlas_statusline.py
+plugins/atlas/scripts/test_atlas_team.py
+plugins/atlas/scripts/test_atlas_todo.py
+plugins/atlas/scripts/test_atlas_todo_more.py
+plugins/atlas/scripts/test_atlas_verifier_eval.py
+plugins/atlas/scripts/test_atlas_warm_lead.py
+plugins/atlas/scripts/test_atlas_warm_lead_inproc.py
+plugins/atlas/scripts/test_atlas_warm_lead_stop.py
+plugins/atlas/scripts/test_bench_hooks.py
+plugins/atlas/scripts/test_cli_help.py
+plugins/atlas/scripts/test_omp_runstate.py
+plugins/atlas/scripts/test_omp_transcript.py
+plugins/atlas/scripts/test_probe_dashboard.py
+plugins/atlas/scripts/test_skill_smoke.py
+
+# ---- bun: plugins/atlas/omp ----
+plugins/atlas/omp/channels.test.ts
+plugins/atlas/omp/delegation.test.ts
+plugins/atlas/omp/hook-bridge-session.test.ts
+plugins/atlas/omp/hook-bridge.test.ts
+plugins/atlas/omp/hud-paint.test.ts
+plugins/atlas/omp/proc.test.ts
+plugins/atlas/omp/stop-bridge.test.ts
+plugins/atlas/omp/usage-statusline.test.ts
+
+# ---- bun: plugins/atlas/mod ----
+plugins/atlas/mod/host/pulse-wiring.test.ts
+plugins/atlas/mod/view/hud/hud-surface.test.ts
+
+# ---- bun: plugins/atlas/scripts ----
+plugins/atlas/scripts/dashboard_ui/js/agents-page-lens.test.js
+plugins/atlas/scripts/dashboard_ui/js/app.test.js
+plugins/atlas/scripts/dashboard_ui/js/model-picker.test.js
+plugins/atlas/scripts/dashboard_ui/js/terminal.test.js
+plugins/atlas/scripts/dashboard_ui/js/work.test.js

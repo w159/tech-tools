@@ -15214,5 +15214,168 @@
     "verified_at": "2026-11-23T13:24:24+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "r1746-fast-gate",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Git hooks run the fast test set in 23 s; slow set runs on demand with scripts/gate.sh full; two useless tests deleted",
+    "evidence": [
+      ".atlas/evidence/2026-11-23_r1746-fast-gate.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "scripts/gate.sh push < /dev/null",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-23T19:40:14+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-e49918-1795462863",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `.venv/bin/python -m pytest -q -p no:cacheprovider scripts plugins/atlas/scripts/test_fix_settings_options.py plugins/atlas/scripts/test_atlas_test.py`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-23_194103_gate-rerun_e49918.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-23T19:41:03+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "core-bar-pane-controls",
+    "surface": "mod",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Core bar carries open/tabs/close pane chips; /atlas-cc removed",
+    "evidence": [
+      "bun test mod: 3905 pass 0 fail",
+      "plugins/atlas/mod/view/band/band-pane-controls.test.ts: 18 pass; 9 fail with the open chip disabled (mutation)",
+      "live classic 150x45: bar row ends 'open   [-]'"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod/view/band/band-pane-controls",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T07:54:12+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "classic-menu-gap-host",
+    "surface": "host",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Blank rows after the / menu in classic mode are Claude Code's renderer: same 17-row gap with ATLAS_MOD=off",
+    "evidence": [
+      "live tmux 150x45 classic, 120 rows scrollback: atlas on prompt 21 last 28 blank 17; atlas off prompt 21 last 28 blank 17"
+    ],
+    "doc_refs": [],
+    "reproduction": "",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T07:54:12+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "core-bar-pane-controls",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Core bar carries open/tabs/close pane chips; /atlas-cc removed",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_core-bar-pane-controls.txt",
+      "plugins/atlas/mod/view/band/band-pane-controls.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T07:57:42+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-b032bf-1795507067",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd plugins/atlas && bun test mod/view/band/band-pane-controls 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_075747_gate-rerun_b032bf.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-24T07:57:47+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "skills-consolidation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Skills consolidation not yet landed: main tree has 40 skill dirs, workers unmerged and mid-edit",
+    "evidence": [
+      "ls plugins/atlas/skills (40 dirs on main); worktree skill counts 33/35/41; no implementer reports on channel"
+    ],
+    "doc_refs": [],
+    "reproduction": "ls plugins/atlas/skills | wc -l; git -C .atlas/wt/tb1f7a9-implementer-* status --short",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "needs-evidence",
+    "verified_at": "2026-11-24T08:22:51+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-ba26"
+  },
+  {
+    "id": "gate-rerun-b032bf-1795509455",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd plugins/atlas && bun test mod/view/band/band-pane-controls 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_083735_gate-rerun_b032bf.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-24T08:37:35+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-b032bf-1795510242",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd plugins/atlas && bun test mod/view/band/band-pane-controls 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_085042_gate-rerun_b032bf.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-24T08:50:42+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "skills-consolidation",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas skills 40 -> 26 (21 menu, 5 model-only), /atlas-say removed, full gate green",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_skills-consolidation-full-gate.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash scripts/gate.sh full < /dev/null",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-24T08:58:03+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

@@ -183,7 +183,7 @@ describe('D1: card and panel never show at once', () => {
     await h.advance(20_000, async () => { await band(h); }); // the boot run rests until the band reads idle
     await press(button(await band(h), 'band:health', 'health'));
     expect(textOf(await band(h))).toContain('HEALTH'); // the card, panel closed
-    await h.one('command.run', ['command', 'atlas-cc'])(h.$, { command: 'atlas-cc' }, noopNext);
+    await press(button(await band(h), 'band:open')); // the band's `open` chip
     await settle();
     expect(h.rec.opens).toContain('atlas');
     expect(textOf(await band(h))).not.toContain('HEALTH'); // the panel opened: the card is gone

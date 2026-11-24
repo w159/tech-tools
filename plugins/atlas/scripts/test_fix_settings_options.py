@@ -90,9 +90,6 @@ class ManifestOptions(unittest.TestCase):
         for key, var in atlas_env.PLUGIN_OPTIONS:
             self.assertEqual(USER_CONFIG[key]["default"], _code_default(var), key)
 
-    def test_version(self):
-        self.assertEqual(MANIFEST["version"], "17.36.5")
-
 
 def _home() -> str:
     return tempfile.mkdtemp()

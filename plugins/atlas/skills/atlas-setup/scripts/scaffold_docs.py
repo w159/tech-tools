@@ -28,7 +28,7 @@ SSOT contract (see atlas-orchestrate/references/docs-ssot.md, authoritative):
                   defect. (.atlas/audits/ and .atlas/decisions/ ARE legitimate
                   atlas-internal names, distinct from their docs/ namesakes.)
   <root>/.gitignore -- ensured present; content is owned by the
-                  atlas-gitignore skill, never authored here.
+                  atlas-setup gitignore mode, never authored here.
 
 This script is stdlib-only and must run under a stock Python 3 interpreter
 with no external deps.
@@ -445,19 +445,14 @@ def detect_api(repo_root: Path) -> bool:
 
 
 def gitignore_seed_path() -> Path:
-    """Resolve the .gitignore seed owned by the atlas-gitignore skill, a
-    sibling skill directory. This script never authors gitignore content
-    itself -- atlas-gitignore owns the zero-trust allowlist template."""
-    return (
-        Path(__file__).resolve().parent.parent.parent
-        / "atlas-gitignore"
-        / "templates"
-        / "gitignore.seed"
-    )
+    """Resolve the .gitignore seed owned by atlas-setup's gitignore mode
+    (templates/gitignore.seed). This script never authors gitignore content
+    itself -- the gitignore mode owns the zero-trust allowlist template."""
+    return Path(__file__).resolve().parent.parent / "templates" / "gitignore.seed"
 
 
 def ensure_gitignore(repo_root: Path) -> str:
-    """Copy the atlas-gitignore seed to <repo-root>/.gitignore if missing.
+    """Copy the gitignore seed to <repo-root>/.gitignore if missing.
     Never touches an existing .gitignore -- a separate skill maintains it."""
     dst = repo_root / ".gitignore"
     if dst.exists() and is_non_empty(dst):
@@ -465,7 +460,7 @@ def ensure_gitignore(repo_root: Path) -> str:
     src = gitignore_seed_path()
     if not src.is_file():
         return (
-            f"MISSING SEED: {src} (cannot seed {dst}; owned by atlas-gitignore skill)"
+            f"MISSING SEED: {src} (cannot seed {dst}; owned by the atlas-setup gitignore mode)"
         )
     shutil.copy2(src, dst)
     return f"seeded: {dst}"
@@ -553,7 +548,7 @@ def main(argv: list) -> int:
     else:
         print("no API signal detected: skipping docs/api/ and docs/endpoints.md")
 
-    # .gitignore: ensure present, content owned by the atlas-gitignore skill.
+    # .gitignore: ensure present, content owned by the atlas-setup gitignore mode.
     print(ensure_gitignore(repo_root))
 
     all_ok = (

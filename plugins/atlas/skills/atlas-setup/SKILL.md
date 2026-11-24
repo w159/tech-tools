@@ -1,7 +1,7 @@
 ---
 name: atlas-setup
-description: "Manual atlas lifecycle: onboard (scaffold docs/ and .atlas/), install, connectors, repair, tour, menu. Use when bringing atlas online, fixing it or learning it."
-when_to_use: "set up atlas, onboard this repo to atlas, first run, atlas menu, atlas tour, check connectors, subagents not launching"
+description: "Manual atlas lifecycle: onboard, install, connectors, repair, tour, gitignore. Use when bringing atlas online, fixing it, learning it, or generating a deny-by-default .gitignore."
+when_to_use: "set up atlas, onboard this repo to atlas, first run, atlas menu, atlas tour, check connectors, subagents not launching, gitignore, deny by default, keep secrets out of git"
 disable-model-invocation: true
 user-invocable: true
 argument-hint: "[onboard | install | connectors | repair [--fix] | tour | task description | menu [need]]"
@@ -10,7 +10,7 @@ allowed-tools: Read, Glob, Grep, Bash(python3:*), Write(docs/**), Write(.atlas/e
 
 # atlas-setup - onboarding, install, connectors, repair
 
-One of three manual skills in the fleet (with atlas-tui and atlas-crew): the user invokes it explicitly and it never auto-triggers.
+One of two manual skills in the fleet (with atlas-ship): the user invokes it explicitly and it never auto-triggers.
 Every other atlas skill auto-triggers from its description.
 
 atlas-setup configures, fixes, and organizes any project it runs in. First run
@@ -102,7 +102,7 @@ When `docs/` does not exist:
 3. **Wire graphify** - record the wiki producer pipeline (architecture/
    in, wiki/diagrams/ out) per `${CLAUDE_PLUGIN_ROOT}/skills/atlas-wiki/references/graphify-wiring.md`.
 4. **Update .gitignore** - write or repair a zero-trust, deny-by-default
-   `.gitignore` (see `atlas-gitignore`): allowlist the full `docs/` and
+   `.gitignore` (see `atlas-setup`): allowlist the full `docs/` and
    `.atlas/` durable trees, ensure `.atlas/.run/` stays ignored except its
    durable `findings.json`, and re-exclude secrets last.
 5. **Inventory skills** - read `references/manual-vs-auto-map.md` and
@@ -145,7 +145,7 @@ The "what should I run next" mode. The analysis checks, in priority order:
    `${CLAUDE_PLUGIN_ROOT}/skills/atlas-audit/references/self-telemetry.md`.
 6. **UX coverage gap** - is there a frontend atlas-ux-test has not tested?
 7. **Docs drift** - does AGENTS.md match the stack? Is CHANGELOG current?
-8. **Recurring task identified** - repeated prompts atlas-loop could
+8. **Recurring task identified** - repeated prompts atlas-orchestrate could
    automate.
 9. **Tech debt** - TODO/FIXME markers, stale branches.
 10. **Connector not provisioned** - vendor signals present but the
@@ -164,8 +164,8 @@ for the full task-to-skill mapping.
 
 ## The skill inventory
 
-- **3 manual skills** - atlas-setup (this skill), atlas-tui, atlas-crew. Invoke by name.
-- **36 auto-trigger skills** - the full list with one-line triggers is
+- **2 manual skills** - atlas-setup (this skill), atlas-ship. Invoke by name.
+- **24 other skills** (5 model-only, 19 menu and auto-trigger) - the full list with one-line triggers is
   `references/manual-vs-auto-map.md`; the intent-to-skill table is
   `${CLAUDE_PLUGIN_ROOT}/references/skill-finder.md`.
 
@@ -197,3 +197,7 @@ skill, asking one question if ambiguous.
 - [Tool patterns](references/tool-patterns.md): skill vs plugin vs MCP decision rule. Read when building the Stage 2 recommendation shortlist.
 - Scripts (run, do not read into context): `scripts/plugin-health.py` (read-only skill/agent count check against the manifest) `scripts/test_scaffold_docs.py` (unit tests for `scaffold_docs.py`) and `scripts/test_plugin_health.py` (unit tests for `plugin-health.py`).
 - Templates in `templates/`: `docs-agents.md`, `atlas-agents.md`, `atlas-claude.md` (orientation files for `docs/` and `.atlas/`), `endpoints.md` (API reference stub), `new-tool-scaffold.md` (new capability proposal), `connector-manifest.seed.json` (connector manifest seed). The empty scaffold directories (`understand-anything`, `memory`, `evidence`, `archive`, `plans`, `audits`, `specs`, `wiki`, `decisions`, `self-improvement`, `nudge`, `architecture`, `lessons`, `graphify`) each hold a `.gitkeep` placeholder so git keeps them; read only when changing the scaffold tree.
+
+## Merged mode: gitignore
+
+Generates a zero-trust, deny-by-default .gitignore for a named stack, secrets re-excluded last (arg: languages, frameworks, package managers, build tools, OS, editors). Onboard calls it. Procedure: `references/gitignore.md`; seed `templates/gitignore.seed`; validator `scripts/validate_gitignore.sh`.

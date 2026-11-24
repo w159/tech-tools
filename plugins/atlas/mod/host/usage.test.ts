@@ -58,10 +58,10 @@ const sum = (ws: Array<{ text: string }>) => {
 };
 
 describe('usage counters', () => {
-  test('USAGE_KEYS is exactly the eleven keys of the schema', () => {
+  test('USAGE_KEYS is exactly the nine keys of the schema', () => {
     expect([...USAGE_KEYS]).toEqual([
       'mod.open.dock', 'mod.open.ondemand', 'mod.open.board',
-      'mod.command.atlas-cc', 'mod.command.atlas-say', 'mod.command.atlas-core', 'mod.command.atlas-todo',
+      'mod.command.atlas-core', 'mod.command.atlas-todo',
       'mod.error.boot', 'mod.error.rebuild', 'mod.error.fault', 'mod.error.other',
     ]);
   });
@@ -83,14 +83,14 @@ describe('usage counters', () => {
 
   test('path: $ATLAS_HOME/analytics/mod/<sid>-<seq>-<rand>.json, else $HOME/.atlas/...; temp file then mv', async () => {
     const a = stub({ env: { ATLAS_HOME: '/atlas-home', HOME: '/home/u' }, sid: 'abc_1-2' });
-    await noteUsage(a.$, 'mod.command.atlas-cc');
+    await noteUsage(a.$, 'mod.command.atlas-todo');
     const tmp = a.last()!.path;
     expect(tmp).toMatch(/^\/atlas-home\/analytics\/mod\/abc_1-2-0-[a-z0-9]{6}\.json\.tmp$/);
     expect(a.runs).toContainEqual(['mkdir', '-p', '/atlas-home/analytics/mod']);
     expect(a.runs).toContainEqual(['mv', '-f', tmp, tmp.replace(/\.tmp$/, '')]);
     resetUsageForTest();
     const b = stub({ env: { HOME: '/home/u' } });
-    await noteUsage(b.$, 'mod.command.atlas-cc');
+    await noteUsage(b.$, 'mod.command.atlas-todo');
     expect(b.last()!.path).toMatch(/^\/home\/u\/\.atlas\/analytics\/mod\/sess-1-0-[a-z0-9]{6}\.json\.tmp$/);
   });
 

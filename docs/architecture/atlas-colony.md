@@ -113,7 +113,7 @@ cmd ▸ ▊  Tab region · ? help · last <TS>
 
 In-process colonies: lead channels in `.atlas/.run/channels.json` with no `lead_pid` whose `last_activity` is within `ATLAS_COLONY_LIVE_WINDOW` seconds (`scripts/atlas_colony_model.py:44`) appear as colonies with transport `in-process` (`in-proc` in the TUI). Seat state comes from the latest board note (done/handback finished, blocked, note under 120 s working, else idle). SESSIONS caps at 30 seats per colony with a `+N more` row (`scripts/atlas_tui.py:1030`). PEEK reads `no pane (in-process subagent)` and `t` does nothing for them; steer and hold work, since both are board operations.
 
-Keys, mouse, hold semantics and the golden regenerate command: skill `plugins/atlas/skills/atlas-tui/SKILL.md`. Design inspired by OpenRig's team workspace.
+Keys, mouse, hold semantics and the golden regenerate command: skill `plugins/atlas/skills/atlas-status/references/tui.md`. Design inspired by OpenRig's team workspace.
 
 ## Spawning workers (transport)
 

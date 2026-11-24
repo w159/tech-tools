@@ -395,7 +395,7 @@ class MutantKillers(unittest.TestCase):
         code, out = self._main(["prog", self.proj])
         self.assertEqual(code, 0)
         payload = out.split("JSON:\n", 1)[1]
-        self.assertIn("loop-library (atlas-loop)", [r["id"] for r in json.loads(payload)["recommendations"]])
+        self.assertIn("loop-library (atlas-orchestrate)", [r["id"] for r in json.loads(payload)["recommendations"]])
         self.assertTrue(payload.startswith('{\n  "context": {'), payload[:40])
 
     def test_project_mcp_json_is_read_even_when_the_user_file_is_missing(self):

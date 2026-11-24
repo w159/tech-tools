@@ -1,6 +1,6 @@
 ---
 name: atlas-security
-description: "Triages open GitHub Dependabot, code-scanning and secret-scanning alerts into one grouped fix on a working branch, verified by a fresh verifier. Use when handling vulnerabilities, CVEs or the security tab."
+description: "Triages Dependabot, code-scanning and secret-scanning alerts into one verified grouped fix. Use when handling vulnerabilities, CVEs, secret scanning, security alerts, the GitHub security tab, or bumping vulnerable packages."
 when_to_use: "dependabot, CVEs, secret scanning, security alerts, bump vulnerable packages"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '[--kinds dependabot,code,secret] [--repo owner/name] [plan-only]'

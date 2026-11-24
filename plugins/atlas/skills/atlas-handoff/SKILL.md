@@ -1,6 +1,6 @@
 ---
 name: atlas-handoff
-description: "Writes a dense session handoff so a fresh session resumes without re-discovery. Use when at a checkpoint before context fills, before a break, or when passing work to another session."
+description: "Writes a dense session handoff so a fresh session resumes without re-discovery. Use when context is filling up, at end of session or a checkpoint, before a break, or when asked for a continuation doc, to write up where we are, or to pick up tomorrow."
 when_to_use: "handoff, context filling up, end of session, continuation doc, write up where we are, resume tomorrow, pick up later"
 allowed-tools: Read, Glob, Grep, Bash, Write
 argument-hint: (no args; run at a checkpoint)

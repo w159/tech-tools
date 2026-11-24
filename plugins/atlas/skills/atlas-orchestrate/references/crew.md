@@ -15,14 +15,20 @@ read-only and review teams (audit, explore, verify), where nothing is merged.
 
 ## Start it in one call
 
-From a Claude session the entry point is the manual skill `/atlas:atlas-crew`,
-which takes the flags below (`/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'
---tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'`). Its body runs
-`atlas_crew.py run $ARGUMENTS --wait 100` as pre-executed shell, so the crew is
-running before the lead's first model call and the lead is one turn. Codex does
-not execute that dynamic skill line: run the direct command once with
-`--harness codex`. If the summary has not appeared after 100 s it prints only
-the start line; run `atlas_crew.py wait --run <id>` as below. The direct call:
+This is crew mode of atlas-orchestrate (say "crew", "parallel workers per file"
+or "spec to files"). There is no separate skill: run the direct call below once
+from one Bash call (on Codex add `--harness codex`). Do not start the crew
+twice. If the summary has not appeared after the `--wait` window the command
+prints only the start line; run `atlas_crew.py wait --run <id>` (Bash timeout
+600000 ms) until the summary appears. Reading the result:
+
+- Final JSON summary with `check_exit` 0: reply in one line with the numbers
+  (workers, wall time, tokens, check result).
+- `check_exit` non-zero: read only `check_tail`, fix what remains in the named
+  files, and re-run the check command.
+- An error line instead of JSON: report it verbatim and stop.
+
+The direct call:
 
 ```bash
 # spec-driven: one worker per file, each gets only its own spec section

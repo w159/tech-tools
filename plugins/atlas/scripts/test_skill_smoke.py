@@ -187,7 +187,7 @@ class SkillSmokeTests(unittest.TestCase):
         dirs = sorted(p.name for p in SKILLS.iterdir() if (p / "SKILL.md").is_file())
         generated = sorted(n[len("test_skill_"):] for n in dir(self) if n.startswith("test_skill_"))
         self.assertEqual([d.replace("-", "_") for d in dirs], generated)
-        self.assertGreaterEqual(len(dirs), 40)
+        self.assertGreaterEqual(len(dirs), 26)
 
 
 class SmokeDetectors(unittest.TestCase):

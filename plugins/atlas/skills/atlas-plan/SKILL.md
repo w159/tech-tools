@@ -1,9 +1,9 @@
 ---
 name: atlas-plan
-description: "Writes an implementation-ready plan to docs/plans/ with U-numbered units and a verification contract, from a brainstorm artifact or feature description. Use when requirements are settled."
-when_to_use: "plan this, implementation plan, turn the brainstorm into a plan, plan the migration, break into units, technical plan"
+description: "Writes an implementation-ready plan to docs/plans/; also publishes docs for human review. Use when requirements are settled and need U-numbered units and a verification contract, or when a plan or spec needs shared review and comments."
+when_to_use: "plan this, implementation plan, turn the brainstorm into a plan, plan the migration, break into units, technical plan, share for review, comment on this doc, review round-trip"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Task, Agent, ToolSearch
-argument-hint: '<requirements artifact path or feature description>'
+argument-hint: '<requirements artifact path or feature description> | proof <file or PR to publish for review>'
 ---
 
 
@@ -87,3 +87,7 @@ atlas-plan owns: intake classification, research, the question inventory, the ch
 
 - [Subagent kit](../atlas-orchestrate/references/subagent-kit.md): the required dispatch shape and ToolSearch-first TOOLS line. Read when dispatching the explorer, critic, or verifier.
 - [Compound packs](../../references/compound-packs.md): the full compound-pack rule contract. Read when matching pack rules during research.
+
+## Merged mode: proof (human review round-trip)
+
+Argument `proof <file or PR>`, or any ask to share a plan, spec or draft for comments (not proofreading): publish the markdown for human review, record anchored comments in a sidecar file, fold feedback back. Procedure: `references/proof.md`; review recipes: `references/proof/review-recipes.md`.

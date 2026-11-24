@@ -1,6 +1,6 @@
 # Swift testing reference
 
-How Swift (iOS, macOS, server-side Swift Package Manager) maps to the atlas-testing taxonomy. TYPE IDs are the canonical ids from `references/taxonomy.md`; gap output references rows here. Simulator builds and Xcode test runs are executed via the atlas-test-xcode skill.
+How Swift (iOS, macOS, server-side Swift Package Manager) maps to the atlas-testing taxonomy. TYPE IDs are the canonical ids from `references/taxonomy.md`; gap output references rows here. Simulator builds and Xcode test runs are executed via the atlas-testing skill.
 
 ## Contents
 
@@ -21,7 +21,7 @@ How Swift (iOS, macOS, server-side Swift Package Manager) maps to the atlas-test
 | component | ViewInspector 0.10.5 (SwiftUI); XCTest for UIKit view controllers | SPM/CocoaPods test-target only | via `swift test` / `xcodebuild test` | ViewInspector introspects SwiftUI view trees, state (`@State`, `@Binding`, `@Observable`), and triggers callbacks. Tracks new iOS releases closely (iOS 26/27 support current). Do not add to the main target. |
 | api | URLSession tests via `URLProtocol` mocking; contract tools absent | stdlib | `swift test` | No mainstream Pact-for-Swift. For service teams, API behavior is covered by stub-based API-layer tests; true contract testing lives in the backend repo (see `references/types-functional.md`). |
 | contract | Not applicable (see Not applicable list) | | | |
-| e2e | XCUITest (ships with Xcode 27) | Bundled | `xcodebuild test -destination 'platform=iOS Simulator,...'` | UI automation only exists in XCTest; do not migrate XCUITest suites to Swift Testing. Route simulator/xcodebuild execution to the atlas-test-xcode skill. |
+| e2e | XCUITest (ships with Xcode 27) | Bundled | `xcodebuild test -destination 'platform=iOS Simulator,...'` | UI automation only exists in XCTest; do not migrate XCUITest suites to Swift Testing. Route simulator/xcodebuild execution to the atlas-testing skill. |
 | smoke | Swift Testing suite tagged or filtered as smoke | Bundled | `xcodebuild test -only-testing:...SmokeTests` or `swift test --filter Smoke` | Small app-launch + critical-path set; run on every CI build, not nightly. |
 | regression | Full suite re-run before release; Swift Testing regression traits | Bundled | `swift test` / `xcodebuild test` | Bugs get a failing parameterized case first; keep cases cheap and parallel. |
 | snapshot-approval | pointfree swift-snapshot-testing 1.19.6 | SPM `pointfreeco/swift-snapshot-testing` | via `xcodebuild test` / `swift test` | View, VC, image, and Codable snapshots; records Swift Testing attachments natively (1.19+). Uses local diff tools during review; pass `record:` explicitly rather than a global recording flag. |

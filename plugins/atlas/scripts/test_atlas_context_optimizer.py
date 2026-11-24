@@ -166,13 +166,12 @@ Body.
     def test_core_skills_never_disabled(self):
         # Every CORE_SKILLS member must be kept and never disabled, even under
         # aggressive optimize with no usage DB. Covers the original core set
-        # plus the newly added atlas-debug, atlas-validate.
+        # plus the newly added atlas-debug.
         core_members = [
             "atlas-orchestrate",
             "atlas-setup",
             "atlas-audit",
             "atlas-debug",
-            "atlas-validate",
         ]
         for name in core_members:
             self._create_skill(name, "core skill")

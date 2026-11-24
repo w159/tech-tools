@@ -35,7 +35,7 @@ Pass the chosen capabilities into each subagent's spec as directives, **and** te
 | Security review | `security-engineer`* | `security-review`, `security-best-practices`; `backend-security-skills`/`vibeguard` plugins if present | `context7`, lean-ctx | opus |
 | Comprehensive quality + security + OWASP audit (full codebase sweep) | (orchestrator dispatches atlas-audit) | `atlas-audit` | lean-ctx, `context7`, `context-mode`; no browser needed | sonnet (multi-swarm) |
 | Architecture map / structural dedup / boundaries doc missing | (orchestrator dispatches atlas-audit) | `atlas-audit` | lean-ctx, LSP, `context-mode` | sonnet |
-| Recurring or iterative task / needs a reusable loop | (orchestrator dispatches atlas-loop) | `atlas-loop` | - | sonnet |
+| Recurring or iterative task / needs a reusable loop | (orchestrator runs loop mode) | `references/loop.md` | - | sonnet |
 | Vendor MCP connector setup / credentials to wire | (user runs `/atlas:atlas-setup`; skill is user-invoked only) | `atlas-setup` | - | sonnet |
 | Measure run health / self-improvement from observability data | (orchestrator dispatches atlas-audit) | `atlas-audit` | SQLite observability DB (`~/.atlas/atlas.db`) | sonnet |
 | Project boot / onboarding / configure tooling for a repo | (user runs `/atlas:atlas-setup`; skill is user-invoked only) | `atlas-setup` | lean-ctx, hook/config wiring | sonnet |

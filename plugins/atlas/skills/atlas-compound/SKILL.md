@@ -1,6 +1,7 @@
 ---
 name: atlas-compound
-description: "Captures one verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem is solved and a future engineer would repeat it."
+description: "Captures one verified, non-obvious lesson into docs/lessons/ after an eligibility gate and overlap check. Use when a problem was just solved and a future engineer would repeat it, or when asked to record the lesson, document the gotcha, capture what we learned or write a post-mortem note."
+user-invocable: false
 when_to_use: "record this lesson, document the gotcha, capture what we learned, post-mortem note"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '<optional context: what was solved and why it was non-obvious>'

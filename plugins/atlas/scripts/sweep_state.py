@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Deterministic single-writer engine for the atlas-sweep state file.
+"""Deterministic single-writer engine for the atlas-brainstorm sweep state file.
 
 This script is the ONLY writer of `.atlas/.run/sweep-state.json`. Every peer
 (read-only connector subagents, the orchestrator) reads state through `read`
@@ -22,7 +22,7 @@ payload on line 2. Operational conditions exit 0; CLI misuse exits 2.
 Status words: OK | NO-STATE | CORRUPT | LOCKED | STALE-RECLAIMED |
 LEASE-LOST | REFUSED | ERROR.
 
-Schema contract (see skills/atlas-sweep/references/state-schema.md):
+Schema contract (see skills/atlas-brainstorm/references/sweep/state-schema.md):
 - `schema_version: 1` must be present once the file exists; a file that
   parses but lacks it is CORRUPT and is never overwritten.
 - Unknown top-level keys, item fields, and status values are preserved on

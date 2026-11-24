@@ -1,7 +1,8 @@
 ---
 name: atlas-orchestrate
-description: "Runs multi-step, multi-layer or whole-repo work (build, fix, audit, refactor, investigate, full-stack features) through subagents with independent verification. Use when a task spans layers or the repo."
-when_to_use: "orchestrate, whole-repo work, cross-layer bug, subagent waves, implement a feature across API, database and frontend"
+description: "Runs multi-step or whole-repo work through subagents with independent verification. Use when a task spans layers or the repo, or says orchestrate, autopilot (plan to local commit), parallel crew (one worker per file), or loop until/every N minutes/sweep a backlog."
+when_to_use: "orchestrate, whole-repo work, cross-layer bug, subagent waves, implement a feature across API, database and frontend, autopilot, run the whole pipeline, plan to commit, parallel crew, workers per file, spec to files, loop until, run repeatedly, recurring task, sweep a backlog"
+argument-hint: "[task | autopilot <plan> | crew --spec SPEC.md --files 'glob' | loop <task>]"
 allowed-tools: Read, Glob, Grep, Bash, TodoWrite, AskUserQuestion, Agent, Task
 ---
 
@@ -27,6 +28,14 @@ While this skill is active, fan out when the work has independent parts or needs
 - **Your Write/Edit only touches orchestration artifacts:** `.atlas/.run/`, `docs/plans/`, `.atlas/evidence/`, and (via curator) durable `docs/`.
 - **Do not investigate target code in your own context** when the investigation is more than a glance. Dispatch `atlas:explorer`. Open only orchestration artifacts/manifests for Orient.
 - **Specify goal/constraints/acceptance - never the bytes.** Dictating a finished patch is self-implementation.
+
+## Modes
+
+Default is the loop below. On a trigger word, read and follow the mode reference:
+
+- **Autopilot** ("autopilot"): `references/autopilot.md`: no push without consent.
+- **Crew** ("crew", one worker per file): `references/crew.md`.
+- **Loop** ("loop until", every N minutes, sweep a backlog): `references/loop.md`; one job or PR: `atlas-run-watch`.
 
 ## Docs/ SSOT (gate-enforced)
 
@@ -94,34 +103,34 @@ For small direct changes in one-developer repos: `export ATLAS_MODE=solo` (case-
 
 | Load this | When |
 |---|---|
-| `references/laws-and-gates.md` | applying laws, decision gate, todos, mid-run steering |
+| `references/laws-and-gates.md` | laws, decision gate, todos, steering |
 | `references/the-loop.md` | running Orient→Finish or closing a wave |
-| `references/implementation-units.md` | dispatching implementer units, resuming interrupted runs, parallel implementer waves, evidence receipts |
-| `references/feature-flow.md` | implementing one feature across UI, API and data |
-| `references/anti-rationalization.md` | catching "I'll just..." thoughts |
+| `references/implementation-units.md` | implementer units, resumes, parallel waves, receipts |
+| `references/feature-flow.md` | one feature across UI, API, data |
+| `references/anti-rationalization.md` | "I'll just..." thoughts |
 | `references/squad-and-tiers.md` | choosing agent/model/effort |
-| `references/capability-routing.md` | task -> agent/skill/MCP/model |
-| `references/capability-catalog.md` | recommending installs (atlas-setup) |
-| `references/subagent-kit.md` | writing any dispatch |
-| `references/scaffolding.md` | Orient / findings / per-root docs |
-| `references/memory-access.md` | claude-mem recall |
-| `references/execution-testing.md` | FE/BE/DB runtime validation |
-| `references/lsp-and-symbols.md` | symbol navigation |
-| `references/prompt-optimization.md` | sharpening prompts |
-| `references/hooks-automation.md` | hook install/config |
-| `references/fallow-tools.md` | JS/TS fallow CLI/MCP/skills + atlas fallow_gate |
-| `references/tool-routing.md` | lean-ctx/claude-mem/context-mode/ponytail matrix (min context) |
-| `references/claude-code-tuning.md` | Claude Code setup root causes |
+| `references/capability-routing.md` | task routing |
+| `references/capability-catalog.md` | recommending installs |
+| `references/subagent-kit.md` | writing a dispatch |
+| `references/scaffolding.md` | Orient, findings, docs |
+| `references/memory-access.md` | recall |
+| `references/execution-testing.md` | runtime validation |
+| `references/lsp-and-symbols.md` | symbols |
+| `references/prompt-optimization.md` | prompts |
+| `references/hooks-automation.md` | hooks |
+| `references/fallow-tools.md` | JS/TS fallow tools and gate |
+| `references/tool-routing.md` | tool routing matrix |
+| `references/claude-code-tuning.md` | Claude Code setup |
 | `references/docs-ssot.md` | docs/ taxonomy |
-| `references/multi-stage-planning.md` | stage maps, standing consent, fan-out |
+| `references/multi-stage-planning.md` | stage maps, fan-out |
 | `references/ux-test-swarm.md` | UX swarm |
-| `references/verification-and-grounding.md` | failable gate vs self-critique |
+| `references/verification-and-grounding.md` | failable gates |
 | `references/codeql.md` | CodeQL |
 | `references/pytest-coverage.md` | pytest coverage |
 | `references/workflow-template.md` | Workflow scripts |
-| `references/session-lifecycle.md` | start/end docs reconcile |
-| `references/dashboard-api.md` | local atlas status/dashboard API |
-| `references/remote-access.md` | reaching the colony UI from another device (tailnet-only `tailscale serve`, `atlas_remote.py`) |
+| `references/session-lifecycle.md` | start/end reconcile |
+| `references/dashboard-api.md` | dashboard API |
+| `references/remote-access.md` | remote access to the colony UI |
 
 ## Flag the run
 
@@ -141,3 +150,7 @@ Run **Orient** (recall + roots + manifests + capabilities). Present plan, **writ
 ## Additional references
 
 - [Operating contract](${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md): the plugin-level operating contract (single copy). Read when you need the verify-before-done loop in full.
+
+## Reference files
+
+More files: INDEX.md build-fix-loop.md code-review-iterate.md dependency-bump-sweep.md doc-reconcile.md fan-out-adversarial-verify.md flaky-test-hunt.md incident-triage.md loop-until-dry.md migration-pipeline.md perf-profile-iterate.md red-green-tdd.md security-finding-verify.md autopilot-pipeline.md autopilot-shipping-gate.md loop-library.md loop-spec-template.md

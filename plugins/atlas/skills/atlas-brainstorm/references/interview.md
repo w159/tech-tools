@@ -99,7 +99,7 @@ Strong answers stay at 3-5 (not 10), mix leading and lagging (something that mov
 - **Can only go up** ("cumulative hours saved") -> "A metric that can only go up doesn't tell you much. What's the rate, the ratio, or the thing that can regress?"
 - **Unmeasurable** ("user delight") -> "How specifically? If you can't define how you'd check it on a Tuesday, it's aspirational, not a metric."
 
-**Capture:** A list of 3-5. Each with a one-line definition. Note where each is measured (analytics, DB, qualitative, etc.) if known. If measurement is undefined, ask: "Where does this metric live today? If nowhere, is this something you can start measuring?" (When telemetry exists, `atlas-pulse` is where these numbers get read - record *where* each metric lives, not its current value.)
+**Capture:** A list of 3-5. Each with a one-line definition. Note where each is measured (analytics, DB, qualitative, etc.) if known. If measurement is undefined, ask: "Where does this metric live today? If nowhere, is this something you can start measuring?" (When telemetry exists, `atlas-status` is where these numbers get read - record *where* each metric lives, not its current value.)
 
 ## 5. Tracks
 

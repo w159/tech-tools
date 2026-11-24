@@ -83,15 +83,14 @@ REQUIRED_SPEC_BLOCKS = (
     ("REPORT:",),
 )
 # Skills whose invocation means the session IS an atlas orchestration run.
-# Deliberately excludes advisory/config skills (atlas-setup, atlas-validate)
+# Deliberately excludes advisory/config skills (atlas-setup)
 # and narrow single-purpose skills (atlas-prompt, atlas-readme,
-# atlas-gitignore, atlas-handoff, atlas-db-audit)
+# atlas-handoff)
 # so casual sessions never trip the completion gate.
 ORCH_SKILLS = {
     "atlas-orchestrate",
     "atlas-audit",
     "atlas-ux-test",
-    "atlas-loop",
     "atlas-debug",
     "atlas-refactor",
     "atlas-harden",

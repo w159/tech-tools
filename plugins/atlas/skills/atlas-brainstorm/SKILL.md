@@ -1,7 +1,7 @@
 ---
 name: atlas-brainstorm
-description: "Grills an unclear product idea one question at a time into a requirements doc (default) or a product strategy; writes no product code. Use when an idea needs shaping, before atlas-plan."
-when_to_use: "brainstorm, brainstorm requirements, what should we build, requirements discovery, product strategy, STRATEGY.md, grill me"
+description: "Grills an idea into requirements or strategy; triages issues and feedback. Use when an idea needs shaping before atlas-plan, or when issues, transcripts or support tickets need triage."
+when_to_use: "brainstorm, brainstorm requirements, what should we build, requirements discovery, product strategy, STRATEGY.md, grill me, triage issues, feedback sweep, analyze transcript, customer interviews, support tickets, pain points"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[strategy [section]] <the idea, feature, or request to brainstorm>'
 ---
@@ -103,3 +103,20 @@ Open each when its mode reaches that step:
 - `references/interview.md`: strategy mode Phase 1: questions, pushback, stress test
 - `references/strategy-template.md`: strategy mode: the literal file shape
 - `references/update-run.md`: strategy mode Phase 2: before editing an existing strategy doc
+
+## Merged mode: sweep (feedback and issue triage)
+
+Argument `sweep [setup|reconfigure] [mode:non-interactive]` triages GitHub issues into a docs/features/ doc (never closes or replies); `sweep analyze <feedback artifact path>` extracts findings from a transcript or notes. Procedure: `references/sweep.md` (sub-references under `references/sweep/`). `${CLAUDE_PLUGIN_ROOT}/scripts/sweep_state.py` stays where it is.
+
+## Merged-mode reference files
+
+- `references/sweep/evidence-rules.md`
+- `references/sweep/finding-format.md`
+- `references/sweep/github-issues-connector.md`
+- `references/sweep/personas/feedback-analyst.md`
+- `references/sweep/quick-report.md`
+- `references/sweep/run-phases.md`
+- `references/sweep/setup.md`
+- `references/sweep/state-schema.md`
+- `references/sweep/transcript-input.md`
+- `references/sweep/triage-doc.md`

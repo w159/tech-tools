@@ -2,7 +2,6 @@
 // Split out of mod/register.ts (plan docs/plans/2026-11-18_atlas-mod-reorg-plan.md section 7); no behavior change.
 import { atom, type EngineInterface, type On, type PluginOptions, read, type RenderElement, update } from 'claude-code';
 import { SnapshotBuilder } from '../data/snapshot';
-import { intentToArgv } from '../input/intents';
 import { bandBlockedOf, bandHealth, bandKindOf, type BandModel, bandTree, hudPhases, railPhase } from '../view/band/band';
 import { bandKind } from '../view/panel/pane/band-kind';
 import { noteStopVerdict } from '../view/transcript/superseded';
@@ -34,7 +33,7 @@ import { holdSpinFrame, sharedSpinFrame } from '../design/atlas-ui';
 import { clearLook, lookOf } from '../design/look';
 import { hoverStyle } from '../input/clickable';
 import type { LiveSnapshot } from '../orchestra-types';
-import { BOARD_ID, engineFs, flipsOf, PANE_DOCK, PANE_ID, PANE_ON_DEMAND, reportFailure, rootOf, S, shouldDockAsked, shouldDockRest, shownFailures, toastUnplaced } from './atoms';
+import { BOARD_ID, engineFs, flipsOf, PANE_DOCK, PANE_ID, reportFailure, rootOf, S, shouldDockAsked, shouldDockRest, shownFailures, toastUnplaced } from './atoms';
 import { folderOf, headerTallyOf } from './agents';
 import { GATES_MS, gitBranch, HERDR_MS, herdrTick, MUX_MS, muxTick, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
 import { buildCore, coreTick, gateGroups, leadMessages, resetCore } from './core-tick';
@@ -138,8 +137,6 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 			await probeTmux($); // Z4: headless sessions run no process but the branch probe
 			if (!wired) {
 				wired = true;
-				await $.command.register({ name: 'atlas-cc', description: 'Open and focus the Atlas sidebar' });
-				await $.command.register({ name: 'atlas-say', description: 'Post a note to the lead channel', argumentHint: '<message>' });
 				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
 				$.clock.every(POLL_MS, () => {
@@ -413,7 +410,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			shown: hud.length,
 			fullscreen: e.viewport?.isFullscreen === true,
 		});
-		const handlers = bandHandlers($);
+		const handlers = { ...bandHandlers($), paneOpen: await read($, paneOpenedState) }; // the one-row bar draws `open` or `close` by it
 		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.toggleHealth?.(); else if (key === CARD_MORE_KEY) handlers.openView('route'); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the card's `▾ hide` chip toggles the card like the band's `▸ health`
 		S.bandDrawnMs = clockNow;
 		const band = bandTree(els, plan.band, handlers);
@@ -479,17 +476,6 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
-	// /atlas-cc — open the sidebar and give it the keyboard; it stays until the person closes it.
-	on('command.run', { command: 'atlas-cc' }, async ($) => {
-		void noteUsage($, 'mod.command.atlas-cc');
-		await update($, paneOpenedState, () => true);
-		const opened = $.ui.open(PANE_ON_DEMAND);
-		void noteUsage($, 'mod.open.ondemand');
-		toastUnplaced($, await opened);
-		void rebuild($);
-		return {};
-	});
-
 	// /atlas-core — the four pillars as text; computed fresh, no UI needed.
 	on('command.run', { command: 'atlas-core' }, async ($) => {
 		void noteUsage($, 'mod.command.atlas-core');
@@ -516,7 +502,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		return next(e);
 	});
 
-	// The person closed the pane (Esc or the close mark): /atlas-cc opens it again next time.
+	// The person closed the pane (Esc or the close mark): the band's `open` chip opens it again.
 	on('ui.close', async ($, e, next) => {
 		if (e.id === PANE_ID) {
 			if (e.origin?.kind === 'person') paneClosedByPerson = true; // a close by hand is final for the session: the prompt hook never reopens it
@@ -524,22 +510,6 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			await update($, viewState, () => 'route'); // reopen on the first tab, not the last one used
 		}
 		return next(e);
-	});
-
-	// /atlas-say <message> — post a note to the lead channel.
-	on('command.run', { command: 'atlas-say' }, async ($, e) => {
-		void noteUsage($, 'mod.command.atlas-say');
-		const text = e.args.trim();
-		if (text === '') return { text: 'usage: /atlas-say <message>' };
-		const snapshot = await read($, snapshotState);
-		const res = intentToArgv(
-			{ t: 'note', channel: snapshot?.channel ?? '', to: 'lead', text },
-			{ pluginRoot: $.plugin.root, root: snapshot?.root ?? '', channel: snapshot?.channel ?? null },
-		);
-		if (!res.ok || res.kind !== 'cli') return { text: `atlas: ${res.ok ? 'no board in view' : res.error}` };
-		const out = await $.process.run(res.argv);
-		void rebuild($);
-		return { text: out.exitCode === 0 ? 'sent' : `atlas: ${out.stderr.trim() || `exit ${out.exitCode}`}` };
 	});
 
 	// /atlas-todo <text> — add a todo at the current phase.

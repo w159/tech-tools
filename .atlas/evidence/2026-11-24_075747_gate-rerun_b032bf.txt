@@ -1,0 +1,13 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas
+command: cd plugins/atlas && bun test mod/view/band/band-pane-controls 2>&1 | tail -3
+exit: 0
+seconds: 0.04
+--- output tail ---
+bun test v1.4.2 (744846f84)
+
+ 18 pass
+ 0 fail
+ 114 expect() calls
+Ran 18 tests across 1 file. [37.00ms]
+

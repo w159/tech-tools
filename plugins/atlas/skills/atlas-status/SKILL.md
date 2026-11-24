@@ -1,9 +1,9 @@
 ---
 name: atlas-status
-description: "Builds a stakeholder status rollup for a plan or feature from plans, findings, the todo board and commits (claims marked verified or assumed); announce mode drafts release notes. Use when asked for feature status or to announce shipped work."
-when_to_use: "status report, where do we stand, progress rollup, release notes, announce a release"
+description: "Rolls up feature status, release notes, product pulse and the live TUI. Use when asked for status, an announcement, a usage and error pulse, or to watch colony workers."
+when_to_use: "status report, where do we stand, progress rollup, release notes, announce a release, product pulse, usage report, error rate, PostHog, Sentry, Mixpanel, atlas tui, command center, watch workers"
 allowed-tools: Read, Glob, Grep, Bash, Write, Task
-argument-hint: '[announce] <plan-or-feature-name, or what shipped and the channels>'
+argument-hint: '[announce | pulse [window e.g. 24h, 7d] | tui] <plan-or-feature-name, or what shipped and the channels>'
 ---
 
 # atlas-status
@@ -36,3 +36,16 @@ Done when the script's markdown is shown to the user unedited apart from a one-l
 Open each when its mode reaches that step:
 
 - `references/announcement-channels.md`: announce mode: per-channel shapes and grounding rules
+
+## Merged modes
+
+- **pulse** (`pulse [window]`): time-windowed product pulse (usage, performance, errors) from wired telemetry, read-only, into docs/pulses/. Procedure: `references/pulse.md` (sub-references under `references/pulse/`).
+- **tui** (`tui`): open the Atlas Command Center, a live terminal UI over the colony's tmux workers (topology, seats, feed, system). Procedure: `references/tui.md`; it runs `${CLAUDE_PLUGIN_ROOT}/scripts/atlas_tui.py`. Run only when the user asks for it.
+
+## Merged-mode reference files
+
+- `references/pulse/config.md`
+- `references/pulse/discovery.md`
+- `references/pulse/interview.md`
+- `references/pulse/report-template.md`
+- `references/pulse/run.md`

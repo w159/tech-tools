@@ -14,7 +14,7 @@ import { bandFrame, forgetBandFrame, noteBandFrame } from '../motion/motion';
 import { lineText, panelLines, type PanelModel } from './panel/panel-layout';
 
 describe('step 1: no `working` after done or idle without a new prompt, and the clock never passes the run total', () => {
-  // live-150-2 f0105 `idle 0:39`, f0106 `working 3:11`: /atlas-cc ran as a host turn, no prompt armed a run, and runElapsed added the whole rest to the closed run.
+  // live-150-2 f0105 `idle 0:39`, f0106 `working 3:11`: a slash command ran as a host turn, no prompt armed a run, and runElapsed added the whole rest to the closed run.
   const closed = (): ReturnType<typeof newRunClock> => {
     let c = stepRun(newRunClock(), true, 5_000);
     c = stepRun(c, true, 44_000);

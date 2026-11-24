@@ -132,10 +132,10 @@ def test_skills_a() -> None:
         lacks=("step by step",),
     )
     _check(
-        "plugins/atlas/skills/atlas-resolve-pr-feedback/SKILL.md",
+        "plugins/atlas/skills/atlas-run-watch/references/resolve-pr-feedback.md",
         lacks=("The confirmation gate is absolute",),
     )
-    _check("plugins/atlas/skills/atlas-loop/SKILL.md", lacks=("visible to others",))
+    _check("plugins/atlas/skills/atlas-orchestrate/references/loop.md", lacks=("visible to others",))
 
 
 def test_skills_b() -> None:

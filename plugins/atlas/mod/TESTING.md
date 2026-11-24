@@ -54,12 +54,15 @@ sidebar), not a surface's paint.
 
 ## Local gate
 
-`.github/workflows/tests.yml` holds only the `attribution` job. The suites run locally through `scripts/gate.sh`:
-`scripts/gate.sh commit` (pre-commit) is scoped to staged files, and `scripts/gate.sh push` (pre-push) runs
-everything, cheapest first and stopping at the first failing step. Enable the hooks with
-`git config core.hooksPath .githooks`. The Python suites run through `plugins/atlas/scripts/atlas_test.py`.
+`.github/workflows/tests.yml` holds only the `attribution` job. The suites run locally through `scripts/gate.sh`.
+The git hooks run the fast set and finish in under 30 s: `scripts/gate.sh commit` (pre-commit) is scoped to the
+staged files, `scripts/gate.sh push` (pre-push) runs every fast test, and both run independent steps
+concurrently. A test file listed in `scripts/gate-slow.txt` (the one list of slow files, with the threshold and how
+to re-measure it) is skipped by the hooks; a file not on the list is fast. `scripts/gate.sh full` runs everything,
+slow list, `herdr-web-ui` and the live mod gate included, one step after another; run it by hand before a
+release. Enable the hooks with `git config core.hooksPath .githooks`.
 
-| Push step | Command |
+| `full` step | Command |
 | --- | --- |
 | `versions` | `python scripts/check_versions.py` |
 | `attribution` | `python3 scripts/check_attribution.py <range>` for each pushed ref range |
@@ -72,6 +75,9 @@ everything, cheapest first and stopping at the first failing step. Enable the ho
 | `atlas-py` | `python3 plugins/atlas/scripts/atlas_test.py run` |
 | `herdr-web-ui` | in `plugins/atlas/colony/herdr-web-ui`: `bun run build`, `bun run test:unit`, `bun run test:integration` |
 | `mod-gate-live` | `python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live` |
+
+`push` runs the same steps except `herdr-web-ui`, and runs the Python files (`atlas-py-fast`, one pytest process
+per file, 8 at a time) and the bun files (`bun-omp`, `bun-mod`, `bun-scripts-colony`) that are not on the slow list.
 
 ## Typecheck
 

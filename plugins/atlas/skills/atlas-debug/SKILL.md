@@ -1,12 +1,10 @@
 ---
 name: atlas-debug
-description: "Finds and fixes the root cause of a reproducible bug, exception, stack trace or wrong output, with evidence. Use when a failure's cause is unknown."
-when_to_use: "bug, wrong output, crash, find the cause, stack trace, test failure, regression, why is this failing, root cause"
-allowed-tools: Read, Glob, Grep, Bash
-argument-hint: '[context] [stack] [symptom] [paste error/log]'
+description: "Finds and fixes the root cause of a bug, or optimizes a measured metric, with evidence. Use when a failure's cause is unknown (exception, stack trace, wrong output, regression) or when asked to optimize a metric, fix a performance regression, or cut latency, build time or bundle size."
+when_to_use: "bug, wrong output, crash, find the cause, stack trace, test failure, regression, why is this failing, root cause, optimize metric, performance regression, make it faster, reduce latency, slow build, bundle size, bottleneck"
+allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
+argument-hint: '[context] [stack] [symptom] [paste error/log] | optimize <target and metric>'
 ---
-
-
 
 Apply the Operating Contract to this entire task. It is injected below.
 
@@ -16,7 +14,9 @@ cat "${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md"
 
 If the contract did not load above, read `${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md` and apply it before proceeding.
 
-Read `${CLAUDE_SKILL_DIR}/references/debug-workflow.md` and follow the reproduce-localize-fix-verify loop it defines for every debug run.
+**Optimize mode:** when the ask is to improve a working system's metric (latency, size, build time) rather than fix a failure, read `${CLAUDE_SKILL_DIR}/references/optimize.md` and follow it instead of the steps below (protocol `references/optimize-measurement-protocol.md`, verifier brief `references/optimize-verifier-brief.md`).
+
+Otherwise read `${CLAUDE_SKILL_DIR}/references/debug-workflow.md` and follow the reproduce-localize-fix-verify loop it defines for every debug run.
 
 Debug and fix this: $ARGUMENTS
 
@@ -36,7 +36,7 @@ Steps:
 3. Fix the actual cause in place, driven by the loop: done when it goes red then green, never green by editing the check. Do not paper over it with a workaround unless the real fix is out of scope; if so, say which part and why.
    - Red for the right reason: before trusting any fix, confirm the RED instrument fails on the targeted defect, not on an unrelated setup error. If a regression test exists or was written, run it and read the failure message - it must point at the root cause (missing init, wrong branch, bad coercion), not at a missing fixture, stale build artifact, wrong interpreter, or import error. A test red for the wrong reason proves nothing when it turns green. With no regression test, the step 1 reproduction command is the instrument: its captured failure output must match the defect's signature, not merely error somewhere nearby.
    - Three-failed-fix invalidation: if a fix does not turn the reproduction GREEN, return to the hypothesis step and explicitly invalidate the current root-cause hypothesis - state in writing the evidence that ruled it out - before forming a new one with its own grounding observation and prediction. Do not retry variants of the same theory ("maybe it was the other branch"); that is a rationalization spiral, not iteration. After THREE failed fix attempts, the root-cause identification was likely wrong: stop patching, write down which hypothesis the evidence ruled out, form a new one from new evidence per the escalation rule above, and continue. Ask the user only when no grounded new hypothesis exists or a decision is theirs. Never attempt a fourth patch blind, because a blind attempt repeats the failed strategy.
-4. If this is a recurring or iterative fix (a multi-round build-fix loop, a sweep across many failing cases, or an until-clean retry cycle), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer to locate the failing path and its callers, debugger to confirm the root cause, atlas:implementer to apply the fix. ALWAYS close the wave with an independent atlas:verifier in a fresh context before integrating results.
+4. If this is a recurring or iterative fix (a multi-round build-fix loop, a sweep across many failing cases, or an until-clean retry cycle), read `${CLAUDE_PLUGIN_ROOT}/skills/atlas-orchestrate/references/loop.md` (orchestrate loop mode) to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer to locate the failing path and its callers, debugger to confirm the root cause, atlas:implementer to apply the fix. ALWAYS close the wave with an independent atlas:verifier in a fresh context before integrating results.
 
 VERIFY:
 - Run the reproduction command again. Show the exact command and the actual output.

@@ -172,7 +172,7 @@ describe('prompt sharpening', () => {
 
   test('specific, slash, quoted and non-composer prompts get no facts', async () => {
     const { submit } = setup();
-    for (const text of ['/atlas-cc', 'fix "it"', 'summarize everything under plugins/atlas/hooks']) {
+    for (const text of ['/atlas-core', 'fix "it"', 'summarize everything under plugins/atlas/hooks']) {
       expect((await submit(text)).context).toEqual(['reinforce-line']);
     }
     expect((await submit('fix it', { origin: { kind: 'peer' } })).context).toEqual(['reinforce-line']);

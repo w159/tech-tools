@@ -63,8 +63,9 @@ Run tests, dashboard and scripts from repo paths (`plugins/atlas/scripts/...`,
 - No `Co-Authored-By: Claude`, `Claude-Session:` or "Generated with Claude Code" lines,
   in commits or PR text.
 - Run `git config core.hooksPath .githooks` in every fresh clone. The hooks run `scripts/gate.sh`
-  (scoped on commit, everything on push, attribution check included); the `attribution` job on
-  GitHub is the only CI check left.
+  and only its fast set (under 30 s, attribution check included; the slow test files are listed in
+  `scripts/gate-slow.txt`). `scripts/gate.sh full` runs everything, slow list included, and is run by hand
+  before a release. The `attribution` job on GitHub is the only CI check left.
 
 ---
 

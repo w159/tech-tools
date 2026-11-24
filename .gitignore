@@ -159,6 +159,7 @@ firebase-adminsdk*.json
 !scripts/assert-dynamics-connector-entra-perms.sh
 !scripts/check_attribution.py
 !scripts/gate.sh
+!scripts/gate-slow.txt
 !scripts/test_*.py
 !scripts/telemetry_report.py
 !scripts/gen_codex_hooks.py

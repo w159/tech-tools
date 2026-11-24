@@ -101,9 +101,9 @@ RULES = [
         "match": lambda c: True,
     },
     {
-        "id": "loop-library (atlas-loop)",
+        "id": "loop-library (atlas-orchestrate)",
         "type": "note",
-        "reason": "Built-in curated loops; use the atlas-loop skill.",
+        "reason": "Built-in curated loops; use atlas-orchestrate in loop mode.",
         "cmd": "(already shipped with atlas)",
         "match": lambda c: True,
     },

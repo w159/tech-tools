@@ -155,12 +155,6 @@ describe('item 1: the finish card says what the band says (critique 34: a 179 `d
     noteRunSecs(undefined);
     forgetPlaced();
   });
-  test('the pane hands the card the band\'s clock', () => {
-    forgetPlaced();
-    render('route', 57, 40, snap('done'), { kind: 'done', secs: 33, startMs: NOW - 33000 });
-    forgetPlaced(); // (the note is cleared with the cards; the wiring itself is the next test's subject)
-    expect(true).toBe(true);
-  });
 });
 
 // ---- item 3: the status view ---------------------------------------------------------------------------------------------------------

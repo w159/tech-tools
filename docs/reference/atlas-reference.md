@@ -88,9 +88,9 @@ profile only; named profiles have their own config) and restart omp.
 ## Use it in chat
 
 Atlas is driven from the chat prompt of Claude Code or omp. Type a skill name
-followed by what you want, or just describe the work: 37 of the 40 skills
-auto-trigger from their description. The three manual skills,
-`/atlas:atlas-setup`, `/atlas:atlas-tui` and `/atlas:atlas-crew`, you invoke
+followed by what you want, or just describe the work: 24 of the 26 skills
+auto-trigger from their description. The two manual skills,
+`/atlas:atlas-setup` and `/atlas:atlas-ship`, you invoke
 yourself (Claude Code prefixes a plugin skill with the plugin name; omp takes
 the bare `/atlas:atlas-setup` form). The output blocks below are illustrative
 sketches, not captured runs; real answers are longer, but open with the
@@ -169,14 +169,14 @@ smoke test the routes my branch touches
 ```text
 | Route         | Status | Notes                                       |
 | /broken.html  | Fail   | GET /api/metrics 404; renderChart undefined |
-Remediation: run atlas-dogfood or atlas-debug with the failed routes as scope.
+Remediation: run atlas-ux-test dogfood or atlas-debug with the failed routes as scope.
 ```
 
 More browser prompts are in [Browser automation and testing](#browser-automation-and-testing).
 
 **In omp**, the same prompts work after the extension is installed. To name a
 skill explicitly, use the `/skill:` form, for example
-`/skill:atlas-dogfood smoke current`.
+`/skill:atlas-ux-test dogfood smoke current`.
 
 Hit a wall? A blocked Stop, a denied first tool call, a missing connector:
 see [Troubleshooting](#troubleshooting). Every guard has an off switch listed
@@ -206,7 +206,7 @@ real answer appears only in the stream. First-tool-call denials by the recall
 gate in headless runs are expected unless the claude-mem search tool is
 allowed; `ATLAS_MANDATES=off` disables it for throwaway runs. omp prints MCP
 connector warnings on stderr, so `omp -p ... > answer.md` captures only the
-answer. For unattended browser smoke checks use `atlas-dogfood smoke
+answer. For unattended browser smoke checks use `atlas-ux-test dogfood smoke
 mode:pipeline`.
 
 ## The operating contract
@@ -389,8 +389,8 @@ so a plugin update no longer leaves the statusline on an old version folder.
 
 ## Skills
 
-Type the skill name or describe the work; every skill except the three manual
-ones (`atlas-setup`, `atlas-tui`, `atlas-crew`) auto-triggers from its
+Type the skill name or describe the work; every skill except the two manual
+ones (`atlas-setup`, `atlas-ship`) auto-triggers from its
 `description`. In chat either `atlas-debug login returns 500` or
 `/atlas:atlas-debug login returns 500` works in Claude Code.
 Source: `plugins/atlas/skills/`.
@@ -399,7 +399,7 @@ Source: `plugins/atlas/skills/`.
 |---|---|---|
 | `atlas-setup` | first bringing atlas online, setting up a workspace, a first-session tour, or fixing atlas (manual; `--fix`) | `/atlas:atlas-setup` |
 | `atlas-orchestrate` | a task spans layers or the whole repo | `atlas-orchestrate ship the rate-limiter across API + cache` |
-| `atlas-autopilot` | a plan or fix executed end to end autonomously, stopping before any push, PR or merge | `atlas-autopilot fix the flaky cart test` |
+| `atlas-orchestrate` autopilot | a plan or fix executed end to end autonomously, stopping before any push, PR or merge | `atlas-orchestrate autopilot fix the flaky cart test` |
 | `atlas-brainstorm` | a feature idea is vague and needs scoping before planning | `atlas-brainstorm add offline mode` |
 | `atlas-plan` | requirements are settled and a plan is needed before execution | `atlas-plan split invoice storage out of the monolith` |
 | `atlas-orchestrate` (feature flow) | implement or add a feature or build new functionality | `atlas-orchestrate add CSV export` |
@@ -407,46 +407,46 @@ Source: `plugins/atlas/skills/`.
 | `atlas-refactor` | code works but is messy, or a change was just implemented and needs a behavior-preserving simplify pass before review or commit | `atlas-refactor extract the pricing rules into a module` (or `atlas-refactor` with no argument for the fresh diff) |
 | `atlas-frontend component` | creating a progress modal, upload widget, job panel or other async component | `atlas-frontend component add a cancellable file uploader` |
 | `atlas-frontend` | creating, reworking or polishing frontend UI | `atlas-frontend build the dashboard page` |
-| `atlas-gitignore` | starting a repo or hardening an existing .gitignore | `atlas-gitignore harden for node + terraform` |
+| `atlas-setup` gitignore | starting a repo or hardening an existing .gitignore | `atlas-setup gitignore harden for node + terraform` |
 | `atlas-handoff` | at a checkpoint before context fills, before a break, or handing work to another session | `/atlas:atlas-handoff` |
 | `atlas-harden` | remediating or enforcing an endpoint setting at scale | `atlas-harden remediate unencrypted drives for RMM` |
 | `atlas-audit act` | after an atlas-audit run, to act on a finding | `atlas-audit act` |
-| `atlas-loop` | something must run repeatedly, poll for status, iterate until done, or sweep a backlog | `atlas-loop scan dependencies weekly until green` |
+| `atlas-orchestrate` loop | something must run repeatedly, poll for status, iterate until done, or sweep a backlog | `atlas-orchestrate loop scan dependencies weekly until green` |
 | `atlas-prompt` | you ask to rewrite, tighten or judge a prompt, or run `/atlas:atlas-prompt`; an independent judge model checks the rewrite kept every goal | `rewrite this prompt: make the search faster` |
 | `atlas-readme` | a repo has no README or its README is stale | `atlas-readme` |
-| `atlas-validate` | a plugin is believed complete and needs a structural and content check | `atlas-validate plugins/atlas` |
+| `atlas-audit` plugin | a plugin is believed complete and needs a structural and content check | `atlas-audit plugin plugins/atlas` |
 | `atlas-wiki` | architecture docs changed or wiki diagrams are stale or missing | `atlas-wiki` |
 | `atlas-review` | reviewing a changeset before merge; not whole-codebase audits | `atlas-review PR #142` |
 | `atlas-audit` | audit a repo, map its architecture before a refactor, or check atlas health | `atlas-audit` |
 | `atlas-doctor` | telemetry has accumulated, atlas should self-improve, or before skill/hook/agent changes | `atlas-doctor` |
-| `atlas-db-audit` | reviewing a database before any schema or permission change | `atlas-db-audit` |
+| `atlas-audit` db | reviewing a database before any schema or permission change | `atlas-audit db` |
 | `atlas-compound` | a problem was solved and verified and a future engineer would repeat the mistake | `atlas-compound` |
 | `atlas-brainstorm strategy` | starting a product, adding a strategy doc, or changing direction | `/atlas:atlas-brainstorm strategy` |
-| `atlas-pulse` | a product pulse, health snapshot, or usage and error summary | `atlas-pulse 7d` |
-| `atlas-sweep` | new issues or feedback need sweeping and triage | `atlas-sweep` |
+| `atlas-status` pulse | a product pulse, health snapshot, or usage and error summary | `atlas-status pulse 7d` |
+| `atlas-brainstorm` sweep | new issues or feedback need sweeping and triage | `atlas-brainstorm sweep` |
 | `atlas-bakeoff` | choosing an architecture, library or data-model shape | `atlas-bakeoff sqlite vs postgres for the queue` |
 | `atlas-bakeoff verdict` | an opinion or second opinion on a technical choice | `atlas-bakeoff verdict should we switch ORMs` |
 | `atlas-explain` | how something works, why something happens, or what a file or message means | `atlas-explain why the retry loop exists` |
 | `atlas-prototype` | a question is cheaper to demonstrate than argue about | `atlas-prototype sketch the new nav` |
-| `atlas-optimize` | a working system's metric should improve and the winning change is unknown | `atlas-optimize cut the prompt tokens 30%` |
-| `atlas-sweep analyze` | analyzing feedback, transcripts or tickets for pain points and requests | `atlas-sweep analyze docs/feedback/2026-09.md` |
+| `atlas-debug` optimize | a working system's metric should improve and the winning change is unknown | `atlas-debug optimize cut the prompt tokens 30%` |
+| `atlas-brainstorm` sweep analyze | analyzing feedback, transcripts or tickets for pain points and requests | `atlas-brainstorm sweep analyze docs/feedback/2026-09.md` |
 | `atlas-ship commit-only` | changed files are ready to commit locally | `atlas-ship commit-only` |
 | `atlas-ship` | verified, gate-passing work is ready to commit and optionally push or open a PR | `atlas-ship` |
 | `atlas-run-watch` | a long-running job, or an open PR's CI, needs watching (PR targets repair genuine failures) | `atlas-run-watch pr:142` |
-| `atlas-resolve-pr-feedback` | a PR has open review comments to address | `atlas-resolve-pr-feedback #142` |
+| `atlas-run-watch` resolve-pr | a PR has open review comments to address | `atlas-run-watch resolve-pr #142` |
 | `atlas-worktree` | isolating parallel implementer waves, spikes or bakeoffs | `atlas-worktree branch for the payment spike` |
 | `atlas-frontend polish` | a surface needs spacing, transition or micro-interaction polish | `/atlas:atlas-frontend polish` |
-| `atlas-dogfood` | changed flows must work end to end and small breakages should be fixed autonomously | `atlas-dogfood current` |
-| `atlas-test-xcode` | building or testing an iOS or Xcode project; macOS only | `atlas-test-xcode current` |
+| `atlas-ux-test` dogfood | changed flows must work end to end and small breakages should be fixed autonomously | `atlas-ux-test dogfood current` |
+| `atlas-testing` xcode | building or testing an iOS or Xcode project; macOS only | `atlas-testing xcode current` |
 | `atlas-testing` | adding tests, choosing a test strategy, or finding what testing is missing in any language | `atlas-testing src/payments gaps` |
-| `atlas-dogfood smoke` | a quick check that changed routes still render | `atlas-dogfood smoke current` |
+| `atlas-ux-test` dogfood smoke | a quick check that changed routes still render | `atlas-ux-test dogfood smoke current` |
 | `atlas-ux-test` | a full UI/UX test pass: persona testing, pre-release sweep, re-test after fixes | `atlas-ux-test the checkout flow` |
-| `atlas-proof` | sharing a plan, spec or draft for review or acting on its comments | `atlas-proof docs/plans/x.md` |
+| `atlas-plan` proof | sharing a plan, spec or draft for review or acting on its comments | `atlas-plan proof docs/plans/x.md` |
 | `atlas-status announce` | after a merged PR, completed plan, or recorded lesson; announce what changed | `atlas-status announce the audit feature` |
 | `atlas-status` | a stakeholder status rollup for a plan or feature, each claim marked verified or assumed | `atlas-status the billing migration` |
 | `atlas-security` | open GitHub Dependabot, code-scanning or secret-scanning alerts need triage into one grouped fix | `atlas-security` |
-| `atlas-tui` | watching or attaching to running colony workers in the terminal Command Center (manual) | `/atlas:atlas-tui` |
-| `atlas-crew` | a spec or plan.json splits into independent files to build in parallel, one tmux worker per file (manual) | `/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'` |
+| `atlas-status` tui | watching or attaching to running colony workers in the terminal Command Center (manual) | `/atlas:atlas-status tui` |
+| `atlas-orchestrate` crew | a spec or plan.json splits into independent files to build in parallel, one tmux worker per file (manual) | `/atlas:atlas-orchestrate crew --spec SPEC.md --files 'pkg/*.py'` |
 
 ## Agents
 
@@ -542,7 +542,7 @@ them. The table lists the main entry points, not every module.
 | `atlas_context_optimizer.py` | Disables unused skills/agents to cut token cost. |
 | `atlas_packs.py` | Resolves Compound Packs declared in `.claude/atlas.local.md`. |
 | `atlas_hook_guard.py` | Shared Stop-hook loop guard. |
-| `sweep_state.py` | Single-writer engine for `atlas-sweep` state. |
+| `sweep_state.py` | Single-writer engine for `atlas-brainstorm sweep` state. |
 | `tool_routing.py` | Stack signals and the tool-routing boot lines. |
 | `turn_scoring.py` | Optional model-scored turn quality. |
 | `typesafe_client.py` | Stdlib client for the TypeSafe System One API. |
@@ -873,24 +873,24 @@ Prompts to type in Claude Code or omp:
 
 ```text
 smoke test the routes my branch touches
-atlas-dogfood smoke PR 482 --port 5173
+atlas-ux-test dogfood smoke PR 482 --port 5173
 dogfood this change and fix what breaks, --fix-budget 3
 atlas-ux-test users=6 coverage=smoke
 run a full UI pass before release, users=12 coverage=full seed=42
 ```
 
-In omp the explicit form is `/skill:atlas-dogfood smoke current`.
+In omp the explicit form is `/skill:atlas-ux-test dogfood smoke current`.
 
 **Options at a glance**
 
 | Skill | Scope | Fixes code? | Arguments | Evidence |
 |---|---|---|---|---|
-| `atlas-dogfood smoke` | Routes touched by the current diff or PR | No: marks Fail and hands off | PR number, branch, `current`, or `--port PORT`; `mode:pipeline` for unattended runs (claims a free port, starts and stops the server, never prompts) | Pass/Fail/Skip table per route, console and network lines, screenshots under `.atlas/evidence/<date>-<slug>/`, one `findings.json` entry per failed route |
-| `atlas-dogfood` | User flows touched by the current diff or PR | Yes, bounded: only via `atlas:implementer`, each fix confirmed by a fresh `atlas:verifier`; never auto-commits | PR number, branch or `current`, `--port PORT`, `--fix-budget N` (default 2 attempts per scenario); stops on an empty diff | Scenario matrix (Pass, Fixed, Skipped, Blocked), regression tests, report at `docs/audits/atlas-dogfood-<branch-slug>-<date>/report.md` |
+| `atlas-ux-test` dogfood smoke | Routes touched by the current diff or PR | No: marks Fail and hands off | PR number, branch, `current`, or `--port PORT`; `mode:pipeline` for unattended runs (claims a free port, starts and stops the server, never prompts) | Pass/Fail/Skip table per route, console and network lines, screenshots under `.atlas/evidence/<date>-<slug>/`, one `findings.json` entry per failed route |
+| `atlas-ux-test` dogfood | User flows touched by the current diff or PR | Yes, bounded: only via `atlas:implementer`, each fix confirmed by a fresh `atlas:verifier`; never auto-commits | PR number, branch or `current`, `--port PORT`, `--fix-budget N` (default 2 attempts per scenario); stops on an empty diff | Scenario matrix (Pass, Fixed, Skipped, Blocked), regression tests, report at `docs/audits/atlas-dogfood-<branch-slug>-<date>/report.md` |
 | `atlas-ux-test` | The whole app, multi-persona | No: detects and reports | `users` (6/12/24 or an integer, default 12), `coverage=smoke\|standard\|full` (default standard), `profile=valid\|mixed` (default mixed), `speed=fast\|thorough` (default fast), `seed`; browser walk only in `standard` and `full` | Screenshots per mutating step, severity ratings, three gates, verdict under `docs/claude_testers/run-<date>/` |
 
-Which one: smoke-check a change with `atlas-dogfood smoke`; smoke-check then fix
-with `atlas-dogfood smoke`, then `atlas-dogfood` using the failed routes as
+Which one: smoke-check a change with `atlas-ux-test dogfood smoke`; smoke-check then fix
+with `atlas-ux-test dogfood smoke`, then `atlas-ux-test dogfood` using the failed routes as
 scope; a full pre-release UX pass with `atlas-ux-test` (do not combine it with
 the others in one run); one known bug with `atlas-debug`. In manual mode you
 run the dev server yourself; if none is running the skill stops and prints how
@@ -991,7 +991,7 @@ tech-tools/
 |  |  |- .claude-plugin/     # plugin.json (userConfig: `atlas_mod_sound` plus 8 decision, Ollama and analytics keys mapped to ATLAS_* by scripts/atlas_env.py; connector keys live in armada)
 |  |  |- (no .mcp.json or mcp/: the 12 connectors ship in plugins/armada/)
 |  |  |- package.json        # omp.extensions entry
-|  |  |- skills/             # 40 skills
+|  |  |- skills/             # 26 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 19 hook programs / 25 bindings (18 in hooks/; atlas_doctor.py, the 19th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
 |  |  |- scripts/            # 91 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
@@ -1055,7 +1055,7 @@ tech-tools/
 | Dashboard **Colony** page or `atlas_herdr.py status` reports `server_down` | Atlas cannot start herdr itself. | Install herdr from https://herdr.dev, run `herdr` in a terminal, then `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/atlas_herdr.py" ensure`. `ATLAS_COLONY=off` skips the SessionStart start. |
 | Hooks never fire | `hooks.json` not loaded (bare-skill install rather than a plugin install). | Install as a plugin, or run `python3 "${CLAUDE_PLUGIN_ROOT}/scripts/install_hooks.py"`. |
 | `fallow audit` blocks `git commit`/`git push` | Fallow gate returned `verdict: fail` for findings newer than the saved baselines in `fallow-baselines/`. | Fix the finding, or skip once with `ATLAS_FALLOW=off`. |
-| `atlas-dogfood smoke` reports a preflight blocker | The dev server is down, or the harness exposes no browser surface. | Start the dev server (manual mode prints the command), or configure a browser tool; see the browser troubleshooting list above. |
+| `atlas-ux-test dogfood smoke` reports a preflight blocker | The dev server is down, or the harness exposes no browser surface. | Start the dev server (manual mode prints the command), or configure a browser tool; see the browser troubleshooting list above. |
 
 ## License
 

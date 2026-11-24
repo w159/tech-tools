@@ -15,7 +15,7 @@ which skill to activate.
 | "boot this project" / "set up atlas" / "configure tooling" | atlas-setup (install mode) | Project bootstrap and configuration |
 | "set up connectors" / "configure vendor" / "enable NinjaOne/etc" | atlas-setup (connectors mode) | Vendor MCP connector setup |
 | "atlas is broken" / "subagents not launching" | atlas-setup (repair mode) | Plugin install repair |
-| "run something repeatedly" / "poll" / "iterate until" / "sweep a backlog" | atlas-loop | Recurring/iterative loop library |
+| "run something repeatedly" / "poll" / "iterate until" / "sweep a backlog" | atlas-orchestrate | Recurring/iterative loop library |
 | "test my UI" / "UX test" / "persona test" / "pre-release sweep" | atlas-ux-test | UX test swarm |
 | "set up my org" / "configure departments" / "brand enforcement" | armada plugin (separate install) | Organizational deployment layer |
 | "set up my workspace" / "what should I run" / "analyze my project" | atlas-setup (onboard mode) | Scaffold and recommend |
@@ -37,7 +37,7 @@ When the user describes a task:
 |---|---|---|
 | "improve my code" | atlas-audit (code or architecture mode), atlas-orchestrate (orchestrate fixes) | atlas-audit first (find what needs improving), then atlas-orchestrate to fix |
 | "make my app better" | atlas-audit (code mode), atlas-ux-test (UX test) | atlas-audit first (broadest), then follow its recommendations |
-| "automate a task" | atlas-loop (loop), atlas-orchestrate (orchestrate) | atlas-loop if the task is recurring; atlas-orchestrate if it is a one-time build |
+| "automate a task" | atlas-orchestrate (loop), atlas-orchestrate (orchestrate) | atlas-orchestrate if the task is recurring; atlas-orchestrate if it is a one-time build |
 
 ## Menu mode
 
@@ -50,15 +50,14 @@ The atlas fleet:
  1. atlas-orchestrate  -- Orchestrate multi-step build/fix/audit/refactor
  2. atlas-audit        -- Code/security audit, architecture map, self telemetry
  3. atlas-setup        -- Onboard, install, connectors, repair (this skill)
- 4. atlas-loop         -- Recurring/iterative task loops
+ 4. atlas-orchestrate  -- Recurring/iterative task loops (loop mode)
  5. atlas-ux-test      -- UX test swarm on any web app
  6. Task skills        -- atlas-debug, atlas-refactor,
-                          atlas-frontend (build, component, polish), atlas-db-audit,
-                          atlas-gitignore, atlas-handoff, atlas-harden,
-                          atlas-prompt, atlas-readme, atlas-validate,
-                          atlas-wiki
-    Modes of one skill: atlas-audit act, atlas-dogfood smoke, atlas-ship commit-only,
-    atlas-status announce, atlas-sweep analyze, atlas-bakeoff verdict,
+                          atlas-frontend (build, component, polish), atlas-audit,
+                          atlas-handoff, atlas-harden,
+                          atlas-prompt, atlas-readme, atlas-wiki
+    Modes of one skill: atlas-audit act, atlas-ux-test smoke, atlas-ship commit-only,
+    atlas-status announce, atlas-brainstorm analyze, atlas-bakeoff verdict,
     atlas-brainstorm strategy, atlas-run-watch pr:<N>, atlas-setup tour
 
 Org deployment lives in the separate armada plugin.
@@ -76,7 +75,7 @@ will determine what to do based on context:
 - **atlas-audit** with no task: runs zero-arg discovery (builds the knowledge
   graph, asks for audit depth); self mode with no task runs the trends report.
 - **atlas-setup** with no task: onboard/recommend, per its mode routing.
-- **atlas-loop** with no task: lists the loop library grouped by category.
+- **atlas-orchestrate** with no task: lists the loop library grouped by category.
 - **atlas-ux-test** with no task: runs phase 0 discovery on the app.
 
 This means the user can invoke any skill with no arguments and it will figure

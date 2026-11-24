@@ -1,6 +1,7 @@
 ---
 name: atlas-bakeoff
-description: "Decides a costly, hard-to-reverse technical choice with evidence: compares 2-3 options on named criteria, or grades one Adopt, Trial, Hold or Reject. Use when a second opinion is needed on a library, architecture or build-vs-buy; reversible picks go to atlas-plan."
+description: "Decides costly technical choices by comparing 2-3 options or grading one on evidence. Use when choosing a library, database, architecture or build-vs-buy, asked which option to pick, tradeoffs, or whether it is safe to adopt (verdict Adopt, Trial, Hold or Reject); reversible picks go to atlas-plan."
+user-invocable: false
 when_to_use: "bakeoff, compare options, which database or library, build vs buy, tradeoff analysis, is it safe to adopt, bet the product on"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task
 argument-hint: '[verdict] <the decision to bake off, or the single option to opine on>'

@@ -1,7 +1,7 @@
 // A /clear raises session.end (reason 'clear') and NO session.start (plugin-authoring reference.md:27),
 // and the session's $.state atoms fall back to their initial values. The mod must re-boot itself for the
 // new session from the classic SessionStart hook (source 'clear'), or the band, the todo board and the
-// /atlas-cc pane stay dead and the builder keeps the old session id.
+// Atlas pane stay dead and the builder keeps the old session id.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { register } from '../register';

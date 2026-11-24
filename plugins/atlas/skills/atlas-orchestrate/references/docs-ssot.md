@@ -129,7 +129,7 @@ are how a project stays continuously understandable as it grows.
 
 ### .gitignore: zero-trust, deny-by-default
 
-The project's `.gitignore` is produced and maintained by the `atlas-gitignore` skill
+The project's `.gitignore` is produced and maintained by the `atlas-setup` skill (gitignore mode)
 (deny everything, then allowlist intentionally, then re-exclude secrets/build
 artifacts last). It must allowlist the durable trees and re-exclude the ephemeral one:
 
@@ -162,7 +162,7 @@ the re-exclusion block comes last and wins.
 | `.atlas/self-improvement/*`, `.atlas/memory/*` | Atlas hooks and self-improvement scripts | Written by the atlas infrastructure itself. |
 | `docs/CHANGELOG.md`, `docs/ROADMAP.md`, `docs/AGENTS.md` | `atlas:docs-curator` | Orchestrator may also update directly when a curator pass is overkill. |
 | `docs/` subfolders (`architecture/`, `plans/`, `specs/`, `features/`, `audits/`, `lessons/`, `wiki/`, `api/`, etc.) | `atlas:docs-curator` | Write-capable, confined to `docs/`. Creates subfolders on demand as the project needs them. |
-| `.gitignore` | `atlas-gitignore` skill / `atlas:docs-curator` maintenance | Kept zero-trust and current as new tracked paths appear. |
+| `.gitignore` | `atlas-setup` skill (gitignore mode) / `atlas:docs-curator` maintenance | Kept zero-trust and current as new tracked paths appear. |
 
 Hard boundaries:
 - The orchestrator never edits target source code.

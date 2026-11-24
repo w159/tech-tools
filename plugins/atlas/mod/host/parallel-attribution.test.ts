@@ -102,7 +102,7 @@ async function run(opts: { tickInsideSpawn: boolean; dropCompleted: boolean; noA
   const h = harness();
   await h.register();
   await h.fire('session.start', { cwd: '/tmp/proj', surface: 'terminal', isInteractive: true });
-  await h.fire('command.run', { command: 'atlas-cc', args: 'channel' });
+  await h.$.state.set({ plugin: 'atlas', key: 'paneOpened' } as never, true); // the pane is open (the band's `open` chip sets this)
   const spawn = (id: string, e: { description: string; name: string }) =>
     h.fire('agent.spawn', e, async () => {
       h.listed.push({ id, type: 'atlas:explorer', description: e.description, status: 'running', name: e.name });

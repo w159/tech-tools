@@ -81,7 +81,7 @@ either a broken feature or an unverified one.
 
 - If this work is recurring or iterative (a sweep across many endpoints
   or screens, a build-fix cycle, an until-dry discovery pass, a
-  migration, or a review round), invoke the `atlas-loop` skill to
+  migration, or a review round), read `references/loop.md` (loop mode) to
   select and instantiate the best-fit loop from the loop-library, then
   run that loop.
 - Otherwise dispatch the squad directly for a single pass as above.

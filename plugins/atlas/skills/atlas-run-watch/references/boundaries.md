@@ -17,7 +17,7 @@ Running this skill authorizes, on the active PR's head branch only:
 - **Push.** `git push` / device `pr_push` happens only after the user says yes to the specific commit. CE's original pre-authorized pushes as loop operation; atlas does not. This is the same gate `atlas-ship` enforces, and it is absolute here.
 - **Merge.** Merge-readiness is never merge authorization. The report prints the exact `gh pr merge` command; the user runs it.
 - **Approve a gated CI run**, rebase, force-push, rewrite history, or delete/reset branches.
-- **Resolve or reply to review comments.** Comments are surfaced verbatim and handed to the user; `atlas-resolve-pr-feedback` owns acting on them.
+- **Resolve or reply to review comments.** Comments are surfaced verbatim and handed to the user; `atlas-run-watch` owns acting on them.
 - **Weaken or delete tests** to clear red checks (see ci-classification.md).
 - **Update the base branch** into the head (merge-from-base, branch refresh). If the PR falls behind base, report it as a residual; do not pull/rebase autonomously.
 

@@ -636,7 +636,7 @@ KnowBe4 is recognized as FORBIDDEN rather than falling through to INTERNAL_ERROR
 
 ### Tech debt: root .gitignore fails its own zero-trust validator (found 2026-07-17)
 
-`bash plugins/atlas/skills/atlas-gitignore/scripts/validate_gitignore.sh .gitignore` FAILs
+`bash plugins/atlas/skills/atlas-setup/scripts/validate_gitignore.sh .gitignore` FAILs
 on "banned Unicode (em/en dash, curly quotes, or ellipsis) present." Root cause: about 20
 pre-existing comment lines (`.gitignore:30-377`, e.g. lines 30-36, 43-55, 132-202, 260-306,
 377) use em dashes in prose. Unrelated to the 2026-07-17 canonical-structure change (which
@@ -654,5 +654,5 @@ hyphen/comma/rewrite) followed by a clean validator run.
 - [planned] Decide whether to vendor graphify into `plugins/atlas/skills` or keep it optional (today optional with a git-churn/fan-in fallback; the unregistered root `skills/graphify/` copy was removed on 2026-11-17).
 - [planned] `testscope detect --root .` hides unittest suites when a pytest config is present at the root; plugins/atlas suites show only with `--root plugins/atlas/<dir>`.
 - [planned] Raise the `testscope.py` mutation score above 31.0%; survivors concentrate in `command_rows`, `detect_misc_files`, `_collect`, `baseline_rows`, `detect_terraform`, `detect_workflows`.
-- [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-loop, atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-tui, atlas-ux-test, atlas-wiki.
+- [planned] Decide whether the 10 skills without the operating-contract fence should carry it: atlas-audit (now fenced), atlas-orchestrate, atlas-prompt, atlas-run-watch, atlas-setup, atlas-status, atlas-ux-test, atlas-wiki.
 - [planned] Run the full atlas-audit swarm once on a small repo to prove Phases 2-4 live; only Phase 1 fallbacks, `build_hub.py` and the act-mode listing were proven on 2026-10-26.

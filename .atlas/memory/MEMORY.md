@@ -73,3 +73,9 @@ Assumption to avoid (tech-tools): The index-exact path (`surfaceHex`/`fitHex`/`E
 Assumption to avoid (tech-tools): - The ponytail-review pre-commit mandate fired and I committed without running it. [noted 2026-11-22]
 §
 User correction (tech-tools): here's what you said you found: [noted 2026-11-23]
+§
+Assumption to avoid (tech-tools): The worker said they were already there before it started; I didn't run a before-and-after comparison. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): Only the changelog landed; the seds didn't run. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): I didn't run the generator or diff the pair, so I don't know whether the omp copy was regenerated or hand-edited, or why `bun test omp` passes now. [noted 2026-11-24]

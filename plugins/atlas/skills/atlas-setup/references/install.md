@@ -59,7 +59,7 @@ the reference before building the recommend-then-confirm shortlist in Stage 2.
    signals against `../atlas-orchestrate/references/capability-catalog.md`. Present a
    ranked list (skill / plugin / mcp) with a reason and the exact install command
    per item. Also surface the built-ins this project can use now: the loop-library
-   (via atlas-loop), vendor connectors (via atlas-setup, disabled until setup),
+   (via atlas-orchestrate), vendor connectors (via atlas-setup, disabled until setup),
    architecture mapping and structural dedup (atlas-audit), comprehensive
    quality and security audit (atlas-audit), UX runtime swarm (atlas-ux-test),
    and measurable self-improvement with observability (atlas-audit). Install only
@@ -135,7 +135,7 @@ recommend-then-confirm. Check, in order:
   the scan and Stage 2's shortlist are matched to what this project actually is;
 - the session-augmentation trio - claude-mem (memory), context-mode (context
   protection), ponytail (less-code mode);
-- the built-ins - loop-library (surfaced by atlas-loop), connectors (enabled via
+- the built-ins - loop-library (surfaced by atlas-orchestrate), connectors (enabled via
   atlas-setup when MSP/vendor signals are present), atlas-audit (architecture
   map + structural dedup), atlas-audit (quality and security audit), atlas-ux-test
   (UX runtime swarm), and atlas-audit (measurable self-improvement + observability);

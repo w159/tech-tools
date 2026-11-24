@@ -1,6 +1,7 @@
 ---
 name: atlas-ship
-description: "Ships finished work: the project gates (or a fresh-context verifier where no gate can express the check) check a clean tree, then a local commit; stops before any push or PR. Commit-only mode commits a file list. Use when work is ready to commit or open a PR."
+description: "Ships finished work: gates, clean-tree check, then a local commit; stops before any push or PR. Use when asked to ship it, commit my work, make a conventional commit, or stage and commit; commit-only mode commits a given file list."
+disable-model-invocation: true
 when_to_use: "ship it, commit my work, commit my changes, ready to commit, conventional commit, stage and commit"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, ToolSearch
 argument-hint: '[commit-only] [files...] [exclude:<paths>] [description-only] [babysit:off|checkpoint]'

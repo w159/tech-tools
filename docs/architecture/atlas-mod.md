@@ -11,7 +11,7 @@ The Atlas mod is an in-process UI plugin module for Claude Code mods (Claude Cod
 - Claude Code 2.1.287 or newer (mods). On older versions the `modules` key is ignored and the rest of the plugin keeps working.
 - The mod is wired by the `modules` entry in `hooks/hooks.json`, in the same file as the existing hook bindings. `register(on, options)` in `mod/register.ts` is the entry point (a thin file that calls `register` in `mod/host/hooks.ts`); `claude plugin validate --json plugins/atlas` passes (success true, 0 errors).
 - The mod runs in-process. Hook modules get no Node APIs: every file, process and network call goes through the mods `$` API.
-- Lifecycle: `session.start` runs `boot` in `mod/host/hooks.ts`. It reads the kill switch, builds the first snapshot, and (interactive sessions only) starts every mod clock and registers the four commands (`/atlas-cc`, `/atlas-say`, `/atlas-core`, `/atlas-todo`). Commands and the long timers register once per loaded copy of the mod. A `/clear` raises `session.end` (reason clear) and no `session.start`, so `boot` also runs on `classic.SessionStart` with source `clear`; module state keeps the interactive flag across the clear. Without that second trigger the band, the todo board and the `/atlas-cc` pane stay blank or stale after `/clear`. The pane opens itself only when the terminal is fullscreen and wide enough (`shouldDock`); otherwise it stays closed until `/atlas-cc`.
+- Lifecycle: `session.start` runs `boot` in `mod/host/hooks.ts`. It reads the kill switch, builds the first snapshot, and (interactive sessions only) starts every mod clock and registers its commands (`/atlas-core`, `/atlas-todo`). Commands and the long timers register once per loaded copy of the mod. A `/clear` raises `session.end` (reason clear) and no `session.start`, so `boot` also runs on `classic.SessionStart` with source `clear`; module state keeps the interactive flag across the clear. Without that second trigger the band, the todo board and the `/atlas-cc` pane stay blank or stale after `/clear`. The pane opens itself only when the terminal is fullscreen and wide enough (`shouldDock`); otherwise it stays closed until `/atlas-cc`.
 - Where it runs: the CLI and the Desktop Code tab. Rendering is text-first everywhere. `claude -p` and the Agent SDK run mod hooks but draw nothing, so every `ui.*` call no-ops cleanly there.
 - Kill switch: `ATLAS_MOD=off` disables the mod (band, sidebar, restyles, routing). The plugin's hooks and CLIs are unaffected.
 
@@ -93,7 +93,7 @@ One `Pane` with id `atlas`. Placement: the pane docks itself, unasked, only on t
 - **`Spinner`** becomes a braille-globe frame next to the phase capsule; when any squad member is `running`/`spawning` it appends a live agent count and that agent's current task.
 - **`ToolUse` for `Agent`/`Task` on atlas personas** becomes a deployment card tracking `$.agent.list()` status live. A finished `Bash`/`Read`/`Grep` call whose output is 8000 bytes or more collapses to a one-line `<tool> <target> ▸ <size>` summary instead of drawing the raw output.
 - **`TurnDuration`** becomes a one-line receipt: duration, phase move, completions this turn, live agent count and context fill. Since 12.4.0 the receipt shows no dollar cost and no token count (the engine exposes no per-turn token count).
-- **`PromptHint`** shows contextual chords (`/atlas-cc Command Center · /atlas-say @name …`).
+- **`PromptHint`** shows contextual chords.
 - Toasts for a subagent completed or failed, a note to the lead, a todo completed, fired on answer-turn boundaries (`mod/host/notify.ts` `registerNotify`). An opt-in sound pack (`atlas_mod_sound`, off by default) ships its assets in `mod/motion/fx/`.
 
 ### Context discipline (`mod/host/discipline.ts`)
@@ -162,7 +162,7 @@ Fail open, stated precisely: when only the mod is stopped, the band and the pane
 Everything the mod can change, all user-initiated:
 
 - Todo add, claim, status and complete (complete requires an evidence note) through `atlas_todo.py`, via `/atlas-todo`.
-- Channel notes: the sidebar message field and `/atlas-say`.
+- Channel notes: the sidebar message field.
 - Automatic process calls: the 5-second `atlas_herdr.py status` poll (read-only) and the 30-second `atlas_gates.py` run (no side effects, DB opened read-only).
 - The mod makes no `$.http` calls, and its links point only at localhost (the herdr web UI).
 
@@ -210,7 +210,7 @@ Colocated `*.test.ts` files use the `claude-code/testing` kit. `scripts/sprite_r
 
 ## Route default tab and turn timer (12.1.0)
 
-- The `atlasView` atom defaults to `route` (the `status` tab, second in the strip, `mod/host/hooks.ts:65`); closing the pane resets it to `route` so `/atlas-cc` reopens on `status` (`viewState`, `mod/host/hooks.ts`).
+- The `atlasView` atom defaults to `route` (the `status` tab, second in the strip, `mod/host/hooks.ts:65`); closing the pane resets it to `route` so reopening the pane lands on `status` (`viewState`, `mod/host/hooks.ts`).
 - The turn receipt duration is `min(host durationMs, now - turnStart)`. The mod stamps `turnStart` from `$.clock.now()` at turn start (`mod/view/transcript/restyle.tsx` `ReceiptTracker.turnStart`, `durationTree`); the host figure was seen reading 9m02s for a 77s turn. Without a clock the host figure is used.
 
 ## Failure reporting and the core report (17.4.1)

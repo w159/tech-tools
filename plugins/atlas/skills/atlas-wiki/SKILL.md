@@ -1,6 +1,6 @@
 ---
 name: atlas-wiki
-description: "Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, before the completion gate, or when wiki diagrams are stale."
+description: "Generates and refreshes docs/wiki/ diagrams from docs/architecture/ using graphify. Use when architecture docs changed, wiki diagrams are stale, or before the completion gate."
 when_to_use: "wiki is stale, refresh diagrams, architecture diagrams"
 allowed-tools: Read, Glob, Grep, Bash
 ---

@@ -1,0 +1,21 @@
+-    "version": "17.36.5",
++    "version": "17.37.0",
+-        self.assertGreaterEqual(len(skills), 30)
++        self.assertGreaterEqual(len(skills), 26)
+-        self.assertGreaterEqual(len(dirs), 40)
++        self.assertGreaterEqual(len(dirs), 26)
+full exit 0
+versions                        0s
+attribution                     0s
+root-pytest                     6s
+telemetry-node                  0s
+bun-omp-mod                    45s
+tsc-relative-imports           15s
+bun-colony-scripts             14s
+leftover-pytest                 2s
+atlas-py                      152s
+herdr-web-ui                  203s
+mod-gate-live                   0s
+total 437s
+
+[exited with code 0]

@@ -13,7 +13,7 @@ session, so your context window holds reports instead of raw output.
 | ---------- | -------------------------------------------------------------------------------------------------------------------- |
 | Version    | 17.36.5 (`.claude-plugin/plugin.json`)                                                                              |
 | License    | Apache-2.0                                                                                                           |
-| Ships      | 40 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
+| Ships      | 26 skills, 11 agents, 19 hook programs / 25 bindings, 11 JSON contracts                                              |
 | Harnesses  | Claude Code (native), Codex (skills, hooks, and workers), omp (extension package)                                    |
 | Runtime    | Python 3 standard library for hooks and scripts; TypeScript for the mod and the omp extension; tmux for worker teams |
 | Connectors | None. The 12 vendor MCP connectors moved to the `armada` plugin in 16.0.0                                            |
@@ -273,7 +273,7 @@ The pattern appears at several levels:
 | Every code change | `atlas:implementer` makes the change. `atlas:verifier` runs in a fresh context, has Write, Edit and Agent removed (`disallowedTools` in `agents/verifier.md`), re-opens the cited lines, re-runs the tests and returns confirm or refute. The verdict is written with `scripts/atlas_finding.py --status verified\|rejected\|needs-evidence`. Gate conditions (b) and (g) block "done" without it. |
 | Before "done"     | `atlas:completeness-critic` hunts unverified claims, unread sources and unmet requirements, and refutes "done" on a load-bearing gap.                                                                                                                                                                                                                                                              |
 | Reviews           | `atlas-review` selects reviewer personas by risk from 13 lenses, one of them `adversarial`, and verifies P0/P1 findings before the verdict.                                                                                                                                                                                                                                                        |
-| Fan-out review    | The `fan-out-adversarial-verify` loop (`skills/atlas-loop/loops/`) runs one reviewer per lens in parallel, then a separate verifier per finding that is given the symptom, never the reviewer's conclusion.                                                                                                                                                                                        |
+| Fan-out review    | The `fan-out-adversarial-verify` loop (`skills/atlas-orchestrate/references/loops/`) runs one reviewer per lens in parallel, then a separate verifier per finding that is given the symptom, never the reviewer's conclusion.                                                                                                                                                                                        |
 | Technical choices | `atlas-bakeoff` builds 2 or 3 candidates as fresh-context dispatches and has `atlas:verifier` judge them against named criteria.                                                                                                                                                                                                                                                                   |
 | Across vendors    | `atlas_mux.py spawn --harness claude\|omp\|codex` is set per worker, so an implementer on one harness and model can be checked by a verifier on another.                                                                                                                                                                                                                                           |
 
@@ -314,7 +314,7 @@ python3 "$ATLAS/scripts/atlas_crew.py" run --spec SPEC.md --files 'pkg/*.py' \
   --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q' --wait 580
 tmux attach -t atlas-<run>          # watch: one window per worker, plus the channel
 # or from a Claude session, with the same flags: the crew runs before the lead's first model call
-/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py' --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'
+/atlas:atlas-orchestrate crew --spec SPEC.md --files 'pkg/*.py' --tests 'tests/test_{stem}.py' --check 'python3 -m pytest -q'
 ```
 
 - Workers share one IRC channel (`scripts/atlas_irc.py`): an append-only log
@@ -424,7 +424,7 @@ Usage and the plan format: `skills/atlas-orchestrate/references/crew.md`.
 
 ```bash
 python3 "$ATLAS/scripts/atlas_warm_lead.py" start --root . -- claude --model sonnet --effort medium
-python3 "$ATLAS/scripts/atlas_warm_lead.py" send --root . --wait "/atlas:atlas-crew --spec SPEC.md --files 'pkg/*.py'"
+python3 "$ATLAS/scripts/atlas_warm_lead.py" send --root . --wait "/atlas:atlas-orchestrate crew --spec SPEC.md --files 'pkg/*.py'"
 python3 "$ATLAS/scripts/atlas_warm_lead.py" status --root .
 python3 "$ATLAS/scripts/atlas_warm_lead.py" stop --root .
 ```
@@ -759,8 +759,10 @@ whether the background daemon honours it was not verified.
 
 ## Skills
 
-40 skills. Three are invoked by name only (`disable-model-invocation: true`):
-`atlas-setup`, `atlas-tui` and `atlas-crew`. The other 37 load on relevance
+26 skills. Two are invoked by name only (`disable-model-invocation: true`):
+`atlas-setup` and `atlas-ship`. Five more (`atlas-bakeoff`, `atlas-compound`,
+`atlas-explain`, `atlas-worktree`, `atlas-harden`) are model-only
+(`user-invocable: false`) and stay out of the `/` menu. The rest load on relevance
 from their `description`. Overlapping capabilities are modes of one skill, not
 separate skills; each multi-mode skill documents its modes in its `SKILL.md` or
 its `references/`.
@@ -768,8 +770,8 @@ its `references/`.
 | Area    | Skill                     | What it does                                                                                                                                    |
 | ------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | Engine  | atlas-orchestrate         | Runs multi-step or whole-codebase work through subagents with independent verification; feature mode builds one feature across UI, API and data |
-| Engine  | atlas-autopilot           | Consent-gated pipeline: runs a ready plan, simplifies, reviews, fixes under a budget, stops at the local commit                                 |
-| Engine  | atlas-loop                | Matches a recurring or iterative task to a library loop (interval via `/loop`, or a parallel fan-out verify)                                    |
+| Engine  | atlas-orchestrate autopilot           | Consent-gated pipeline: runs a ready plan, simplifies, reviews, fixes under a budget, stops at the local commit                                 |
+| Engine  | atlas-orchestrate loop                | Matches a recurring or iterative task to a library loop (interval via `/loop`, or a parallel fan-out verify)                                    |
 | Plan    | atlas-brainstorm          | Asks one hard question at a time until requirements are clear; writes a requirements-only plan or a product strategy                            |
 | Plan    | atlas-plan                | Writes an implementation-ready plan to `docs/plans/` with numbered units and a verification contract                                            |
 | Plan    | atlas-prompt              | Rewrites a rough prompt into a right-sized one; an independent judge model checks that every goal and limit survived                            |
@@ -777,36 +779,36 @@ its `references/`.
 | Plan    | atlas-prototype           | Builds a throwaway prototype to answer one product-shape question                                                                               |
 | Build   | atlas-debug               | Finds and fixes the root cause of a reproducible failure, with evidence                                                                         |
 | Build   | atlas-refactor            | Restructures code, or simplifies a fresh diff, without changing behavior; before and after evidence, gate re-run                                |
-| Build   | atlas-optimize            | One baseline, one hypothesis, one change, one identical re-measure                                                                              |
+| Build   | atlas-debug optimize            | One baseline, one hypothesis, one change, one identical re-measure                                                                              |
 | Build   | atlas-frontend            | Builds, refactors or polishes UI on one design system, verified in a browser                                                                    |
 | Build   | atlas-harden              | Writes an idempotent CHECK/SET/VERIFY endpoint remediation script for RMM or MDM                                                                |
-| Build   | atlas-gitignore           | Generates a deny-by-default `.gitignore` for a named stack                                                                                      |
+| Build   | atlas-setup gitignore           | Generates a deny-by-default `.gitignore` for a named stack                                                                                      |
 | Verify  | atlas-review              | Risk-selected multi-persona diff review; verdict Ready, Ready-with-fixes or Not-ready                                                           |
 | Verify  | atlas-testing             | Detects the stack, maps test gaps across types, writes and runs the highest-value next test                                                     |
 | Verify  | atlas-ux-test             | Persona-driven browser walkthroughs and fuzzing of a web app                                                                                    |
-| Verify  | atlas-dogfood             | Drives the branch diff in a live browser; full mode repairs, smoke mode reports                                                                 |
-| Verify  | atlas-test-xcode          | Builds and tests an iOS app on the simulator (macOS only)                                                                                       |
-| Verify  | atlas-validate            | Checks a finished Claude Code plugin's structure, manifest and content                                                                          |
+| Verify  | atlas-ux-test dogfood             | Drives the branch diff in a live browser; full mode repairs, smoke mode reports                                                                 |
+| Verify  | atlas-testing xcode          | Builds and tests an iOS app on the simulator (macOS only)                                                                                       |
+| Verify  | atlas-audit plugin            | Checks a finished Claude Code plugin's structure, manifest and content                                                                          |
 | Audit   | atlas-audit               | Code, architecture, self (Atlas run health) or act (remediate one finding)                                                                      |
-| Audit   | atlas-db-audit            | Read-only live database audit: schema, schema-to-code, privileges, naming                                                                       |
+| Audit   | atlas-audit db            | Read-only live database audit: schema, schema-to-code, privileges, naming                                                                       |
 | Audit   | atlas-explain             | Explains how existing code behaves, with file:line evidence; read-only                                                                          |
 | Ship    | atlas-ship                | Verifier checks a clean tree, makes the local commit, stops before any push or PR                                                               |
 | Ship    | atlas-worktree            | Creates, reuses and tears down linked git worktrees with dirty-state protection                                                                 |
 | Ship    | atlas-run-watch           | Watches a long job or one PR's CI; repairs genuine CI failures, asks before pushing, never merges                                               |
 | Ship    | atlas-security            | Triages Dependabot, code-scanning and secret alerts, fixes on one branch, a fresh verifier confirms each fix |
-| Ship    | atlas-resolve-pr-feedback | Triages PR review threads, applies approved fixes, confirms before posting                                                                      |
+| Ship    | atlas-run-watch resolve-pr | Triages PR review threads, applies approved fixes, confirms before posting                                                                      |
 | Docs    | atlas-readme              | Generates a README by inspecting the repo, every claim traced to a file                                                                         |
 | Docs    | atlas-wiki                | Refreshes `docs/wiki/` diagrams from `docs/architecture/`                                                                                       |
 | Docs    | atlas-compound            | Captures one verified, non-obvious lesson into `docs/lessons/`                                                                                  |
-| Docs    | atlas-proof               | Publishes a doc for human review and folds anchored comments back                                                                               |
+| Docs    | atlas-plan proof               | Publishes a doc for human review and folds anchored comments back                                                                               |
 | Docs    | atlas-handoff             | Writes a dense handoff so a fresh session resumes without re-discovery                                                                          |
 | Report  | atlas-status              | Status rollup labeled verified or assumed; announce mode drafts release notes                                                                   |
-| Report  | atlas-pulse               | Read-only, time-windowed usage, performance and error pulse into `docs/pulses/`                                                                 |
-| Report  | atlas-sweep               | Triages GitHub issues (never auto-closes) or turns transcripts into quoted findings                                                             |
+| Report  | atlas-status pulse               | Read-only, time-windowed usage, performance and error pulse into `docs/pulses/`                                                                 |
+| Report  | atlas-brainstorm sweep               | Triages GitHub issues (never auto-closes) or turns transcripts into quoted findings                                                             |
 | Operate | atlas-setup               | Manual: onboard, install, connectors, repair, tour, menu                                                                                        |
 | Operate | atlas-doctor              | Mines cross-session telemetry into findings, applies accepted changes, records a baseline                                                       |
-| Operate | atlas-tui                 | Opens a terminal UI over the colony's tmux workers                                                                                              |
-| Operate | atlas-crew                | Builds a multi-file deliverable with a parallel tmux + IRC crew, one worker per file, from a pre-executed run |
+| Operate | atlas-status tui                 | Opens a terminal UI over the colony's tmux workers                                                                                              |
+| Operate | atlas-orchestrate crew                | Builds a multi-file deliverable with a parallel tmux + IRC crew, one worker per file, from a pre-executed run |
 
 ## Agents
 
@@ -913,8 +915,8 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 
 `mod/register.ts` (the entry; it calls `register` in `mod/host/hooks.ts`), wired by the `modules` entry in `hooks/hooks.json`, draws four
 things in Claude Code: a band above the prompt, the TODO and SUBAGENTS HUD under
-it, a side panel with a tab strip, and cards in the transcript. `/atlas-cc` opens
-and focuses the panel. `ATLAS_MOD=off` disables the whole mod. Gate readings come
+it, a side panel with a tab strip, and cards in the transcript. The band's `open` chip opens
+and focuses the panel, and its `close` chip closes it. `ATLAS_MOD=off` disables the whole mod. Gate readings come
 from `scripts/atlas_gates.py --session <id> --root <repo> --json`, which shares
 its evaluation with the Stop hook. Detail:
 [docs/architecture/atlas-mod.md](../../docs/architecture/atlas-mod.md). The
@@ -1329,8 +1331,8 @@ keep request logs the code never reads.
 
 ## Security and data handling
 
-- No push without consent. `atlas-ship`, `atlas-run-watch` and
-  `atlas-resolve-pr-feedback` stop before any push, PR or posted reply;
+- No push without consent. `atlas-ship` and `atlas-run-watch`
+  (including its `resolve-pr` mode) stop before any push, PR or posted reply;
   `atlas-run-watch` never merges.
 - Untrusted input stays labeled. Board notes and recalled memory reach agents
   wrapped as untrusted data, a forged closing tag cannot escape the wrapper, and
@@ -1419,7 +1421,7 @@ wiring problem.
 atlas/
 |-- .claude-plugin/plugin.json   manifest, version 17.36.5
 |-- agents/                      11 agents (atlas:<role>)
-|-- skills/                      40 skills, one directory each
+|-- skills/                      26 skills, one directory each
 |-- hooks/                       hook programs, hooks.json, tests
 |-- scripts/                     CLIs: doctor, mux, resolve, todo, finding, gates,
 |                                dashboard, statusline, worktrees, telemetry

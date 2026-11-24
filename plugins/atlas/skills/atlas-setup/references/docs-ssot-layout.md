@@ -53,7 +53,7 @@ tooling-activation record install mode writes (`references/install.md`).
 Everything shown above except `.atlas/.run/`
 (minus its durable `findings.json`) is committed, behind a zero-trust,
 deny-by-default `.gitignore` that allowlists the durable trees and
-re-excludes secrets last (see `atlas-gitignore`). The scaffold is created by
+re-excludes secrets last (see `atlas-setup`). The scaffold is created by
 a deterministic, idempotent script, never inline prose:
 
     python3 "${CLAUDE_SKILL_DIR}/scripts/scaffold_docs.py" <repo-root>

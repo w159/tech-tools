@@ -1,7 +1,7 @@
 ---
 name: atlas-testing
-description: "Plans, writes and runs tests in any language: maps gaps across test types (unit through mutation, fuzz, load, security, accessibility), writes the highest-value next test, reports evidence. Use when adding tests or finding what testing is missing."
-when_to_use: "write tests, unit tests, add tests for a module, add tests, test strategy, test gaps, mutation, fuzz, flaky tests, coverage"
+description: "Plans, writes and runs tests in any language, and tests iOS apps on the Xcode simulator. Use when adding tests, finding testing gaps, or building and testing an iOS or Xcode project (macOS only)."
+when_to_use: "write tests, unit tests, add tests for a module, add tests, test strategy, test gaps, mutation, fuzz, flaky tests, coverage, iOS simulator, xcodebuild, XCTest, simctl"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: "[path or module] [gaps|plan|write|run|mutate]"
 ---
@@ -85,7 +85,7 @@ row names, only when its trigger applies:
 
 ## Routing
 
-- Building or testing an iOS app on a simulator belongs to `atlas-test-xcode`
+- Building or testing an iOS app on a simulator belongs to `atlas-testing`
   (xcodebuild/simctl), not this skill.
 - Browser UX walkthroughs and persona swarms belong to `atlas-ux-test`.
 
@@ -127,3 +127,12 @@ Every claim carries its exact command, its real exit code, and the decisive outp
 Report with the fixed evidence block from `references/workflow.md` (all fields, even when
 zero or none), point at the evidence directory, and close with the single highest-priority
 next-test recommendation (type id, area, why) in every mode, including `run` and `mutate`.
+
+## Merged mode: xcode (iOS simulator, macOS only)
+
+Boots the simulator, builds and tests via xcodebuild, captures screenshots and logs (arg: scheme name or `current`). Procedure: `references/test-xcode.md`; steps under `references/test-xcode/`; Swift language notes in `references/lang-swift.md`.
+
+## Merged-mode reference files
+
+- `references/test-xcode/setup-and-build.md`
+- `references/test-xcode/test-and-report.md`

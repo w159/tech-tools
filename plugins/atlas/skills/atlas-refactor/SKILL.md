@@ -1,6 +1,6 @@
 ---
 name: atlas-refactor
-description: "Refactors, renames or restructures code without changing behavior, or (diff mode, no target) runs a three-reviewer simplify pass over a fresh diff, with before/after evidence. Use when code works but is messy, or right after implementing and before review."
+description: "Refactors, renames or restructures code without changing behavior, with before/after evidence. Use when code works but is messy, to extract helpers, remove dead code or rename, or (blank target, diff mode) to run a three-reviewer simplify pass on a fresh diff before review."
 when_to_use: "refactor, restructure a package, rename, extract helpers, remove dead code, simplify my changes, simplification pass, tidy the diff"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write, Agent, Task, AskUserQuestion
 argument-hint: '<target symbol or file> | blank or base:<ref> = simplify the fresh diff'
@@ -40,7 +40,7 @@ Rules:
 Sequence:
 1. Analysis. Map the current structure and list specific problems with evidence (file and line numbers).
 2. Planning. Propose the target structure and ordered steps. Pause for approval only if a step changes a public API contract or touches files outside the named project.
-3. Execution. Step by step, verifying behavior after each change. If this is a recurring or iterative refactor (a sweep across many files, a migration, or an until-dry cleanup pass), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer for structure discovery, debugger if a step breaks behavior, atlas:implementer for the edits. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, so that behavior is shown to hold before integrating results.
+3. Execution. Step by step, verifying behavior after each change. If this is a recurring or iterative refactor (a sweep across many files, a migration, or an until-dry cleanup pass), invoke the `atlas-orchestrate` skill in loop mode to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise, for non-trivial single-pass work, dispatch the squad rather than doing it all inline: dispatch all independent jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight - atlas:explorer for structure discovery, debugger if a step breaks behavior, atlas:implementer for the edits. Close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, so that behavior is shown to hold before integrating results.
 
 VERIFY:
 - Run the test suite or the captured sample runs after each step. Show the exact command and the actual output.

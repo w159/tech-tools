@@ -1,5 +1,29 @@
 # Changelog
 
+## atlas 17.37.0 -- 26 skills instead of 40; the / menu lists only skills a person starts
+
+- Changed, atlas skills: 40 -> 26. Twenty-one stay in the / menu (audit, brainstorm, debug, doctor, frontend, handoff, orchestrate, plan, prompt, prototype, readme, refactor, review, run-watch, security, setup, ship, status, testing, ux-test, wiki). Five are model-only (`user-invocable: false`): bakeoff, compound, explain, harden, worktree. atlas-setup and atlas-ship are manual (`disable-model-invocation: true`) because they install or commit.
+- Merged, as modes or references of the target skill (folders removed, scripts kept): autopilot, crew, loop -> atlas-orchestrate; db-audit, validate -> atlas-audit; optimize -> atlas-debug; proof -> atlas-plan; pulse, tui -> atlas-status; resolve-pr-feedback -> atlas-run-watch; sweep -> atlas-brainstorm; gitignore -> atlas-setup; test-xcode -> atlas-testing; dogfood -> atlas-ux-test.
+- Changed: every remaining description was rewritten per Anthropic's skill guidance (third person, what then when, trigger words); menu skills open with a short first sentence so a menu row fits one line.
+- Removed, atlas mod: `/atlas-say` (agents post notes with `atlas_todo.py`). `/atlas-todo` and `/atlas-core` stay.
+- Basis: per-skill review against https://docs.claude.com/en/docs/claude-code/skills and the Agent Skills best-practices page, plus local usage from `~/.atlas/atlas.db` (24 of 40 skills had no recorded use).
+
+## Unreleased -- the core bar opens and closes the Atlas pane; /atlas-cc removed
+
+- Added, atlas mod: the one-row core bar now ends with pane controls. While the pane is closed it shows `open`. While the pane is open it shows the tab chips and `close`, and below 80 columns only `open` or `close`. On the main screen (classic, `CLAUDE_CODE_NO_FLICKER=0`) the pane opens above the prompt; in fullscreen it docks. This is Claude Code's placement rule (`Pane` placement in the host types). `plugins/atlas/mod/view/band/band.tsx`, `mod/host/handlers.ts`, `mod/host/hooks.ts`; test `mod/view/band/band-pane-controls.test.ts`.
+- Removed, atlas mod: the `/atlas-cc` command, its usage counter `mod.command.atlas-cc` (analytics schema, telemetry reference) and its README mention. The bar's `open` chip replaces it.
+- Recorded: the blank rows left under the prompt after the `/` menu closes in classic mode come from Claude Code's main-screen renderer, not atlas. In a live 150x45 tmux run with 120 rows of scrollback, both atlas on and `ATLAS_MOD=off` left 17 blank rows. Finding `classic-menu-gap-host`.
+
+## Unreleased -- git hooks run the fast test set in under 30 seconds
+
+Evidence: `.atlas/evidence/2026-11-23_r1746-fast-gate.txt`.
+
+- Changed, local gate: `scripts/gate.sh push` and `scripts/gate.sh commit` run only test files that are not on `scripts/gate-slow.txt`, with independent steps running concurrently. `push` measured 23 s three times in a row on this machine, against 437 s before. It runs 192 of 272 atlas Python test files and 282 of 292 atlas bun test files, plus the version, attribution, root pytest, telemetry, tsc relative-import and live mod gate steps. The herdr web UI step is no longer in a hook.
+- Added, local gate: `scripts/gate.sh full` runs everything, slow list included (486 s measured). No hook calls it; run it by hand before a release. Until someone does, the 80 slow Python files, 10 slow bun files and the herdr integration tests are not run by anything. The slow Python files include the regression suites for the completion gate, the dispatch tripwire, git_guard, crew and mux.
+- Added: `scripts/gate-slow.txt`, the one list of slow test files (Python at 2 s or more per file, bun at 1 s or more), with re-measure instructions in its header.
+- Removed, two tests that checked nothing: `test_version` in `plugins/atlas/scripts/test_fix_settings_options.py` (asserted the manifest version equals a literal that had to be edited on every release; `scripts/check_versions.py` covers version agreement) and `'the pane hands the card the band's clock'` in `plugins/atlas/mod/view/panel/panel-band-agreement.test.ts` (its only assertion was `expect(true).toBe(true)`).
+- Changed, docs: `CLAUDE.md` rule 6 and `plugins/atlas/mod/TESTING.md` describe the fast hooks and the on-demand full run.
+
 ## Unreleased -- tests move from GitHub Actions to local git hooks
 
 - Changed, CI: `.github/workflows/tests.yml` keeps only the `attribution` job. The nine test jobs (`tests`, `atlas-py-fast`, `atlas-py-slow`, `telemetry-server`, `atlas-bun`, `atlas-herdr`, `atlas-mod-gate`, `full`) are deleted. A commit made with `--no-verify`, from a clone without the hooks enabled, or by a pull request is no longer tested anywhere.

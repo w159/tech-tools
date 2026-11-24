@@ -1,0 +1,29 @@
+r1746: git hooks run the fast test set. 2026-11-23, tree at b9a3b649 plus uncommitted changes.
+
+1. Per-file timing of the atlas Python suites (one pytest process per file, 8 jobs):
+   272 files, 10182 tests, wall 179 s, summed 1305 s, 0 failures.
+   >= 20 s: 17 files (802 s). >= 2 s: 80 files (1204 s). Under 2 s: 192 files (101 s summed).
+   Slowest: hooks/test_completion_gate.py 153 s (786 tests), scripts/test_atlas_crew.py 94 s,
+   hooks/test_worker_inbox.py 65 s, scripts/test_atlas_done_claim_positives.py 62 s,
+   hooks/test_dispatch_tripwire.py 59 s, scripts/test_atlas_mux.py 56 s.
+
+2. Bun from plugins/atlas: omp 32.8 s (56 files), mod 12.5 s (239 files), ./scripts 14.7 s (59 files).
+   10 files in omp and mod take 1 s or more and sum to 29.9 s of 42.3 s.
+
+3. New push gate, three consecutive runs:
+   $ scripts/gate.sh push < /dev/null
+   tsc-relative-imports 23s; atlas-py-fast 15s; bun-omp 8s; bun-mod 11s; bun-scripts-colony 5s; root-pytest 9s;
+   leftover-pytest 4s; versions 0s; attribution 0s; telemetry-node 0s; mod-gate-live 1s; total 23s
+   Runs 2 and 3: total 23s, total 23s. Steps run concurrently; the tsc check sets the wall time.
+
+4. Coverage of the hooks: python 272 files, 80 on scripts/gate-slow.txt; bun 292 files, 10 on the list.
+   Every listed path exists (missing=0).
+
+5. Full mode, run once by hand:
+   $ scripts/gate.sh full < /dev/null
+   versions 0s, attribution 0s, root-pytest 7s, telemetry-node 0s, bun-omp-mod 46s, tsc-relative-imports 19s,
+   bun-colony-scripts 15s, leftover-pytest 2s, atlas-py 191s, herdr-web-ui 205s, mod-gate-live 1s, total 486s
+
+6. Two tests deleted after review (crew-14301172c7): test_fix_settings_options.py 11 passed; panel-band-agreement.test.ts 11 pass 0 fail.
+   Review found no whole file to delete. The duplicate comparison of about 40 _more/_units/_sweep/_optimized files
+   against their siblings was not completed.

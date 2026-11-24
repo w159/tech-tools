@@ -1,7 +1,7 @@
 ---
 name: atlas-ux-test
-description: "Runs a UX test swarm over a whole web app: generates personas, drives real-browser walkthroughs and fuzzing, gates on client-surface correctness. Use when a full UI/UX pass or persona testing is needed."
-when_to_use: "persona testing, UX swarm, full UI pass, fuzz the forms"
+description: "Runs UX persona swarms or browser smoke checks on a diff. Use when a full UI/UX pass or persona testing is needed, or when changed routes need a browser check (dogfood)."
+when_to_use: "persona testing, UX swarm, full UI pass, fuzz the forms, dogfood this change, smoke test, check changed routes, console errors, does it load"
 allowed-tools: Read, Glob, Grep, Bash, Agent, Task, AskUserQuestion
 ---
 
@@ -203,3 +203,16 @@ Lead with the synthesis reporter's verdict and headline completion rate, name th
 most important finding, and point to `RUN_DIR/reports/` by path. If the verdict is
 INCOMPLETE, dispatch targeted agents to close the named gaps and re-run synthesis; do not
 report a run as done with open gaps.
+
+## Merged mode: dogfood (diff scope)
+
+`dogfood [smoke] [PR number, branch, or current] [--port PORT] [--fix-budget N]` drives the branch or PR diff in a live browser: full mode repairs genuine breaks in a bounded loop, smoke mode only reports Pass, Fail or Skip per route. Procedure: `references/dogfood.md` (sub-references under `references/dogfood/`); port helper `scripts/resolve-port.sh`.
+
+## Merged-mode reference files
+
+- `references/dogfood/fix-loop.md`
+- `references/dogfood/phases.md`
+- `references/dogfood/pipeline-mode.md`
+- `references/dogfood/report-template.md`
+- `references/dogfood/route-and-report.md`
+- `references/dogfood/smoke.md`

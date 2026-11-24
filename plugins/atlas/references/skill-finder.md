@@ -13,8 +13,8 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Intent ("I want to...") | Skill | Trigger | What you get |
 | --- | --- | --- | --- |
 | Set up, re-run or repair atlas: onboard, install, or wire vendor connectors | atlas-setup | Manual | The lifecycle skill: scaffold docs/, install gates and connectors, run the health check, or `--fix` repairs |
-| Watch the colony's workers live in a terminal UI | atlas-tui | Manual | The Atlas Command Center terminal UI over the colony's tmux workers: sessions, channel feed, a live pane peek, and a steer line |
-| Build several files at once with a parallel crew from a spec or plan.json | atlas-crew | Auto | Runs `atlas_crew.py run` in a pre-executed `!` line: one worker per file on tmux + IRC with file leases and a check gate; the lead only reads the summary |
+| Watch the colony's workers live in a terminal UI | atlas-status tui | Manual | The Atlas Command Center terminal UI over the colony's tmux workers: sessions, channel feed, a live pane peek, and a steer line |
+| Build several files at once with a parallel crew from a spec or plan.json | atlas-orchestrate crew | Auto | Runs `atlas_crew.py run` in a pre-executed `!` line: one worker per file on tmux + IRC with file leases and a check gate; the lead only reads the summary |
 | Get a guided first session: what a dispatch, gate, and actually running one task looks like | atlas-setup tour | Manual | A one-time walkthrough ending in one tiny real task, with plain-language glosses for every atlas term |
 
 ## Understand & decide
@@ -40,8 +40,8 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Build one UI component that survives latency, cancellation, and failure | atlas-frontend component | Auto | A reusable component rendering all six interaction states |
 | Fix a reproducible bug, exception, or bad output | atlas-debug | Auto | Root-cause fix with evidence, not a symptom patch |
 | Make existing code cleaner without changing behavior | atlas-refactor | Auto | Behavior-preserving restructure with before/after evidence |
-| Make something measurably faster or cheaper | atlas-optimize | Auto | Baseline -> one bounded change -> identical re-measure -> the real delta |
-| Automate a recurring or every-session task | atlas-loop | Auto | Matching loop template from the loop library, instantiated |
+| Make something measurably faster or cheaper | atlas-debug optimize | Auto | Baseline -> one bounded change -> identical re-measure -> the real delta |
+| Automate a recurring or every-session task | atlas-orchestrate loop | Auto | Matching loop template from the loop library, instantiated |
 | Keep a long-running command (pipeline, script, log tail) watched and checkpointed | atlas-run-watch | Auto | Compact status ticks into context and full logs spilled to the run ledger, the same tick loop for any long job |
 
 ## Review & fix
@@ -50,22 +50,22 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | --- | --- | --- | --- |
 | Get this diff, branch, or PR reviewed before merge | atlas-review | Auto | Risk-selected multi-persona review; P0/P1 findings independently validated; report-only by default |
 | Review a whole queue of PRs in one batch | atlas-review queue | Auto | One cross-PR triage table: verdict, worst open severity, run-id, sorted by merge-blocking risk |
-| Handle open reviewer comments on a PR | atlas-resolve-pr-feedback | Auto | Each thread triaged fix/reply/needs-human; fixes applied with verification; nothing auto-posted |
+| Handle open reviewer comments on a PR | atlas-run-watch resolve-pr | Auto | Each thread triaged fix/reply/needs-human; fixes applied with verification; nothing auto-posted |
 | Keep a PR's CI green until it's mergeable | atlas-run-watch pr | Auto | Watches one PR's CI, classifies flaky vs genuine failures, bounded repair loop; never merges |
 | Slim down a fresh diff without changing behavior | atlas-refactor (diff mode, no target) | Auto | Three read-only reviewers (reuse/quality/efficiency) over the diff, behavior-preserving apply, gate re-run |
-| Ingest new GitHub feedback and triage it | atlas-sweep | Auto | New issues acknowledged, clustered, folded into a rolling `docs/features/` triage doc |
-| Turn raw feedback (transcripts, tickets, session notes) into findings | atlas-sweep analyze | Auto | Prioritized findings each tied to a verbatim source quote |
+| Ingest new GitHub feedback and triage it | atlas-brainstorm sweep | Auto | New issues acknowledged, clustered, folded into a rolling `docs/features/` triage doc |
+| Turn raw feedback (transcripts, tickets, session notes) into findings | atlas-brainstorm sweep analyze | Auto | Prioritized findings each tied to a verbatim source quote |
 
 ## Ship & commit
 
 | Intent ("I want to...") | Skill | Trigger | What you get |
 | --- | --- | --- | --- |
-| Run the whole pipeline (brainstorm -> plan -> work -> simplify -> review -> commit) with consent gates | atlas-autopilot | Auto | Consent-gated autonomous run of the full spec-to-ship loop; hard stop before any push/PR/merge |
+| Run the whole pipeline (brainstorm -> plan -> work -> simplify -> review -> commit) with consent gates | atlas-orchestrate autopilot | Auto | Consent-gated autonomous run of the full spec-to-ship loop; hard stop before any push/PR/merge |
 | Make one clean, well-scoped local commit | atlas-ship commit-only | Auto | A conventional message grounded in the real diff; stages only the intended files; never pushes |
 | Commit, push, and open a PR when work is verified | atlas-ship | Auto | Fresh-context verifier, local commit, then a hard stop for your confirmation before anything leaves the machine |
 | Triage and fix Dependabot, code-scanning and secret-scanning alerts | atlas-security | Auto | One grouped fix branch, a fresh-context verifier confirming each patched version, and an honest report of what could not be read or fixed; never one PR per alert |
 | Announce what just shipped | atlas-status announce | Auto | Plain-language release note / changelog entry / Slack-style draft, grounded in real changes; never auto-posted |
-| Put a doc or draft through human review with comments | atlas-proof | Auto | Review workflow with anchored comments in a sidecar file and applied edits |
+| Put a doc or draft through human review with comments | atlas-plan proof | Auto | Review workflow with anchored comments in a sidecar file and applied edits |
 | Work in an isolated git worktree for parallel work | atlas-worktree | Auto | Linked worktree with run-ledger reuse and dirty-state-protected teardown |
 | Hand this session to another session without losing the thread | atlas-handoff | Auto | Dense handoff artifact so the next session resumes with zero re-discovery |
 
@@ -74,16 +74,16 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Intent ("I want to...") | Skill | Trigger | What you get |
 | --- | --- | --- | --- |
 | Run a full UX test pass on a web app | atlas-ux-test | Auto | Persona-driven real-browser walkthroughs, fuzzing, and a report gating release |
-| Smoke-check just the routes my branch touched | atlas-dogfood smoke | Auto | Read-only Pass/Fail/Skip per route with console + network evidence; never fixes |
-| Build and test the iOS app on the simulator | atlas-test-xcode | Auto | Simulator boot, xcodebuild test, screenshots + logs, PASS/FAIL report |
+| Smoke-check just the routes my branch touched | atlas-ux-test dogfood smoke | Auto | Read-only Pass/Fail/Skip per route with console + network evidence; never fixes |
+| Build and test the iOS app on the simulator | atlas-testing xcode | Auto | Simulator boot, xcodebuild test, screenshots + logs, PASS/FAIL report |
 | Plan, generate and run tests and see what testing is missing | atlas-testing | Auto | Stack + existing-test detection, gap map across every testing type, highest-value next test written, run, and reported with evidence |
-| Try the branch diff in a live browser and fix real breaks | atlas-dogfood | Auto | Map routes touched, drive each flow like a user, bounded repair loop |
+| Try the branch diff in a live browser and fix real breaks | atlas-ux-test dogfood | Auto | Map routes touched, drive each flow like a user, bounded repair loop |
 | Polish spacing, transitions, and micro-interactions on working UI | atlas-frontend polish | Auto | Small live visual/CSS/animation changes you steer in the browser |
 | Push a hardening/config fix to many endpoints at once | atlas-harden | Auto | Idempotent CHECK/SET/VERIFY script for RMM/MDM that reports changed vs already-compliant |
-| Create or harden a .gitignore | atlas-gitignore | Auto | Deny-by-default allowlist for your stack; secrets re-excluded last |
-| Validate a finished Claude Code plugin | atlas-validate | Auto | Structure + manifest + content audit with pass/fail per check; never auto-fixes |
+| Create or harden a .gitignore | atlas-setup gitignore | Auto | Deny-by-default allowlist for your stack; secrets re-excluded last |
+| Validate a finished Claude Code plugin | atlas-audit plugin | Auto | Structure + manifest + content audit with pass/fail per check; never auto-fixes |
 | Audit the codebase for quality, security, and dead code | atlas-audit | Auto | Three modes (code / architecture / self) with adversarially verified findings and a written report |
-| Audit a live database before changing it | atlas-db-audit | Auto | Read-only schema + code reconciliation + privilege/naming checks via parallel subagents |
+| Audit a live database before changing it | atlas-audit db | Auto | Read-only schema + code reconciliation + privilege/naming checks via parallel subagents |
 | Act on an audit finding right now | atlas-audit act | Auto | Remediation session preloaded with one finding from the latest audit hub |
 
 ## Learn & maintain
@@ -94,5 +94,5 @@ Every skill's full contract lives in its own `SKILL.md` under `plugins/atlas/ski
 | Help atlas improve itself from what it noticed | atlas-doctor | Auto | Mining of session findings asked one by one, applied changes, baseline measure |
 | Generate a README from the actual repo | atlas-readme | Auto | Onboarding-grade README with every claim traced to a real file |
 | Refresh architecture diagrams in docs/wiki/ | atlas-wiki | Auto | Diagrams regenerated from docs/architecture/ |
-| Get a usage/performance/error pulse for a time window | atlas-pulse | Auto | Telemetry-grounded pulse report written to docs/ |
+| Get a usage/performance/error pulse for a time window | atlas-status pulse | Auto | Telemetry-grounded pulse report written to docs/ |
 | Get a plain-language status report of where the work stands | atlas-status | Auto | One stakeholder-ready report synthesized from plans, the findings ledger, the todo board, and git log - each claim labeled verified or assumed |

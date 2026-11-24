@@ -1,6 +1,7 @@
 ---
 name: atlas-harden
-description: "Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state. Use when remediating or enforcing an endpoint setting at scale."
+description: "Writes an idempotent endpoint remediation script (CHECK/SET/VERIFY) for RMM or MDM that proves whether it changed state. Use when remediating or enforcing an endpoint setting at scale: NinjaOne, Intune, remediation script, CIS benchmark, GPO or registry hardening, idempotent PowerShell."
+user-invocable: false
 when_to_use: "remediation script, RMM, MDM, NinjaOne, Intune, idempotent PowerShell"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 argument-hint: '[objective] [target OS/devices] [deployment context: RMM run-as, one-shot/scheduled, known GPO/MDM interactions]'
@@ -23,7 +24,7 @@ Write the hardening or remediation script described in `$ARGUMENTS` (PowerShell 
 Inputs to read from `$ARGUMENTS`: the specific objective (for example, enforce a signing setting, harden null sessions); the target devices (OS versions, device groups); the deployment context (run-as SYSTEM or run-as user, one-shot or scheduled, known GPO or MDM interactions). If a required input is missing or ambiguous, ask once for it, then proceed. The RMM or MDM is a deployment detail, not a dependency; tools such as NinjaOne or Intune are examples only.
 
 ## Pick the shape: loop or single pass
-- If this is a recurring or iterative job (a sweep that hardens many settings or device groups, a poll-until-compliant cycle, or a multi-round remediation), invoke the `atlas-loop` skill to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise write and verify the single script directly. When fanning out across independent settings or targets, dispatch those jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight, and close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, before integrating results.
+- If this is a recurring or iterative job (a sweep that hardens many settings or device groups, a poll-until-compliant cycle, or a multi-round remediation), invoke the `atlas-orchestrate` skill in loop mode to select and instantiate the best-fit loop from the loop-library, then run that loop. Otherwise write and verify the single script directly. When fanning out across independent settings or targets, dispatch those jobs in ONE message (multiple Agent calls in a single message) so they run concurrently, roughly 4-6 in flight, and close the wave with a test run where a test can express the check, and with an independent atlas:verifier in a fresh context where none can, before integrating results.
 
 ## Documentation first
 - Verify every cmdlet, parameter, registry path, and key name against Microsoft Learn (or the OS vendor's docs for non-Windows targets). Do not rely on memory for key names or cmdlet signatures.

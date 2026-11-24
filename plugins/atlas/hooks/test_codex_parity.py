@@ -74,7 +74,7 @@ class ManifestParity(unittest.TestCase):
             self.assertTrue(CODEX[key].startswith("./") and ".." not in CODEX[key], key)
             self.assertTrue((PLUGIN / CODEX[key]).exists(), key)
         skills = [d for d in (PLUGIN / CODEX["skills"]).iterdir() if (d / "SKILL.md").is_file()]
-        self.assertGreaterEqual(len(skills), 30)
+        self.assertGreaterEqual(len(skills), 26)
         self.assertNotIn("agents", CODEX, "Codex manifests have no agents field; see README 'omp and codex'")
 
     def test_codex_hooks_file_is_the_generator_output(self):

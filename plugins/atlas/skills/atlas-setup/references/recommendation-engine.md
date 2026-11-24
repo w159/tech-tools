@@ -102,8 +102,8 @@ Reason: "Documentation has drifted from the codebase."
 Check: read the observability DB for repeated prompts. Are there tasks the
 user asks for repeatedly that could be automated as a loop?
 
-If repeated patterns found: recommend atlas-loop (loop library).
-Command: invoke the atlas-loop skill.
+If repeated patterns found: recommend atlas-orchestrate (loop library).
+Command: invoke the atlas-orchestrate skill.
 Reason: "You have repeated this task N times; a loop could automate it."
 
 ### 10. Tech debt accumulation (confidence: low)

@@ -1,8 +1,9 @@
-// The sidebar opens at rest at every width (X5: the first render with a viewport notes it, the next tick opens it; below 144 the engine draws it when the first prompt asks); /atlas-cc opens it on demand with focus and Esc-to-close.
+// The sidebar opens at rest at every width (X5: the first render with a viewport notes it, the next tick opens it; below 144 the engine draws it when the first prompt asks); the band's `open` chip opens it on demand with focus and Esc-to-close.
 import { describe, expect, test } from 'claude-code/testing';
 import type { EngineInterface, On } from 'claude-code';
 import { dockTick, register, shouldDockAsked, shouldDockRest } from '../register';
 import { memState } from '../test_helpers';
+import { bandHandlers } from './handlers';
 
 type AnyNext = (input: unknown) => Promise<unknown>;
 type AnyHandler = ($: EngineInterface, e: unknown, next: AnyNext) => Promise<unknown>;
@@ -214,10 +215,11 @@ describe('sidebar open requests', () => {
     expect((await renderBand({ columns: 160, rows: 40, isFullscreen: true })).denied).toBe(0);
   });
 
-  test('the render alone opens nothing (X5: the tick does); /atlas-cc opens 12 rows with focus and Esc-close', async () => {
-    const { opens, pick, engine } = await renderBand({ columns: 160, rows: 40, isFullscreen: true });
+  test('the render alone opens nothing (X5: the tick does); the band `open` press opens 12 rows with focus and Esc-close', async () => {
+    const { opens, engine } = await renderBand({ columns: 160, rows: 40, isFullscreen: true });
     expect(opens).toEqual([]);
-    await pick('command.run|atlas-cc')(engine, { args: '' }, noopNext);
+    bandHandlers(engine).openView('route');
+    await Promise.resolve();
     expect(opens[0]).toMatchObject({ id: 'atlas', rows: 12, closeOnEscape: true, focus: true });
   });
 

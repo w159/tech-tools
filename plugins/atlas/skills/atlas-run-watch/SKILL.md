@@ -1,7 +1,7 @@
 ---
 name: atlas-run-watch
-description: "Watches a long-running job (PID, log, CI URL, command loop) or one open PR's CI with a tick loop and run ledger; PR mode repairs genuine CI failures in a bounded loop and never merges. Use when a job or PR's CI needs watching."
-when_to_use: "watch a PID, tail a log, keep an eye on, ping me when done, babysit this PR, watch CI, get PR green, flaky vs real failure"
+description: "Watches a long job or PR CI and resolves PR review feedback. Repairs genuine CI failures in a bounded loop and never merges. Use when a job or PR's CI needs watching or a PR has open review comments."
+when_to_use: "watch a PID, tail a log, keep an eye on, ping me when done, babysit this PR, watch CI, get PR green, flaky vs real failure, address review comments, respond to reviewers, resolve PR threads"
 allowed-tools: Read, Glob, Grep, Bash, Edit, Write
 ---
 
@@ -98,3 +98,14 @@ Done when one of these lines is printed with its sentences and recap.
 - [Watch modes and tick recipes](references/watch-modes.md)
 - [Run ledger spec](references/run-ledger.md)
 - [PR CI target](references/pr-ci.md), with `references/repair-round.md` and `references/boundaries.md`
+
+## Merged mode: pr-feedback
+
+Ask to address review comments or resolve PR threads (arg: PR number, comment URL, or blank for the current branch PR): triage each thread (fix, reply, needs-human), apply approved fixes, draft replies, and confirm before pushing or posting. Procedure: `references/resolve-pr-feedback.md`; full and targeted modes, rubric and fixer prompt under `references/resolve-pr-feedback/`.
+
+## Merged-mode reference files
+
+- `references/resolve-pr-feedback/evaluation-rubric.md`
+- `references/resolve-pr-feedback/fixer-prompt.md`
+- `references/resolve-pr-feedback/full-mode.md`
+- `references/resolve-pr-feedback/targeted-mode.md`
