@@ -35,7 +35,8 @@ import { hoverStyle } from '../input/clickable';
 import type { LiveSnapshot } from '../orchestra-types';
 import { BOARD_ID, engineFs, flipsOf, PANE_DOCK, PANE_ID, reportFailure, rootOf, S, shouldDockAsked, shouldDockRest, shownFailures, toastUnplaced } from './atoms';
 import { folderOf, headerTallyOf } from './agents';
-import { GATES_MS, gitBranch, HERDR_MS, herdrTick, IDLE_BACKOFF_MS, idleSkip, MUX_MS, muxTick, resetPollIdle, noteNotified, POLL_MS, probeTmux, rebuild, rebuildTick, runGates } from './poll';
+import { gitBranch, resetPollIdle, noteNotified, probeTmux, rebuild, runGates } from './poll';
+import { resetWatch, stopWatch, wake, watch } from './rest';
 import { buildCore, coreTick, gateGroups, leadMessages, resetCore } from './core-tick';
 import { atlasSlot, bandHandlers, effectiveRows, healthInOf, publishHudState, readStatuslineRows, sidebarHandlers } from './handlers';
 import { armFrameLoop, armTick, easeTick, ensureFrameLoop, heldFinal, heldWork, hostTurnRunning, isWorkingNow, motionTick, originOf, runBandModel, STOP_SETTLE_MS, syncHistory, verdictFast, wakeLoops } from './frame';
@@ -140,21 +141,8 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 				wired = true;
 				await $.command.register({ name: 'atlas-core', description: 'Show the Atlas core: contract, verdicts, offload, routes' });
 				await $.command.register({ name: 'atlas-todo', description: 'Add a todo to the board', argumentHint: '<text>' });
-				$.clock.every(POLL_MS, () => {
-					void rebuildTick($);
-					void ensureFrameLoop($).catch(() => undefined); // a second watchdog: the poll is an interval of its own
-				});
-				$.clock.every(HERDR_MS, () => {
-					void herdrTick($);
-				});
-				$.clock.every(MUX_MS, () => {
-					void muxTick($);
-					void idleSkip($, 'core', IDLE_BACKOFF_MS).then((skip) => (skip ? undefined : coreTick($)));
-				});
-				$.clock.every(GATES_MS, () => {
-					if (S.hostWorking) void runGates($); // the backstop runs only while a turn does; Stop / turn.complete mark the gates stale themselves
-				});
 			}
+			watch($); // the poll, herdr, mux and gates timers: rest.ts cancels them at rest and every event wakes them (also after a /clear: session.end stopped them)
 			void runGates($);
 			void coreTick($);
 			// The frame loop: the spinner and the run clock beat on their own `$.clock.every`, never behind a store update (an idle session writes nothing; see frameBeat).
@@ -222,6 +210,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		S.stopSeen = false; // a new prompt (or a background task's notification) starts a new turn
 		S.stopRefused = false;
 		const opening = dockOnPrompt($);
+		wake($, true);
 		void wakeLoops($).catch(() => undefined);
 		const at = await hookStamp($);
 		noteHook('prompt.submit', at);
@@ -240,6 +229,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// A reload drops the old copy's timers and commands, so the next boot wires them afresh.
 	booted = null;
 	wired = false;
+	resetWatch();
 
 	// Session boot: read the kill switch, resolve the board, build the first
 	// snapshot, start timers and register commands — interactive sessions only;
@@ -336,6 +326,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The band above the prompt: bordered section (terminal + interactive only).
 	on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || e.props.hasSurvey || !(await read($, isModOn)) || !(await read($, isInteractive))) return next(e);
+		wake($, true); // a redraw is an event: the sleeping poll timers come back (no state write here)
 		// X5: the pane opens at rest (dockTick) and again at the first prompt (dockOnPrompt). Drawing is pure: the engine denies a $.state write made while ui.render dispatches (the hook is then skipped and the band never
 		// draws), so the render only notes the wish; dockTick opens the pane. A terminal widened later is checked again until the open is made once; a pane the person closed stays closed.
 		S.lastViewport = e.viewport ? { isFullscreen: e.viewport.isFullscreen, columns: e.viewport.columns } : undefined;
@@ -430,6 +421,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	// The Atlas sidebar: a native tree, so its elements join the engine's focus ring.
 	on('ui.render', { component: 'Pane' }, async ($, e, next) => {
 		if (e.surface !== 'terminal' || (e.requestId !== PANE_ID && e.requestId !== BOARD_ID) || !(await read($, isModOn))) return next(e);
+		wake($, true);
 		const snapshot = await read($, snapshotState);
 		if (snapshot === null) return next(e);
 		const look = await lookOf($);
@@ -480,6 +472,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// /atlas-core — the four pillars as text; computed fresh, no UI needed.
 	on('command.run', { command: 'atlas-core' }, async ($) => {
+		wake($, true);
 		void noteUsage($, 'mod.command.atlas-core');
 		const model = await buildCore($).catch(() => null);
 		return { text: coreReport(hasCore(model) ? model : null) };
@@ -501,6 +494,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		S.idleFlipped = true;
 		S.easeTimer?.cancel();
 		S.easeTimer = null;
+		if (e.reason !== 'clear') stopWatch(); // a /clear boots again at once and keeps the timers
 		return next(e);
 	});
 
@@ -516,6 +510,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 
 	// /atlas-todo <text> — add a todo at the current phase.
 	on('command.run', { command: 'atlas-todo' }, async ($, e) => {
+		wake($, true);
 		void noteUsage($, 'mod.command.atlas-todo');
 		const text = e.args.trim();
 		if (text === '') return { text: 'usage: /atlas-todo <text>' };

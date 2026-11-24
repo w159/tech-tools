@@ -57,6 +57,17 @@ export function resetPollIdle(): void {
 	lastRun.clear();
 }
 
+/** Something a poll watches is live (a running agent or a worker's tool call, seen by the last fingerprint). */
+export const pollBusy = (): boolean => busy;
+/** Ms since a hook event or a fingerprint move, whichever is newer. */
+export async function quietMs($: EngineInterface): Promise<number> {
+	return (await $.clock.now()) - Math.max(movedAt, lastHookAt());
+}
+/** A render or command (no hook event of its own) woke the session: the quiet window restarts. */
+export async function noteAwake($: EngineInterface): Promise<void> {
+	movedAt = await $.clock.now();
+}
+
 /** True when this tick of `key` should be skipped: the session is idle (no turn or live work, no hook event and no fingerprint move for IDLE_AFTER_MS)
  * and the last run was less than `gapMs` ago. Awake, it never skips, so the first tick after a hook event runs at once. */
 export async function idleSkip($: EngineInterface, key: string, gapMs: number): Promise<boolean> {
@@ -108,7 +119,9 @@ async function worktrees($: EngineInterface, now: number): Promise<WtRow[]> {
 	if (now - S.wtAt >= WT_MS && !(await idleSkip($, 'wt', IDLE_BACKOFF_MS))) {
 		S.wtAt = now;
 		const root = (await read($, snapshotState))?.root;
-		const out = root ? await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_wt.py`, '--root', root, 'status']).catch(() => undefined) : undefined;
+		// A worktree record exists only under <root>/.atlas/wt: no directory entry, no python spawn.
+		const hasWt = root ? ((await Promise.resolve().then(() => $.fs.list(`${root.replace(/\/+$/, '')}/.atlas/wt`)).catch(() => [])).length > 0) : false;
+		const out = root && hasWt ? await $.process.run(['python3', `${$.plugin.root}/scripts/atlas_wt.py`, '--root', root, 'status']).catch(() => undefined) : undefined;
 		S.wtRows = out?.exitCode === 0 ? parseWt(out.stdout) : [];
 	}
 	return S.wtRows;

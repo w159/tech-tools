@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased -- an idle atlas session fires no mod timer
+
+- Changed, mod (`mod/host/rest.ts`, `hooks.ts`, `poll.ts`, `frame.ts`, `hook-log.ts`): one rest decision (`atRest`) replaces the always-on timers. At rest (no host turn, armed prompt, frame loop, gauge glide, pending dock, live agent or worker, and no event for 10 s) the poll, herdr, mux and gates timers and the slow tick are cancelled: no callback fires, no process is spawned, no file is read. Every hook event, band or pane render, and `/atlas-*` command wakes them once. A finished run keeps them on until its `done` clock has flipped to idle (60 s), because that flip is drawn.
+- Changed, `poll.ts`: `atlas_wt.py status` runs only while `.atlas/wt/` holds a worktree record.
+- Added, `mod/host/rest-idle.test.ts` (fake clock: zero callbacks, spawns and fs reads over 10 minutes at rest; a prompt wakes the poll; the timers sleep again after the turn).
+
 ## atlas 17.39.0 -- an idle atlas session no longer drains the battery
 
 Measured (`.atlas/evidence/2026-11-24_battery-drain.txt`): an idle Claude Code session with the atlas mod, in a project holding 1,273 board files and 324 MB of `.atlas/.run`, used 56.1 CPU-seconds per minute on 17.38.0 (about one core, roughly 32% battery an hour reported), 0.84 on 17.39.0, and 0.52 with the mod off.

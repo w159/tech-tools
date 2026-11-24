@@ -171,8 +171,18 @@ describe('session boot and rebuild', () => {
     expect(snap.members.map((m: { name: string }) => m.name)).toEqual(['w1']);
   });
 
+  test('atlas_wt.py is not spawned while no worktree record exists under .atlas/wt', async () => {
+    const s = stubEngine();
+    await boot(s);
+    clock.now += 10_000;
+    s.agents.list = [{ id: 'w-a', status: 'running' }];
+    await rebuildTick(s);
+    expect(s.rec.runs.filter((a) => a[1]?.endsWith('atlas_wt.py')).length).toBe(0);
+  });
+
   test('atlas_wt.py status runs at most every 5 s of the clock', async () => {
     const s = stubEngine();
+    s.files[`${ROOT}/.atlas/wt/w-a/.git`] = ''; // a worktree record: the status run has something to report
     const cap = await boot(s);
     void cap;
     const wtRuns = (): number => s.rec.runs.filter((a) => a[1]?.endsWith('atlas_wt.py')).length;
