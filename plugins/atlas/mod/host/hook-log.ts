@@ -82,9 +82,14 @@ export function eventMinutes(): { m: number; n: number }[] {
 /** Engine clock of the newest event noted this session (-Infinity before the first): the poll's idle backoff snaps back on it. */
 export const lastHookAt = (): number => newest;
 
+let onNoted: (() => void) | null = null;
+/** The rest gate's wake: called on every recorded event (rest.ts arms the poll timers from it). `null` clears it. */
+export const onHookNoted = (fn: (() => void) | null): void => { onNoted = fn; };
+
 /** Record one event the handlers saw, at the engine clock `at` (ms); an event with no clock reading is not recorded. */
 export function noteHook(label: string, at: number | undefined): void {
   if (at === undefined || !Number.isFinite(at)) return;
+  onNoted?.();
   log.push({ label, at });
   stamps.push(at);
   newest = Math.max(newest, at);

@@ -211,7 +211,7 @@ export function armFrameLoop($: EngineInterface): void {
 }
 /** The watchdog: a loop that stopped beating is armed again, and a stopped loop is armed once something wants frames. */
 export async function ensureFrameLoop($: EngineInterface): Promise<void> {
-	if (!S.tickTimer) return; // the session ended: nothing re-arms the loop behind it
+	if (!tickAlive) return; // the session ended: nothing re-arms the loop behind it
 	const now = await $.clock.now();
 	if (!S.frameTimer ? framesWanted((await read($, snapshotState)) as LiveSnapshot | null, now) : beatStale(S.lastBeatMs, now)) {
 		S.lastBeatMs = now;
@@ -220,16 +220,18 @@ export async function ensureFrameLoop($: EngineInterface): Promise<void> {
 }
 /** A hook event or a host turn says work starts: restart the frame loop and the fast tick now, not at the next slow tick. */
 export async function wakeLoops($: EngineInterface): Promise<void> {
-	if (!S.tickTimer) return;
+	if (!tickAlive) return;
 	if (!S.frameTimer) { S.lastBeatMs = await $.clock.now(); armFrameLoop($); }
-	if (tickMs !== TICK_MS) armTick($, undefined, TICK_MS);
+	if (!S.tickTimer || tickMs !== TICK_MS) armTick($, undefined, TICK_MS);
 }
 
 /** The slow tick runs at TICK_MS while anything animates and every IDLE_TICK_MS at rest; its body is the caller's (it reads gauges, motion and the Stop verdict). */
 let tickBody: (() => Promise<void>) | null = null;
 let tickMs = TICK_MS;
+let tickAlive = false; // the session runs: the slow tick may be asleep (rest) but wakeLoops and the watchdog may bring it back
 export function armTick($: EngineInterface, body?: () => Promise<void>, ms = TICK_MS): void {
 	if (body) tickBody = body;
+	tickAlive = true;
 	tickMs = ms;
 	S.tickTimer?.cancel();
 	S.tickTimer = $.clock.every(ms, () => {
@@ -239,6 +241,12 @@ export function armTick($: EngineInterface, body?: () => Promise<void>, ms = TIC
 			if (S.tickTimer && want !== tickMs) armTick($, undefined, want);
 		})().catch(() => undefined);
 	});
+}
+/** At rest the slow tick stops with the rest of the timers (rest.ts); wake re-arms it. */
+export function sleepTick(end = false): void {
+	S.tickTimer?.cancel();
+	S.tickTimer = null;
+	if (end) tickAlive = false;
 }
 /** The spinner tick's look at the Stop verdict: the fast path of gatesPoll, plus the urgent gate run it queues (gatesPoll would start it on the next 500 ms poll). */
 export async function verdictFast($: EngineInterface, snap: LiveSnapshot): Promise<void> {
