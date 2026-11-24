@@ -304,6 +304,8 @@ def _brief_reap(out: dict) -> str:
         f"{len(out['members'])} members, {session}, {out['prompts_removed']} prompts removed, "
         f"{out['channels_reaped'] or 0} channels reaped"
     ]
+    if out.get("worktrees_autocommitted"):
+        lines.append(f"uncommitted work auto-committed: {', '.join(out['worktrees_autocommitted'])}")
     if out.get("worktrees_merged"):
         lines.append(f"worktrees merged: {', '.join(out['worktrees_merged'])}")
     if out.get("worktrees_on_base"):
@@ -319,7 +321,8 @@ def _brief_reap(out: dict) -> str:
             s for s in (f"{k['ahead']} ahead" if k.get("ahead") else "", "dirty" if k.get("dirty") else "", str(k.get("error") or "")) if s
         )
         agent = k["branch"].removeprefix("worker/")  # atlas_wt.py names a worktree by agent, branch worker/<agent>
-        lines.append(f"worktree kept: {k['member']} {k['branch']} ({state or 'kept'}), merge with atlas_wt.py merge {agent}")
+        how = f"finish with: {k['finish']}" if k.get("finish") else f"merge with atlas_wt.py merge {agent}"
+        lines.append(f"worktree kept: {k['member']} {k['branch']} ({state or 'kept'}), {how}")
     return "\n".join(lines)
 
 
@@ -2371,7 +2374,7 @@ def worktree_plan(rec: dict, root: str) -> dict:
 
 
 def add_worktree(root: str, wt: dict) -> str | None:
-    """Create wt's branch+worktree from HEAD; None on success or when it already exists, else the
+    """Create wt's branch+worktree from wt["start"] (a dirty-lead snapshot, see _lead_snapshot) or HEAD; None on success or when it already exists, else the
     error: a git failure, or the atlas_git worktree cap (merged worktrees are cleaned first)."""
     if Path(wt["path"]).exists():
         return None
@@ -2386,7 +2389,7 @@ def add_worktree(root: str, wt: dict) -> str | None:
     except Exception:  # noqa: BLE001 -- fail-open: hygiene modules never block a spawn by crashing
         pass
     res = subprocess.run(
-        ["git", "-C", root, "worktree", "add", "-b", wt["branch"], wt["path"], "HEAD"],
+        ["git", "-C", root, "worktree", "add", "-b", wt["branch"], wt["path"], wt.get("start") or "HEAD"],
         capture_output=True,
         text=True,
     )
@@ -2416,6 +2419,109 @@ def _merge_is_noop(root: str, branch: str) -> bool:
     if res.returncode != 0 or head_tree.returncode != 0 or not res.stdout.strip():
         return False
     return res.stdout.splitlines()[0].strip() == head_tree.stdout.strip()
+
+_ATLAS_IDENTITY = ("-c", "user.name=atlas", "-c", "user.email=atlas@localhost")
+
+
+def _identity_args(path: str) -> tuple:
+    """git -c identity flags, only when the repo at `path` has no user.name/user.email configured."""
+    ok = all(_git(path, "config", k).stdout.strip() for k in ("user.name", "user.email"))
+    return () if ok else _ATLAS_IDENTITY
+
+
+def _tree_snapshot(root: str) -> str | None:
+    """Tree sha of the full working tree (tracked + untracked, not ignored) via a temp index: the lead's
+    index and files are never touched. None on any failure."""
+    tmp = tempfile.mkdtemp(prefix="atlas-snap-")
+    try:
+        env = dict(os.environ, GIT_INDEX_FILE=os.path.join(tmp, "index"))
+        add = subprocess.run(["git", "-C", root, "add", "-A"], capture_output=True, text=True, env=env)
+        tree = subprocess.run(["git", "-C", root, "write-tree"], capture_output=True, text=True, env=env)
+        return tree.stdout.strip() if add.returncode == 0 and tree.returncode == 0 and tree.stdout.strip() else None
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def _lead_snapshot(root: str) -> str | None:
+    """Commit sha of the lead working tree when it has uncommitted changes (parent HEAD), else None.
+    Workers branch from it so they edit what the lead sees; reap brings their diffs back as a patch."""
+    if not _git(root, "status", "--porcelain").stdout.strip():
+        return None
+    try:
+        import atlas_wt
+
+        atlas_wt.ensure_ignored(Path(root))  # nested worktrees must not land in the snapshot
+    except Exception:  # noqa: BLE001 -- fail-open
+        pass
+    tree = _tree_snapshot(root)
+    if not tree:
+        return None
+    res = _git(root, *_ATLAS_IDENTITY, "commit-tree", tree, "-p", "HEAD", "-m", "atlas spawn: lead working tree snapshot")
+    return res.stdout.strip() if res.returncode == 0 and res.stdout.strip() else None
+
+
+def _apply_snapshot_base(root: str, rec: dict) -> None:
+    """Dirty lead tree: base every planned worktree on a snapshot of it (rec["base"]) instead of HEAD."""
+    if rec.get("worktrees") and (snap := _lead_snapshot(root)):
+        rec["base"] = snap
+        for wt in rec["worktrees"].values():
+            wt["start"] = snap
+
+
+def _autocommit_worktrees(root: str, rec: dict) -> list:
+    """Members whose worktree held uncommitted work: committed onto their own worker branch so the merge
+    sees it (workers often exit without committing)."""
+    done = []
+    for member, wt in sorted((rec.get("worktrees") or {}).items()):
+        path = wt["path"]
+        if not Path(path).is_dir() or not _git(path, "status", "--porcelain").stdout.strip():
+            continue
+        if _git(path, "add", "-A").returncode == 0 and _git(
+            path, *_identity_args(path), "commit", "-q", "-m", f"atlas reap: {member} uncommitted work"
+        ).returncode == 0:
+            done.append(member)
+    return done
+
+
+def _apply_back(root: str, rec: dict) -> tuple:
+    """(applied members, conflicted rows, skipped rows) for a team spawned on a dirty-lead snapshot
+    (rec["base"], not an ancestor of the lead branch, so no merge). Per worker, in member order: a tree-level
+    three-way merge of (base, lead working tree snapshot, branch) via `git merge-tree`; when clean, the lead
+    tree -> merged tree difference is applied to the working tree with `git apply` (index untouched). The
+    working tree is only written after a clean merge, so a conflict leaves it as it was. Applied content now
+    lives in the lead tree: that is the proof reap needs to delete the worktree and branch."""
+    applied, conflicted, skipped = [], [], []
+    base = rec["base"]
+    for member in sorted(rec.get("worktrees") or {}):
+        wt = rec["worktrees"][member]
+        branch = wt["branch"]
+        row = {"member": member, "branch": branch}
+        if _git(root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}").returncode != 0:
+            continue
+        if Path(wt["path"]).is_dir() and _git(wt["path"], "status", "--porcelain").stdout.strip():
+            skipped.append(dict(row, reason="worker worktree has uncommitted changes"))
+            continue
+        lead = _tree_snapshot(root)
+        if not lead:
+            skipped.append(dict(row, reason="could not snapshot the lead tree"))
+            continue
+        res = _git(root, "merge-tree", "--write-tree", "--name-only", f"--merge-base={base}", lead, branch)
+        lines = res.stdout.splitlines()
+        if res.returncode == 1:
+            files = sorted(set(lines[1:]) if "" not in lines else set(lines[1 : lines.index("")]))
+            conflicted.append(dict(row, files=files or ["(see git merge-tree)"]))
+            continue
+        if res.returncode != 0 or not lines:
+            skipped.append(dict(row, reason="merge-tree failed: " + (res.stderr or res.stdout).strip()[-200:]))
+            continue
+        patch = _git(root, "diff", "--binary", lead, lines[0].strip()).stdout
+        if patch.strip():
+            ap = subprocess.run(["git", "-C", root, "apply", "-"], input=patch, capture_output=True, text=True)
+            if ap.returncode != 0:
+                skipped.append(dict(row, reason="git apply failed: " + ap.stderr.strip()[-200:]))
+                continue
+        applied.append(member)
+    return applied, conflicted, skipped
 
 
 def _merge_back(root: str, rec: dict) -> tuple:
@@ -2465,6 +2571,17 @@ def _merge_back(root: str, rec: dict) -> tuple:
     return merged, conflicted, skipped
 
 
+def _finish_cmd(root: str, rec: dict, wt: dict) -> str:
+    """The exact command that finishes a kept worktree by hand."""
+    agent = wt["branch"].removeprefix("worker/")
+    if rec.get("base"):  # snapshot base is not on the lead branch: bring the diff over, then clean up
+        return (
+            f"git -C {root} diff --binary {rec['base']} {wt['branch']} | git -C {root} apply --3way - && "
+            f"git -C {root} worktree remove {wt['path']} && git -C {root} branch -D {wt['branch']}"
+        )
+    return f"python3 {Path(__file__).resolve().parent / 'atlas_wt.py'} --root {root} merge {agent}"
+
+
 def _reap_worktrees(root: str, rec: dict) -> tuple:
     """(removed member names, kept rows) for a team's worktrees. A worktree goes only when it is clean
     and its branch holds nothing no other ref has; then its branch goes (`branch -d`, `-D` only after
@@ -2482,16 +2599,17 @@ def _reap_worktrees(root: str, rec: dict) -> tuple:
             ["git", "-C", root, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"], capture_output=True
         ).returncode == 0
         ahead = _ahead_of_others(root, branch) if has_branch else 0
-        if member in (rec.get("already_on_base") or []):
+        if member in (rec.get("already_on_base") or []) or member in (rec.get("applied") or []):
             ahead = 0  # its commits are not ancestors of HEAD but its content is: nothing unique to lose
         if dirty or ahead != 0:
-            kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty})
+            kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty,
+                         "finish": _finish_cmd(root, rec, wt)})
             continue
         if exists:
             rm = subprocess.run(["git", "-C", root, "worktree", "remove", path], capture_output=True, text=True)
             if rm.returncode != 0:
                 kept.append({"member": member, "path": path, "branch": branch, "ahead": ahead, "dirty": dirty,
-                             "error": (rm.stderr or rm.stdout).strip()[-200:]})
+                             "finish": _finish_cmd(root, rec, wt), "error": (rm.stderr or rm.stdout).strip()[-200:]})
                 continue
         if has_branch:
             drop = subprocess.run(["git", "-C", root, "branch", "-d", branch], capture_output=True)
@@ -2908,6 +3026,7 @@ def cmd_spawn_team(args) -> int:
     rec["harness"] = args.harness
     if any(m["role"] not in atlas_provider.VERIFIER_ROLES for m in rec["members"]):
         rec["held_members"] = [m["name"] for m in rec["members"] if m["role"] in atlas_provider.VERIFIER_ROLES]
+    _apply_snapshot_base(root, rec)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(rec, indent=1, sort_keys=True), encoding="utf-8")
     members = ", ".join(f"{m['name']} ({m['role']}{':' + m['seat'] if m.get('seat') else ''})" for m in rec["members"])
@@ -3210,7 +3329,15 @@ def cmd_reap(args) -> int:
     if state == "live":
         arch.mkdir(parents=True, exist_ok=True)
         (_team_dir(root) / f"{rec['team_id']}.json").replace(archived_path)
-    wt_merged, wt_conflicted, wt_skipped = _merge_back(root, rec)
+    wt_committed = _autocommit_worktrees(root, rec)
+    if rec.get("base"):
+        wt_merged, wt_conflicted, wt_skipped = _apply_back(root, rec)
+        rec["applied"] = list(wt_merged) + [  # branch with no change of its own is also "applied"
+            m for m in sorted(rec.get("worktrees") or {}) if m not in wt_merged
+            and not any(r["member"] == m for r in wt_conflicted + wt_skipped)
+        ]
+    else:
+        wt_merged, wt_conflicted, wt_skipped = _merge_back(root, rec)
     wt_removed, wt_kept = _reap_worktrees(root, rec)
     prompts = [_team_dir(root) / f"{rec['team_id']}-{n}.prompt" for n in names]
     removed = 0
@@ -3232,6 +3359,7 @@ def cmd_reap(args) -> int:
             "prompts_removed": removed,
             "worktrees": rec.get("worktrees") or {},
             "worktrees_on_base": rec.get("already_on_base") or [],  # content already on HEAD: no merge commit made
+            "worktrees_autocommitted": wt_committed,  # uncommitted worker edits committed onto their branch
             "worktrees_merged": wt_merged,  # merged into the lead branch by reap, then removed below
             "worktrees_conflicted": wt_conflicted,  # merge aborted, lead branch untouched: branch + worktree kept
             "worktrees_skipped": wt_skipped,  # not attempted (dirty worker, dirty lead files, detached HEAD)
@@ -3241,6 +3369,38 @@ def cmd_reap(args) -> int:
             "archived": str(archived_path) if state != "recovered" else None,
         },
         brief=_brief_for(args, _brief_reap),
+    )
+
+
+def cmd_reap_stale(args) -> int:
+    """Reap every unreaped team record whose tmux session is gone (lead crashed or closed): same path as
+    `reap`, so worktrees are auto-committed, merged or applied back and removed. Fail-soft and idempotent
+    (a reaped record is archived); a record younger than 2 minutes is skipped (its panes may still be starting)."""
+    root = _root(args)
+    reaped, kept, errors = [], 0, []
+    for rec_path in sorted(_team_dir(root).glob("*.json")):
+        rec = _load_team(root, rec_path.stem)
+        if not rec or rec.get("transport") != "tmux" or time.time() - float(rec.get("created") or 0) < 120:
+            continue
+        if _tmux("has-session", "-t", _session(rec["team_id"])).returncode == 0:
+            continue
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                cmd_reap(argparse.Namespace(team=rec["team_id"], root=root, json=True))
+            out = json.loads(buf.getvalue().strip().splitlines()[-1])
+        except Exception as exc:  # noqa: BLE001 -- one bad team never stops the sweep
+            errors.append(f"{rec['team_id']}: {type(exc).__name__}: {exc}")
+            continue
+        reaped.append(rec["team_id"])
+        kept += len(out.get("worktrees_kept") or [])
+        for k in out.get("worktrees_kept") or []:
+            errors.append(f"{rec['team_id']} kept {k['branch']}: {k.get('finish')}")
+    result = {"ok": True, "reaped": reaped, "worktrees_kept": kept, "notes": errors}
+    return _emit(
+        result, 0, None if getattr(args, "json", False) else lambda o: "\n".join(
+            [f"reap-stale: reaped {len(o['reaped'])} team(s), {o['worktrees_kept']} worktree(s) kept"] + o["notes"]
+        ),
     )
 
 
@@ -3352,6 +3512,9 @@ def _parser() -> argparse.ArgumentParser:
                 action="store_true",
                 help="kill the team's panes when the timeout expires (or set ATLAS_WAIT_KILL=1)",
             )
+    rs = sub.add_parser("reap-stale", help="reap teams whose tmux session is gone")
+    rs.add_argument("--root")
+    rs.add_argument("--json", action="store_true", help=json_help)
     for name in ("status", "kill"):
         sp = sub.add_parser(name)
         if name == "status":
@@ -3373,6 +3536,7 @@ def main(argv=None) -> int:
             "spawn-team": cmd_spawn_team,
             "wait": cmd_wait,
             "reap": cmd_reap,
+            "reap-stale": cmd_reap_stale,
             "status": cmd_status,
             "kill": cmd_kill,
         }[args.cmd](args)
