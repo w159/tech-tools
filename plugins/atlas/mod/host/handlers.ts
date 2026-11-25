@@ -14,9 +14,7 @@ import { noteUsage } from './usage';
 import { flipsOf, PANE_BOARD, PANE_ID, PANE_ON_DEMAND, rootOf, S, toastUnplaced } from './atoms';
 import { rebuild } from './poll';
 import { gateGroups } from './core-tick';
-import { setViewState } from './bored';
 
-const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // the host reads only a const of the reading file
 const snapshotState = atom({ plugin: 'atlas', key: 'snapshot' } as const, null);
 const usageState = atom({ plugin: 'atlas', key: 'usage' } as const, { tokens: null, contextPct: null });
 
@@ -28,6 +26,9 @@ const draftState = atom({ plugin: 'atlas', key: 'sidebarDraft' } as const, '');
 
 const flipState = atom({ plugin: 'atlas', key: 'sidebarFlips' } as unknown as { readonly plugin: 'atlas'; readonly key: 'sidebarDraft' }, '');
 
+const spinnerTickState = atom({ plugin: 'atlas', key: 'spinnerTick' } as const, 0); // written by restyle's ticker; renders only read it
+
+const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
 
 export type HudState = { maxRows: number; wanted: number; shown: number; fullscreen: boolean };
 /** `.atlas/.run/statusline-rows.json`: the rows the status line printed last and the rows its full grid would take. */
@@ -58,7 +59,7 @@ export function atlasSlot(els: ClientElements, parts: { /** Y1d: the narrow idle
 	return els.Box({ flexDirection: 'column', flexShrink: 0, children: [...(parts.lead ? [els.Box({ height: parts.lead, flexShrink: 0, children: [] })] : []), ...(parts.strip ?? []), parts.band, ...parts.gapRow, ...(lower.length > 0 ? [els.Box({ flexDirection: 'column', flexShrink: 0, children: lower })] : []), parts.below] });
 }
 
-export { slotHold } from '../view/band/slot';
+export { fitHudToBand, hudGapRows, hudSlotCap, slotHold } from '../view/band/slot';
 
 export const resetSlotHold = (): void => { S.slotHeld = 0; };
 /** Test reset for the session clock. Not part of resetCore(): the product calls resetCore() after session.start has set it. */
@@ -141,7 +142,7 @@ export function sidebarHandlers($: EngineInterface, surface: 'terminal'): Sideba
 		draftChange: (text) => guarded(() => update($, draftState, () => text)),
 		send: (text) => guarded(() => sendNote($, text)),
 		focus: (key) => guarded(() => $.ui.focus({ requestId: PANE_ID, key })),
-		setView: (v) => guarded(() => setViewState($, v)), // the bored tab starts and stops its stream here
+		setView: (v) => guarded(() => update($, viewState, () => v)),
 		toggleTodos: () => guarded(() => openBoard($)),
 		expand: (key) =>
 			guarded(async () => {
@@ -162,7 +163,7 @@ export async function openBoard($: EngineInterface): Promise<void> {
 	// keys), so with the Atlas pane shown the board draws inside it (view `board`); `o` again returns to the route.
 	const panes = await (async () => $.ui.panes())().catch(() => []); // a surface that lists none leaves the open below as it was
 	if (panes.some((p) => p.id === PANE_ID && p.isShown)) {
-		await setViewState($, (await read($, viewState)) === 'board' ? 'route' : 'board');
+		await update($, viewState, (cur) => (cur === 'board' ? 'route' : 'board'));
 		void rebuild($);
 		return;
 	}
@@ -173,12 +174,13 @@ export async function openBoard($: EngineInterface): Promise<void> {
 }
 
 /** Band presses: open (or focus) the pane on a view, close it, or open the Board pane. */
-/** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured. */
+/** Wave 42: the idle health's raw inputs: uptime on the clock, the version and branch read at boot, the tokens the host measured, whether the card is open. */
 export async function healthInOf($: EngineInterface, clockNow: number): Promise<HealthIn> {
 	const usage = await read($, usageState);
-	// Y1d: the pane counts as up only while the engine has it placed: below 144 columns an unasked pane is open but waits undrawn, and the band and the narrow strip then stand in for it
+	// Y1d: the pane counts as up only while the engine has it placed: below 144 columns an unasked pane is open but waits undrawn, and the band, the card and the narrow strip then stand in for it
 	const listed = await (async () => $.ui.panes())().catch(() => undefined);
 	const panelUp = (await read($, paneOpenedState)) && (listed === undefined || listed.some((p) => p.id === PANE_ID && p.isPlaced));
+	if (panelUp) S.healthOpenNow = false; // round 2 (D1): card and panel never show at once; a card open when the panel opens is closed (and stays closed when the panel closes)
 	noteDenied(deniedCalls(await gateGroups($)), clockNow); // N3: the gates chip reads red until DENY_RED_SECS after the denied count last rose
 	const denyAge = denyAgeSecs(clockNow);
 	const hist = historyView(clockNow); // Y1a: what earlier sessions recorded, drawn as `prev`
@@ -193,7 +195,8 @@ export async function healthInOf($: EngineInterface, clockNow: number): Promise<
 		hooks: hookStats(clockNow, 40, S.runClock.startMs ?? undefined), // the panel's RECENT grows into the free rows of a tall pane
 		pulse: pulseOf(clockNow),
 		...(hist ? { hist } : {}),
-		...(panelUp ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band says only what it does not
+		open: S.healthOpenNow,
+		...(panelUp ? { panel: true } : {}), // the side panel is up: it says the gates, the uptime, the context and the events; the band and the card say only what it does not
 	};
 }
 
@@ -205,11 +208,12 @@ export function bandHandlers($: EngineInterface): BandHandlers {
 				// Open first, before any await: the engine counts the open as asked (placed at any width) only while the press is behind it.
 				const opened = $.ui.open(PANE_ON_DEMAND);
 				void noteUsage($, 'mod.open.ondemand');
-				await setViewState($, v);
+				await update($, viewState, () => v);
 				await update($, paneOpenedState, () => true);
 				toastUnplaced($, await opened);
 			}),
 		closePane: () => guarded(async () => { await $.ui.close({ id: PANE_ID }); }), // the engine then runs the ui.close hook, which clears paneOpenedState
 			toggleTodos: () => guarded(() => openBoard($)),
+		toggleHealth: () => guarded(() => { S.healthOpenNow = !S.healthOpenNow; return update($, spinnerTickState, (n) => { S.beatFrame = n + 1; return n + 1; }); }),
 	};
 }

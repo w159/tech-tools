@@ -1,5 +1,8 @@
 # Changelog
 
+## atlas 17.43.1 -- the band and side panel are back to 17.42.0
+- Reverted, atlas mod: the 17.43.0 band and side-panel redesign is rolled back to the 17.42.0 mod (TODO rows, subagent and worker lanes, gates tab, phase and gate headers). The bored tab goes with it. The Stop-gate fixes from 17.43.0 stay (`hooks/completion_gate_core.py`, `scripts/atlas_mux.py`).
+
 ## atlas 17.43.0 -- side panel rework with the bored tab; Stop gate credits normal test runs
 - Fixed, completion gate (m) in a session with no orchestration: the block said the gate re-runs your last test command, but that path never re-ran it, so a green run still blocked until the loop cap. It now re-runs the command; a green exit writes the proof and clears (m), a red one keeps the block (`hooks/completion_gate_core.py` `_rerun_clears_m`).
 

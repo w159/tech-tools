@@ -36,19 +36,19 @@ const byKey = (root: Node, key: string): Node => {
 };
 
 describe('band footer buttons', () => {
-  test('status health channel bored are chip Buttons with no hotkey', () => {
+  test('health status gates channel are chip Buttons with no hotkey', () => {
     const t = band();
-    expect(['route', 'core', 'channel', 'bored'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual([undefined, undefined, undefined, undefined]);
+    expect(['core', 'route', 'gates', 'channel'].map((k) => byKey(t, `band:${k}`).props.hotkey)).toEqual([undefined, undefined, undefined, undefined]);
     expect(hotkeys(t)).toEqual([]);
     expect(kids(byKey(t, 'band:route'))[0]!.props.children).toBe(' status ');
   });
   test('pressing a button opens that pane view, or toggles the board', () => {
     const t = band();
-    for (const k of ['route', 'core', 'channel', 'bored']) byKey(t, `band:${k}`).props.onPress();
-    expect(calls).toEqual(['open:route', 'open:core', 'open:channel', 'open:bored']);
+    for (const k of ['core', 'route', 'gates', 'channel']) byKey(t, `band:${k}`).props.onPress();
+    expect(calls).toEqual(['open:core', 'open:route', 'open:gates', 'open:channel']);
   });
-  test('the buttons are the side panel strip: status, health, channel, bored (change 9: the same set and order on both hosts)', () => {
-    expect(buttons(band()).map((b) => b.props.label)).toEqual(['status', 'health', 'channel', 'bored']); // the redesigned strip: four tabs (the board is reached through its view, not a tab)
+  test('the buttons are the side panel strip: health, status, gates, channel (change 9: the same set and order on both hosts)', () => {
+    expect(buttons(band()).map((b) => b.props.label)).toEqual(['health', 'status', 'gates', 'channel']); // the redesigned strip: four tabs (the board is reached through its view, not a tab)
   });
   test('keys show only while idle at 80+ columns: they survive 80, drop at 79 and with no handlers', () => {
     expect(buttons(band(80)).length).toBe(4);
@@ -88,7 +88,7 @@ describe('band footer buttons', () => {
   test('the chips sit one cell apart (each its own tile) and end one cell before the edge', () => {
     const t = bandTree(els, { snapshot: busySnap({ squad: [], activity: {}, comms: [] }), live: [], gates: [], columns: 160, tick: 0, maxRows: 12 }, handlers) as unknown as Node;
     const row = kids(kids(t).at(-1)!);
-    expect(textOf(kids(t).at(-1)!).endsWith(' status   health   channel   bored  ')).toBe(true);
+    expect(textOf(kids(t).at(-1)!).endsWith(' health   status   gates   channel  ')).toBe(true);
     expect(row.at(-1)!.props.children).toBe(' ');
   });
   test('no hotkey is bound on any band button', () => {
@@ -98,10 +98,10 @@ describe('band footer buttons', () => {
 
 describe('sidebar chips (no hotkeys)', () => {
   const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
-  const tree = (view: 'route' | 'team' | 'channel' | 'core' | 'bored'): Node =>
+  const tree = (view: 'route' | 'team' | 'channel' | 'gates'): Node =>
     sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 130, rows: 40 }, side) as unknown as Node;
   test('no view binds a hotkey', () => {
-    for (const v of ['route', 'team', 'channel', 'core', 'bored'] as const) expect(hotkeys(tree(v))).toEqual([]);
+    for (const v of ['route', 'team', 'channel', 'gates'] as const) expect(hotkeys(tree(v))).toEqual([]);
   });
   test('six buttons fit a docked 56-column pane on one strip row (L21)', () => {
     const t = sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view: 'route' }, columns: 56, rows: 40 }, side) as unknown as Node;

@@ -6,9 +6,10 @@ import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
 import { cells, runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
-import { hudBudget, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
+import { hudBudget, hudCompactRows, hudFloorRows, hudWantRows, hudLines, hudMotionItems, lastOf, type HudAgent, type HudInput } from './hud';
 import { Motion } from '../../motion/motion';
 import { bodyLines, lineText, stripLayout, tabRows } from '../panel/panel-layout';
+import { hudGapRows, hudSlotCap } from '../../register';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const NOW = 5_000_000;
@@ -93,10 +94,12 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
   const agent = (n: string): HudAgent => ({ name: n, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', tool: 'Read', target: `${n.split('-')[0]}.py` });
   const plan = (statuses: string[]): TodoItem[] => statuses.map((s, i) => ({ id: `t${i}`, content: `T${i + 1} step ${i + 1} (${['alpha', 'beta', 'gamma'][i] ?? 'lead'}-explorer)`, status: s, owner: ['alpha', 'beta', 'gamma'][i] ? `${['alpha', 'beta', 'gamma'][i]}-explorer` : undefined }) as unknown as TodoItem);
   const agents = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'].map(agent);
-  /** The HUD in `budget` rows less one: the rows left over are the band's. */
-  const slot = (todos: TodoItem[], cols: number, budget: number): { hud: string[]; band: number } => {
-    const hud = hudLines({ todos, agents }, { merge: false, cols, maxRows: budget - 1, ui, now: NOW }).map(runsString);
-    return { hud, band: budget - hud.length };
+  const slot = (todos: TodoItem[], cols: number, budget: number): { hud: string[]; gap: number; band: number } => {
+    const input: HudInput = { todos, agents };
+    const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true, hudWantRows(input, cols, NOW));
+    const hud = hudLines(input, { merge: false, cols, maxRows: cap, ui, now: NOW }).map(runsString);
+    const gap = hudGapRows(hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS'), hud.length, budget);
+    return { hud, gap, band: budget - hud.length - gap };
   };
   test('3 done, 2 open: at 16 rows (the two rules take two more than critique 23) every plan row is drawn, the blank and the header stay, the band keeps a row', () => {
     const { hud, band } = slot(plan(['completed', 'completed', 'completed', 'pending', 'pending']), 61, 16);
@@ -129,6 +132,7 @@ describe('B4: at 10 rows with 5 todos and 3 agents the band keeps a row, the bla
   });
   test('a roomy slot is unchanged (hudBudget still floors at the compact form)', () => {
     expect(hudBudget(14, 10, 7, true)).toBe(10);
+    expect(hudSlotCap(14, 10, 12, 7, true, true)).toBe(12);
   });
 });
 
@@ -140,7 +144,7 @@ describe('B5: route rows do not wrap at 110, and one strip form serves every tab
   ];
   test('wide panes keep the owner in the title as before', () => {
     const rows = bodyLines(panelWorld('route', 120, ui, { todos, workers: [], rows: 40 })).map((l) => lineText(l).trimEnd());
-    expect(rows.some((r) => r.includes('T2 read ghost.py (ghost-explorer)'))).toBe(true); // the done T1 row folds into the `N done` line, so the open blocked row carries the owner check
+    expect(rows.some((r) => r.includes('T1 read alpha.py (alpha-explorer)'))).toBe(true);
   });
 });
 

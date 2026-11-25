@@ -6,7 +6,7 @@ import { cells, uiFromEnv } from '../../design/atlas-ui';
 import { fillRows, headerRows, lineText, stripLayout, tabRows, type PanelTab } from './panel-layout';
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
-const TABS: PanelTab[] = ['route', 'team', 'channel', 'core'];
+const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 const word = (t: PanelTab): string => (t === 'route' ? 'status' : t); // the first tab's id is `route`; it reads `status`
 const NAMES = 'status   team   channel   gates   core   board';
 
@@ -37,7 +37,7 @@ describe('panel-strip-c18', () => {
 // whenever the six whole words fit; the keys stay bound (the zero-width layer of mod/view/panel/pane/sidebar.tsx) and the band footer names them.
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
-const TABS: PanelTab[] = ['route', 'team', 'channel', 'core'];
+const TABS: PanelTab[] = ['route', 'team', 'channel', 'gates', 'core'];
 
 describe('C5 (D14, AA5): the tab strip is one row of chips in one fixed order; a pane too narrow even for the short labels folds its trailing tabs into `more ›`', () => {
   for (const cols of [37, 38, 40, 44]) {

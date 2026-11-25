@@ -53,7 +53,7 @@ describe('I: gates rows', () => {
   ];
   const world = (cols: number): string[] => {
     const h: Health = { gates: { total: 1, green: 0, checks: [{ id: 'routing', ok: false, lines: 6, pass: 5 }], denied: 2 }, upSecs: 9, version: '1', branch: 'm', hooks: { total: 3, byLabel: [{ label: 'tool.call', n: 3 }], recent: [{ label: 'tool.call Bash', ageSecs: 7, ms: 2 }] } } as never;
-    const m = panelWorld('core', cols, ui, { rows: 40, todos: [], workers: [], notes: [], gates: [{ id: 'routing', title: 'routing', lines }], run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: h } as never);
+    const m = panelWorld('gates', cols, ui, { rows: 40, todos: [], workers: [], notes: [], gates: [{ id: 'routing', title: 'routing', lines }], run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: h } as never);
     return panelLines(m).map((l) => lineText(l).trimEnd());
   };
   for (const cols of [48, 41]) test(`at ${cols}: identical rows merge as ×N, labels cut at the end with …, the verdict is a right column`, () => {

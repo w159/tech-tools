@@ -1,5 +1,5 @@
 // Change 9: the Claude Code side panel and the omp painter draw one tab strip (same set, order and label form).
-// Redesign: the strip is status health channel bored (no team, gates or board), the lit chip filled with the accent and an accent segment on the rule below it, health and channel carrying their count.
+// Redesign: the strip is health status gates channel (no team, core or board), the lit chip filled with the accent and an accent segment on the rule below it, gates and channel carrying their count.
 // Lives under omp/ because it imports omp/panel-view.ts; `claude plugin test` cannot load omp tests (bun:test), `bun test omp` runs it.
 import { describe, expect, test } from "bun:test";
 import type { ClientElements } from "claude-code";
@@ -16,8 +16,8 @@ import { paintPanel } from "./panel-view";
 
 const mocha: Ui = { theme: "mocha", ascii: false, color: "truecolor" };
 const core = coreModel({ ...coreFixture, matrix: coreMatrix, todos: [], header: { ok: 3, total: 4 }, openGates: 3 });
-const TABS: PanelTab[] = ["route", "core", "channel", "bored"];
-const LABELS = ["status", "health", "channel", "bored"];
+const TABS: PanelTab[] = ["core", "route", "gates", "channel"];
+const LABELS = ["health", "status", "gates", "channel"];
 
 type Node = { kind: string; props: Record<string, any> };
 const mk = (kind: string) => (props: Record<string, any>): Node => ({ kind, props });
@@ -34,9 +34,9 @@ const plain = (s: string): string => s.replace(/\x1b\[[0-9;]*m/g, '').trimEnd();
 
 describe('change 9: one tab strip on both hosts', () => {
   const WORDS = new Set([...LABELS, 'chan', 'more', '›', '‹', 'back']);
-  // A strip row is only tab words and their counts (digits): `status health 1 channel 2 bored`.
+  // A strip row is only tab words and their counts (digits): `health status gates 1 channel 2`.
   const stripOf = (rows: readonly string[]): string[] => rows.filter((l) => { const tk = l.trim().split(/\s+/); return tk.length > 0 && tk[0] !== '' && tk.every((w) => WORDS.has(w) || /^\d+$/.test(w)); });
-  test('the strip tabs are status health channel bored, no keys', () => {
+  test('the strip tabs are health status gates channel, no keys', () => {
     expect(L.STRIP_TABS.map((t) => t.label)).toEqual(LABELS);
   });
   test('the band buttons are the same set in the same order', () => {
@@ -61,17 +61,17 @@ describe('change 9: one tab strip on both hosts', () => {
       expect(L.stripLayout(cols - 1, 'route').rows).toHaveLength(1);
       const row = stripOf(ccRows('route', cols))[0]!;
       expect([...row].length).toBeLessThanOrEqual(cols);
-      expect(row.startsWith('  status')).toBe(true);
+      expect(row.startsWith('  health')).toBe(true);
     }
-    expect(stripOf(ccRows('route', 60))[0]!.trim().replace(/ +/g, ' ')).toMatch(/^status health( \d+)? channel( \d+)? bored$/);
-    expect(stripOf(ccRows('route', 30)).map((x) => x.trim().replace(/ +/g, ' '))).toEqual(['status more ›']); // 29 inner cells: the health chip with its denial badge no longer fits, so it folds behind `more ›` with the rest
+    expect(stripOf(ccRows('route', 60))[0]!.trim().replace(/ +/g, ' ')).toMatch(/^health status gates( \d+)? channel( \d+)?$/);
+    expect(stripOf(ccRows('route', 30)).map((x) => x.trim().replace(/ +/g, ' '))).toEqual(['health status more ›']);
   });
   test('the lit chip is filled and an accent segment of the rule sits under it, on both hosts', () => {
     for (const tab of TABS) {
       const rows = panelText(panelWorld(tab, 120, mocha, { core }));
-      const at = rows.findIndex((l) => l.startsWith('  status'));
+      const at = rows.findIndex((l) => l.startsWith('  health'));
       const word = LABELS[TABS.indexOf(tab)]!;
-      expect(rows[at + 1]!.indexOf('━')).toBe(rows[at]!.indexOf(` ${word}`));
+      expect(rows[at + 1]!.indexOf('━')).toBe(rows[at]!.indexOf(` ${word} `));
       expect(rows[at + 1]!.match(/━+/g)).toHaveLength(1);
     }
   });

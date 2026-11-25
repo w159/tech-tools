@@ -5,11 +5,11 @@ import type { ClientElements } from 'claude-code';
 import { leadSpinnerGlyph, LEAD_FRAMES, SPIN_FRAMES, spinnerGlyph, type Ui } from '../../design/atlas-ui';
 import { bandTree } from './band';
 import { ARM_MS, END_GRACE_MS, FRAME_MS, newRunClock, ranSecsOf, restSecsOf, stepRun, workSecsOf } from './band-motion';
-import { hudAgents, hudLines, type HudAgent, type HudInput } from '../hud/hud';
+import { hudAgents, hudCompactRows, hudFloorRows, hudLines, hudListsAgents, type HudAgent, type HudInput } from '../hud/hud';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';
-import { atlasSlot, withStopVerdict } from '../../register';
+import { atlasSlot, fitHudToBand, hudGapRows, hudSlotCap, withStopVerdict } from '../../register';
 import { rowOf, type Segment } from '../../design/runs';
 import { bodyLines } from '../panel/panel-layout';
 import { panelModelOf } from '../panel/pane/sidebar-model';
@@ -38,12 +38,17 @@ const hudIn: HudInput = { todos: ownTodos(PLAN), agents: ['alpha-explorer', 'bet
 
 describe('step 1: the band is the first row of the slot, so no host clip can take it', () => {
   const cols = 150;
-  /** A slot of `budget` rows: the band at what is left over HUD rows that leave it one row. */
+  /** The slot register.ts draws for `budget` rows: the HUD fitted to leave the band its row, the gap, the band at what is left. */
   function slotFor(budget: number): string[] {
     const snap = busySnap();
-    const hud = budget > 1 ? hudLines(hudIn, { cols, maxRows: budget - 1, ui, rich: false, now: Date.now() }).map((l): Segment[] => l.map((x) => ({ t: x.t }))).slice(0, budget - 1) : [];
-    const band = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates: [], columns: cols, tick: 0, ui, maxRows: hud.length > 0 ? budget - hud.length : budget, working: true }) as unknown as Node;
-    const tree = atlasSlot(els, { band: band as never, gapRow: [], hud: hud.map((r) => rowOf(els, r, cols)), below: els.Box({ children: [] }) }) as unknown as Node;
+    const compact = hudCompactRows(hudIn, cols);
+    const cap = hudSlotCap(budget, compact, hudFloorRows(hudIn, cols, Date.now()), 1, true, true);
+    const full = hudLines(hudIn, { cols, maxRows: cap, ui, rich: false, now: Date.now() }).map((l): Segment[] => l.map((x) => ({ t: x.t })));
+    const hud = fitHudToBand(full, budget, (rows) => hudGapRows(hudListsAgents(rows as Segment[][]), rows.length, budget)) as Segment[][];
+    const gap = hudGapRows(hudListsAgents(hud), hud.length, budget);
+    const band = bandTree(els, { snapshot: snap, live: liveWorkers(snap, snap.now), gates: [], columns: cols, tick: 0, ui, maxRows: hud.length > 0 ? budget - hud.length - gap : budget, working: true }) as unknown as Node;
+    const blank = gap > 0 ? [rowOf(els, [{ t: ' '.repeat(cols) }], cols)] : [];
+    const tree = atlasSlot(els, { band: band as never, gapRow: blank, hud: hud.map((r) => rowOf(els, r, cols)), below: els.Box({ children: [] }) }) as unknown as Node;
     return rowsOf(tree);
   }
   const isBand = (row: string): boolean => row.includes(' ◆ ATLAS ') && !row.includes('▸');

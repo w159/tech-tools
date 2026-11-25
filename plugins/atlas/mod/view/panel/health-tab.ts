@@ -130,8 +130,7 @@ function runsSection(m: PanelModel, h: Health, room: number, used: number): Pane
   return [runsHeader(m, runs), BLANK, ...runsChart(m, h, chartH), BLANK, lastRunsRow(m, runs)];
 }
 
-/** `budget` is how many rows the figures may take: the RUNS chart is left out when it would not fit (the gates share the pane). */
-export function healthRows(m: PanelModel, room: number, budget = Infinity): PanelLine[] {
+export function healthRows(m: PanelModel, room: number): PanelLine[] {
   const h = m.health;
   if (!h) return [];
   const U = usable(m);
@@ -142,7 +141,6 @@ export function healthRows(m: PanelModel, room: number, budget = Infinity): Pane
     contextRow(m, h, U), BLANK,
     hookRow(m, h, sparkW), toolsRow(m, h, sparkW), denialsRow(m, h, sparkW), BLANK,
   ];
-  const runs = runsSection(m, h, room, rows.length);
-  if (rows.length + runs.length <= budget) rows.push(...runs);
+  rows.push(...runsSection(m, h, room, rows.length));
   return rows;
 }

@@ -161,7 +161,6 @@ export function panelModelOf(m: SidebarModel, ui: Ui = lookUi(), cols: number = 
     ...(m.motion ? { motion: m.motion } : {}),
     ...(m.run ? { run: m.run } : {}),
     ...(m.health ? { health: m.health } : {}),
-    ...(m.bored ? { bored: m.bored } : {}),
     ...((rd) => (rd ? { read: rd } : {}))(readInfoOf(m.clock)), // M6: the readers' own result (failed read, snapshot age), never a figure built here
     // Critique 19 C5: a kill, a blocked worker and a refused Stop are rows too, after the board's own notes (the store's facts, built the same on every render).
     ...(finishes.length ? { finishes } : {}),

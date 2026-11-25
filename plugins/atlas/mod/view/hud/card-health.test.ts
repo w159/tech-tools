@@ -116,7 +116,7 @@ describe('the run duration prints once across band, panel and transcript card', 
   type N = { kind: string; props: Record<string, any> };
   const kids = (n: N): N[] => { const c = n.props.children; return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x: unknown): x is N => typeof x === 'object' && x !== null); };
   const textOf = (n: N): string => (n.kind === 'Text' || typeof n.props.children === 'string' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
-  const handlers: BandHandlers = { openView() {}, toggleTodos() {} };
+  const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
   const doneSnap = (now: number): AtlasSnapshot => {
     const squad = [{ name: 'alpha-explorer', persona: 'explorer', state: 'finished', source: 'task' }] as SquadAgent[];
     const todos = [{ id: 't1', content: 'T1 read alpha.py', status: 'completed', owner: 'alpha-explorer' }];

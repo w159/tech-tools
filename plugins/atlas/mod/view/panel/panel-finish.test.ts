@@ -27,7 +27,7 @@ describe('2: no middle ellipsis on a name the panel owns', () => {
     test(`no tab has a middle cut at ${cols}`, () => {
       const gates = [{ id: 'g1', title: 'Completion gate', lines: [{ id: 'a', label: 'x', ok: false, fix: 'run the thing' }, { id: 'b', label: 'y', ok: true }] }, { id: 'g2', title: 'Dispatch required', lines: [{ id: 'c', label: 'z', ok: true }] }];
       const todos = [{ id: 'a', label: 'List the function names defined in alpha.py', state: 'running' as const, owner: 'implementer-board-with-long-name' }];
-      for (const t of ['route', 'team', 'channel', 'core'] as PanelTab[]) {
+      for (const t of ['route', 'team', 'channel', 'gates', 'core'] as PanelTab[]) {
         for (const l of body(t, cols, { workers, gates, todos })) expect(l).not.toMatch(MIDDLE);
       }
     });
@@ -67,7 +67,7 @@ describe('6: height and indent', () => {
   test('section headings sit under the strip, one cell in', () => {
     for (const l of body('core', 80).filter((x) => /^ ?(contract|verdicts)/.test(x))) expect(l.startsWith(' ')).toBe(true);
   });
-  for (const t of ['team', 'channel', 'route'] as PanelTab[]) {
+  for (const t of ['team', 'gates', 'channel', 'route'] as PanelTab[]) {
   }
 });
 

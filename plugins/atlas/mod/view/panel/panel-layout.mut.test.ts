@@ -47,14 +47,14 @@ describe('gates tab: the first fix or detail stays on the group row once it fits
   /** Every panel width draws the whole `tail`, on the group row or wrapped under it, and the group row holds it from `from` on. */
   const wholeAt = (g: unknown, title: string, tail: string, from: number): void => {
     for (let cols = 30; cols <= 160; cols++) {
-      const rows = bodyLines(panelWorld('core', cols, mocha, { gates: [g] as never })).map((l) => l.runs.map((x) => x.t).join(''));
+      const rows = bodyLines(panelWorld('gates', cols, mocha, { gates: [g] as never })).map((l) => l.runs.map((x) => x.t).join(''));
       expect([cols, rows.some((t) => t.includes(tail))]).toEqual([cols, true]);
       expect([cols, rows.some((t) => t.includes(title) && t.includes(tail))]).toEqual([cols, cols >= from]);
     }
   };
   test('a passing group never carries a check\'s detail: it stays with its own row (critique 6, label and value apart)', () => {
     for (let cols = 30; cols <= 160; cols++) {
-      const rows = bodyLines(panelWorld('core', cols, mocha, { gates: [passing] as never })).map((l) => l.runs.map((x) => x.t).join(''));
+      const rows = bodyLines(panelWorld('gates', cols, mocha, { gates: [passing] as never })).map((l) => l.runs.map((x) => x.t).join(''));
       expect([cols, rows.some((t) => t.includes('docs') && t.includes('all links'))]).toEqual([cols, false]);
     }
   });

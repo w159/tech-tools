@@ -38,9 +38,8 @@ describe('band mutation kills', () => {
     const base = liveWorkers(snapshot, NOW);
     const live = Array.from({ length: 9 }, (_, i) => ({ ...base[i % base.length]!, name: `w${i}`, state: 'working' as const }));
     const model = (maxRows?: number) => ({ snapshot, live, gates: [], columns: 120, tick: 0, maxRows, ui: mocha });
-    const spare12 = bandSpareRows(model(12)); // the band is the status row alone now: the reclaimable blanks are the budget the rows leave
-    expect(spare12).toBeGreaterThan(0);
-    expect(bandSpareRows(model(13))).toBe(spare12 + 1);
+    expect(bandSpareRows(model(12))).toBe(1);
+    expect(bandSpareRows(model(13))).toBe(2);
     expect(bandSpareRows(model())).toBe(bandSpareRows(model(12)));
     // bandTree takes the same default: it never draws more rows than the 12 budget
     expect((bandTree(els, model()) as unknown as Node).props.children.length).toBeLessThanOrEqual(12);

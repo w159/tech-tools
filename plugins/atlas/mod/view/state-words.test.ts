@@ -8,7 +8,7 @@ import type { AtlasSnapshot, SquadAgent, TodoItem } from '../contract';
 import * as runstate from '../data/runstate';
 import { liveWorkers, queuedMembers, resetWorkerFacts, workerFacts } from '../data/live';
 import { clipEvidence, ownTodos } from '../data/todos';
-import { hudAgents, hudLines, hudRows, isRunning, outcomeOf, type HudAgent, type HudInput } from './hud/hud';
+import { hudAgents, hudLines, isRunning, outcomeOf, type HudAgent, type HudInput } from './hud/hud';
 import { busySnap, NOW } from '../live_fixture';
 import { blockedText, STOP_REFUSED } from '../data/runstate';
 import { bandFrame, forgetBandFrame, noteBandFrame } from '../motion/motion';
@@ -66,9 +66,7 @@ function frameOf(sh: Shape, cols: number, screen: number, extra: Partial<BandMod
   const budget = Math.floor(screen / 2) - 4;
   const plan = composeSlot({ budget, hasSlot: true, hudOn: true, runOn: true, columns: cols, hudIn, hudView: { cols, tick: 3, ui, rich: false, now: snapshot.now }, running: agents.some(isRunning), agentsListed: agents.length > 0, orchestrated: true, now: snapshot.now, bandIn: bandIn as never, held: 0 } as never);
   const band = rowsOf(bandTree(els, plan.band, handlers) as unknown as Node)[0]!;
-  // The slot is the band alone now: the HUD rows are drawn straight from hudLines, the table the status tab reads.
-  const hud = hudRows(hudIn, { cols, tick: 3, ui, rich: false, now: snapshot.now, maxRows: Math.max(0, budget - 1), reserve: true, settled: true, ...(sh.working ? { working: true } : { idle: true }) }) as { t: string; bgHex?: string }[][];
-  return { band, hud: hud.map((r) => r.map((x) => x.t).join('')), hudSegs: hud as never, model: plan.band };
+  return { band, hud: plan.hud.map((r) => r.map((x) => x.t).join('')), hudSegs: plan.hud as never, model: plan.band };
 }
 
 const RUNNING: Shape = { working: true, agents: NAMES.map((name) => ({ name, squad: 'running', mood: 'working', tool: 'Read' })), plan: ['in_progress', 'in_progress', 'in_progress', 'pending', 'pending'] };

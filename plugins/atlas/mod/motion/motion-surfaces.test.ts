@@ -131,31 +131,31 @@ describe('Board rows', () => {
 });
 
 // ---- side panel: route tasks and gate rows ----------------------------------------------------------------------------------------
-const panelAt = (tab: 'route' | 'core', task: UiState, gateOk: boolean, m?: MotionCtx): PanelModel => {
+const panelAt = (tab: 'route' | 'gates', task: UiState, gateOk: boolean, m?: MotionCtx): PanelModel => {
   const base = panelWorld(tab, 120, ui);
   return {
     ...base, motion: m,
     todos: base.todos.map((t, i) => (i === 2 ? { ...t, state: task } : t)),
     gates: base.gates.map((g, gi) => (gi === 0 ? { ...g, lines: g.lines.map((l, li) => (li === 0 ? { ...l, ok: gateOk } : l)) } : g)),
-    expanded: tab === 'core' ? `group:${base.gates[0]!.id}` : null,
+    expanded: tab === 'gates' ? `group:${base.gates[0]!.id}` : null,
   };
 };
 describe('side panel rows', () => {
   check({
     name: 'route task row', surface: 'panel',
-    before: () => panelMotionItems(panelAt('route', 'queued', true)), after: () => panelMotionItems(panelAt('route', 'running', true)), // a done row leaves the status tab (`N done`), so the visible change is queued to running
-    render: (m) => bodyLines(panelAt('route', 'running', true, m)).map((l) => l.runs),
+    before: () => panelMotionItems(panelAt('route', 'running', true)), after: () => panelMotionItems(panelAt('route', 'done', true)),
+    render: (m) => bodyLines(panelAt('route', 'done', true, m)).map((l) => l.runs),
   });
   check({
     name: 'gate row', surface: 'panel',
-    before: () => panelMotionItems(panelAt('core', 'running', false)), after: () => panelMotionItems(panelAt('core', 'running', true)),
-    render: (m) => bodyLines(panelAt('core', 'running', true, m)).map((l) => l.runs),
+    before: () => panelMotionItems(panelAt('gates', 'running', false)), after: () => panelMotionItems(panelAt('gates', 'running', true)),
+    render: (m) => bodyLines(panelAt('gates', 'running', true, m)).map((l) => l.runs),
   });
   check({
     name: 'team worker row', surface: 'panel',
-    before: () => panelMotionItems({ ...panelAt('route', 'running', true), workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'queued' as UiState } : w)) }),
-    after: () => panelMotionItems({ ...panelAt('route', 'running', true), workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'running' as UiState } : w)) }),
-    render: (m) => bodyLines({ ...panelWorld('team', 120, ui), motion: m, workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'running' as UiState } : w)) }).map((l) => l.runs),
+    before: () => panelMotionItems({ ...panelAt('route', 'running', true), workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'running' as UiState } : w)) }),
+    after: () => panelMotionItems({ ...panelAt('route', 'running', true), workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'done' as UiState } : w)) }),
+    render: (m) => bodyLines({ ...panelWorld('team', 120, ui), motion: m, workers: panelWorld('team', 120, ui).workers.map((w, i) => (i === 0 ? { ...w, state: 'done' as UiState } : w)) }).map((l) => l.runs),
   });
 });
 

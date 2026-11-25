@@ -42,15 +42,15 @@ describe('side panel design goldens', () => {
 });
 
 describe('tab strip', () => {
-  test('lists status health channel bored by name; the lit tab is the filled chip with an accent segment on the rule', () => {
+  test('lists health status gates channel by name; the lit tab is the filled chip with an accent segment on the rule', () => {
     for (const t of tabs) {
       const [strip, rule] = headerRows(panelWorld(t, 120, mocha)).slice(2, 4);
-      expect(lineText(strip!).trim().replace(/ +/g, ' ').replace(/ \d/g, '')).toBe('status health channel bored');
+      expect(lineText(strip!).trim().replace(/ +/g, ' ').replace(/ \d/g, '')).toBe('health status gates channel');
       const lit = strip!.runs.find((x) => x.bold && x.bg === 'accent')!;
       expect(lit.t.trim()).toBe(PANEL_TABS.find((x) => x.id === t)!.label);
       expect(lineText(rule!)).toMatch(/━/);
     }
-    expect(STRIP_TABS.map((t) => t.label)).toEqual(['status', 'health', 'channel', 'bored']);
+    expect(STRIP_TABS.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'channel']);
   });
   test('L21: one strip row at every width from 29 to 140, never wider than the pane; from 34 the closed set and the `more ›` set together hold every tab, in order', () => {
     const words = (m: ReturnType<typeof panelWorld>): string[] => tabRows(m).map(lineText).join(' ').split(/\s+/).filter((w) => w && !/^\d+$/.test(w) && !['▸', '›', 'more', '‹', 'back'].includes(w));
@@ -60,7 +60,7 @@ describe('tab strip', () => {
       expect([closed.length, open.length]).toEqual([1, 1]);
       for (const l of [...closed, ...open]) expect(cells(lineText(l))).toBeLessThanOrEqual(cols);
       const said = (cols >= 40 ? words(panelWorld('route', cols, mocha, {})) : [...words(panelWorld('route', cols, mocha, {})), ...words(panelWorld('route', cols, mocha, { expanded: MORE_KEY }))]).map((w) => (w === 'chan' ? 'channel' : w));
-      if (cols >= 34) expect(said).toEqual(['status', 'health', 'channel', 'bored']); // names only, in order (the short `chan` where the whole words do not fit with their counts)
+      if (cols >= 34) expect(said).toEqual(['health', 'status', 'gates', 'channel']); // names only, in order (the short `chan` where the whole words do not fit with their counts)
     }
   });
 });
@@ -93,17 +93,14 @@ describe('route tab (the status tab)', () => {
     expect(text).toContain('no agents yet');
   });
   test('an open task row shows its evidence line', () => {
-    const open = { id: 'd1', label: 'wire it', state: 'running' as const, evidence: 'tests green' }; // a done task leaves the list, so the open row is a running one
-    expect(rows('route', 100, { todos: [open], expanded: 'task:d1' }).join('\n')).toContain('tests green');
+    const done = { id: 'd1', label: 'wire it', state: 'done' as const, evidence: 'tests green' };
+    expect(rows('route', 100, { todos: [done], expanded: 'task:d1' }).join('\n')).toContain('tests green');
   });
-  test('critique 22: a done task leaves the list (one `1 done` line keeps the count, the plan still reads 1 of 2) and nothing is struck through', () => {
+  test('critique 22: a done task title is dim in the panel and never struck through (the HUD draws no strikethrough)', () => {
     const todos = [{ id: 'd1', label: 'read alpha.py', state: 'done' as const }, { id: 'q1', label: 'read gamma.py', state: 'queued' as const }];
     const runs = bodyLines(panelWorld('route', 100, mocha, { todos })).flatMap((l) => l.runs);
     expect(runs.filter((x) => x.strike)).toEqual([]);
-    expect(runs.find((x) => x.t.includes('read alpha.py'))).toBeUndefined();
-    const text = rows('route', 100, { todos, workers: [] }).join('\n');
-    expect(text).toContain('1 of 2');
-    expect(text).toMatch(/^ +1 done$/m);
+    expect(runs.find((x) => x.t.includes('read alpha.py'))?.tone).toBe('muted');
   });
   test('a plan longer than the row budget folds into a counted more row', () => {
     const many = Array.from({ length: 30 }, (_, i) => ({ id: `m${i}`, label: `task ${i}`, state: 'queued' as const }));
@@ -120,18 +117,15 @@ describe('the TEAM section lists the subagents by name and state', () => {
   };
   test('every worker row names the worker and shows its state mark; the tally carries the six state words', () => {
     const body = teamRows();
-    const live = world.workers.filter((w) => w.state !== 'done'); // a finished worker leaves the list: it is counted in the `N done` line
-    expect(body).toHaveLength(live.length);
+    expect(body).toHaveLength(world.workers.length);
     const marks: Record<string, string> = { running: '◐', done: '✓', failed: '✗', queued: '○', waiting: '◉', blocked: '▲' };
-    for (const w of live) {
+    for (const w of world.workers) {
       const row = body.find((l) => new RegExp(`^▸ \\S ${w.name} `).test(l))!;
       expect(row).toContain(marks[w.state]!);
       expect(UI_STATES).toContain(w.state);
     }
     const head = rows('team', 80, { rows: 40 }).find((l) => l.includes('TEAM'))!;
-    for (const s of ['running', 'failed', 'queued']) expect(head).toContain(s);
-    expect(head).not.toContain('done');
-    expect(rows('team', 80, { rows: 40 }).some((l) => /^ +\d+ done$/.test(l))).toBe(true);
+    for (const s of ['running', 'done', 'failed', 'queued']) expect(head).toContain(s);
   });
   test('the recipient takes the focus marker; without one the first running worker does', () => {
     const marked = (r: string | null): string[] => bodyLines(panelWorld('team', 80, mocha, { recipient: r })).filter((l) => l.press?.kind === 'worker' && l.runs[0]?.bold).map(lineText);
@@ -161,20 +155,20 @@ describe('the TEAM section lists the subagents by name and state', () => {
   });
 });
 
-describe('gates section of the health tab (the gates tab is gone)', () => {
+describe('gates tab', () => {
   const long = 'the completion gate found that verification coverage is missing for the changed modules and the docs tree';
   // fix1728: a completion line is pending until a Stop refuses; the refused Stop (a record, never a gate row) keeps these lines real failures
   const STOP = { id: 'stop-verdict', label: 'Last Stop blocked', ok: true, detail: 'verification coverage' };
   const base = [{ id: 'verify', label: 'verification coverage', ok: false, detail: 'no verified finding', fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }];
   const g = (over: { lines?: PanelGateLine[] } = {}) => [{ id: 'completion', title: 'Completion gate', ...over, lines: [...(over.lines ?? base), STOP] }];
   test('fix1728: no Stop refused, the group has no denial: its lines are neither red nor counted denied', () => {
-    const out = rows('core', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base.map((l) => ({ ...l, ok: true, pending: l.id === 'verify' })) }] });
+    const out = rows('gates', 100, { gates: [{ id: 'completion', title: 'Completion gate', lines: base.map((l) => ({ ...l, ok: true, pending: l.id === 'verify' })) }] });
     expect(out.join('\n')).not.toMatch(/✗ [a-z]/i);
     expect(out.find((l) => l.includes('GATES'))).toMatch(/✓ 1 +✗ 0$/); // the pending line is neither passed nor denied
     expect(out.join('\n')).toContain('○ verification');
   });
   test('a failing line is a card: its label, its reason and the first fix; the header counts it as denied', () => {
-    const out = rows('core', 100, { gates: g() });
+    const out = rows('gates', 100, { gates: g() });
     expect(out.find((l) => l.includes('GATES'))).toMatch(/✓ 1 +✗ 1$/);
     const at = out.findIndex((l) => l.includes('DENIED'));
     expect(out[at + 2]).toContain('verification coverage');
@@ -182,23 +176,23 @@ describe('gates section of the health tab (the gates tab is gone)', () => {
     expect(out[at + 4]).toBe(' ▌ fix  run the hooks suite');
   });
   test('D8: a long tail wraps onto rows and is never cut mid-word', () => {
-    const out = rows('core', 40, { gates: g({ lines: [{ id: 'verify', label: 'verify', ok: false, detail: long }] }) });
+    const out = rows('gates', 40, { gates: g({ lines: [{ id: 'verify', label: 'verify', ok: false, detail: long }] }) });
     expect(out.join(' ')).toContain('verification coverage');
     expect(out.join(' ').replace(/ ▌ /g, ' ').replace(/\s+/g, ' ')).toContain('docs tree');
     expect(out.every((l) => cells(l) <= 40)).toBe(true);
   });
   test('a failing line shows the fix and copies it on a second press', () => {
-    const open = bodyLines(panelWorld('core', 100, mocha, { gates: g() })).filter((l) => l.press);
+    const open = bodyLines(panelWorld('gates', 100, mocha, { gates: g() })).filter((l) => l.press);
     expect(open).toHaveLength(1);
     expect(open[0]!.press!.copy).toBe('run the hooks suite');
     expect(lineText(open[0]!)).toContain('fix  run the hooks suite');
     expect(open[0]!.runs[0]!.t).toBe(' '); // the fix row carries no chevron: its rule stays aligned
   });
   test('an unavailable source says so', () => {
-    expect(rows('core', 100, { gates: [{ id: 'header', title: 'Header contract', lines: [], error: 'findings.json unreadable' }] }).join('\n')).toContain('unavailable: findings.json unreadable');
+    expect(rows('gates', 100, { gates: [{ id: 'header', title: 'Header contract', lines: [], error: 'findings.json unreadable' }] }).join('\n')).toContain('unavailable: findings.json unreadable');
   });
   test('no gate data is the design empty state', () => {
-    expect(rows('core', 100, { gates: [] }).join('\n')).toContain('no gates reported yet');
+    expect(rows('gates', 100, { gates: [] }).join('\n')).toContain('no gates reported yet');
   });
 });
 
@@ -255,18 +249,18 @@ describe('core tab (the health tab: the old core rows sit under CORE)', () => {
   test('B3: the gates figure is `N denied` in the strip badge and the gates tab header counts denials, never a ratio', () => {
     const gates = [{ id: 'lint', title: 'Lint', lines: [{ id: 'l1', label: 'style', ok: true }] }, { id: 'doctor', title: 'Doctor', lines: [{ id: 'd1', label: 'x', ok: false }, { id: 'd2', label: 'y', ok: true }] }];
     for (const cols of [150, 110, 80]) {
-      const gatesTab = rows('core', cols, { gates }).join('\n');
+      const gatesTab = rows('gates', cols, { gates }).join('\n');
       expect([cols, gatesTab]).toEqual([cols, expect.stringMatching(/GATES +this run +✓ 2 +✗ 1/)]);
       expect(gatesTab).not.toMatch(/\d+ of \d+ green|\d+\/\d+ green/);
-      expect(rows('route', cols, { gates })[2]).toMatch(/health {2}1 /); // the strip badge: the one denial
+      expect(rows('route', cols, { gates })[2]).toMatch(/gates {2}1 /); // the strip badge: the one denial
     }
   });
   test('B2: a drifted dispatch route makes the routing line fail on the gates tab, the verdict the core row states', () => {
     const c = JSON.parse(JSON.stringify(core)) as CoreModel;
     c.routes = [{ teamId: 'in-process:audit/low', name: 'in-process', cls: 'audit', effort: 'low', isolation: '', maxParallel: 3, drift: ['explorer ran 3, seat plans 1'], transport: 'in-process', seats: [{ role: 'explorer', count: 1, model: 'haiku', effort: 'low', ran: ['haiku', 'haiku', 'haiku'] }] }];
     const gates = [{ id: 'routing', title: 'Tool routing', lines: [{ id: 'native-Read', label: 'Native Read calls', ok: true }] }];
-    expect(rows('core', 150, { gates, core: { ...c, routes: [] } }).join('\n')).not.toContain('DENIED\n ▌');
-    const out = rows('core', 150, { gates, core: c }).join('\n');
+    expect(rows('gates', 150, { gates, core: { ...c, routes: [] } }).join('\n')).not.toContain('DENIED\n ▌');
+    const out = rows('gates', 150, { gates, core: c }).join('\n');
     expect(out).toContain('Dispatches followed the plan');
     expect(out).toContain('3 explorers ran, the plan said 1'); // the line's detail is the core row's own sentence
     expect(rows('core', 150, { core: c }).join('\n')).toContain('3 explorers ran, the plan said 1'); // the same sentence, once
@@ -284,7 +278,7 @@ describe('core tab (the health tab: the old core rows sit under CORE)', () => {
     expect(open).toContain('evidence:');
   });
   test('no core data is the design empty state', () => {
-    expect(rows('core', 120, { core: null, gates: [] }).join('\n')).toContain('no gates reported yet');
+    expect(rows('core', 120, { core: null }).at(-1)).toBe(' '.repeat(43) + 'no verdicts, workers or gates yet');
   });
 });
 
@@ -324,7 +318,7 @@ describe('shared invariants', () => {
     const route = rows('route', 120).join('\n');
     expect(route).toContain('3 of 7');
     expect(route).toMatch(/1 running/);
-    expect(rows('route', 120)[2]).toMatch(/health {2}1 /); // the denial badge
+    expect(rows('route', 120)[2]).toMatch(/gates {2}1 /); // the denial badge
     for (const l of rows('route', 120).slice(0, 9).filter((x, i) => i !== 2)) expect(l.replace(/\d+ of \d+|\d+\/\d+/g, '')).not.toMatch(/(^|\s)\d+$/); // no bare number ends a row (the strip's badges are the one count a tab word carries)
   });
   test('the latte theme changes tones only, never text', () => {
@@ -381,10 +375,9 @@ describe('the status tab names the running agents (live round2: `agents ◐ 3 ru
   });
   test('finished and parked agents are counted in the tally, and listed with their own mark', () => {
     const text = rows('route', 80, { todos: plan, workers: [...running, { name: 'delta-explorer', state: 'done' as const, detail: 'finished' }, { name: 'eps-explorer', state: 'queued' as const, detail: 'parked' }], rows: 40 }).join('\n');
-    expect(text).not.toMatch(/delta-explorer/); // the finished agent leaves the list
+    expect(text).toMatch(/✓ delta-explorer/);
     expect(text).toMatch(/○ eps-explorer/);
-    expect(text).toMatch(/TEAM .*3 running.*1 queued/);
-    expect(text).toMatch(/^ +1 done$/m); // and is counted once, on the `N done` line
+    expect(text).toMatch(/TEAM .*3 running.*1 queued.*1 done|TEAM .*3 running.*1 done.*1 queued/);
   });
   test('a long group folds into `+N more`, and a failed agent reads failed', () => {
     const many = Array.from({ length: 8 }, (_, i) => ({ name: `w${i}-explorer`, state: i === 0 ? ('failed' as const) : ('running' as const), detail: 'x' }));
@@ -398,9 +391,9 @@ describe('the status tab names the running agents (live round2: `agents ◐ 3 ru
 describe('critique 12 A2: a title that names its owner keeps the owner whole and prints it once', () => {
   // live-110-8271cfc8-2/tab-route.png: `T1 read ... done  alpha-explorer`; live-150-8271cfc8-1 mod-todo_tree.png: `T1 read alpha.py (alpha-e... done  alpha-explorer`
   const plan = [
-    { id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'running' as const, owner: 'alpha-explorer' },
-    { id: 'T2', label: 'T2 read beta.py (beta-explorer)', state: 'queued' as const, owner: 'beta-explorer' },
-    { id: 'T4', label: 'T4 combine the three reports', state: 'queued' as const },
+    { id: 'T1', label: 'T1 read alpha.py (alpha-explorer)', state: 'done' as const, owner: 'alpha-explorer' },
+    { id: 'T2', label: 'T2 read beta.py (beta-explorer)', state: 'done' as const, owner: 'beta-explorer' },
+    { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const },
   ];
   const taskRows = (cols: number): string[] => rows('route', cols, { todos: plan, workers: [] }).filter((l) => /\bT\d /.test(l));
   test('at 55 columns every title shows whole', () => {
@@ -421,7 +414,7 @@ describe('critique 12 A2: a title that names its owner keeps the owner whole and
     expect(all.filter((l) => /\bT\d /.test(l))).toHaveLength(plan.length); // one row per task
   });
   test('a row whose title does not name its owner keeps the owner column; one that does never prints it twice, at any width', () => {
-    const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'queued' as const, owner: 'lead-agent' }];
+    const mixed = [...plan.slice(0, 1), { id: 'T4', label: 'T4 combine the three reports', state: 'done' as const, owner: 'lead-agent' }];
     for (const cols of [120, 80, 55]) {
       const out = rows('route', cols, { todos: mixed, workers: [] }).filter((l) => /\bT\d /.test(l));
       expect(out[0]!.match(/alpha-explorer/g)).toHaveLength(1);

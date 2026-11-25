@@ -23,7 +23,7 @@ describe('A4: route rows at the 110-column pane', () => {
   for (const cols of [37, 38, 43]) {
   }
   test('a pane with room keeps one row per task (nothing moves to a second row)', () => {
-    const rows = route(80, LIVE.map((t) => ({ ...t, state: 'queued' as const }))); // done rows leave the status tab, so the rows that stay are open ones
+    const rows = route(80);
     expect(rows.filter((r) => /T\d /.test(r))).toHaveLength(5);
     expect(rows.filter((r) => /^\s+done\s*$/.test(r))).toHaveLength(0);
   });

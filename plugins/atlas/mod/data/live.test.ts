@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing';
 import { busySnap, NOW } from '../live_fixture';
-import { activeCount, callBuckets, liveState, liveWorkers, notifiedEnds, queuedMembers,workerStates, workerWord, withOwnerStates } from './live';
+import { activeCount, callBuckets, liveState, liveWorkers, queuedMembers, workerStates, workerWord, withOwnerStates } from './live';
 
 test('liveWorkers orders blocked, failed, working, done and drops the lead', () => {
   const s = busySnap();
@@ -108,12 +108,6 @@ test('queuedMembers: a member whose agent_id matches a host row is listed under 
 test('withOwnerStates attaches the owner state to the items whose owner is a listed worker or a queued member', () => {
   const states = new Map([['a-1', 'failed' as const]]);
   expect(withOwnerStates([{ owner: 'a-1', id: 1 }, { owner: 'you', id: 2 }, { id: 3 }], states)).toEqual([{ owner: 'a-1', id: 1, ownerState: 'failed' }, { owner: 'you', id: 2 }, { id: 3 }]);
-});
-
-test('notifiedEnds: each task-notification names its worker; completed reads done, killed reads failed', () => {
-  const note = (id: string, status: string) => `<task-notification>\n<task-id>${id}</task-id>\n<tool-use-id>t1</tool-use-id>\n<status>${status}</status>\n</task-notification>`;
-  expect(notifiedEnds(`${note('gamma-explorer', 'completed')}\n${note('runner-1', 'killed')}`)).toEqual([{ id: 'gamma-explorer', outcome: 'done' }, { id: 'runner-1', outcome: 'failed' }]);
-  expect(notifiedEnds('no notification here')).toEqual([]);
 });
 
 test('callBuckets: 12 slots of 5s by default, oldest first, edges and out-of-range', () => {

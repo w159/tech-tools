@@ -25,10 +25,9 @@ describe('team rows from the live snapshot', () => {
   test('the workers follow the tally with their state mark and the tally closes the head', () => {
     const s = world({ squad: [sq('a', 'running'), sq('b', 'finished')], activity: { a: act({ mood: 'working', tool: 'Grep', toolCount: 2 }) } as never });
     const out = teamSection(team(s, 80));
-    expect(out[0]).toMatch(/^ TEAM +◐ 1 running$/);
+    expect(out[0]).toMatch(/^ TEAM +◐ 1 running +✓ 1 done$/);
     expect(out.some((l) => /^▸ [◐◓◑◒] a +runner +/.test(l))).toBe(true);
-    expect(out.some((l) => /^▸ ✓ b /.test(l))).toBe(false); // the finished worker is not a row
-    expect(out.some((l) => /^ +\d+ done$/.test(l))).toBe(true); // it is counted on the `N done` line
+    expect(out.some((l) => /^▸ ✓ b +runner +/.test(l))).toBe(true);
   });
   test('a roster member the squad does not know reads queued', () => {
     const out = teamSection(team(world({ members: [{ name: 'leader' }] }), 80));
@@ -67,14 +66,14 @@ describe('channel tab from the live snapshot', () => {
     expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead'), note(3, 'a'), note(4, 'b')] as never }))[0]).toMatch(/^ #chat +● 3 online$/);
     expect(chan(world({ channel: 'chat', notes: [note(1, 'a'), note(2, 'lead')] as never }))[0]).toMatch(/^ #chat +● 2 online$/);
   });
-  test('a missing channel name reads #channel; a note with a bad timestamp reads --:--:--; a good one reads hh:mm:ss', () => {
+  test('a missing channel name reads #channel; a note with a bad timestamp reads --:--; a good one reads hh:mm', () => {
     const out = chan(world({ channel: undefined as never, notes: [note(1, 'a', { ts: 'not a time' }), note(2, 'b')] as never }));
     expect(out[0]).toMatch(/^ #channel /);
     const a = out.findIndex((l) => /^ ◆ a /.test(l));
-    expect(out[a]).toMatch(/^ ◆ a +--:--:--$/); // the time is the right-aligned value column
+    expect(out[a]).toMatch(/^ ◆ a +crew +--:--$/); // the time is the right-aligned value column
     expect(out[a + 1]).toBe('   note 1');
     const b = out.findIndex((l) => /^ ◆ b /.test(l));
-    expect(out[b]).toMatch(/^ ◆ b +10:02:\d\d$/);
+    expect(out[b]).toMatch(/^ ◆ b +crew +10:02$/);
     expect(out[b + 1]).toBe('   note 2');
   });
 });
@@ -82,7 +81,7 @@ describe('channel tab from the live snapshot', () => {
 describe('gate text', () => {
   test('a 17-hex agent id in a gate label, detail, fix or error shows its first 6 characters', () => {
     const id = '0123456789abcdef0';
-    const text = (g: unknown): string => panelText(panelModelOf(model(world(), { gates: [g] as never, ui: { recipient: null, expanded: 'gate:l', draft: '', view: 'core' } as never }, 'core'), ui, 120)).join('\n');
+    const text = (g: unknown): string => panelText(panelModelOf(model(world(), { gates: [g] as never, ui: { recipient: null, expanded: 'gate:l', draft: '', view: 'gates' } as never }, 'gates'), ui, 120)).join('\n');
     const lines = text({ id: 'g', title: `Gate ${id}`, lines: [{ id: 'l', label: `lbl ${id}`, ok: false, detail: `det ${id}`, fix: `fix ${id}` }] });
     const err = text({ id: 'g', title: `Gate ${id}`, error: `broke ${id}`, lines: [] });
     expect(lines + err).not.toContain(id);
@@ -92,7 +91,7 @@ describe('gate text', () => {
   });
   test('a 16-hex or 18-hex run is left alone', () => {
     const gates = [{ id: 'g', title: 'g', lines: [{ id: 'l', label: 'G 0123456789abcdef', ok: true }] }, { id: 'h', title: 'h', lines: [{ id: 'm', label: 'H 0123456789abcdef01', ok: true }] }]; // short names: the grid cuts a long one at its end
-    const text = panelText(panelModelOf(model(world(), { gates: gates as never }, 'core'), ui, 120)).join('\n');
+    const text = panelText(panelModelOf(model(world(), { gates: gates as never }, 'gates'), ui, 120)).join('\n');
     expect(text).toContain('G 0123456789abcdef');
     expect(text).toContain('H 0123456789abcdef01');
   });

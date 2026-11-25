@@ -35,7 +35,7 @@ describe('sidebar board tab', () => {
   test('critique 15 B5 (L19, round W M): the board shows the same ATLAS header as every other view, with no tab lit, and no second BOARD title row follows', () => {
     const rows = board(many);
     expect(rows[0]).toContain('ATLAS');
-    expect(rows[2]).toMatch(/status +health +channel +bored/); expect(rows[3]).not.toContain('━'); // the board is no tab of the strip: no chip is lit over it
+    expect(rows[2]).toMatch(/health +status +gates +channel/); expect(rows[3]).not.toContain('━'); // the board is no tab of the strip: no chip is lit over it
     expect(rows[0]).not.toContain('12 items'); // the count is said once, by the summary row (critique 22)
     expect(rows.join('\n').match(/12 items/g)!.length).toBe(1);
     expect(rows[0]).toContain('◆ ATLAS'); // the one header, the same on every view

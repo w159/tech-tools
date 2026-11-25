@@ -13,7 +13,7 @@ const gates: PanelGate[] = [
   { id: 'dispatch', title: 'Dispatch tripwire', lines: [{ id: 'name', label: 'named dispatch', ok: true }, { id: 'scope', label: 'scope declared', ok: true }] },
   { id: 'header', title: 'Header contract', lines: [{ id: 'header-matched', label: 'header matched', ok: true, detail: '8 of 8' }] },
 ];
-const body = (cols: number, over: Partial<PanelModel> = {}) => bodyLines(panelWorld('core', cols, ui, { rows: 40, gates, ...over }));
+const body = (cols: number, over: Partial<PanelModel> = {}) => bodyLines(panelWorld('gates', cols, ui, { rows: 40, gates, ...over }));
 
 describe('C2: gates grouped by check', () => {
   for (const cols of [38, 49, 80]) {

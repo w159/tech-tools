@@ -1,4 +1,4 @@
-// The redesigned side panel (mock.html `side`, `chat`): tabs status / health / channel / bored, the header pill, and the four tab bodies (the gates content sits under the health tab).
+// The redesigned side panel (mock.html `side`, `chat`): tabs health / status / gates / channel, the header pill, and the four tab bodies.
 // Truths kept from the old panel tests (state words in the tally, counts, which agent owns which row, frozen clocks, whole phase names, no cell wider than the pane) are asserted here against the new shape.
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
@@ -19,14 +19,14 @@ const HEALTH: Health = {
 const run = { kind: 'working' as const, secs: 5, startMs: 0, frame: 0 };
 const live = (tab: PanelTab, cols = 62, over: Partial<PanelModel> = {}, ui: Ui = mocha): PanelModel => panelWorld(tab, cols, ui, { rows: 40, run, health: HEALTH, ...over });
 
-describe('the strip: status health channel bored', () => {
+describe('the strip: health status gates channel', () => {
   test('the four tabs, in this order, whole words; no team, core or board', () => {
-    expect(PANEL_TABS.map((t) => t.label)).toEqual(['status', 'health', 'channel', 'bored']);
-    expect(STRIP_TABS.map((t) => t.label)).toEqual(['status', 'health', 'channel', 'bored']);
-    expect(lineText(tabRows(live('route'))[0]!).trim().replace(/ +/g, ' ')).toBe('status health 1 channel 2 bored'); // the world's one denied gate (the badge sits on health, where the gates live), two unread notes
+    expect(PANEL_TABS.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'channel']);
+    expect(STRIP_TABS.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'channel']);
+    expect(lineText(tabRows(live('route'))[0]!).trim().replace(/ +/g, ' ')).toBe('health status gates 1 channel 2'); // the world's one denied gate, two unread notes
   });
   test('the lit tab is a filled accent chip, with an accent segment on the rule below it', () => {
-    for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
+    for (const tab of ['core', 'route', 'gates', 'channel'] as PanelTab[]) {
       const m = live(tab);
       const lit = tabRows(m)[0]!.runs.find((x) => x.bg === 'accent');
       expect(lit?.bold).toBe(true);
@@ -37,7 +37,7 @@ describe('the strip: status health channel bored', () => {
       expect(lineText(rule).indexOf('━')).toBe(lineText(tabRows(m)[0]!).indexOf(lit!.t));
     }
   });
-  test('health carries its denial count in red, channel its unread count in the accent', () => {
+  test('gates carries its denial count in red, channel its unread count in the accent', () => {
     const runs = tabRows(live('route'))[0]!.runs;
     expect(runs.find((x) => x.t === ' 1' && x.tone === 'bad')).toBeTruthy();
     expect(runs.find((x) => x.t === ' 2' && x.tone === 'accent')).toBeTruthy();
@@ -51,11 +51,11 @@ describe('the strip: status health channel bored', () => {
       expect(cells(lineText(tabRule(live('route', cols))))).toBeLessThanOrEqual(cols);
       const f = stripLayout(cols, 'route');
       const shown = [...f.rows[0]!.map((t) => t.id), ...f.folded.map((t) => t.id)];
-      expect(shown).toEqual(['route', 'core', 'channel', 'bored'].filter((t) => shown.includes(t as never)));
+      expect(shown).toEqual(['core', 'route', 'gates', 'channel'].filter((t) => shown.includes(t as never)));
     }
-    expect(stripLayout(40, 'route').rows[0]!.map((t) => t.label)).toEqual(['status', 'health', 'channel', 'bored']);
+    expect(stripLayout(40, 'route').rows[0]!.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'channel']);
     expect(stripLayout(37, 'route').more).toBe(false);
-    expect(stripLayout(37, 'route').rows[0]!.map((t) => t.label)).toEqual(['status', 'health', 'chan', 'bored']); // the short label where the whole words do not fit
+    expect(stripLayout(37, 'route').rows[0]!.map((t) => t.label)).toEqual(['health', 'status', 'gates', 'chan']); // the short label where the whole words do not fit
     expect(stripLayout(30, 'route').more).toBe(true);
   });
   test('the header: the ATLAS pill, project · branch dim, the version flush right; four rows above the body', () => {
@@ -69,7 +69,7 @@ describe('the strip: status health channel bored', () => {
     expect(head!.runs.find((x) => x.t.includes('ATLAS'))?.bg).toBe('accent');
   });
   test('ascii and no colour: every glyph has an ascii form', () => {
-    for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
+    for (const tab of ['core', 'route', 'gates', 'channel'] as PanelTab[]) {
       const rows = panelText(live(tab, 62, {}, plain));
       expect(rows.join('\n')).not.toMatch(/[✓✗●○◐◓◑◒◉▰▱━─│╭╮╰╯▌↳⇢•›…▇┤└]/);
       for (const r of rows) expect(cells(r)).toBeLessThanOrEqual(62);
@@ -107,7 +107,7 @@ describe('status', () => {
     expect(rows.join('\n')).toContain('failed · tests red 3'); // a failed row says why under it
   });
   test('PLAN: a title naming its owner keeps the owner whole when it is cut', () => {
-    const todos = [{ id: 't1', label: 'T1 read alpha.py (alpha-explorer)', state: 'running' as const }];
+    const todos = [{ id: 't1', label: 'T1 read alpha.py (alpha-explorer)', state: 'done' as const }];
     for (const cols of [37, 43]) expect(body(live('route', cols, { todos, workers: [] })).join('\n')).toContain('(alpha-explorer)');
   });
   test('PLAN: the owner is one column, the time flush right, nothing runs into the next column', () => {
@@ -121,8 +121,7 @@ describe('status', () => {
     const rows = body(live('route', 80));
     const head = rows.find((l) => l.includes('TEAM'))!;
     expect(head).toContain('1 running');
-    expect(head).not.toContain('done'); // finished agents leave the list and the tally: one `N done` line below keeps the count
-    expect(rows.some((l) => /^ +\d+ done$/.test(l))).toBe(true);
+    expect(head).toContain('2 done');
     expect(head).toContain('1 failed');
     expect(head).toContain('1 queued');
     const a = rows.find((l) => l.includes('implementer-band') && l.includes('read runs.ts'))!;
@@ -191,21 +190,20 @@ describe('health', () => {
   });
 });
 
-describe('health: the gates section', () => {
+describe('gates', () => {
   const gates = [
     { id: 'tripwire', title: 'tripwire', lines: [{ id: 't', label: 'team', ok: false, detail: 'Working dispatches run as a tmux team.', fix: 'atlas_mux.py spawn-team --class fix' }, { id: 'n', label: 'name', ok: true }] },
     { id: 'routing', title: 'routing', lines: [{ id: 's', label: 'scope', ok: true }, { id: 'r', label: 'recall', ok: true }] },
   ];
   test('the header counts what passed and what was denied; the grid lists every gate with its mark', () => {
-    const rows = body(live('core', 62, { gates }));
-    const gi = rows.findIndex((l) => l.includes('GATES'));
-    expect(rows[gi]).toMatch(/GATES +this run +✓ 3 +✗ 1$/);
-    const grid = rows.slice(gi + 2, gi + 4).join(' ');
+    const rows = body(live('gates', 62, { gates }));
+    expect(rows[0]).toMatch(/GATES +this run +✓ 3 +✗ 1$/);
+    const grid = rows.slice(2, 4).join(' ');
     for (const g of ['team', 'name', 'scope', 'recall']) expect(grid).toContain(g);
-    expect(rows[gi + 2]).toMatch(/^ {2}✗ team +✓ name +✓ scope +✓ recall$/);
+    expect(rows[2]).toMatch(/^ {2}✗ team +✓ name +✓ scope +✓ recall$/);
   });
   test('a DENIED card: red rule, code, reason, `fix` in cyan, the denial age flush right', () => {
-    const m = live('core', 62, { gates });
+    const m = live('gates', 62, { gates });
     const rows = body(m);
     const at = rows.findIndex((l) => l.includes('DENIED'));
     expect(rows[at + 2]).toMatch(/^ ▌ team +2m ago$/);
@@ -216,17 +214,17 @@ describe('health: the gates section', () => {
     expect(bodyLines(m).flatMap((l) => l.runs).find((x) => x.t === 'team' && x.tone === 'bad')?.bold).toBe(true);
   });
   test('nothing denied: the card list says so', () => {
-    expect(body(live('core', 62, { gates: [gates[1]!] })).join('\n')).toContain('nothing denied');
+    expect(body(live('gates', 62, { gates: [gates[1]!] })).join('\n')).toContain('nothing denied');
   });
   test('the TIMELINE: a tick per bucket that saw checks, the bucket of the last denial marked', () => {
-    const rows = body(live('core', 62, { gates }));
+    const rows = body(live('gates', 62, { gates }));
     const at = rows.findIndex((l) => l.includes('TIMELINE'));
     expect(rows[at + 1]).toMatch(/^ {2}[│·┃]+$/);
     expect(rows[at + 1]).toContain('┃');
     expect(rows[at + 2]).toMatch(/-\dm +now$/);
   });
   test('no gates reported: one honest line', () => {
-    expect(body(live('core', 62, { gates: [] })).join('\n')).toContain('no gates reported yet');
+    expect(body(live('gates', 62, { gates: [] })).join('\n')).toContain('no gates reported yet');
   });
 });
 
@@ -254,38 +252,39 @@ describe('channel: the chat', () => {
     expect(rows[2]).toMatch(/^ ─+ today ─+$/);
     expect(Math.abs(rows[2]!.indexOf('today') - (62 - 5) / 2)).toBeLessThanOrEqual(2);
   });
-  test('a message: `<glyph> <from> -> <to>` with the HH:MM:SS time right-aligned, the body wrapped at a 3-cell indent', () => {
+  test('a message: `<glyph> <name>  <role>` with the time right-aligned, the body wrapped at a 3-cell indent, `↳ to <name>`', () => {
     const rows = body(chat());
-    const h = rows.findIndex((l) => l.startsWith(' ◆ lead'));
-    expect(rows[h]).toMatch(/^ ◆ lead -> implementer-1759 +08:41:00$/); // the route is in the header: `from -> to`
+    const h = rows.findIndex((l) => l.startsWith(' ● lead'));
+    expect(rows[h]).toMatch(/^ ● lead +orchestrator +08:41$/);
     expect(rows[h]!.length).toBe(61); // the time ends at the margin
     expect(rows[h + 1]!.startsWith('   Dispatching')).toBe(true);
     for (const l of rows.slice(h + 1, h + 4)) expect(cells(l)).toBeLessThanOrEqual(61);
+    expect(rows.join('\n')).toContain('   ↳ to implementer-1759');
   });
-  test('every message has its own header with its time; a blank row separates messages', () => {
+  test('consecutive messages of one sender within two minutes share a header; a blank row separates senders', () => {
     const rows = body(chat());
-    expect(rows.filter((l) => l.startsWith(' ◆ lead'))).toHaveLength(2);
+    expect(rows.filter((l) => l.startsWith(' ● lead'))).toHaveLength(1);
     expect(rows.join('\n')).toContain('   Second note in the same minute.');
     const i = rows.findIndex((l) => l.startsWith(' ◆ implementer-1759'));
     expect(rows[i - 1]).toBe('');
+    const far = body(chat({ notes: [notes[0]!, { ...notes[1]!, ms: T + 3 * 60_000 }] as never }));
+    expect(far.filter((l) => l.startsWith(' ● lead'))).toHaveLength(2);
   });
   test('the name wears its role colour: the lead the accent, a worker its role colour', () => {
-    const hdrs = bodyLines(chat()).filter((l) => /^ ◆ /.test(lineText(l)));
+    const hdrs = bodyLines(chat()).filter((l) => /^ [●◆] /.test(lineText(l)));
     expect(hdrs[0]!.runs.find((x) => x.t === 'lead')?.tone).toBe('accent');
-    const worker = hdrs.find((l) => l.runs.some((x) => x.t === 'implementer-1759' && x.bold))!; // the speaker, not the `-> recipient` of the lead's note
-    expect(worker.runs.find((x) => x.t === 'implementer-1759' && x.bold)?.fg).toBeTruthy();
-    expect(worker.runs.find((x) => x.t === 'implementer-1759' && x.bold)?.bold).toBe(true);
-    expect(worker.runs.find((x) => x.t === 'implementer-1759' && x.bold)?.fg).not.toBe(hdrs[0]!.runs.find((x) => x.t === 'lead')?.fg); // one colour per agent
+    expect(hdrs[1]!.runs.find((x) => x.t === 'implementer-1759')?.fg).toBeTruthy();
+    expect(hdrs[1]!.runs.find((x) => x.t === 'implementer-1759')?.bold).toBe(true);
   });
   test('a worker that started is one centred dim system line', () => {
     const l = body(chat()).find((x) => x.includes('lead dispatched verifier-a1'))!;
-    expect(l.trim()).toBe('⇢ lead dispatched verifier-a1  ·  08:43:00');
+    expect(l.trim()).toBe('⇢ lead dispatched verifier-a1  ·  08:43');
     expect(Math.abs((l.length - l.trimStart().length) - (62 - l.trim().length) / 2)).toBeLessThanOrEqual(2);
   });
   test('the user\'s own message is a right-aligned bubble on the accent tint, `you  hh:mm` above it', () => {
     const m = chat();
     const rows = body(m);
-    const i = rows.findIndex((l) => l.trim() === 'you  08:45:00');
+    const i = rows.findIndex((l) => l.trim() === 'you  08:45');
     expect(rows[i]!.length).toBe(61);
     expect(rows[i + 1]!.endsWith('also check the mux workers')).toBe(true);
     expect(cells(lineText(bodyLines(m)[bodyLines(m).findIndex((l) => lineText(l).includes('also check'))]!))).toBe(61); // the bubble ends at the margin
@@ -309,22 +308,22 @@ describe('channel: the chat', () => {
   test('the footer: the bordered input and `@name` chips for the online members; the recipient chip is filled', () => {
     const m = chat({ recipient: 'verifier-a1' });
     const rows = body(m);
-    expect(rows.at(-4)).toMatch(/^ +@lead +@implementer-1759 +@verifier-a1 +⏎ send$/); // the chips sit above the input: the compose box is the last thing in the room
-    expect(rows.at(-3)).toMatch(/^ ╭─+╮$/);
-    expect(rows.at(-2)).toMatch(/^ │ › Message verifier-a1 +│$/);
-    expect(rows.at(-2)!.length).toBe(61);
-    expect(rows.at(-1)).toMatch(/^ ╰─+╯$/);
-    const chips = bodyLines(m).at(-4)!.runs.filter((x) => x.press);
+    expect(rows.at(-4)).toMatch(/^ ╭─+╮$/);
+    expect(rows.at(-3)).toMatch(/^ │ › Message verifier-a1 +│$/);
+    expect(rows.at(-3)!.length).toBe(61);
+    expect(rows.at(-2)).toMatch(/^ ╰─+╯$/);
+    expect(rows.at(-1)).toMatch(/^ +@lead +@implementer-1759 +@verifier-a1 +⏎ send$/);
+    const chips = bodyLines(m).at(-1)!.runs.filter((x) => x.press);
     expect(chips.map((x) => x.press)).toEqual(['to:lead', 'to:implementer-1759', 'to:verifier-a1']);
     expect(chips.map((x) => x.bg === 'accent')).toEqual([false, false, true]);
-    expect(rows.at(-2)).toContain('Message verifier-a1');
-    expect(body(chat()).at(-2)).toContain('Message the lead, or @name an agent');
-    expect(bodyLines(chat()).at(-2)!.press).toMatchObject({ kind: 'compose' });
+    expect(rows.at(-3)).toContain('Message verifier-a1');
+    expect(body(chat()).at(-3)).toContain('Message the lead, or @name an agent');
+    expect(bodyLines(chat()).at(-3)!.press).toMatchObject({ kind: 'compose' });
   });
   test('an empty channel says so and still has the input', () => {
     const rows = body(chat({ notes: [], starts: [], finishes: [] }));
     expect(rows.join('\n')).toContain('no messages yet');
-    expect(rows.at(-2)).toContain('Message the lead');
+    expect(rows.at(-3)).toContain('Message the lead');
   });
   test('the pane height holds: header + body is exactly the rows, with the input on the last four', () => {
     for (const rows of [24, 30, 40]) expect(panelLines(chat({ rows })).length).toBeLessThanOrEqual(rows);
@@ -345,7 +344,7 @@ describe('truths carried over from the old tab tests', () => {
   });
   test('a note is wrapped on its words: whitespace and line breaks collapse, no row is wider than the pane', () => {
     const rows = body(chat({ notes: [{ at: '10:02:00', ms: T, from: 'lead', text: 'one\n\n  two   three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen', lead: true }] as never }, 40));
-    const at = rows.findIndex((l) => l.startsWith(' ◆ lead'));
+    const at = rows.findIndex((l) => l.startsWith(' ● lead'));
     expect(rows[at + 1]).toBe('   one two three four five six seven');
     for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(39);
   });
@@ -370,7 +369,7 @@ describe('truths carried over from the old tab tests', () => {
   });
   test('ASCII: a note to a peer is marked with `>` and everything is plain ASCII', () => {
     const rows = body(chat({ notes: [{ at: '10:02:00', ms: T, from: 'lead', to: 'impl', text: 'go', lead: true }] as never }, 62, plain));
-    expect(rows.join('\n')).toContain('+ lead -> impl'); // the ASCII glyph set: `+` for the speaker mark, `->` for the route
+    expect(rows.join('\n')).toContain('   > to impl');
     expect(rows.join('\n')).toMatch(/^[\x20-\x7e\n]*$/);
   });
   test('the strip badge shows unread only when it is not zero, with its number', () => {
@@ -387,18 +386,18 @@ describe('truths carried over from the old tab tests', () => {
     expect(body(live('route', 80, { run: { kind: 'working', secs: 5, startMs: 0, frame: 0 } })).find((l) => l.includes('PHASE'))).toMatch(/PHASE +[◐◓◑◒] working$/);
   });
   test('the Claude pane fills its height: header + body + fill is exactly the rows when the body fits', () => {
-    for (const rows of [30, 40, 48]) for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
+    for (const rows of [30, 40, 48]) for (const tab of ['core', 'route', 'gates', 'channel'] as PanelTab[]) {
       const m = live(tab, 62, { rows });
       const used = panelLines(m).length + fillRows(m, bodyLines(m).length).length;
       expect([tab, rows, used]).toEqual([tab, rows, Math.max(rows, used)]);
     }
   });
-  test('no gate ratio: `n/m` never appears beside a gate on the health tab or the strip', () => {
-    const rows = panelText(live('core', 80)).join('\n') + panelText(live('route', 80))[2];
+  test('no gate ratio: `n/m` never appears beside a gate on the gates tab or the strip', () => {
+    const rows = panelText(live('gates', 80)).join('\n') + panelText(live('route', 80))[2];
     expect(rows).not.toMatch(/(gates?|routing|tripwire|completion|header)[^\n]*\d+\/\d+/);
   });
   test('every row of every tab at every width is inside the pane, idle, working, done and blocked, colour and ascii', () => {
-    for (const ui of [mocha, plain]) for (const kind of ['idle', 'working', 'done', 'blocked'] as const) for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) for (const cols of [30, 38, 47, 62, 80, 110, 150]) {
+    for (const ui of [mocha, plain]) for (const kind of ['idle', 'working', 'done', 'blocked'] as const) for (const tab of ['core', 'route', 'gates', 'channel'] as PanelTab[]) for (const cols of [30, 38, 47, 62, 80, 110, 150]) {
       for (const l of panelText(live(tab, cols, { run: { kind, secs: 5, startMs: 0, frame: 0 } }, ui))) expect([tab, kind, cols, cells(l)]).toEqual([tab, kind, cols, Math.min(cells(l), cols)]);
     }
   });

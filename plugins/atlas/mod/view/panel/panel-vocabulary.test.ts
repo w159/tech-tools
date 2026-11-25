@@ -64,13 +64,13 @@ describe('step 4: the channel', () => {
   });
   test('kill, refusal and closure are three timed rows with whole names', () => {
     const notes: PanelNote[] = [
-      { at: '15:56:10', from: 'ghost-explorer', to: 'lead', kind: 'failed', text: 'worker killed' },
-      { at: '15:56:20', from: 'stop gate', to: 'lead', kind: 'blocked', text: 'Stop refused: 1 open dispatch row' },
-      { at: '15:57:05', from: 'lead', to: 'all', kind: 'done', text: 'T2 dispatch closed after Stop refusal · ghost-explorer', lead: true },
+      { at: '15:56', from: 'ghost-explorer', to: 'lead', kind: 'failed', text: 'worker killed' },
+      { at: '15:56', from: 'stop gate', to: 'lead', kind: 'blocked', text: 'Stop refused: 1 open dispatch row' },
+      { at: '15:57', from: 'lead', to: 'all', kind: 'done', text: 'T2 dispatch closed after Stop refusal · ghost-explorer', lead: true },
     ];
     const t = text('channel', 150, { notes, channel: 'lc-m_ca9rmi' });
     for (const who of ['ghost-explorer', 'stop gate', 'lead']) expect(t.some((l) => l.includes(who))).toBe(true);
-    expect(t.filter((l) => /\d\d:\d\d:\d\d$/.test(l)).length).toBe(3); // every message row carries HH:MM:SS
+    expect(t.filter((l) => /\d\d:\d\d$/.test(l)).length).toBe(3);
   });
   test('the live model stamps a refusal and a closure with the time of the log before them, so all three rows carry a time', () => {
     const m = baseSidebar();

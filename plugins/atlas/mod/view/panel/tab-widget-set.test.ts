@@ -237,7 +237,7 @@ describe('X5: the band at the pane-open width keeps state, gates chip and the sp
   const bandRow = (columns: number): string => {
     const snapshot = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 6 } as never);
     const hs = { upSecs: 13, version: '17.24.0', branch: 'master', tokens: 64_000, window: 1_000_000, panel: true, open: false, hooks: { total: 3, byLabel: [{ label: 'tool.call', n: 3 }], recent: [], lastEventSecs: 2, runTools: 3 }, pulse: { events: [0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], ctx: [], runs: [] } };
-    const tree = bandTree(els, { snapshot, live: [], gates: ['a', 'b', 'c', 'd'].map(g), columns, tick: 0, maxRows: 12, ui, health: hs } as never, { openView() {}, toggleTodos() {} }) as unknown as N;
+    const tree = bandTree(els, { snapshot, live: [], gates: ['a', 'b', 'c', 'd'].map(g), columns, tick: 0, maxRows: 12, ui, health: hs } as never, { openView() {}, toggleTodos() {}, toggleHealth() {} }) as unknown as N;
     return textOf(kids(tree)[0]!);
   };
   for (const cols of [57, 58, 60]) test(`idle at ${cols} cells with the pane open`, () => {

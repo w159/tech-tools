@@ -6,6 +6,8 @@ import { bandBlockedOf, bandHealth, bandKindOf, type BandModel, bandTree, hudPha
 import { bandKind } from '../view/panel/pane/band-kind';
 import { noteStopVerdict } from '../view/transcript/superseded';
 import { composeSlot } from '../view/band/slot';
+import { healthCardRows } from '../view/hud/hud-surface';
+import { CARD_MORE_KEY } from '../view/hud/status-frame';
 import { healthLine } from '../data/idle-health';
 import { hookDone, hookStamp, noteHook, resetHookLog } from './hook-log';
 import { noteBilling, noteMeasure, resetPulse } from '../data/pulse';
@@ -26,8 +28,6 @@ import { registerCompletion, registerRouting } from '../input/routing';
 import { type DisciplineDeps, disciplinePrompt, registerDiscipline, reinforceLine } from './discipline';
 import { forgetDrawnHeaders, headerPhaseOf, registerRestyle } from '../view/transcript/restyle';
 import { registerNotify } from './notify';
-import { setViewState, stopBored } from './bored';
-import type { BoredView } from '../view/panel/bored-types';
 import { forgetPlaced, noteBlocked, noteRunFinal } from '../view/transcript/placed';
 import { holdSpinFrame, sharedSpinFrame } from '../design/atlas-ui';
 import { clearLook, lookOf } from '../design/look';
@@ -62,7 +62,6 @@ const gaugeState = atom({ plugin: 'atlas', key: 'bandGauges' } as const, null as
 const easeTickState = atom({ plugin: 'atlas', key: 'easeTick' } as const, 0); // bumped by the ease timer so the band redraws each frame of a glide
 
 const gatesState = atom({ plugin: 'atlas', key: 'gates' } as const, []);
-const boredState = atom({ plugin: 'atlas', key: 'bored' } as const, { status: 'closed', screen: null, seq: 0 } as BoredView); // bored.ts writes it; the host reads only a const of the reading file
 const viewState = atom({ plugin: 'atlas', key: 'atlasView' } as const, 'route'); // docs and the tab strip list route first
 const coreState = atom({ plugin: 'atlas', key: 'core' } as const, null); // CoreModel or null; written by coreTick, read by the band and pane renders
 const headerTallyState = atom({ plugin: 'atlas', key: 'headerTally' } as const, { ok: 0, total: 0 }); // main-agent answers that opened with the ATLAS header, of all answers
@@ -117,6 +116,7 @@ async function boot($: EngineInterface, cwd: string, interactive: boolean): Prom
 		resetPulse();
 		resetReads();
 		noteHook('session.start', S.sessionStartMs);
+		S.healthOpenNow = false;
 		S.bandDrawnMs = -Infinity;
 		S.beatN = 0;
 		S.pluginVersion = await $.fs.read(`${$.plugin.root.replace(/\/+$/, '')}/.claude-plugin/plugin.json`).then((text) => { const v = (JSON.parse(text) as { version?: unknown }).version; return typeof v === 'string' ? v : undefined; }).catch(() => undefined);
@@ -390,9 +390,10 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		const runOn = e.props.isWorking === true || S.runClock.startMs !== null; // the run lasts until its clock closes: the host turn ending a beat before it (a Stop retry, f0129 of stoprun-150-46d4825c-1) must not drop the hold
 		const health = bandHealth(bandIn([], 1)); // wave 42: the idle health, from the band's own inputs
 		const healthLn = health ? healthLine(health, look.ui) : '';
-		// Y1d: below the pane's rest width an idle session gets the two-row health strip above the band (never beside the open pane); it takes its rows off the budget first
-		const stripOn = health !== undefined && e.props.maxRows !== undefined && budget >= STRIP_ROWS + 2 && stripWanted({ cols: columns, kind: S.shownKind, panel: healthIn.panel === true, open: false });
-		const plan = composeSlot({ budget: stripOn ? budget - STRIP_ROWS : budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: S.slotHeld });
+		const healthCard = health && healthIn.open ? healthCardRows(health, { cols: columns, ui: look.ui, ...(e.props.maxRows !== undefined && budget > 1 ? { maxRows: budget - 1 } : {}) }).map((row) => row.filter((x) => x.t !== '').map((x) => segmentOf(x, look.ui))) : undefined;
+		// Y1d: below the pane's rest width an idle session gets the two-row health strip above the band (never beside the open pane or the open card); it takes its rows off the budget first
+		const stripOn = health !== undefined && e.props.maxRows !== undefined && budget >= STRIP_ROWS + 2 && stripWanted({ cols: columns, kind: S.shownKind, panel: healthIn.panel === true, open: healthIn.open === true });
+		const plan = composeSlot({ budget: stripOn ? budget - STRIP_ROWS : budget, hasSlot: e.props.maxRows !== undefined, hudOn, runOn, columns, hudIn, hudView: { ...hudView, ...(healthLn ? { healthLine: healthLn } : {}) }, ...(healthCard ? { healthCard } : {}), running, agentsListed, orchestrated: snapshot.phaseSource === 'header' || hudIn.todos.length > 0 || agents.length > 0, now: snapshot.now, bandIn, held: S.slotHeld });
 		S.slotHeld = plan.held;
 		const hud = plan.hud;
 		const wanted = hudOn ? hudRows(hudIn, { ...hudView, maxRows: 1_000 }).length : 0;
@@ -403,7 +404,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			fullscreen: e.viewport?.isFullscreen === true,
 		});
 		const handlers = { ...bandHandlers($), paneOpen: await read($, paneOpenedState) }; // the one-row bar draws `open` or `close` by it
-		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.openView('core'); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the idle strip's rows are the health chip too: a press opens the panel's health tab
+		const hudPress = { press: (key: string): void => { if (key === 'band:health') handlers.toggleHealth?.(); else if (key === CARD_MORE_KEY) handlers.openView('route'); }, hover: (key: string): object => hoverStyle(look.ui, key) }; // the card's `▾ hide` chip toggles the card like the band's `▸ health`
 		S.bandDrawnMs = clockNow;
 		const band = bandTree(els, plan.band, handlers);
 		// One blank row between the band and the HUD (A3), in the HUD's own panel fill.
@@ -453,7 +454,6 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 			...(bandHealth(bandB) ? { health: bandHealth(bandB) } : {}),
 			run: { kind: bandKind(bandB), frame: paneFrame, ...(runSecs !== undefined ? { secs: runSecs } : {}), ...(originMs !== undefined ? { startMs: originMs } : {}) },
 			ui: { recipient: await read($, recipientState), expanded: await read($, expandedState), draft: await read($, draftState), view: await read($, viewState), flips: flipsOf(await read($, flipState)) },
-			bored: await read($, boredState), // the bored tab's latest screen; the render only reads it
 			columns: e.props.bodyColumns,
 			rows: e.props.scroll.bodyRows,
 			tick: paneFrame,
@@ -479,8 +479,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 	});
 
 	// Session over: the spinner clock and any gauge glide stop.
-	on('session.end', async ($, e, next) => {
-		await stopBored($); // ends the ssh stream so no child outlives the session
+	on('session.end', (_$, e, next) => {
 		S.tickTimer?.cancel();
 		S.tickTimer = null;
 		S.frameTimer?.cancel();
@@ -504,7 +503,7 @@ export async function register(on: On, options: PluginOptions): Promise<void> {
 		if (e.id === PANE_ID) {
 			if (e.origin?.kind === 'person') paneClosedByPerson = true; // a close by hand is final for the session: the prompt hook never reopens it
 			await update($, paneOpenedState, () => false);
-			await setViewState($, 'route'); // reopen on the first tab, not the last one used; leaving bored stops its stream
+			await update($, viewState, () => 'route'); // reopen on the first tab, not the last one used
 		}
 		return next(e);
 	});

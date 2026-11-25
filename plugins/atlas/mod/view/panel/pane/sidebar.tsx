@@ -26,7 +26,7 @@ function stripEls(els: ClientElements, m: SidebarModel, on: SidebarHandlers, ui:
   const { segs } = stripSegs(pm);
   const open = m.ui.expanded === MORE_KEY;
   const sub = ui.color === 'none' ? undefined : runHex({ tone: 'sub' }, ui.theme, ui.color);
-  const badgeColour = (id: string): string | undefined => (ui.color === 'none' ? undefined : runHex({ tone: id === 'core' ? 'bad' : 'accent' }, ui.theme, ui.color));
+  const badgeColour = (id: string): string | undefined => (ui.color === 'none' ? undefined : runHex({ tone: id === 'gates' ? 'bad' : 'accent' }, ui.theme, ui.color));
   const pressOf = (id: string) => () => {
     if (open) on.toggle(MORE_KEY); // a pick from the folded row closes it
     on.setView(id as SidebarView);

@@ -192,11 +192,11 @@ describe('A3: header n of m and the Header contract row are one evaluation', () 
     expect(withHeaderTally([], { ok: 1, total: 2 })).toEqual([]);
   });
   test('the gates tab reads the core tally: core amber 6 of 8 never sits beside a passing Header contract', () => {
-    const rows = text('core', { gates: [headerPass] as never, core: core(6, 8) }).join('\n');
+    const rows = text('gates', { gates: [headerPass] as never, core: core(6, 8) }).join('\n');
     expect(rows).toMatch(/✗ Replies with header matched/); // redesign: a failing line is a red `✗` row (and a DENIED entry), not an amber `△ ... warning` one
     expect(rows).not.toContain('Last reply header matched');
     expect(rows).toContain('6 of 8'); // critique 19 C4: the figure is the reply tally, not the one line's `0/1 green`
-    const all = text('core', { gates: [headerPass] as never, core: core(8, 8) }).join('\n');
+    const all = text('gates', { gates: [headerPass] as never, core: core(8, 8) }).join('\n');
     expect(all).not.toMatch(/✗ Replies with header/);
     expect(all).toContain('✓ Replies with header matched'); // every reply matched: the one line is green
   });

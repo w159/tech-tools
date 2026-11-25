@@ -25,7 +25,7 @@ const buttons = (n: Node): Node[] => all(n).filter((x) => x.kind === 'Button');
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
 const calls: string[] = [];
-const handlers: BandHandlers = { openView: (v) => calls.push(`open:${v}`), toggleTodos: () => calls.push('board') };
+const handlers: BandHandlers = { openView: (v) => calls.push(`open:${v}`), toggleTodos: () => calls.push('board'), toggleHealth: () => calls.push('health') };
 const green = (id: 'completion' | 'tripwire' | 'routing' | 'header') => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
 const GATES = [green('completion'), green('tripwire'), green('routing'), green('header')];
 const HEALTH = { upSecs: 724, version: '17.21.1', branch: 'main', tokens: 42_000, open: false };
@@ -94,10 +94,10 @@ describe('the health button', () => {
     expect(text.props.hover?.backgroundColor).toBeTruthy();
     expect(text.props.hover?.scope).toBeTruthy();
   });
-  test('pressing it opens the pane on the health tab', () => {
+  test('pressing it calls toggleHealth', () => {
     calls.length = 0;
     btn(model(150)).props.onPress();
-    expect(calls).toEqual(['open:core']);
+    expect(calls).toEqual(['health']);
   });
   test('with no handlers wired (omp, fixtures) no button is drawn', () => {
     expect(firstRow(model(150), null)).not.toContain('health');
@@ -174,12 +174,19 @@ describe('the side panel status view, idle', () => {
   });
 });
 
-describe('the idle slot is the band alone: the side panel health tab is the expanded view', () => {
+describe('the slot draws the open card while idle', () => {
   const hudIn = { todos: [], agents: [], root: '/tmp/proj', phases: { ids: ['plan'], active: 0 } };
   const bandIn = (rows: unknown[], maxRows: number | undefined): BandModel => model(110, { maxRows: maxRows ?? 12 });
-  const input = (hudOn: boolean) => ({ budget: 14, hasSlot: true, hudOn, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn, held: 0 }) as never;
-  test('HUD on or off: no HUD rows', () => {
-    expect(composeSlot(input(true)).hud).toHaveLength(0);
-    expect(composeSlot(input(false)).hud).toHaveLength(0);
+  const input = (card?: never[][]) => ({ budget: 14, hasSlot: true, hudOn: true, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn, held: 0, ...(card ? { healthCard: card } : {}) }) as never;
+  test('closed: no HUD rows; open: the card rows stand in the HUD', () => {
+    expect(composeSlot(input()).hud).toHaveLength(0);
+    const card = [[{ t: ' ◆ ATLAS  ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
+    expect(composeSlot(input(card)).hud).toHaveLength(2);
+  });
+  test('ATLAS_HUD=off: the band still draws the `▸ health` button, so the card it opens is shown too (wave 43)', () => {
+    const off = (card?: never[][]) => ({ ...(input(card) as object), hudOn: false }) as never;
+    const card = [[{ t: ' ◆ ATLAS  ▸ HEALTH' }], [{ t: 'hooks' }]] as never[][];
+    expect(composeSlot(off()).hud).toHaveLength(0);
+    expect(composeSlot(off(card)).hud).toHaveLength(2);
   });
 });

@@ -103,6 +103,7 @@ describe('Z4: tabs fill to the footer with real data', () => {
     ['team', 'team', false, { workers: WORKERS, lead: { name: 'lead', role: 'lead', state: 'running', detail: '', secs: 185 } }],
     ['channel', 'channel', false, { notes: NOTES }],
     ['core', 'core', false, { todos: TODOS }],
+    ['gates', 'gates', false, {}],
   ];
   for (const [name, tab, board, over] of cases) for (const cols of [48, 41]) {
   }

@@ -24,7 +24,7 @@ const kids = (n: Node): Node[] => {
   return (Array.isArray(c) ? c : c == null ? [] : [c]).filter((x: unknown): x is Node => typeof x === 'object' && x !== null);
 };
 const textOf = (n: Node): string => (n.kind === 'Text' || typeof n.props.children === 'string' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
-const first = (b: BandModel): string => kids(bandTree(els, b, { openView() {}, toggleTodos() {} }) as unknown as Node).map(textOf)[0]!;
+const first = (b: BandModel): string => kids(bandTree(els, b, { openView() {}, toggleTodos() {}, toggleHealth() {} }) as unknown as Node).map(textOf)[0]!;
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
 const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;

@@ -85,7 +85,7 @@ describe('D14: tabs', () => {
 });
 
 describe('D14: each tab owns the full body', () => {
-  for (const tab of ['team', 'channel', 'core'] as PanelTab[]) {
+  for (const tab of ['team', 'channel', 'gates', 'core'] as PanelTab[]) {
   }
 });
 
@@ -164,8 +164,8 @@ function bootHarness() {
   };
   return { handlers, onFn, one, $, clock, rec, advance };
 }
-const band = async (h: ReturnType<typeof bootHarness>, bodyColumns = 150): Promise<Node> =>
-  (await h.one('ui.render', ['component', 'AbovePrompt'])(h.$, { surface: 'terminal', props: { hasSurvey: false, bodyColumns, maxRows: 14, isWorking: false } }, async () => els.Text({ children: 'prompt' }))) as Node;
+const band = async (h: ReturnType<typeof bootHarness>): Promise<Node> =>
+  (await h.one('ui.render', ['component', 'AbovePrompt'])(h.$, { surface: 'terminal', props: { hasSurvey: false, bodyColumns: 150, maxRows: 14, isWorking: false } }, async () => els.Text({ children: 'prompt' }))) as Node;
 const button = (tree: Node, key: string, text?: string): Node => {
   const found = all(tree).find((n) => n.kind === 'Button' && n.props.key === key && (text === undefined || textOf(n).includes(text)));
   if (!found) throw new Error(`no Button ${key}${text ? ` with ${text}` : ''}`);
@@ -173,8 +173,8 @@ const button = (tree: Node, key: string, text?: string): Node => {
 };
 const press = async (n: Node): Promise<void> => { n.props.onPress(); await settle(); };
 
-describe('D1: the band holds no health card', () => {
-  test('pressing the band `health` chip never draws a card in the band slot (the expanded health view lives on the panel health tab)', async () => {
+describe('D1: card and panel never show at once', () => {
+  test('a card open when the panel opens is closed, and stays closed after the panel closes; the panel up, the band chip opens no card', async () => {
     const h = bootHarness();
     resetCore();
     await register(h.onFn, {});
@@ -182,24 +182,52 @@ describe('D1: the band holds no health card', () => {
     await settle();
     await h.advance(20_000, async () => { await band(h); }); // the boot run rests until the band reads idle
     await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).toContain('HEALTH'); // the card, panel closed
+    await press(button(await band(h), 'band:open')); // the band's `open` chip
     await settle();
-    expect(textOf(await band(h))).not.toContain('HEALTH'); // no card title in the band
+    expect(h.rec.opens).toContain('atlas');
+    expect(textOf(await band(h))).not.toContain('HEALTH'); // the panel opened: the card is gone
+    expect(all(await band(h)).some((n) => n.kind === 'Button' && n.props.key === 'band:health')).toBe(false); // v1 frame spec: with the panel up the band draws no health chip, so no card can open
+    expect(all(await band(h)).some((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:gates'))).toBe(true); // the gates chip stays and opens the panel on its gates tab
+    expect(textOf(await band(h))).not.toContain('HEALTH');
+    await h.one('ui.close')(h.$, { id: 'atlas', origin: { kind: 'person' } }, noopNext);
+    await settle();
+    expect(textOf(await band(h))).not.toContain('HEALTH'); // the card does not come back by itself
+    await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).toContain('HEALTH'); // panel closed: the chip opens the card again
   });
-  // at 150 the chip sits on the band's row; at 110 the idle health strip above the band carries the same key
-  for (const cols of [150, 110]) {
-    test(`at ${cols}: pressing \`band:health\` opens the side panel on its health tab (view \`core\`), as the gates pill does`, async () => {
-      const h = bootHarness();
-      resetCore();
-      await register(h.onFn, {});
-      await h.one('session.start')(h.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
-      await settle();
-      await h.advance(20_000, async () => { await band(h, cols); });
-      const view = async (): Promise<unknown> => (await h.$.state.get({ plugin: 'atlas', key: 'atlasView' })).value;
-      expect(await view()).not.toBe('core');
-      const opened = h.rec.opens.length;
-      await press(button(await band(h, cols), 'band:health'));
-      expect(await view()).toBe('core');
-      expect(h.rec.opens.slice(opened)).toEqual(['atlas']);
-    });
-  }
+  test('round W M: the card title chip toggles too: it reads `▾ HEALTH` while open and a click closes the card; the band keeps a `▾ health` chip that closes it', async () => {
+    const h = bootHarness();
+    resetCore();
+    await register(h.onFn, {});
+    await h.one('session.start')(h.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
+    await settle();
+    await h.advance(20_000, async () => { await band(h); });
+    await press(button(await band(h), 'band:health', 'health'));
+    const open = await band(h);
+    const title = all(open).find((n) => n.kind === 'Button' && String(n.props.key).startsWith('band:health') && textOf(n).includes('HEALTH'));
+    expect(title).toBeDefined();
+    expect(textOf(open)).toContain('▾ HEALTH');
+    expect(textOf(button(open, 'band:health', 'health'))).toContain('▾ health'); // the band chip stays, selected
+    await press(title!);
+    expect(textOf(await band(h))).not.toContain('HEALTH'); // the title click closed it
+    await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).toContain('▾ HEALTH'); // and the band chip opens it again
+    await press(button(await band(h), 'band:health', 'health'));
+    expect(textOf(await band(h))).not.toContain('HEALTH');
+  });
+  test('the card collapses from the band chip that opened it (key band:health), selected while open', async () => {
+    const h = bootHarness();
+    resetCore();
+    await register(h.onFn, {});
+    await h.one('session.start')(h.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
+    await settle();
+    await h.advance(20_000, async () => { await band(h); }); // the boot run rests until the band reads idle
+    await press(button(await band(h), 'band:health', 'health'));
+    const open = await band(h);
+    expect(textOf(open)).toContain('HEALTH');
+    expect(textOf(open)).not.toContain('hide');
+    await press(button(open, 'band:health', 'health'));
+    expect(textOf(await band(h))).not.toContain('HEALTH');
+  });
 });

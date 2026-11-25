@@ -29,7 +29,7 @@ describe('the board view in a narrow pane draws the one-row chip strip (critique
     test(`pane ${columns}: the strip is one row of chips, the ◆ ATLAS pill names the pane, no chip is lit over the board, no row is wider than the pane`, () => {
       const r = rows('board', columns).join('\n').split('\n');
       expect(r[0]).toContain('◆ ATLAS');
-      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^status health( \d+)?( more ›| chan(nel)?( \d+)?( bored)?)?$/); // D14: the trailing tabs fold behind `more ›`; the order never changes, no swap
+      expect(r[2]!.trim().replace(/ +/g, ' ')).toMatch(/^health status( more ›| gates( \d+)?( chan(nel)?( \d+)?| more ›)?)?$/); // D14: the trailing tabs fold behind `more ›`; the order never changes, no swap
       expect(r[3]!.includes('━')).toBe(false); // the board is no tab: no accent segment under any chip
       expect(r[4]!.includes('━')).toBe(false); // the strip is not wrapped: the row under the rule is the body
       for (const l of r.slice(0, 4)) expect([...l].length).toBeLessThanOrEqual(columns);
@@ -38,7 +38,7 @@ describe('the board view in a narrow pane draws the one-row chip strip (critique
   test('every view draws the same strip row at 38 columns (critique 17 B5: one form on every tab)', () => {
     const first = (v: SidebarView): string => rows(v, 38)[2]!.trimEnd();
     // one form (the chips that fit and `more ›`) whichever tab is lit
-    for (const v of ['route', 'team', 'channel', 'core', 'bored', 'board'] as const) expect([v, first(v)]).toEqual([v, first('route')]);
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) expect([v, first(v)]).toEqual([v, first('route')]);
   });
 });
 
@@ -46,7 +46,7 @@ describe('the board view in a narrow pane draws the one-row chip strip (critique
 const SCORER_PANE = (text: string): boolean => text.includes('◆ ATLAS');
 describe('the 110-column pane carries a pane marker the capture scorer recognises on every view', () => {
   for (const columns of [37, 38, 43, 55]) {
-    for (const v of ['route', 'team', 'channel', 'core', 'bored', 'board'] as const) {
+    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) {
       test(`pane ${columns}, ${v}: marker present, strip one row`, () => {
         const text = rows(v, columns).join('\n');
         expect(SCORER_PANE(text)).toBe(true);

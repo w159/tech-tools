@@ -68,7 +68,7 @@ describe('worker age and order', () => {
     expect(byName(s, 'dn').secs).toBe(18);
     expect(byName(s, 'fl').secs).toBe(9);
     expect(byName(s, 'rn').secs).toBe(70); // a running worker still counts to now
-    expect(byName(s, 'nofin').secs).toBe(0); // no usable finish stamp (since == start): the run freezes at zero length, it never keeps growing with the clock (data/live.ts endedAt)
+    expect(byName(s, 'nofin').secs).toBe(70); // no finish stamp (since == start): fall back to now rather than show 0s
   });
   test('start order, never state order (critique 11 A3): the squad as listed, then the dispatched members the host does not list', () => {
     const s = world({

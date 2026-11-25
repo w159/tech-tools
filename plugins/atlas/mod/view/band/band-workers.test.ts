@@ -37,13 +37,79 @@ const parsed = (rows: string[]) => rows.slice(1).map((r) => SCORER_ROW.exec(r)).
 
 describe('band worker rows beside the Subagents block (live frame shape: band slot of 2 rows)', () => {
   for (const [label, columns] of [['150 (band 93)', 93], ['110 (band 61)', 61]] as const) {
+    test(`${label}: the one spare row names a running worker in the scorer's form`, () => {
+      const rows = rowsOf(columns, 2, THREE);
+      expect(rows).toHaveLength(2);
+      const got = parsed(rows);
+      expect(got).toHaveLength(1);
+      expect(SPIN).toContain(got[0]![1]!); // the glyph carries the state: a spinner is running
+      expect(THREE.map((w) => w.name)).toContain(got[0]![2]!);
+      expect(got[0]![3]).toBe('running');
+      expect(textWidthOf(rows[1]!)).toBe(columns);
+    });
   }
 
+  test('every running worker gets its turn on the one row: the row follows snapshot.now, never the wall clock', () => {
+    const seen = new Set<string>();
+    for (let k = 0; k < 8; k++) {
+      const snapshot = bare({ now: NOW + k * 1000 });
+      const got = parsed(rowsOf(93, 2, THREE, { snapshot }));
+      expect(got).toHaveLength(1);
+      seen.add(got[0]![2]!);
+    }
+    expect([...seen].sort()).toEqual(THREE.map((w) => w.name).sort());
+    // same snapshot, same row
+    expect(rowsOf(93, 2, THREE)).toEqual(rowsOf(93, 2, THREE));
+  });
 
+  test('with more rows every running worker has its own row', () => {
+    for (const columns of [93, 61]) {
+      const got = parsed(rowsOf(columns, 4, THREE));
+      expect(got.map((m) => m[2]).sort()).toEqual(THREE.map((w) => w.name).sort());
+      expect(got.every((m) => m[3] === 'running')).toBe(true);
+    }
+  });
 
+  test('a finished or killed worker reads its true state in words, and a waiting worker says waiting', () => {
+    const live = [
+      explorer('alpha-explorer'),
+      explorer('beta-explorer', { state: 'done', tool: null, lastTool: 'Read', since: NOW - 2_000 }),
+      explorer('ghost-explorer', { state: 'failed', tool: null, lastTool: 'Read', since: NOW - 3_000 }),
+      explorer('gamma-explorer', { state: 'blocked', tool: null }),
+    ];
+    const rows = rowsOf(93, 6, live);
+    const byName = Object.fromEntries(parsed(rows).map((m) => [m[2], m]));
+    expect(byName['beta-explorer']![1]).toBe('✓');
+    expect(byName['beta-explorer']![3]).toBe('done');
+    expect(byName['ghost-explorer']![1]).toBe('✗');
+    expect(byName['ghost-explorer']![3]).toBe('failed');
+    expect(rows.find((r) => r.includes('ghost-explorer'))).toContain('failed');
+    expect(byName['gamma-explorer']![1]).toBe('◉');
+    expect(byName['gamma-explorer']![3]).toBe('waiting');
+    expect(SPIN).toContain(byName['alpha-explorer']![1]!);
+  });
 
+  test('a worker finished just now shows its done row ahead of the running ones, then gives the row back', () => {
+    const live = [explorer('alpha-explorer'), explorer('beta-explorer', { state: 'done', tool: null, lastTool: 'Read', since: NOW - 1_000 })];
+    expect(parsed(rowsOf(93, 2, live))[0]![2]).toBe('beta-explorer');
+    const later = bare({ now: NOW + 60_000 });
+    const got = parsed(rowsOf(93, 2, live, { snapshot: later }));
+    expect(got[0]![2]).toBe('alpha-explorer');
+  });
 
+  test('the clock column counts from snapshot.now', () => {
+    const rows = rowsOf(93, 2, [explorer('alpha-explorer', { startedAt: NOW - 12_000 })]);
+    expect(rows[1]).toContain('0:12');
+  });
 
+  test('a long name is clipped in cells, the row stays exactly as wide as the band', () => {
+    const long = 'implementer-auth-middleware-refactor';
+    const rows = rowsOf(61, 2, [explorer(long)]);
+    const got = parsed(rows);
+    expect(got).toHaveLength(1);
+    expect(got[0]![2]!.endsWith(String.fromCharCode(0x2026))).toBe(true); // critic fix 4: the band cuts with the HUD's one-cell ellipsis (the SUBAGENTS rows already cut names with U+2026), never three dots
+    expect(textWidthOf(rows[1]!)).toBe(61);
+  });
 
   test('the ribbon, the todo and the counts stay: a worker row never replaces them', () => {
     const rows = rowsOf(93, 2, THREE);
@@ -62,6 +128,21 @@ describe('band worker rows beside the Subagents block (live frame shape: band sl
 });
 
 describe('band count glyph (critique 19 Band 3: ◒ in the band against ◐ in the HUD row)', () => {
+  test('one running worker: the count and the worker row turn the same frame', () => {
+    const one = [explorer('alpha-explorer')];
+    for (let tick = 0; tick < 4; tick++) {
+      const rows = rowsOf(93, 2, one, { tick });
+      const rowGlyph = parsed(rows)[0]![1]!;
+      const countGlyph = /(\S) 1 running/.exec(rows[0]!)![1]!;
+      const frame = spinFrameOf(spinClock(bare().now, tick), '');
+      expect(countGlyph).toBe(leadSpinnerGlyph(frame)); // the count turns the band spinner frame; the worker row stays a circle quarter (the scorer parses it by glyph)
+      expect(rowGlyph).toBe(SPIN_FRAMES[((frame % 4) + 4) % 4]);
+    }
+  });
+  test('the band turns the HUD frame: spinFrameOf of the spinner clock, ticker included', () => {
+    const rows = rowsOf(93, 2, [explorer('alpha-explorer')], { tick: 3 });
+    expect(parsed(rows)[0]![1]).toBe(SPIN[spinFrameOf(NOW + 300, 'alpha-explorer') % 4]);
+  });
 });
 
 describe('blocked band at 61 cells (critique 19 Band 2: todo and failed dropped)', () => {

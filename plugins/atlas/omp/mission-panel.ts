@@ -168,7 +168,6 @@ function missionModel(m: PanelModel, w: number): MissionModel {
 		boardRows: m.todosExpanded && m.todos?.length ? m.todos.length + 1 : 0,
 		ctx: m.ctx,
 		rich: m.rich ?? hostEnv().ATLAS_BAND_RICH === "1",
-		workersInHud: true, // omp mounts no side panel (panel-view.ts), so this widget is the only place the workers, the newest message and the checks are listed
 		ui: m.ui ?? uiFromEnv(),
 		...(m.motion ? { motion: m.motion } : {}),
 	};
@@ -193,12 +192,7 @@ export function panelMotionOf(m: PanelModel): { board: MotionItem[]; band: Motio
 
 export function renderPanel(m: PanelModel): string[] {
 	const w = Math.max(20, m.width);
-	// The band layout no longer reserves a todo slot (the Claude Code side panel lists the plan); omp has no panel, so the expanded board is drawn here, under what the layout used.
-	const mm = { ...missionModel(m, w), boardRows: 0 };
-	const rows = paintMission(mm);
-	const room = mm.maxRows - rows.length;
-	const board = m.todosExpanded && m.todos?.length && room >= 2 ? todoLines(withOwnerStates(m.todos, ownerStates(m)), { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: room, now: m.nowSecs, motion: m.motion }).map(s => fitLine(s, w)) : [];
-	return [...rows, ...board];
+	return paintMission(missionModel(m, w), rows => todoLines(withOwnerStates(m.todos ?? [], ownerStates(m)), { width: w, tick: m.tick, spin: m.laneSpin, expanded: true, maxLines: rows, now: m.nowSecs, motion: m.motion }).map(s => fitLine(s, w)));
 }
 /** Last gate groups from atlas_gates.py; re-runs at most once per GATES_TTL_MS and never blocks a paint. */
 export interface GatesCache {

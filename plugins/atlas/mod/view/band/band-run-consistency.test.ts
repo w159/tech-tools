@@ -6,7 +6,7 @@ import { LEAD_FRAMES, SPINNER_MS, hostTo256, xtermHex, type Ui } from '../../des
 import { BAND_BUTTONS, bandRuns, bandTree, hudPhases, type BandModel } from './band';
 import type { SquadAgent, TodoItem } from '../../contract';
 import * as runstate from '../../data/runstate';
-import { forgetEnded, liveWorkers, noteEnded, queuedMembers } from '../../data/live';
+import { forgetEnded, liveWorkers, noteEnded, notifiedEnds, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
 import * as hud from '../hud/hud';
 import { hudAgents, isRunning, type HudInput } from '../hud/hud';
@@ -166,6 +166,17 @@ describe('4. the TODO HUD', () => {
   const T = (n: number, status: string, owner?: string): TodoItem => ({ id: `t${n}`, content: `T${n} item`, status, ...(owner ? { owner } : {}) }) as unknown as TodoItem;
   const ag = (name: string, state: string, ui_: string, extra: Record<string, unknown> = {}): hud.HudAgent => ({ name, role: 'explorer', state, ui: ui_ as never, model: 'haiku', since: NOW_MS - 5000, startedAt: NOW_MS - 9000, task: `read ${name}.py`, ...extra } as never);
   const rows = (todos: TodoItem[], agents: hud.HudAgent[], cols = 93, maxRows = 30): string[] => hud.hudLines({ todos: ownTodos(todos), agents }, { cols, maxRows, ui, now: NOW_MS }).map((r) => r.map((x) => x.t).join(''));
+  test('a folded title counts once: `1/5 · ✗1`, never a second `· N done`', () => {
+    const todos = [T(1, 'completed'), T(2, 'completed'), T(3, 'in_progress'), T(4, 'pending'), T(5, 'pending')];
+    for (const maxRows of [3, 4, 5, 6, 8]) {
+      const title = rows(todos, [], 93, maxRows)[0]!;
+      expect(title, `${maxRows}`).not.toMatch(/done/);
+      expect(title, `${maxRows}`).toMatch(/\d\/5/);
+    }
+    const stop = frameOf(STOP, 93, 45).hud.find((r) => r.includes('TODO'))!;
+    expect(stop).toMatch(/TODO ─+ 4\/5 · ✗1/);
+    expect(stop).not.toMatch(/done/);
+  });
   test('state 38: no `└ explorer-xxxx queued` child row in any state', () => {
     const open = [T(1, 'completed'), T(2, 'in_progress'), T(3, 'pending')];
     const queued = ag('explorer-7a37', 'queued', 'queued');
@@ -184,10 +195,40 @@ describe('4. the TODO HUD', () => {
     for (let n = 1; n <= 12; n++) expect(out.some((r) => r.includes(title(n))), `row ${n} shows whole`).toBe(true);
     expect(out.join('\n')).not.toMatch(/\+\d+ more/);
   });
+  test('a done title is 245 (secondary), not the dim 240', () => {
+    for (const [, screen, body] of SIZES) {
+      const f = frameOf(FINISHED, body, screen);
+      const done = f.hudSegs.filter((r) => /^[│▌] ✓ T\d/.test(r.map((x) => x.t).join('')));
+      expect(done.length).toBe(5);
+      for (const r of done) expect(r.find((x) => /^T\d /.test(x.t))!.color).toBe("#767676");
+    }
+  });
 });
 
 describe('5. SUBAGENTS: one frozen schema', () => {
   const header = (f: Frame): string => f.hud.find((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE/.test(r))!;
+  test('the header and its column positions are identical in every state, at 150 and 110 columns', () => {
+    for (const [cols, screen, body] of SIZES) {
+      const heads = [RUNNING, FINISHED, IDLE, STOP].map((sh) => header(frameOf(sh, body, screen)));
+      expect(new Set(heads.map((h) => h.trimEnd())).size, `${cols}: ${heads.join('|')}`).toBe(1);
+      const h = heads[0]!;
+      expect(h).toMatch(/^│ {3}AGENT {1,}(?:ROLE {1,})?STATE {2,}NOW/); // state 40: one cell between the numeric columns under 80 cells
+    }
+  });
+  test('TIME and CALLS end on one cell in every row; an unknown count reads `-`', () => {
+    for (const [name, sh] of ALL.slice(0, 4)) for (const [, screen, body] of SIZES) {
+      const f = frameOf(sh, body, screen);
+      const h = header(f);
+      const timeEnd = h.indexOf('TIME') + 4, callsEnd = h.indexOf('CALLS') + 5;
+      const agents = f.hud.filter((r) => /^[│▌] \S (?:alpha|beta|gamma)-expl/.test(r)); // state 39: at 110 columns the name clips to 12 cells (`alpha-explo…`)
+      expect(agents.length, name).toBe(3);
+      for (const r of agents) {
+        expect(r.slice(0, timeEnd).split(/\s+/).pop(), `${name} TIME`).toMatch(/^\d+:\d\d$/);
+        if (h.includes('CALLS')) expect(r.slice(0, callsEnd).split(/\s+/).pop(), `${name} CALLS`).toMatch(/^(\d+|-)$/); // CALLS comes only when a row has a figure
+        expect(r, name).not.toMatch(/undefined|NaN/);
+      }
+    }
+  });
   const NOW_MS = 1_800_000_000_000;
   const ag = (name: string, state: string, ui_: string): hud.HudAgent => ({ name, role: 'explorer', state, ui: ui_ as never, model: 'haiku', since: NOW_MS - 5000, startedAt: NOW_MS - 9000, task: `read ${name}.py` }) as never;
   const rows = (agents: hud.HudAgent[]): { text: string[]; segs: Segment[][] } => {
@@ -215,6 +256,23 @@ describe('5. SUBAGENTS: one frozen schema', () => {
 });
 
 describe('6. the card and the HUD row flip on the same completion signal', () => {
+  test('the task-notification names the worker; the HUD row and the worker list read it done on that render', () => {
+    forgetEnded();
+    try {
+      expect(notifiedEnds('<task-notification><task-id>gamma-explorer</task-id><status>completed</status></task-notification>')).toEqual([{ id: 'gamma-explorer', outcome: 'done' }]);
+      expect(notifiedEnds('<task-id>x</task-id><status>killed</status>')).toEqual([{ id: 'x', outcome: 'failed' }]);
+      const before = frameOf(RUNNING, 93, 45);
+      expect(before.hud.some((r) => /^[│▌] [◐◓◑◒] gamma-explorer\s+(?:\S+\s+)?running/.test(r))).toBe(true);
+      noteEnded('gamma-explorer', 'done', NOW);
+      const after = frameOf(RUNNING, 93, 45);
+      expect(after.hud.some((r) => /^[│▌] ✓ gamma-explorer\s+(?:\S+\s+)?done/.test(r)), after.hud.join('\n')).toBe(true);
+      expect(after.band).toMatch(/2 running/);
+      const live = liveWorkers(snapshotOf(RUNNING), NOW + 1);
+      expect(live.find((w) => w.name === 'gamma-explorer')!.state).toBe('done');
+    } finally {
+      forgetEnded();
+    }
+  });
   test('a retry that started after the signal is a new run and is not ended by it', () => {
     forgetEnded();
     try {

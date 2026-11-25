@@ -1,14 +1,14 @@
 // channel-chat.ts: the channel tab of the redesigned side panel (approved mockup `chat`): the channel as a chat. A header with the online count, a `today` divider, messages grouped under one header per sender (name bold in the role's colour,
-// HH:MM:SS flush right on every message, body wrapped under a 3-cell indent, `from -> to` for a note to someone), centred dim system events, the user's own messages as right-aligned bubbles on the accent tint, a `<name> is typing` line, then the bordered input and the `@name` chips.
+// time flush right, body wrapped under a 3-cell indent, `↳ to <name>`), centred dim system events, the user's own messages as right-aligned bubbles on the accent tint, a `<name> is typing` line, then the bordered input and the `@name` chips.
 // The newest message stays visible: the log is cut from the top, never from the bottom. Pure: the compose row is a `compose` press the pane paints as the field (pane/sidebar-paint.tsx).
 import { stateRun, type MarkState, type Run } from '../../design/atlas-ui';
 import { tileOf } from '../../input/clickable';
 import { roleOf } from '../../design/theme';
 import { BLANK, nameOf, noteState, oneLine, r, type PanelLine, type PanelModel, type PanelNote, type PanelWorker } from './panel-shared';
-import { clipUi, g, roleRun, row, usable, w } from './tab-kit';
+import { clipUi, g, head, hhmm, padL, roleRun, row, tint, usable, w, wrapWords } from './tab-kit';
 import { channelLabel } from './panel-tabs';
-import { bodyRows, hms, speakerColours, speakerHeader, userBlock } from './channel-bubbles';
 
+const GROUP_MS = 120_000;
 const TYPING_MS = 10_000;
 const isHuman = (from: string): boolean => /^(human|you|user)$/i.test(from);
 const isLeadNote = (n: PanelNote): boolean => n.lead === true || /^lead(-[0-9a-f]{4,})?$/i.test(n.from);
@@ -36,26 +36,50 @@ function blocks(m: PanelModel, items: readonly Item[]): Block[] {
   const ui = m.ui;
   const U = usable(m);
   const out: Block[] = [];
-  const colours = speakerColours(ui, items.filter((x) => !isHuman(x.from) && !x.lead).map((x) => x.from).concat(m.workers.map((x) => x.name)));
+  let prev: Item | undefined;
+  let prevBlock: Block | undefined;
   for (const it of items) {
     if (it.kind === 'event') {
       const t = it.text === 'dispatched' ? [r('lead dispatched ', 'muted'), r(labelOf(m, it.from), 'sub')] : [r(labelOf(m, it.from), 'sub'), r(' finished', 'muted')];
-      const runs = [r(g(ui, '⇢', '->') + ' ', 'muted'), ...t, ...(hms(it.at) ? [r(`  ${g(ui, '·', '|')}  ${hms(it.at)}`, 'dim')] : [])];
+      const runs = [r(g(ui, '⇢', '->') + ' ', 'muted'), ...t, ...(hhmm(it.at) ? [r(`  ${g(ui, '·', '|')}  ${hhmm(it.at)}`, 'dim')] : [])];
       const pad = Math.max(1, Math.floor((U - w(runs)) / 2) + 1);
       out.push([BLANK, { runs: [r(' '.repeat(pad)), ...runs] }]);
+      prev = undefined; prevBlock = undefined;
       continue;
     }
     if (isHuman(it.from)) {
-      out.push(userBlock(ui, U, it.text, it.at));
+      const bw = Math.max(10, U - 8);
+      const lines = wrapWords(ui, it.text, bw);
+      const none = ui.color === 'none';
+      const bubbles = lines.map((t): PanelLine => {
+        const text = `${none ? g(ui, '│ ', '| ') : '  '}${t}  `;
+        return { runs: [r(' '.repeat(Math.max(1, U - [...text].length + 1))), r(text, 'text', none ? {} : { bgHex: tint(ui) })] };
+      });
+      out.push([BLANK, { runs: [r(` ${padL(`you${hhmm(it.at) ? `  ${hhmm(it.at)}` : ''}`, U)}`, 'dim')] }, ...bubbles]);
+      prev = undefined; prevBlock = undefined;
       continue;
     }
-    // One header per message (no grouping): every message row carries its own HH:MM:SS and, for a note to someone, `-> recipient`.
-    const st = noteState({ at: it.at, from: it.from, ...(it.nkind ? { kind: it.nkind } : {}), text: it.text });
-    const tone = st.state === 'failed' ? 'bad' : st.state === 'blocked' ? 'warn' : 'text';
-    const mark: Run[] = st.state ? ((mk) => [{ ...mk, t: `${mk.t} `, ...(st.state === 'done' ? { bold: true } : {}) }])(stateRun(st.state as MarkState, ui)) : [];
-    const to = it.to && it.to !== 'all' && it.to !== it.from ? it.to : undefined;
-    const name = it.lead ? 'lead' : labelOf(m, it.from);
-    out.push([BLANK, speakerHeader(ui, U, name, colours.get(it.from), to, it.at, it.lead), ...bodyRows(ui, U, it.text, tone, mark)]);
+    const same = prev && prevBlock && !isHuman(prev.from) && prev.kind === 'msg' && prev.from === it.from && it.ms - prev.ms <= GROUP_MS;
+    const body = (): PanelLine[] => {
+      const st = noteState({ at: it.at, from: it.from, ...(it.nkind ? { kind: it.nkind } : {}), text: it.text });
+      const lines = wrapWords(ui, it.text, Math.max(8, U - 4));
+      const tone = st.state === 'failed' ? 'bad' : st.state === 'blocked' ? 'warn' : 'text';
+      const lead: Run[] = st.state ? ((mk) => [{ ...mk, t: `${mk.t} `, ...(st.state === 'done' ? { bold: true } : {}) }])(stateRun(st.state as MarkState, ui)) : [];
+      const rows = lines.map((t, i): PanelLine => ({ runs: [r('   '),...(i === 0 ? lead : []), r(t, tone)] }));
+      const to = it.to && it.to !== 'all' && it.to !== it.from && !st.state ? [{ runs: [r('   '), r(`${g(ui, '↳', '>')} to ${it.to}`, 'muted')] }] : [];
+      return [...rows, ...to];
+    };
+    if (same) {
+      prevBlock!.push(...body());
+    } else {
+      const role = roleOfName(m, it.from, it.lead);
+      const glyph = it.lead ? r(`${g(ui, '●', '*')} `, 'accent', { bold: true }) : { ...roleRun(`${g(ui, '◆', '+')} `, role, ui, { bold: true }) };
+      const hdr = row(m, [glyph, roleRun(it.from === 'lead' || it.lead ? 'lead' : labelOf(m, it.from), role, ui, { bold: true }), r(`  ${role}`, 'muted')], hhmm(it.at) ? [r(hhmm(it.at), 'dim')] : [], undefined, 0);
+      const block: Block = [BLANK, hdr, ...body()];
+      out.push(block);
+      prevBlock = block;
+    }
+    prev = it;
   }
   return out;
 }
@@ -67,7 +91,7 @@ function recipients(m: PanelModel): string[] {
   if (m.recipient && !names.includes(m.recipient)) names.push(m.recipient);
   return names;
 }
-/** The recipient chips, then the bordered input (five rows with the blank above). */
+/** The bordered input and the recipient chips (five rows with the blank above). */
 function footer(m: PanelModel): PanelLine[] {
   const ui = m.ui;
   const U = usable(m);
@@ -88,7 +112,7 @@ function footer(m: PanelModel): PanelLine[] {
     used += 1 + [...t].length;
   }
   const chipRow: PanelLine = { runs: [r(' '), ...chips, ...(U - used >= [...send].length + 3 ? [r(' '.repeat(U - used - [...send].length + 1)), r(send, 'muted')] : [])] };
-  return [BLANK, chipRow, edge('╭', '╮'), mid, edge('╰', '╯')]; // the compose field is the last row of the pane
+  return [BLANK, edge('╭', '╮'), mid, edge('╰', '╯'), chipRow];
 }
 
 export function chatRows(m: PanelModel, room: number): PanelLine[] {

@@ -8,10 +8,9 @@ import { type CoreModel } from '../../data/core';
 import { gateTally, STOP_LINE, withCoreTally } from '../../data/runstate';
 import { displayName } from '../hud/hud';
 import type { GateGroup } from './pane/sidebar-types';
-import type { BoredView } from './bored-types';
 import { ageWord, KILLED } from './pane/activity';
 
-export type PanelTab = 'route' | 'team' | 'channel' | 'bored' | 'core';
+export type PanelTab = 'route' | 'team' | 'channel' | 'gates' | 'core';
 export type PanelTodo = { id: string; label: string; state: UiState; /** The state word as drawn when it differs from `state`'s own (`returned`). */ word?: string; owner?: string; detail?: string; evidence?: string | null };
 export type PanelWorker = { name: string; role?: string; state: UiState; model?: string; task?: string; /** The dispatch description (`name: what to do`): the HUD's source for the one name every surface shows (displayName). */ goal?: string; detail: string; secs?: number; /** When the worker started and when its run ended (or now), in the snapshot clock's ms: the board's Gantt places its bar by them. */ startMs?: number; endMs?: number; tools?: number; /** Start times of the worker's tool calls, in the snapshot clock's ms: the team tab's activity sparkline. */ calls?: readonly number[]; /** Wave 38 (critique 37: the side panel listed ghost, beta, alpha under SUBAGENTS' alpha, ghost, beta): the agent's place in the order it was dispatched, the HUD's own `seq` (hud.ts agentModel). */ seq?: number };
 export type PanelGateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string; /** Only Stop decides it (data/runstate withPending): drawn `◇`. */ pending?: boolean };
@@ -63,8 +62,6 @@ export type PanelModel = {
   board?: boolean;
   /** Rows the user flipped from their default open or closed state (gate groups, workers, board items; mod/view/panel/tabs-frame.ts), kept for the session. */
   flips?: readonly string[];
-  /** The bored tab's live ASCII Theater stream (slice 3 owns the view); absent: nothing connected yet. */
-  bored?: BoredView;
 };
 /** A row a press acts on: `toggle` opens or closes `key`; `worker` also picks `name` as the message recipient; `copy` is
  * what a second press on an open row copies. */

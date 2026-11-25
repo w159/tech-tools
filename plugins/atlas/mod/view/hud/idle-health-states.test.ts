@@ -27,7 +27,7 @@ const all = (n: Node): Node[] => [n, ...kids(n).flatMap(all)];
 const textOf = (n: Node): string => (n.kind === 'Text' || typeof n.props.children === 'string' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
-const handlers: BandHandlers = { openView() {}, toggleTodos() {} };
+const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
 const green = (id: 'completion' | 'tripwire' | 'routing' | 'header', ok = true) => ({ id, title: id, lines: [{ id, label: id, ok }] }) as any;
 const GATES = [green('completion'), green('tripwire'), green('routing'), green('header')];
 const HOOKS = { total: 6, byLabel: [{ label: 'tool.call', n: 3 }, { label: 'session.measure', n: 2 }, { label: 'session.start', n: 1 }], recent: [{ label: 'tool.call Bash', ageSecs: 12 }, { label: 'session.measure', ageSecs: 40 }, { label: 'session.start', ageSecs: 70 }], lastEventSecs: 12 };
@@ -42,7 +42,7 @@ const h: Health = {
   hooks: HOOKS,
   last: { secs: 2, done: 0, total: 0, agents: 2, failed: 0, endedAgo: 600, workers: [{ name: 'alpha', state: 'done', secs: 42 }, { name: 'beta', state: 'failed', secs: 7 }] },
 };
-const world = (cols: number, over: Partial<PanelModel> = {}, tab: 'route' | 'team' | 'core' = 'route'): PanelModel => panelWorld(tab, cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW }, health: h, ...over } as never);
+const world = (cols: number, over: Partial<PanelModel> = {}, tab: 'route' | 'team' = 'route'): PanelModel => panelWorld(tab, cols, ui, { rows: 40, todos: [], workers: [], gates: [], notes: [], run: { kind: 'idle', secs: 0, startMs: NOW }, health: h, ...over } as never);
 const body = (m: PanelModel): string[] => bodyLines(m).map(lineText);
 
 describe('1: the checks row never repeats the gates figure', () => {
@@ -205,12 +205,11 @@ describe('12: the open card is one even block, spaced like the TODO box', () => 
     expect(title.bold).toBe(true);
     expect(title.press).toBe('band:health'); // round W M: the title is the toggle
   });
-  test('the slot is the band alone: the card rows are not drawn there and no blank row follows the band', () => {
+  test('the slot leaves the blank row under the band a HUD block has', () => {
     const card = padRows(healthCardRows(h, { cols: 110, ui }), 110).map((r) => r.map((x) => ({ t: x.t })));
     const hudIn = { todos: [], agents: [], root: '/tmp/proj', phases: { ids: ['plan'], active: 0 } };
     const plan = composeSlot({ budget: 40, hasSlot: true, hudOn: true, runOn: false, columns: 110, hudIn, hudView: { cols: 110, tick: 0, ui }, running: false, agentsListed: false, orchestrated: false, now: NOW, bandIn: (_r: unknown, maxRows: number | undefined) => model(110, { maxRows: maxRows ?? 12 }), held: 0, healthCard: card } as never);
-    expect(card.length).toBeGreaterThan(0);
-    expect(plan.hud.length).toBe(0);
-    expect(plan.gap).toBe(0);
+    expect(plan.hud.length).toBe(card.length);
+    expect(plan.gap).toBe(1);
   });
 });

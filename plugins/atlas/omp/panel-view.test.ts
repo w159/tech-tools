@@ -45,7 +45,7 @@ test("NO_COLOR and ASCII: no escapes, no non-ASCII glyph", () => {
 });
 
 test("omp paints the same rows as the Claude tree for the same model: ribbon and body match, tab strip aside", () => {
-	for (const k of ["route", "team", "channel", "core", "cols38"]) {
+	for (const k of ["route", "team", "channel", "gates", "core", "cols38"]) {
 		const m = goldenModel(k);
 		const ui = mocha;
 		const pm = panelModelOf(m, ui, Math.max(10, m.columns - 1));

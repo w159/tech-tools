@@ -1,5 +1,8 @@
 # Changelog
 
+## 17.43.1 - 2026-11-25
+- Reverted, `mod/`, `omp/` panel files, `contracts/panel-golden.ts`, `types/index.d.ts`: restored to 17.42.0; the band slim-down removed TODO rows, subagent lanes and the gates tab. Hook fixes from 17.43.0 kept.
+
 ## 17.43.0 - 2026-11-25
 - Fixed, `hooks/completion_gate_core.py` (m), non-orchestrating path: `_rerun_clears_m` re-runs the run's last plain test command as the orchestrating path does; green writes `gate-proof.json` and clears (m). Tests: `test_gate_rerun.py` `*_non_orchestrating_session`.
 

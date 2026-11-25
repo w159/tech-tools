@@ -33,8 +33,8 @@ export const PEAK_W = 12;
 /** The gates pill and the health chip, in cells, padding included. */
 export const GATES_CHIP_W = 15;
 export const HEALTH_CHIP_W = 10;
-/** Press keys: the gates pill and the health chip both open the pane on its health tab. A `#n` suffix keeps the pieces of one chip apart; hover scopes read what is before it. */
-const BAND_GATES_KEY = 'band:gates';
+/** Press keys: the gates pill opens the pane on its gates tab, the health chip toggles the card. A `#n` suffix keeps the pieces of one chip apart; hover scopes read what is before it. */
+export const BAND_GATES_KEY = 'band:gates';
 export const BAND_HEALTH_KEY = 'band:health';
 /** A denial reads red for this long after it was raised (and for as long as the run works). */
 export const DENY_RED_SECS = 300;

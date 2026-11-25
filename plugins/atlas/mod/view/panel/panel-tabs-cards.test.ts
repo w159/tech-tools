@@ -113,7 +113,7 @@ describe('truncation (step 5)', () => {
     expect(clipE('abcdefghij', 1)).toBe('…');
   });
   test('no panel tab at any width draws an ASCII `...`', () => {
-    for (const tab of ['route', 'team', 'channel', 'core'] as PanelTab[]) for (const cols of [120, 80, 56, 37]) {
+    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as PanelTab[]) for (const cols of [120, 80, 56, 37]) {
       expect([tab, cols, panelText(panelWorld(tab, cols, mocha, { core: core0, rows: 40 })).join('\n').includes('...')]).toEqual([tab, cols, false]);
     }
   });

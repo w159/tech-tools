@@ -971,10 +971,10 @@
         "count": 3
       },
       "crap_high": {
-        "count": 4
+        "count": 2
       },
       "crap_moderate": {
-        "count": 8
+        "count": 7
       }
     },
     "plugins/atlas/mod/data/crew.ts": {
@@ -1053,10 +1053,10 @@
         "count": 1
       },
       "crap_high": {
-        "count": 2
+        "count": 1
       },
       "crap_moderate": {
-        "count": 3
+        "count": 4
       }
     },
     "plugins/atlas/mod/data/metrics.ts": {
@@ -1074,11 +1074,8 @@
       }
     },
     "plugins/atlas/mod/data/mux.ts": {
-      "crap_critical": {
-        "count": 1
-      },
       "crap_high": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/mod/data/orchestration.test.ts": {
@@ -1273,17 +1270,6 @@
         "count": 1
       }
     },
-    "plugins/atlas/mod/host/bored.ts": {
-      "complexity_critical": {
-        "count": 1
-      },
-      "crap_critical": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "plugins/atlas/mod/host/core-tick.ts": {
       "crap_critical": {
         "count": 1
@@ -1292,7 +1278,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 4
+        "count": 3
       }
     },
     "plugins/atlas/mod/host/frame.ts": {
@@ -1303,10 +1289,10 @@
         "count": 3
       },
       "crap_high": {
-        "count": 2
+        "count": 1
       },
       "crap_moderate": {
-        "count": 3
+        "count": 1
       }
     },
     "plugins/atlas/mod/host/handlers.ts": {
@@ -1330,7 +1316,7 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 2
+        "count": 3
       },
       "crap_high": {
         "count": 4
@@ -1364,14 +1350,11 @@
       }
     },
     "plugins/atlas/mod/host/poll.ts": {
-      "crap_critical": {
-        "count": 1
-      },
       "crap_high": {
-        "count": 5
+        "count": 6
       },
       "crap_moderate": {
-        "count": 9
+        "count": 5
       }
     },
     "plugins/atlas/mod/host/pulse-wiring.test.ts": {
@@ -1451,7 +1434,7 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 4
+        "count": 3
       }
     },
     "plugins/atlas/mod/motion/motion-256-glyph-fade.test.ts": {
@@ -1640,25 +1623,17 @@
     },
     "plugins/atlas/mod/view/band/band-run-consistency.test.ts": {
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/mod/view/band/band-segments.test.ts": {
       "crap_moderate": {
-        "count": 2
-      }
-    },
-    "plugins/atlas/mod/view/band/band-slim.test.ts": {
-      "crap_high": {
-        "count": 1
-      },
-      "crap_moderate": {
-        "count": 1
+        "count": 3
       }
     },
     "plugins/atlas/mod/view/band/band-state-colours.test.ts": {
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/mod/view/band/band.mut.test.ts": {
@@ -1677,7 +1652,7 @@
         "count": 5
       },
       "crap_moderate": {
-        "count": 5
+        "count": 4
       }
     },
     "plugins/atlas/mod/view/band/core-row.ts": {
@@ -1701,7 +1676,7 @@
         "count": 3
       },
       "crap_critical": {
-        "count": 10
+        "count": 11
       },
       "crap_high": {
         "count": 11
@@ -1712,7 +1687,7 @@
     },
     "plugins/atlas/mod/view/band/slot-fixed-block.test.ts": {
       "crap_moderate": {
-        "count": 3
+        "count": 5
       }
     },
     "plugins/atlas/mod/view/band/slot-grid.test.ts": {
@@ -1720,7 +1695,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 2
+        "count": 4
       }
     },
     "plugins/atlas/mod/view/band/slot-no-phantom-work.test.ts": {
@@ -1730,12 +1705,20 @@
     },
     "plugins/atlas/mod/view/band/slot-run-shape.test.ts": {
       "crap_moderate": {
-        "count": 2
+        "count": 3
       }
     },
     "plugins/atlas/mod/view/band/slot-state-truth.test.ts": {
       "crap_moderate": {
         "count": 2
+      }
+    },
+    "plugins/atlas/mod/view/band/slot.ts": {
+      "crap_critical": {
+        "count": 1
+      },
+      "crap_high": {
+        "count": 1
       }
     },
     "plugins/atlas/mod/view/blocked-row-truth.test.ts": {
@@ -1815,10 +1798,10 @@
         "count": 2
       },
       "crap_high": {
-        "count": 3
+        "count": 2
       },
       "crap_moderate": {
-        "count": 1
+        "count": 2
       }
     },
     "plugins/atlas/mod/view/hud/card-frame.ts": {
@@ -1903,6 +1886,11 @@
       "crap_high": {
         "count": 2
       },
+      "crap_moderate": {
+        "count": 1
+      }
+    },
+    "plugins/atlas/mod/view/hud/hud-slot.test.ts": {
       "crap_moderate": {
         "count": 1
       }
@@ -1994,36 +1982,15 @@
         "count": 2
       }
     },
-    "plugins/atlas/mod/view/panel/bored-render.ts": {
-      "crap_high": {
-        "count": 2
-      },
-      "crap_moderate": {
-        "count": 1
-      }
-    },
-    "plugins/atlas/mod/view/panel/bored-vt.ts": {
-      "complexity_critical": {
-        "count": 2
-      },
-      "crap_critical": {
-        "count": 2
-      },
-      "crap_moderate": {
-        "count": 2
-      }
-    },
-    "plugins/atlas/mod/view/panel/channel-bubbles.ts": {
-      "crap_moderate": {
-        "count": 1
-      }
-    },
     "plugins/atlas/mod/view/panel/channel-chat.ts": {
       "complexity_critical": {
         "count": 2
       },
       "crap_critical": {
         "count": 3
+      },
+      "crap_high": {
+        "count": 1
       },
       "crap_moderate": {
         "count": 1
@@ -2183,7 +2150,7 @@
     },
     "plugins/atlas/mod/view/panel/panel-redesign.test.ts": {
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "plugins/atlas/mod/view/panel/panel-route-channel-team.test.ts": {
@@ -2275,7 +2242,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 4
+        "count": 3
       }
     },
     "plugins/atlas/mod/view/panel/panel-uniform-cards.test.ts": {
@@ -2340,11 +2307,8 @@
       }
     },
     "plugins/atlas/mod/view/phase-sync.test.ts": {
-      "crap_critical": {
-        "count": 1
-      },
       "crap_high": {
-        "count": 1
+        "count": 2
       },
       "crap_moderate": {
         "count": 1
@@ -2369,13 +2333,10 @@
       }
     },
     "plugins/atlas/mod/view/surface-polish.test.ts": {
-      "complexity_high": {
-        "count": 1
-      },
       "crap_critical": {
         "count": 1
       },
-      "crap_high": {
+      "crap_moderate": {
         "count": 1
       }
     },
@@ -2470,16 +2431,16 @@
     },
     "plugins/atlas/mod/view/transcript/restyle.tsx": {
       "complexity_critical": {
-        "count": 1
+        "count": 2
       },
       "crap_critical": {
-        "count": 7
+        "count": 8
       },
       "crap_high": {
-        "count": 6
+        "count": 4
       },
       "crap_moderate": {
-        "count": 6
+        "count": 4
       }
     },
     "plugins/atlas/mod/view/transcript/resume.test.tsx": {
@@ -2516,10 +2477,10 @@
         "count": 1
       },
       "crap_critical": {
-        "count": 2
+        "count": 1
       },
       "crap_moderate": {
-        "count": 2
+        "count": 3
       }
     },
     "plugins/atlas/omp/atlas-agents.ts": {
@@ -2546,7 +2507,7 @@
         "count": 2
       },
       "crap_high": {
-        "count": 6
+        "count": 5
       },
       "crap_moderate": {
         "count": 6
@@ -2581,7 +2542,7 @@
         "count": 2
       },
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "plugins/atlas/omp/core-command.ts": {
@@ -2638,13 +2599,13 @@
         "count": 2
       },
       "crap_critical": {
-        "count": 5
+        "count": 7
       },
       "crap_high": {
         "count": 7
       },
       "crap_moderate": {
-        "count": 12
+        "count": 8
       }
     },
     "plugins/atlas/omp/index.test.ts": {
@@ -2690,7 +2651,10 @@
         "count": 5
       },
       "crap_high": {
-        "count": 5
+        "count": 4
+      },
+      "crap_moderate": {
+        "count": 1
       }
     },
     "plugins/atlas/omp/mission-panel.ts": {
@@ -2701,7 +2665,7 @@
         "count": 1
       },
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "plugins/atlas/omp/motion.test.ts": {
@@ -2713,11 +2677,8 @@
       "crap_critical": {
         "count": 2
       },
-      "crap_high": {
-        "count": 1
-      },
       "crap_moderate": {
-        "count": 2
+        "count": 1
       }
     },
     "plugins/atlas/omp/proc.ts": {
@@ -3483,17 +3444,16 @@
     "plugins/atlas/omp/mission-panel.ts:high impact",
     "plugins/atlas/mod/view/hud/hud-surface.ts:high impact",
     "plugins/atlas/mod/data/idle-health.ts:high impact",
-    "plugins/atlas/mod/view/hud/hud.ts:high impact",
     "plugins/atlas/mod/view/band/band.tsx:high impact",
+    "plugins/atlas/mod/view/hud/hud.ts:high impact",
     "plugins/atlas/mod/view/band/mission-layout.ts:high impact",
-    "plugins/atlas/mod/host/poll.ts:high impact",
     "plugins/atlas/mod/view/panel/pane/sidebar.tsx:high impact",
     "plugins/atlas/mod/view/board/board-model.ts:high impact",
+    "plugins/atlas/mod/view/hud/status-frame.ts:high impact",
     "mcp_node/node-paylocity/src/net.ts:dead code",
     "mcp_node/node-vanta/src/net.ts:dead code",
     "mcp_servers/mcp-gateway/src/broker/provider.ts:dead code",
     "plugins/atlas/scripts/dashboard_ui/js/operate-dom-stub.js:high impact",
-    "plugins/atlas/mod/view/hud/status-frame.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/rich-dom.js:high impact",
     "plugins/atlas/mod/view/transcript/restyle.tsx:high impact",
     "mcp_node/node-sonicwall/src/net.ts:dead code",
@@ -3505,69 +3465,72 @@
     "mcp_node/node-panos/src/net.ts:dead code",
     "plugins/atlas/mod/host/notify.ts:high impact",
     "plugins/atlas/mod/view/transcript/cards.tsx:high impact",
-    "plugins/atlas/mod/view/panel/panel-shared.ts:high impact",
+    "plugins/atlas/mod/host/poll.ts:high impact",
     "mcp_servers/_shared/resilient-fetch.ts:high impact",
+    "plugins/atlas/mod/view/panel/panel-shared.ts:high impact",
+    "plugins/atlas/mod/view/board/todo-panel.tsx:high impact",
     "plugins/atlas/mod/fixtures/source-tree.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-rows-team.ts:high impact",
     "plugins/atlas/mod/data/todos.ts:high impact",
     "mcp_node/node-spanning/src/net.ts:dead code",
     "plugins/atlas/scripts/dashboard_ui/js/channel-sync.js:high impact",
-    "plugins/atlas/mod/data/live.ts:high impact",
     "plugins/atlas/mod/view/transcript/placed.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-rows-gates.ts:untested risk",
     "plugins/atlas/mod/view/panel/panel-rows-route.ts:high impact",
-    "plugins/atlas/mod/view/board/todo-panel.tsx:high impact",
+    "plugins/atlas/mod/data/live.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/version-banner.js:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/machine-colonies.js:untested risk",
-    "plugins/atlas/mod/host/core-tick.ts:high impact",
     "mcp_node/node-ninjaone/src/net.ts:dead code",
     "telemetry/server/lib/summary.js:high impact",
     "plugins/atlas/contracts/panel-world.ts:high impact",
     "plugins/atlas/mod/view/hud/card-frame.ts:high impact",
-    "plugins/atlas/mod/view/panel/panel-body.ts:untested risk",
     "plugins/atlas/mod/view/transcript/outcome.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/terminal.js:high impact",
     "plugins/atlas/mod/design/vocab.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/fleet.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/keep-view.js:high impact",
-    "plugins/atlas/mod/view/panel/panel-band-agreement.test.ts:untested risk",
+    "plugins/atlas/mod/view/panel/panel-body.ts:untested risk",
     "plugins/atlas/mod/data/runstate.ts:high impact",
     "plugins/atlas/mod/view/band/band-motion.ts:high impact",
-    "plugins/atlas/mod/surface_indices.ts:high impact",
-    "plugins/atlas/contracts/board-golden.ts:high impact",
-    "plugins/atlas/mod/view/band/slot-grid.test.ts:untested risk",
     "plugins/atlas/mod/view/hud/health-metrics.test.ts:untested risk",
+    "plugins/atlas/contracts/board-golden.ts:high impact",
     "plugins/atlas/mod/host/gates.ts:high impact",
+    "plugins/atlas/mod/view/panel/panel-band-agreement.test.ts:untested risk",
     "mcp_servers/mcp-gateway/src/admin/plan.ts:high impact",
     "plugins/atlas/mod/data/orchestration.ts:high impact",
+    "plugins/atlas/mod/view/band/slot-grid.test.ts:untested risk",
     "plugins/atlas/mod/view/panel/panel-monitor-numbers.test.ts:untested risk",
     "mcp_servers/mcp-gateway/src/test-fixtures/fake-graph.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/nav-order.js:high impact",
-    "plugins/atlas/mod/view/band/slot-no-phantom-work.test.ts:untested risk",
-    "plugins/atlas/mod/view/panel/panel-route-channel-team.test.ts:untested risk",
-    "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js:high impact",
-    "plugins/atlas/mod/view/panel/panel-toasts-cards.test.ts:untested risk",
-    "mcp_servers/auvik-mcp/scripts/smoke.ts:complexity",
     "plugins/atlas/mod/view/band/band-segments.test.ts:untested risk",
+    "plugins/atlas/mod/view/panel/panel-route-channel-team.test.ts:untested risk",
+    "plugins/atlas/mod/surface_indices.ts:untested risk",
+    "plugins/atlas/scripts/dashboard_ui/js/pages/agents.js:high impact",
+    "plugins/atlas/mod/host/core-tick.ts:high impact",
+    "mcp_servers/auvik-mcp/scripts/smoke.ts:complexity",
+    "plugins/atlas/mod/view/band/slot-no-phantom-work.test.ts:untested risk",
     "plugins/atlas/mod/view/band/slot-state-truth.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/agents-store.js:high impact",
     "plugins/atlas/mod/data/metrics.ts:high impact",
+    "plugins/atlas/mod/view/panel/panel-toasts-cards.test.ts:untested risk",
+    "plugins/atlas/mod/view/band/slot.ts:high impact",
     "mcp_node/node-vanta/src/http.ts:complexity",
-    "plugins/atlas/omp/channel-view.ts:high impact",
+    "plugins/atlas/mod/view/band/band-run-consistency.test.ts:untested risk",
     "plugins/atlas/mod/data/datastate.ts:untested risk",
     "plugins/atlas/mod/view/render-states.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/send-path.js:high impact",
     "plugins/atlas/mod/view/state-words.test.ts:untested risk",
+    "plugins/atlas/omp/channel-view.ts:high impact",
     "plugins/atlas/contracts/hud-world.ts:high impact",
     "plugins/atlas/mod/view/band/core-row.ts:high impact",
-    "plugins/atlas/omp/contracts.ts:high impact",
+    "plugins/atlas/mod/view/band/slot-run-shape.test.ts:untested risk",
     "plugins/atlas/mod/view/surface-polish.test.ts:untested risk",
     "plugins/atlas/mod/sprites/api.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-failure-word.test.ts:untested risk",
+    "plugins/atlas/mod/view/panel/pane/sidebar-paint.tsx:high impact",
     "plugins/atlas/mod/motion/motion-demo.ts:high impact",
     "plugins/atlas/omp/todo-panel.ts:high impact",
     "plugins/atlas/mod/host/register-blocked.test.ts:untested risk",
-    "plugins/atlas/mod/view/band/band-slim.test.ts:untested risk",
     "plugins/atlas/mod/view/panel/tabs-frame.ts:high impact",
     "mcp_node/node-threatlocker/src/http.ts:complexity",
     "mcp_servers/kaseya-spanning-backup-mcp/src/utils/logger.ts:high impact",
@@ -3578,88 +3541,83 @@
     "plugins/atlas/scripts/dashboard_ui/js/pages/colony.js:high impact",
     "plugins/atlas/mod/motion/motion.ts:high impact",
     "plugins/atlas/mod/view/panel/status-tab.ts:untested risk",
-    "plugins/atlas/mod/host/frame.ts:high impact",
-    "plugins/atlas/mod/view/band/slot-run-shape.test.ts:untested risk",
+    "plugins/atlas/omp/contracts.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/fetch-fail.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/hp.js:high impact",
-    "plugins/atlas/mod/data/channels.ts:high impact",
-    "plugins/atlas/mod/view/panel/pane/sidebar-paint.tsx:high impact",
-    "plugins/atlas/omp/hook-bridge.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/ui-core.js:high impact",
     "plugins/atlas/mod/data/tally.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-tabs.ts:high impact",
     "plugins/atlas/mod/view/killed-worker-word.test.ts:untested risk",
     "plugins/atlas/mod/input/clickable.ts:high impact",
-    "plugins/atlas/mod/view/panel/channel-chat.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/app.js:high impact",
     "plugins/atlas/mod/view/hud/strip-frame.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/channel-lens.js:high impact",
-    "plugins/atlas/mod/design/look.ts:high impact",
+    "plugins/atlas/mod/data/channels.ts:high impact",
+    "plugins/atlas/mod/view/calls-figure.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/herdr-actions.js:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/settings-row.js:high impact",
-    "plugins/atlas/mod/data/history.ts:high impact",
     "plugins/atlas/mod/host/discipline.ts:high impact",
-    "plugins/atlas/mod/view/panel/bored-render.ts:high impact",
     "plugins/atlas/omp/todo-fallback.ts:high impact",
     "plugins/atlas/omp/worker-report.ts:high impact",
+    "plugins/atlas/omp/hook-bridge.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/api.js:high impact",
-    "plugins/atlas/mod/data/crew.ts:high impact",
-    "plugins/atlas/mod/data/core.ts:high impact",
+    "plugins/atlas/mod/design/look.ts:high impact",
     "plugins/atlas/mod/view/hud/hud-frame.ts:untested risk",
     "plugins/atlas/mod/design/chart.ts:high impact",
-    "plugins/atlas/mod/design/atlas-ui.ts:high impact",
-    "plugins/atlas/omp/index.ts:high impact",
+    "plugins/atlas/mod/data/core.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/dom.js:high impact",
-    "plugins/atlas/mod/host/handlers.ts:high impact",
+    "plugins/atlas/mod/input/no-key-hints.test.ts:untested risk",
+    "plugins/atlas/mod/design/atlas-ui.ts:high impact",
+    "plugins/atlas/mod/data/crew.ts:high impact",
     "plugins/atlas/omp/core-source.ts:high impact",
     "plugins/atlas/omp/style.ts:high impact",
-    "plugins/atlas/mod/input/no-key-hints.test.ts:untested risk",
-    "plugins/atlas/mod/view/calls-figure.test.ts:untested risk",
+    "plugins/atlas/omp/index.ts:high impact",
     "mcp_servers/mcp-gateway/src/policy.ts:high impact",
-    "plugins/atlas/mod/host/usage.ts:high impact",
     "plugins/atlas/mod/view/board/board.test.ts:untested risk",
-    "plugins/atlas/mod/data/herdr.ts:complexity",
-    "plugins/atlas/mod/host/hook-log.ts:high impact",
+    "plugins/atlas/mod/view/panel/panel-truths.test.ts:untested risk",
+    "plugins/atlas/mod/host/handlers.ts:untested risk",
     "plugins/atlas/mod/data/pulse.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/ui-data.js:high impact",
     "plugins/atlas/mod/view/band/band-frames.test.ts:untested risk",
-    "plugins/atlas/omp/agent-guard.ts:untested risk",
     "plugins/atlas/mod/host/agents.ts:high impact",
+    "plugins/atlas/omp/agent-guard.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/health-actions.js:high impact",
-    "plugins/atlas/omp/run-state.ts:high impact",
+    "plugins/atlas/mod/host/hook-log.ts:high impact",
+    "plugins/atlas/mod/data/history.ts:high impact",
     "plugins/atlas/omp/hud-paint.ts:high impact",
+    "plugins/atlas/omp/run-state.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/projects.js:untested risk",
+    "plugins/atlas/mod/host/frame.ts:untested risk",
     "plugins/atlas/omp/knobs.ts:high impact",
+    "plugins/atlas/mod/data/herdr.ts:complexity",
+    "plugins/atlas/mod/host/usage.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-layout.test.ts:untested risk",
-    "plugins/atlas/mod/view/consistency.test.ts:complexity",
     "mcp_servers/panos-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/auvik-mcp/scripts/probe-all-tools.mjs:untested risk",
     "plugins/atlas/omp/advisor.ts:high impact",
     "mcp_servers/mcp-gateway/src/test-fixtures/cookie-jar.ts:high impact",
+    "plugins/atlas/mod/view/band/band-state-colours.test.ts:untested risk",
+    "plugins/atlas/mod/view/consistency.test.ts:complexity",
     "mcp_servers/paylocity-mcp/src/utils/client.ts:high impact",
+    "plugins/atlas/mod/view/panel/channel-chat.ts:untested risk",
     "plugins/atlas/mod/data/lasttext.ts:untested risk",
     "plugins/atlas/mod/host/statusline-gap.test.ts:untested risk",
+    "plugins/atlas/mod/view/band/slot-fixed-block.test.ts:untested risk",
     "mcp_servers/threatlocker-mcp/src/utils/logger.ts:high impact",
-    "plugins/atlas/mod/view/panel/bored-vt.ts:high impact",
     "plugins/atlas/omp/channels.ts:high impact",
+    "plugins/atlas/mod/input/intents.ts:high impact",
     "mcp_servers/paylocity-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/vanta-mcp/src/utils/logger.ts:high impact",
-    "plugins/atlas/mod/view/panel/health-tab.ts:untested risk",
     "plugins/atlas/mod/view/panel/pane/activity.ts:high impact",
-    "plugins/atlas/omp/plugin-path.ts:high impact",
-    "plugins/atlas/omp/mandates.ts:complexity",
     "mcp_servers/threatlocker-mcp/src/utils/resolve.ts:high impact",
     "plugins/atlas/mod/motion/rows.ts:untested risk",
-    "plugins/atlas/mod/view/band/slot-fixed-block.test.ts:untested risk",
-    "plugins/atlas/mod/view/phase-sync.test.ts:untested risk",
+    "plugins/atlas/omp/mandates.ts:complexity",
     "plugins/atlas/mod/view/hud/hud-titles-meter.test.ts:untested risk",
-    "plugins/atlas/mod/view/panel/tab-kit.ts:high impact",
+    "plugins/atlas/mod/view/phase-sync.test.ts:untested risk",
     "plugins/atlas/mod/data/root.ts:high impact",
-    "plugins/atlas/mod/host/bored.ts:high impact",
-    "plugins/atlas/mod/view/panel/panel-redesign.test.ts:untested risk",
-    "plugins/atlas/mod/view/panel/gates-tab.ts:untested risk",
     "plugins/atlas/mod/view/panel/panel-cards.ts:untested risk",
     "mcp_servers/mcp-gateway/src/config.ts:high impact",
+    "plugins/atlas/mod/view/panel/health-tab.ts:untested risk",
     "plugins/atlas/mod/view/panel/panel-state-clock.test.ts:untested risk",
     "plugins/atlas/mod/design/runs.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-uniform-cards.test.ts:untested risk",
@@ -3669,10 +3627,11 @@
     "plugins/atlas/mod/view/hud/hud-surface.test.ts:untested risk",
     "mcp_servers/_shared/zod-shape.ts:high impact",
     "plugins/atlas/mod/view/hud/hud-model.ts:untested risk",
+    "plugins/atlas/omp/plugin-path.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/settings.js:high impact",
-    "plugins/atlas/mod/input/intents.ts:high impact",
     "plugins/atlas/omp/scope.ts:high impact",
     "plugins/atlas/mod/view/board/board-blocked-failed.test.ts:untested risk",
+    "plugins/atlas/mod/view/panel/gates-tab.ts:untested risk",
     "mcp_servers/auvik-mcp/src/client-factory.ts:complexity",
     "mcp_node/node-auvik/src/http.ts:complexity",
     "plugins/atlas/omp/workers.ts:high impact",
@@ -3680,33 +3639,33 @@
     "plugins/atlas/mod/design/rail.ts:high impact",
     "plugins/atlas/mod/view/panel/panel-team-channel-cards.test.ts:untested risk",
     "plugins/atlas/mod/design/spark.ts:high impact",
+    "plugins/atlas/mod/view/panel/tab-kit.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/supervision-lens.js:high impact",
     "mcp_servers/mcp-gateway/src/admin/cli.ts:complexity",
     "mcp_servers/sonicwall-mcp/src/utils/logger.ts:high impact",
     "mcp_servers/sonicwall-mcp/src/utils/inventory.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/pages/health.js:complexity",
     "plugins/atlas/scripts/dashboard_ui/js/model-picker.js:untested risk",
-    "plugins/atlas/mod/data/mux.ts:untested risk",
+    "plugins/atlas/mod/view/band/band-layout.test.ts:untested risk",
     "plugins/atlas/mod/input/routing.ts:high impact",
     "plugins/atlas/scripts/dashboard_ui/js/health-fix.js:high impact",
-    "plugins/atlas/mod/view/band/band-layout.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/work.js:high impact",
+    "plugins/atlas/mod/data/mux.ts:untested risk",
     "plugins/atlas/omp/panel-paint.ts:high impact",
     "plugins/atlas/omp/shell-route.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/improve.js:untested risk",
-    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
-    "plugins/atlas/mod/tree-guards.test.ts:untested risk",
-    "plugins/atlas/mod/palette.test.ts:untested risk",
-    "plugins/atlas/mod/host/hooks.ts:complexity",
     "plugins/atlas/mod/view/hud/hud-todo-rows.test.ts:untested risk",
+    "mcp_servers/cipp-mcp/src/mcp/server.ts:complexity",
+    "plugins/atlas/mod/host/hooks.ts:complexity",
+    "plugins/atlas/mod/palette.test.ts:untested risk",
     "plugins/atlas/omp/stop-bridge.ts:high impact",
     "plugins/atlas/mod/contract-pattern.test.ts:untested risk",
+    "plugins/atlas/mod/tree-guards.test.ts:untested risk",
     "plugins/atlas/mod/design/atlas-ui.test.ts:untested risk",
     "mcp_servers/mcp-gateway/src/admin/provision.ts:complexity",
     "plugins/atlas/mod/motion/motion-256.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/pages/activity.js:untested risk",
     "plugins/atlas/mod/sprites/api.test.ts:untested risk",
-    "plugins/atlas/mod/view/panel/panel-truths.test.ts:untested risk",
     "mcp_servers/ninjaone-mcp/src/domains/alerts.ts:complexity",
     "plugins/atlas/mod/view/band/band-design.test.ts:complexity",
     "plugins/atlas/mod/view/hud/hud-shape.test.ts:untested risk",
@@ -3729,9 +3688,9 @@
     "plugins/atlas/scripts/dashboard_ui/js/app.test.js:untested risk",
     "mcp_servers/cipp-mcp/src/handlers/tool.handler.ts:complexity",
     "plugins/atlas/omp/stop-bridge.test.ts:untested risk",
-    "plugins/atlas/omp/index.test.ts:untested risk",
     "plugins/atlas/scripts/dashboard_ui/js/model-picker.test.js:untested risk",
     "mcp_servers/ninjaone-mcp/src/domains/devices.ts:complexity",
+    "plugins/atlas/omp/index.test.ts:untested risk",
     "test-mcp-tools.mjs:complexity"
   ]
 }

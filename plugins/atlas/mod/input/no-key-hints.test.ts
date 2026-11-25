@@ -31,7 +31,7 @@ const HINTS: RegExp[] = [/\b[a-z]: (status|team|channel|gates|core|board)\b/, /c
 const noHints = (rows: string[], where: string): void => { for (const row of rows) for (const re of HINTS) expect(re.test(row), `${where}: ${row}`).toBe(false); };
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
-const bandOn: BandHandlers = { openView() {}, toggleTodos() {} };
+const bandOn: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
 const idleSnap = busySnap({ squad: [], activity: {}, comms: [], todos: [], todoGroups: [], counts: { done: 0, total: 0, byPhase: {} }, contextPct: 18 } as never);
 const HEALTH = { upSecs: 724, version: '17.21.1', branch: 'main', tokens: 42_000, open: false };
 const bandOf = (columns: number, working: boolean): Node => {
@@ -42,7 +42,7 @@ const bandOf = (columns: number, working: boolean): Node => {
 
 const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView() {}, toggleTodos() {} };
 const open: GateGroup[] = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, fix: 'run it' } as never] }];
-const VIEWS = ['route', 'team', 'channel', 'core', 'bored', 'board'] as const;
+const VIEWS = ['route', 'team', 'channel', 'gates', 'core', 'board'] as const;
 const pane = (columns: number, view: (typeof VIEWS)[number], working: boolean, expanded: string | null = null): Node =>
   sidebarTree(els, { snapshot: { ...(working ? busySnap() : idleSnap), now: NOW }, gates: open, ui: { recipient: null, expanded, draft: '', view }, columns, rows: 45 }, side) as unknown as Node;
 
@@ -57,7 +57,7 @@ describe('no printed key hints', () => {
   }
   test('the shared layout has no KEY_HINT and its spare rows name no key', () => {
     expect('KEY_HINT' in panelLayout).toBe(false);
-    for (const tab of ['route', 'team', 'channel', 'bored', 'core'] as const) {
+    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
       const m = panelWorld(tab, 130, ui, { rows: 60 } as never);
       noHints([...fillRows(m, 3), ...headerRows(m), ...panelLines(m)].map(lineText), `layout ${tab}`);
     }
@@ -67,7 +67,7 @@ describe('no printed key hints', () => {
     expect(input.props.placeholder).toBe('Message the lead, or @name an agent');
   });
   test('no Button binds a hotkey', () => {
-    for (const t of [bandOf(150, false), pane(150, 'team', true), pane(110, 'route', false), pane(60, 'bored', true)]) for (const b of buttons(t)) expect(b.props.hotkey, String(b.props.key)).toBeUndefined();
+    for (const t of [bandOf(150, false), pane(150, 'team', true), pane(110, 'route', false), pane(60, 'gates', true)]) for (const b of buttons(t)) expect(b.props.hotkey, String(b.props.key)).toBeUndefined();
   });
 });
 
@@ -92,11 +92,11 @@ describe('every Button looks clickable', () => {
     test(`the idle status view buttons at ${cols}`, () => buttons(pane(cols, 'route', false)).forEach(looks));
   }
   test('the lit tab is a filled chip, the others are not', () => {
-    const strip = buttons(pane(150, 'bored', true)).filter((b) => String(b.props.key).startsWith('tab:'));
+    const strip = buttons(pane(150, 'gates', true)).filter((b) => String(b.props.key).startsWith('tab:'));
     expect(strip.length).toBe(4);
     const litStyle = activeChipStyle(uiFromEnv()); // slice S3: the lit chip is the one activeChipStyle (the accent fill; inverse with no colour)
     const lit = strip.filter((b) => all(b).some((x) => x.kind === 'Text' && x.props.inverse === litStyle.inverse && x.props.backgroundColor === litStyle.backgroundColor));
-    expect(lit.map((b) => b.props.key)).toEqual(['tab:bored']);
+    expect(lit.map((b) => b.props.key)).toEqual(['tab:gates']);
   });
 });
 
@@ -114,7 +114,7 @@ const all = (n: Node): Node[] => [n, ...kids(n).flatMap(all)];
 
 const calls: string[] = [];
 const side: SidebarHandlers = { selectRecipient() {}, toggle() {}, draftChange() {}, send() {}, copy() {}, focus() {}, expand() {}, setView: (v) => calls.push(`view:${v}`), toggleTodos: () => calls.push('board') };
-const pane = (columns: number, rows = 60, view: 'route' | 'team' | 'channel' | 'core' | 'bored' = 'team'): Node =>
+const pane = (columns: number, rows = 60, view: 'route' | 'team' | 'channel' | 'gates' = 'team'): Node =>
   sidebarTree(els, { snapshot: { ...busySnap(), now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows }, side) as unknown as Node;
 
 describe('c: no key hint is drawn anywhere in the side panel (wave 43)', () => {
@@ -132,10 +132,10 @@ describe('c: every tab is a click chip and pressing it acts (no key is bound)', 
     const chips = all(t).filter((x) => x.kind === 'Button' && String(x.props.key).startsWith('tab:'));
     expect(chips).toHaveLength(4);
     expect(chips.map((b) => b.props.hotkey)).toEqual(Array(4).fill(undefined));
-    expect(PANEL_TABS.map((p) => p.id)).toEqual(['route', 'core', 'channel', 'bored']);
+    expect(PANEL_TABS.map((p) => p.id)).toEqual(['core', 'route', 'gates', 'channel']);
     calls.length = 0;
     for (const b of chips) b.props.onPress();
-    expect(calls.sort()).toEqual(['view:bored', 'view:channel', 'view:core', 'view:route']);
+    expect(calls.sort()).toEqual(['view:channel', 'view:core', 'view:gates', 'view:route']);
   });
   test('the chips stay on a 56-column strip and on a 36-column one, still without a hotkey', () => {
     for (const [cols, count] of [[56, 4], [36, 2 + 1]] as const) { // 36: two tab chips and the `more ›` chip (D14)

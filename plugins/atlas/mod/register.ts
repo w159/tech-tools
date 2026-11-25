@@ -14,6 +14,6 @@ export { BOARD_ID, shouldDockAsked, shouldDockRest } from './host/atoms';
 export { headerPhaseOf, headerTallyOf, mapListed, syncAgentsFromList } from './host/agents';
 export { dockTick, rebuild, rebuildTick, withStopVerdict } from './host/poll';
 export { buildCore, coreTick, resetCore } from './host/core-tick';
-export { atlasSlot, effectiveRows, inlineBelowRows, openBoard, publishHudState, readStatuslineRows, resetHudStateSig, resetSessionStart, resetSlotHold, slotHold } from './host/handlers';
+export { atlasSlot, effectiveRows, fitHudToBand, hudGapRows, hudSlotCap, inlineBelowRows, openBoard, publishHudState, readStatuslineRows, resetHudStateSig, resetSessionStart, resetSlotHold, slotHold } from './host/handlers';
 export type { HudState, StatuslineRows } from './host/handlers';
 export { hostTurnRunning, isWorkingNow, resetBlockedDebounce, resetBlockedMark, STOP_SETTLE_MS, turnEnded } from './host/frame';

@@ -5,7 +5,8 @@ import { describe, expect, test } from 'claude-code/testing';
 import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
-import { hudLines, type HudAgent, type HudInput } from './hud';
+import { hudCompactRows, hudFloorRows, hudLines, type HudAgent, type HudInput } from './hud';
+import { hudSlotCap } from '../../register';
 import { textWidth } from '../../design/theme';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -14,11 +15,12 @@ const agent = (name: string): HudAgent => ({ name, role: 'explorer', state: 'wor
 const NAMES = ['alpha-explorer', 'beta-explorer', 'gamma-explorer'];
 const COLS = 61;
 
-/** The HUD in `budget` rows less one, with `n` agents running. */
+/** The rows register.ts draws for a slot of `budget` rows with `n` agents running. */
 const hudAt = (n: number, budget: number): string[] => {
   const input: HudInput = { todos: ownTodos(PLAN), agents: NAMES.slice(0, n).map(agent) };
   const now = Date.now();
-  return hudLines(input, { cols: COLS, maxRows: budget - 1, ui, rich: false, now }).map(runsString);
+  const cap = hudSlotCap(budget, hudCompactRows(input, COLS), hudFloorRows(input, COLS, now), 7, true, true);
+  return hudLines(input, { cols: COLS, maxRows: cap, ui, rich: false, now }).map(runsString);
 };
 
 describe('SUBAGENTS block at 61 transcript cells (110 columns with the pane docked)', () => {

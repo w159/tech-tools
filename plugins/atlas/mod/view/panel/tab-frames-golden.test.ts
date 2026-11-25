@@ -750,13 +750,13 @@ const idleOver = { workers: [], todos: [], notes: [], gates: groups(false), peop
 for (const [cols, n] of [[150, 1], [110, 3]] as const) {
   const g2 = n === 1 ? 'G2' : 'G3';
   if (n === 1) {
-    spec('G1', 150, 'core', 'idle', IDLE, idleOver);
+    spec('G1', 150, 'gates', 'idle', IDLE, idleOver);
     spec('T1', 150, 'team', 'idle', IDLE, idleOver);
     spec('D1', 150, 'route', 'idle', IDLE, idleOver, true);
     spec('C1', 150, 'channel', 'idle', IDLE, idleOver);
     spec('K1', 150, 'core', 'idle', IDLE, idleOver);
   }
-  spec(g2, cols, 'core', 'working', () => WORKING(true), { workers: [], todos: [], notes: [], gates: groups(true) });
+  spec(g2, cols, 'gates', 'working', () => WORKING(true), { workers: [], todos: [], notes: [], gates: groups(true) });
   spec(`T${n === 1 ? 2 : 3}`, cols, 'team', 'working', () => WORKING(), { workers: WORKERS, todos: [], notes: [], gates: groups(false), lead: { name: 'lead', role: 'lead', state: 'running', detail: '', secs: 185 } });
   spec(`D${n === 1 ? 2 : 3}`, cols, 'route', 'working', () => WORKING(), { workers: BOARD, todos: TODOS, notes: [], gates: groups(false) }, true);
   spec(`C${n === 1 ? 2 : 3}`, cols, 'channel', 'working', () => WORKING(), { workers: [], todos: [], notes: NOTES, gates: groups(false), channel: 'lead-104043', people: 4 });
@@ -808,7 +808,7 @@ describe('one phase count: the band and the panel read the contract phases (fram
 describe('the gate marks: a measured pass is green at every colour depth (spec 2.4; the 256-colour bug)', () => {
   const green = (color: Ui['color']): string[] => {
     const u: Ui = { ...uiFromEnv({}), color };
-    const m = panelWorld('core', 48, u, { rows: 39, phases: PHASES, phase: 'test', entered: [], channel: 'lead-104043', run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: WORKING(), workers: [], todos: [], notes: [], gates: groups(false) } as never);
+    const m = panelWorld('gates', 48, u, { rows: 39, phases: PHASES, phase: 'test', entered: [], channel: 'lead-104043', run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: WORKING(), workers: [], todos: [], notes: [], gates: groups(false) } as never);
     return panelLines(m).flatMap((l) => l.runs).filter((r) => r.t === '●' && r.tone === 'ok').map((r) => String(r.fg ?? runHex(r, u.theme, u.color) ?? ''));
   };
   for (const c of ['truecolor', '256'] as const) {
@@ -819,14 +819,14 @@ describe('the one control idiom: only filled chips press (frame spec 2.3)', () =
   const pressed = (pm: PanelModel) => panelLines(pm).filter((l) => l.press !== undefined);
   const filled = (l: { runs: { bgHex?: string }[] }): boolean => l.runs.some((r) => r.bgHex !== undefined);
   test('the team tab: a worker chip flips `worker:<name>`; the board: an item chip flips `item:<id>`', () => {
-    expect(pressed(world('T2')).map((l) => (l.press as { key: string }).key)).toEqual(WORKERS.filter((w) => w.state !== 'done').map((w) => `worker:${w.name}`)); // a finished worker leaves the list
+    expect(pressed(world('T2')).map((l) => (l.press as { key: string }).key)).toEqual(WORKERS.map((w) => `worker:${w.name}`));
     expect(pressed(world('D2')).map((l) => (l.press as { key: string }).key)).toEqual(TODOS.map((t) => `item:${t.id}`));
   });
   test('an expander chevron sits only in a pressable chip row, and `▹` and `▿` never appear', () => {
     for (const name of Object.keys(FRAMES)) for (const l of panelLines(world(name))) {
       const t = lineText(l);
       expect(t).not.toMatch(/[▹▿]/);
-      if (/^\s{0,3}[▾▸] /.test(t)) expect([name, t, l.press !== undefined]).toEqual([name, t, true]);
+      if (/^\s{0,3}[▾▸] /.test(t)) expect(l.press !== undefined).toBe(true);
     }
   });
 });

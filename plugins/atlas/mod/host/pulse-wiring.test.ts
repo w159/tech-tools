@@ -165,6 +165,20 @@ describe('y1-live: the narrow idle strip (Y1d)', () => {
     expect(hasStrip(textOf(await b.band(110)))).toBe(false);
     b.props.working = false;
   });
+
+  test('a press anywhere on the strip opens the health card, which takes the strip away; the card chip closes it and the strip returns', async () => {
+    const b = await boot();
+    await b.rest();
+    const tree = await b.band(110);
+    const strips = walk(tree).filter((n) => n.kind === 'Button' && n.props.key === 'band:health' && /idle|gates/.test(textOf(n)));
+    expect(strips.length).toBeGreaterThanOrEqual(2); // one clickable row each
+    await press(strips[0]!);
+    const open = textOf(await b.band(110));
+    expect(open).toContain('HEALTH');
+    expect(hasStrip(open)).toBe(false);
+    await press(button(await b.band(110), 'band:health', 'health'));
+    expect(hasStrip(textOf(await b.band(110)))).toBe(true);
+  });
 });
 
 describe('y1-live: the history file (Y1a)', () => {
@@ -189,10 +203,9 @@ describe('y1-live: the history file (Y1a)', () => {
     await c.rest();
     const idle = textOf(await c.band(110));
     expect(idle).toMatch(/prev run \d+:\d\d (ok|failed)/);
-    await press(button(await c.band(110), 'band:gates#0')); // the band no longer draws the card: the side panel's health tab holds RUNS
-    await press(button(await c.pane(110), 'tab:core'));
-    const card = textOf(await c.pane(110));
-    expect(card).toMatch(/RUNS\s+1 run/); // the previous session's run, read from history.json
+    await press(button(await c.band(110), 'band:health', 'details'));
+    const card = textOf(await c.band(110, false, 40)); // Y2a: a card keeps whole sections only: a taller slot holds RUNS
+    expect(card).toMatch(/── RUNS ─+ .*prev/);
   });
 
   test('a corrupt history file reads as an empty history: the strip says `no runs yet`', async () => {

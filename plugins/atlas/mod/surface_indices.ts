@@ -82,7 +82,7 @@ export function scene(kind: Scene, over: Partial<LiveSnapshot> = {}): LiveSnapsh
   } as LiveSnapshot;
 }
 
-export const VIEWS = ['route', 'team', 'channel', 'core', 'bored', 'board'] as const;
+export const VIEWS = ['route', 'team', 'channel', 'gates', 'core', 'board'] as const;
 export const sidebarModel = (s: LiveSnapshot, view: SidebarModel['ui']['view'], columns: number, ui: Ui = UI256, motion?: SidebarModel['motion']): SidebarModel =>
   ({ snapshot: s, look: ui, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows: 40, tick: 0, ...(motion ? { motion } : {}) }) as SidebarModel;
 

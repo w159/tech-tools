@@ -106,14 +106,24 @@ const PLANROW = /^[│▌] [✓◐◓◑◒○✗▲◉] T\d/;
 
 describe('1. the Atlas region holds one height and the band one screen row for the whole run', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: the slot is the rows drawn, never past the budget, with no rows above the band, no HUD rows and no gap (the pad only holds the run's height)`, () => {
+    test(`${cols} cells: the slot is the rows drawn, never past the budget, with no rows above the band and none under the HUD`, () => {
       for (const { st, f } of scenario(screen, cols)) {
         expect([st.name, f.rows.length <= hostBudget(screen, st.running)]).toEqual([st.name, true]);
-        expect([st.name, f.plan.lead, f.plan.gap, f.plan.hud.length]).toEqual([st.name, 0, 0, 0]);
+        expect([st.name, f.plan.lead, f.plan.gap, f.plan.pad]).toEqual([st.name, 0, 0, 0]);
       }
     });
-    test(`${cols} cells: the band's status row is drawn content in every state and only the pad that holds the run's height follows the band (17.15.1)`, () => {
-      for (const { st, f } of scenario(screen, cols)) expect([st.name, f.rows[0]!.trim() !== '', f.rows.length >= f.plan.pad + 1]).toEqual([st.name, true, true]);
+    test(`${cols} cells: the last row of the slot is drawn content in every state (17.15.1: no blank rows between the mod and the prompt)`, () => {
+      for (const { st, f } of scenario(screen, cols)) expect([st.name, f.rows.at(-1)!.trim() !== '']).toEqual([st.name, true]);
+    });
+    test(`${cols} cells: the TODO top rule is the next row and the SUBAGENTS table follows the plan box, in every state`, () => {
+      for (const { st, f } of scenario(screen, cols)) {
+        expect(f.rows[1]!, st.name).toMatch(/^╭─ TODO /);
+        const listed = st.running + st.returned > 0; // with any agent the squad is a table under the plan's closed box, running or not; before the first agent an empty box says so
+        const title = f.rows.filter((r) => /^(╭─|──) SUBAGENTS /.test(r));
+        expect([st.name, title.length]).toEqual([st.name, 1]);
+        const plans = f.rows.findIndex((r) => /^╰/.test(r)); // the plan box's own bottom rule
+        if (listed && /^╭/.test(title[0] ?? '')) expect(f.rows.indexOf(title[0]!), st.name).toBe(plans + 1);
+      }
     });
     test(`${cols} cells: the label is always todo n/m (never phase n/m), from the first frame`, () => {
       for (const { st, f } of scenario(screen, cols)) {
@@ -126,6 +136,21 @@ describe('1. the Atlas region holds one height and the band one screen row for t
 
 describe('2. the SUBAGENTS title: the counts ride the right end of the rule, a table row per agent', () => {
   const rule = (f: Frame): Segment[] => f.hud.find((r) => /^(╭─|──) SUBAGENTS /.test(txt(r)))!;
+  test('working: `● 3 running` with the count in the accent (141), over a table row per agent', () => {
+    const f = frameOf(stage('3 running'), 150, hostBudget(45, 3) + 8, 0);
+    expect(txt(rule(f))).toMatch(/SUBAGENTS ─+ ● 3 running ─╮$/);
+    const count = rule(f).find((x) => x.t.includes('3 running'))!;
+    expect(count.color).toBe(PALETTES.mocha.accent); // 141
+    expect(f.hud.map(txt).filter((r) => /^[│▌] [◐◓◑◒] \S+-explorer\s+(?:\S+\s+)?running\s+.*0:/.test(r)).length).toBe(3);
+  });
+  test('done and idle: `✓ 3 done` on the title, a table row per agent with its clock, no spinner', () => {
+    for (const name of ['done', 'idle']) {
+      const f = frameOf(stage(name), 150, hostBudget(45, 0), 0);
+      expect(txt(rule(f)), name).toMatch(/SUBAGENTS ─+ ✓ 3 done ─╮$/);
+      expect(f.hud.map(txt).filter((r) => /^[│▌] ✓ \S+-explorer\s+(?:\S+\s+)?done\s+.*0:0\d/.test(r)).length, name).toBe(3);
+      expect(txt(rule(f)), name).not.toMatch(SPIN_MARK);
+    }
+  });
   test('every working indicator in the band is a spinner frame too', () => {
     const f = frameOf(stage('3 running'), 150, hostBudget(45, 3), 0);
     expect(f.rows[0]!).toMatch(/[◐◓◑◒] working/);
@@ -149,6 +174,21 @@ describe('4. the TODO rows are one fixed grid: the title, STATE, OWNER and TIME 
   // Every row (running, queued, done, failed, lead) has the same cells: the label from cell 4, STATE under its name, OWNER under its name, TIME right-aligned under its name.
   const headOf = (f: Frame): string | undefined => f.hud.map(txt).find((x) => /^│ {3}ITEM\s+STATE\s+OWNER/.test(x));
   for (const [cols, screen] of GRID) {
+    test(`${cols} cells: the state, owner and time columns start at the same cell on every row`, () => {
+      let seen = 0;
+      for (const { st, f } of scenario(screen, cols)) {
+        const head = headOf(f);
+        if (head === undefined) continue; // a slot too short for the column names draws none
+        const at = { state: head.indexOf('STATE'), owner: head.indexOf('OWNER'), timeEnd: head.indexOf('TIME') + 4 };
+        for (const r of f.hud.map(txt).filter((x) => PLANROW.test(x))) {
+          seen++;
+          expect([st.name, [...r].length]).toEqual([st.name, cols]);
+          expect([st.name, r, /^(?:running|queued|done|failed|blocked|waiting|returned|retried)\s*$/.test(r.slice(at.state, at.owner))]).toEqual([st.name, r, true]);
+          if (head.includes('TIME')) expect([st.name, r, /^ *(?:\d+:\d\d|-)$/.test(r.slice(at.timeEnd - 5, at.timeEnd))]).toEqual([st.name, r, true]); // TIME is right-aligned under its name
+        }
+      }
+      expect(seen).toBeGreaterThan(10);
+    });
   }
   test('an owner name is whole in its column (a longer one ends in an ellipsis, the column never widens)', () => {
     for (const [cols, screen] of GRID) {
@@ -162,9 +202,36 @@ describe('4. the TODO rows are one fixed grid: the title, STATE, OWNER and TIME 
       expect(r1.slice(owner).trimStart().startsWith('alpha-explorer')).toBe(true);
     }
   });
+  test('the title drops the (agent) suffix, so the name appears once per row', () => {
+    const st: Stage = { name: '3 running', running: 3, returned: 0, suffix: true };
+    for (const [cols, screen] of GRID) {
+      const f = frameOf(st, cols, hostBudget(screen, 3) + 6, 0);
+      const rows = f.hud.map(txt).filter((x) => PLANROW.test(x) && /-explo/.test(x));
+      expect(rows.length).toBe(3);
+      for (const r of rows) {
+        expect(r, r).not.toMatch(/\(\w+-explo\w*…?\)/);
+        expect((r.match(/-explo/g) ?? []).length, r).toBe(1);
+      }
+    }
+  });
 });
 
 describe('5. a done row: dim title, the `done` word in its state cell, the agent and its time kept, no `returned`', () => {
+  test('in done and idle the finished rows read `● title ... done agent time`', () => {
+    for (const name of ['done', 'idle']) {
+      const f = frameOf(stage(name), 150, hostBudget(45, 0), 0);
+      const rows = f.hud.filter((r) => /^[│▌] ✓ T\d/.test(txt(r)));
+      expect(rows.length, name).toBe(5);
+      for (const r of rows) {
+        const t = txt(r);
+        expect(t, name).not.toMatch(/returned/);
+        expect(t, name).toMatch(/ done +\S/); // every row has a state word, the done one green beside its green mark
+        const title = r.find((x) => /^T\d /.test(x.t))!;
+        expect([name, t, title.color]).toEqual([name, t, name === 'idle' ? PALETTE5.secondary : '#767676']); // the dim label of a finished row; at rest every word reads 245
+      }
+      expect(txt(rows[0]!), name).toMatch(/alpha-explorer\s+0:04\s+│$/);
+    }
+  });
   test('no frame of the run says `returned` or counts N returned', () => {
     for (const { st, f } of scenario(45, 150)) expect(f.rows.join('\n'), st.name).not.toMatch(/\d+ returned|\breturned\b/);
   });
@@ -189,6 +256,17 @@ describe('6. gates: the one amber 179 on the bar is the separate `△ 2 denied` 
 
 describe('7. same-frame truth: the row flips to done on the event that ends the agent, and the band counts it then', () => {
   const returned: Stage = { name: 'handed back', running: 2, returned: 1, handBack: true };
+  test('the HUD row is done and not `returned`; the plan header and the band both say 1/5', () => {
+    for (const [cols, screen] of [[93, 45], [56, 40]] as const) {
+      const f = frameOf(returned, cols, hostBudget(screen, 2) + 4, 0); // wave 36: the table under the plan needs the rows the squad rule used to
+      const row = f.hud.map(txt).find((r) => /T1 /.test(r))!;
+      expect(row, `${cols}`).toMatch(/^[│▌] ✓ T1/);
+      expect(row, `${cols}`).not.toMatch(/returned/);
+      expect(row, `${cols}`).toMatch(/ done /);
+      expect(f.hud.map(txt)[0]!, `${cols}`).toMatch(/TODO ─+ 1\/5/);
+      expect(f.rows[0]!, `${cols}`).toMatch(/todo (?:[▰▱]+ )?1\/5/);
+    }
+  });
   test('the unsettled reading is untouched: a plain hudLines frame still says `returned` (the side panel route tab reads that)', () => {
     const snap = snapshotOf(returned);
     const live = liveWorkers(snap, snap.now);

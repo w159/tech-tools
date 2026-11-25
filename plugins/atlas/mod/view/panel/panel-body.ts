@@ -13,7 +13,6 @@ import { headerRows } from './panel-tabs';
 import { statusRows } from './status-tab';
 import { healthRows } from './health-tab';
 import { gatesRows } from './gates-tab';
-import { boredRows } from './bored-render';
 import { chatRows } from './channel-chat';
 import { head } from './tab-kit';
 
@@ -23,12 +22,7 @@ import { head } from './tab-kit';
 const roomOf = (m: PanelModel): number => (m.rows > 0 ? Math.max(1, m.rows - headerRows(m).length) : 0);
 /** Health: the session figures, then (the old core tab's content) the contract, verdicts, offload and dispatch rows under a CORE heading. */
 function healthBody(m: PanelModel): PanelLine[] {
-  // The gates tab folded into health: the session figures, a blank, the gate rows, then CORE (the denial badge sits on this tab's chip)
-  const gh = gatesRows(m);
-  const room = roomOf(m);
-  const hr = healthRows(m, room, room > 0 ? room - gh.length - 1 : Infinity); // the gates keep their rows on a short pane: the RUNS chart is what gives way
-  const joined = [...hr, ...(hr.length && gh.length ? [BLANK] : []), ...gh];
-  const hb = room > 0 && !hasCore(m.core) ? joined.slice(0, room) : joined; // nothing below the gates to scroll to: a pane shorter than its content cuts the tail
+  const hb = healthRows(m, roomOf(m));
   if (!hasCore(m.core)) return hb.length ? hb : coreBody(m); // nothing measured and no core: the tab's own empty state (a ribbon and one fact on the Claude pane, one dim line elsewhere)
   const inner: PanelModel = m.run ? { ...m, cols: m.cols - 1 } : m; // the Claude pane's rows sit one cell in from the host's border
   const core = coreBody(inner).map((l) => (m.run && l.runs.length ? { ...l, runs: [r(' '), ...l.runs] } : l));
@@ -37,7 +31,7 @@ function healthBody(m: PanelModel): PanelLine[] {
   return [...hb, ...(hb.length ? [BLANK] : []), head(m, 'CORE'), routing, ...core];
 }
 const BODIES: Record<PanelTab, (m: PanelModel) => PanelLine[]> = {
-  route: (m) => statusRows(m, roomOf(m)), team: (m) => statusRows(m, roomOf(m)), core: healthBody, channel: (m) => chatRows(m, roomOf(m)), bored: (m) => boredRows(m, roomOf(m)),
+  route: (m) => statusRows(m, roomOf(m)), team: (m) => statusRows(m, roomOf(m)), core: healthBody, gates: gatesRows, channel: (m) => chatRows(m, roomOf(m)),
 };
 /** Wave 43: a pressable row wears the one clickable look (mod/input/clickable.ts): its leading blank (the grid's focus cell, or the first of its lead spaces) is the accent chevron (`▸` closed, `▾` open) and every run
  * of the row takes the hover style. A row that already carries a clickRun (the chips) or is the message field is left as it is. */

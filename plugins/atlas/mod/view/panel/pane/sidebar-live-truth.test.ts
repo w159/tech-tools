@@ -41,16 +41,15 @@ describe('A1: the route tab and the HUD read the same state for a row whose work
     for (const t of ['T1', 'T2', 'T3']) { expect(todoWord(hud(s), t)).toBe('running'); expect(todoWord(tab(s, 'route'), t)).toBe('running'); }
     for (const t of ['T4', 'T5']) expect(todoWord(tab(s, 'route'), t)).toBe('queued');
   });
-  test('a returned worker: the row is settled on both (f0063): the HUD draws no word on it, the route tab folds it into `N done`, never queued', () => {
+  test('a returned worker: the row reads done on both (settled rule, f0063), never queued', () => {
     const s = world([sq('alpha-explorer', 'finished'), sq('beta-explorer', 'finished'), sq('gamma-explorer', 'finished')], plan().map((t) => (t.origin === 'dispatch' ? { ...t, status: 'completed' } : t)));
-    for (const t of ['T1', 'T2', 'T3']) { expect(todoWord(tab(s, 'route'), t)).toBeUndefined(); expect(todoWord(hud(s), t)).not.toBe('returned'); } // a done row leaves the route tab; the settled HUD block draws no word on it and never says `returned`
-    expect(tab(s, 'route').join('\n')).toMatch(/PLAN +3 of 5/); // the plan still counts the folded rows
+    for (const t of ['T1', 'T2', 'T3']) { expect(todoWord(tab(s, 'route'), t)).toBe('done'); expect(todoWord(hud(s), t)).not.toBe('returned'); } // the settled HUD block draws no word on a done row; it never says `returned`
+    expect(todoWord(tab(s, 'route'), 'T1')).toBe('done');
   });
   test('A2: the panel agent summary and its own todo rows agree: three done agents leave no queued row of theirs', () => {
     const s = world([sq('alpha-explorer', 'finished'), sq('beta-explorer', 'finished'), sq('gamma-explorer', 'finished')]);
     const out = tab(s, 'route').join('\n');
-    expect(out).toMatch(/PLAN +3 of 5/);
-    expect(out).toMatch(/^ +\d+ done$/m); // the three finished agents and their done rows are one count line, not rows
+    expect(out).toContain('3 done');
     expect(out).not.toMatch(/○ T[123] read/); // no queued mark on a row of a done agent
   });
 });
@@ -63,11 +62,11 @@ describe('A3: one stable agent order, by task', () => {
     expect(order(agents)).toEqual(['alpha', 'beta', 'gamma']);
   });
   test('the team tab lists T1, T2, T3 in reverse finish order too', () => {
-    const s = world([sq('gamma-explorer', 'running'), sq('alpha-explorer', 'running'), sq('beta-explorer', 'failed')]); // finished agents leave the team tab, so the order is checked on listed ones
+    const s = world([sq('gamma-explorer', 'finished'), sq('alpha-explorer', 'finished'), sq('beta-explorer', 'running')]);
     expect(order(tab(s, 'team'))).toEqual(['alpha', 'beta', 'gamma']);
   });
   test('an agent without a task follows the tasked ones, in start order', () => {
-    const s = world([sq('zed-explorer', 'running'), sq('gamma-explorer', 'failed'), sq('alpha-explorer', 'running')]);
+    const s = world([sq('zed-explorer', 'running'), sq('gamma-explorer', 'finished'), sq('alpha-explorer', 'running')]);
     const names = tab(s, 'team').flatMap((l) => /(alpha|gamma|zed)-explorer/.exec(l)?.[1] ?? []).filter((n, i, a) => a.indexOf(n) === i);
     expect(names).toEqual(['alpha', 'gamma', 'zed']);
   });
