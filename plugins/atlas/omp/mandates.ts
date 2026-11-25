@@ -56,13 +56,19 @@ export const RECALL_MARKER = "Recall first:";
 // server whose tool is merely named like one (`mcp__evil__claude_mem_dump`) never counts.
 const CLAUDE_MEM_SERVER = /^mcp__(?:plugin_)?(?:claude[-_]?mem|mcp[-_]?search)(?:[-_]|$)/i;
 
-/** The claude-mem search route callable now: a bare tool or an xd:// device (needs `write`). */
+/**
+ * The claude-mem search route callable now, as the phrase the gate text embeds. omp >= 19.1.0 replaced
+ * `xd://` tool devices with tool commands (CHANGELOG 19.1.0: "rarely-used tools now run as bash commands"),
+ * so `write xd://...` is an "Unknown URI-like write target" there: name the bash command whenever `bash` is
+ * active, and the `xd://` write only for older omp that has `write` but no bash command route.
+ */
 export function claudeMemRoute(active: string[] | undefined): string | undefined {
 	if (!Array.isArray(active)) return undefined;
-	if (!active.includes("write")) return undefined;
+	const bash = active.includes("bash");
+	if (!bash && !active.includes("write")) return undefined;
 	for (const name of active) {
 		if (!name.startsWith("mcp__") || !name.toLowerCase().endsWith("_search")) continue;
-		if (CLAUDE_MEM_SERVER.test(name)) return `xd://${name}`;
+		if (CLAUDE_MEM_SERVER.test(name)) return bash ? `run the bash command ${name} -j '<JSON args>'` : `write JSON args to xd://${name}`;
 	}
 	return undefined;
 }
@@ -71,12 +77,18 @@ export function claudeMemRoute(active: string[] | undefined): string | undefined
 const RECALL_EXEMPT: Record<string, true> = { todo: true, todowrite: true };
 
 /**
- * True when a tool call IS the claude-mem recall: a bare claude-mem tool, or a `write`
- * to an `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it).
+ * True when a tool call IS the claude-mem recall: a bare claude-mem tool, a bash command that runs one
+ * (omp >= 19.1 tool commands), or a `write` to an `xd://mcp__` claude-mem device (older omp; `path`, or
+ * `file_path` as Claude Code names it).
  */
 function satisfiesRecall(toolName: string, input: unknown): boolean {
 	if (CLAUDE_MEM_SERVER.test(toolName)) return true;
-	if (toolName.toLowerCase() !== "write" || !input || typeof input !== "object") return false;
+	if (!input || typeof input !== "object") return false;
+	if (toolName.toLowerCase() === "bash") {
+		const { command } = input as { command?: unknown };
+		return typeof command === "string" && CLAUDE_MEM_SERVER.test(command.trimStart().split(/\s/, 1)[0]);
+	}
+	if (toolName.toLowerCase() !== "write") return false;
 	const { path, file_path: filePath } = input as { path?: unknown; file_path?: unknown };
 	return [path, filePath].some(p => typeof p === "string" && p.startsWith("xd://mcp__") && CLAUDE_MEM_SERVER.test(p.slice("xd://".length)));
 }
@@ -349,7 +361,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 				const route = claudeMemRoute(active);
 				const contract = loadMandates(deps.mandatesPath);
 				if (!route || !contract) return undefined;
-				recallLine = contract.recall.replace("{route}", `write JSON args to ${route}`);
+				recallLine = contract.recall.replace("{route}", route);
 			}
 			return { systemPrompt: [...base, recallLine] };
 		} catch {
@@ -384,7 +396,7 @@ export function registerMandates(pi: Pick<ExtensionAPI, "on">, deps: MandateDeps
 					// still unsatisfied: the gate stays armed and denies the next call too
 					return {
 						block: true,
-						reason: contract.recallGate.replace("{route}", `write JSON args to ${route}`).replace("{example}", contract.recallGateExample),
+						reason: contract.recallGate.replace("{route}", route).replace("{example}", contract.recallGateExample),
 					};
 				}
 			}

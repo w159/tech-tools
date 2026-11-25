@@ -111,11 +111,16 @@ def _contract() -> dict | None:
 
 
 def _is_recall(tool_name: str, tool_input) -> bool:
-    """True when the call IS the claude-mem recall: a claude-mem tool, or a Write to an
-    `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it)."""
+    """True when the call IS the claude-mem recall: a claude-mem tool, a Bash tool command
+    that runs one (omp >= 19.1), or a Write to a legacy `xd://mcp__` claude-mem device (`path`, or `file_path` as Claude Code names it)."""
     if _MEM_TOOL.match(tool_name):
         return True
-    if tool_name.lower() != "write" or not isinstance(tool_input, dict):
+    if not isinstance(tool_input, dict):
+        return False
+    if tool_name.lower() == "bash":  # omp >= 19.1 tool command: `mcp__claude_mem_..._search -j '<JSON>'`
+        command = tool_input.get("command")
+        return isinstance(command, str) and bool(_MEM_TOOL.match(command.lstrip().split(None, 1)[0] if command.strip() else ""))
+    if tool_name.lower() != "write":
         return False
     for key in ("path", "file_path"):
         value = tool_input.get(key)

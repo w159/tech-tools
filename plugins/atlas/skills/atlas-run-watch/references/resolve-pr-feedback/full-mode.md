@@ -25,7 +25,7 @@ If no PR number was provided, detect from the current branch:
 gh pr view --json number -q .number
 ```
 
-Confirm the repo is GitHub first (`xd://github` `op: repo_view`, or `gh repo view`); the platform rule in SKILL.md covers non-GitHub hosts.
+Confirm the repo is GitHub first (`github` `op: repo_view`, or `gh repo view`); the platform rule in SKILL.md covers non-GitHub hosts.
 
 Derive the host: if the caller passed a full PR **URL**, take its host; otherwise read it from `gh repo view --json url -q .url`. Because shell state does not persist between Bash calls, pass the host as a `GH_HOST=<host>` env prefix inline on every `gh` call below. On `github.com`, drop the `GH_HOST=<host> ` prefix entirely. Pass the base `OWNER/REPO` (parsed from the PR URL, when one was given) as `GH_REPO` so a fork-to-upstream PR targets the upstream base repo.
 
@@ -67,7 +67,7 @@ The query returns:
 
 **Stop here if a PENDING review is returned non-empty.** Thread replies posted while you hold an unsubmitted review are absorbed into that draft: the reply call returns a comment ID and URL as if it succeeded, but nothing is visible to the reviewer until the draft is submitted. Do not proceed into steps 2-9. Tell the user they have an unsubmitted review on the PR, that it must be submitted or discarded before this skill can reply, and stop. Do not submit or discard it yourself; a draft review is unsent human writing.
 
-**Tooling note.** The `xd://github` device tool covers PR identification, reading, and diffs (`op: repo_view`; internal reads `pr://<N>`, `pr://<N>/diff`, `pr://<N>/diff/all`), but it exposes no review-thread operations - thread fetch, reply, and resolve go through Bash `gh` as shown. If `gh` is unavailable on the host, run what the device tool covers, report the rest as unavailable, and stop at the gate - do not fake GitHub API access.
+**Tooling note.** The `github` tool command covers PR identification, reading, and diffs (`op: repo_view`; internal reads `pr://<N>`, `pr://<N>/diff`, `pr://<N>/diff/all`), but it exposes no review-thread operations - thread fetch, reply, and resolve go through Bash `gh` as shown. If `gh` is unavailable on the host, run what the device tool covers, report the rest as unavailable, and stop at the gate - do not fake GitHub API access.
 
 ## 2. Triage: Separate New from Pending
 

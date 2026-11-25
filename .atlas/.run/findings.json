@@ -15703,5 +15703,178 @@
     "verified_at": "2026-11-24T19:56:59+00:00",
     "verified_by": "lead",
     "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-424995-1795550407",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd plugins/atlas && ../../.venv/bin/python -m pytest -q -p no:cacheprovider hooks/test_completion_gate.py -k \"Unwatched or InFlightTmux\" hooks/test_untrusted_fence.py scripts/test_atlas_mux_more.py -k \"Unwatched or InFlightTmux or waiter or Emit\" 2>&1 | tail -1`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-24_200007_gate-rerun_424995.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-24T20:00:07+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "team-launch-card",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod: atlas_mux spawn-team draws a team card (role colour, name, role, state, own todos)",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_team-card-worker-budget.txt; plugins/atlas/mod/view/transcript/team-card.test.tsx"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod/view/transcript",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T10:21:06+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "worker-budget-unsplit",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "atlas_mux: refuse unsplit multi-editor teams; worker wall-clock budget enforced by wait",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_team-card-worker-budget.txt; plugins/atlas/scripts/test_atlas_mux_more.py"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T10:21:06+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "host-chip-probe",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mod gate: host probe checks the reply header chip with the real contract pattern (offline run only)",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_team-card-worker-budget.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/scripts/atlas_mod_gate.py && cd plugins/atlas/scripts && python3 -m unittest test_atlas_mod_gate",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T10:21:06+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-rerun-e522da-1795602151",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_102231_gate-rerun_e522da.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-25T10:22:31+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-push-slice-f024",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "mux brief/hygiene + cards.tsx slice passes gates",
+    "evidence": [
+      "plugins/atlas/scripts/atlas_mux.py; plugins/atlas/mod/view/transcript/cards.tsx"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 -m unittest test_atlas_mux test_atlas_mux_more (294 OK); bun test mod from plugins/atlas (3926 pass, 0 fail)",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T10:37:36+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-f024"
+  },
+  {
+    "id": "gate-rerun-e522da-1795603173",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_103933_gate-rerun_e522da.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-25T10:39:33+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "gate-rerun-e522da-1795603398",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_104318_gate-rerun_e522da.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-25T10:43:18+00:00",
+    "verified_by": "completion-gate"
+  },
+  {
+    "id": "push-gate-green",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "gate.sh push green with team card, worker budget, unsplit refusal, host chip probe",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_team-card-worker-budget.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "bash scripts/gate.sh push",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T10:43:26+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "fallow-hookbridge-teamcard",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "No introduced fallow complexity finding in hook-bridge.ts / team-card.test.tsx; omp+transcript tests pass",
+    "evidence": [
+      "/tmp/v327.json verdict=pass introduced=0; bun test: 993 pass 0 fail"
+    ],
+    "doc_refs": [],
+    "reproduction": "fallow audit --base origin/main --format json; cd plugins/atlas && bun test omp mod/view/transcript",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T12:50:54+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "verifier-327d"
+  },
+  {
+    "id": "gate-rerun-e522da-1795611151",
+    "surface": "test",
+    "category": "verification",
+    "severity": "info",
+    "title": "completion gate re-ran `cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3`: exit 0",
+    "evidence": [
+      ".atlas/evidence/2026-11-25_125231_gate-rerun_e522da.txt"
+    ],
+    "status": "verified",
+    "verified_at": "2026-11-25T12:52:31+00:00",
+    "verified_by": "completion-gate"
   }
 ]

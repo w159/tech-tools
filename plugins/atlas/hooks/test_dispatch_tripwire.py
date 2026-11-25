@@ -3192,8 +3192,8 @@ class ColonyGuardUnitTest(unittest.TestCase):
 
 
 class ToolkitGapOmpTest(unittest.TestCase):
-    """ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge. omp has no ToolSearch (its tools are xd://
-    devices), so the load-step half of the requirement cannot be met there; the named-navigation-tool half stays.
+    """ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge. omp has no ToolSearch (its tools are bash tool
+    commands), so the load-step half of the requirement cannot be met there; the named-navigation-tool half stays.
     Unset, as in Claude Code, nothing changes."""
 
     def setUp(self):
@@ -3210,7 +3210,7 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     OMP_TOOLS = (
-        "TOOLS: use lean-ctx via its xd:// devices (xd://mcp__lean_ctx_ctx_search)"
+        "TOOLS: use lean-ctx via its bash tool commands (mcp__lean_ctx_ctx_search)"
     )
 
     def gap(self, prompt, agent="atlas:implementer"):
@@ -3231,7 +3231,7 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertEqual(self.gap(decoy), "atlas:implementer")
         with patch.dict(os.environ, {"ATLAS_TOOLKIT_LOAD": "omp"}):
             self.assertEqual(
-                self.gap("use lean-ctx via xd:// devices"), "atlas:implementer"
+                self.gap("use lean-ctx via bash tool commands"), "atlas:implementer"
             )
             self.assertEqual(
                 self.gap("TOOLS:\nGOAL: use lean-ctx"), "atlas:implementer"
@@ -3292,7 +3292,8 @@ class ToolkitGapOmpTest(unittest.TestCase):
         self.assertNotIn(
             "ToolSearch", text
         )  # omp has no such tool; asking for it is an instruction nobody can follow
-        self.assertIn("xd://mcp__lean_ctx_ctx_search", text)
+        self.assertIn("mcp__lean_ctx_ctx_search", text)
+        self.assertNotIn("xd://", text)
         self.assertIn("TOOLS:", text)  # a one-line block the lead can paste as is
         self.assertIn("atlas:implementer", text)
         self.assertTrue(
@@ -4221,7 +4222,7 @@ class DeviceArgsOverwriteTest(unittest.TestCase):
         for name in ("a.py", "b.js"):
             out = self._hook("Write", self._existing(name), self.ARGS)
             self.assertIn("device arguments", out, name)
-            self.assertIn("xd:// device path", out)
+            self.assertIn("bash command", out)
 
     def test_omp_write_path_key_is_denied_too(self):
         out = self._hook("write", self._existing("c.py"), self.ARGS, key="path")

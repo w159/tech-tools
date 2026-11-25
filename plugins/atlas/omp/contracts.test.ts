@@ -92,6 +92,9 @@ test("exploration deny names only the reachable route", () => {
 	expect(explorationDenyReason("fd x", tool)).toContain("call ctx_shell directly to find");
 	expect(explorationDenyReason("wc -l a", tool)).toContain("(call ctx_shell directly)");
 	expect(explorationDenyReason("cat a", device)).toContain("xd://mcp__lean_ctx_ctx_shell");
+	expect(explorationDenyReason("grep x .", { via: "command", command: "mcp__lean_ctx_ctx_search" })).toBe(
+		"Atlas enforcement: this bash command only reads files, so use lean-ctx ctx_search instead (run the bash command mcp__lean_ctx_ctx_search -j '<JSON>'). Bash stays allowed for tests, git, builds and writes.",
+	);
 	expect(explorationDenyReason("cd src && cat a", tool)).toBeDefined();
 	expect(explorationDenyReason("npm test", tool)).toBeUndefined();
 });

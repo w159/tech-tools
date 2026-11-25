@@ -2041,7 +2041,7 @@ class BootCoreSurvivorTests(unittest.TestCase):
         with open(os.path.join(self.home, "update-check-state.json"), "w") as f:
             json.dump({"last_start": 1_000_000.0}, f)
         with mock.patch.dict(
-            os.environ, {"ATLAS_HOME": self.home, "ATLAS_UPDATE_CHECK": "on"}
+            os.environ, {"ATLAS_HOME": self.home, "ATLAS_UPDATE_CHECK": "on", "ATLAS_HARNESS": "claude"}
         ):
             return session_boot.update_notice(now=1_000_001.0, popen=mock.Mock()), installed
 

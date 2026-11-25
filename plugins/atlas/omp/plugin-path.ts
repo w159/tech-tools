@@ -94,3 +94,30 @@ export function pluginRootFallback(here: string): string {
 export function pluginRoot(): string {
 	return pluginRootFallback(nodePath.resolve(import.meta.dir, ".."));
 }
+
+/** The version `installed_plugins.json` (three levels above a versioned install dir) lists for atlas: this marketplace's entry, else any atlas entry. */
+function installedAtlasVersion(pluginDir: string, marketplace: string): unknown {
+	const registry = nodePath.join(nodePath.dirname(nodePath.dirname(nodePath.dirname(pluginDir))), "installed_plugins.json");
+	const plugins = JSON.parse(fs.readFileSync(registry, "utf8"))?.plugins ?? {};
+	const entries = plugins[`atlas@${marketplace}`] ?? Object.entries(plugins).find(([k]) => k.startsWith("atlas@"))?.[1];
+	return Array.isArray(entries) ? entries[0]?.version : undefined;
+}
+
+/**
+ * One line when this session's in-memory modules (loaded from `<plugins>/cache/plugins/<mkt>___atlas___<ver>/`)
+ * are older than the version omp's `installed_plugins.json` now points at (omp auto-upgrades marketplace
+ * plugins seconds after start; the TypeScript in memory stays old until restart). Undefined when the versions
+ * match, the load dir is not a versioned install, or the registry is unreadable. Never throws.
+ */
+export function staleSessionNotice(pluginDir: string = nodePath.resolve(import.meta.dir, "..")): string | undefined {
+	try {
+		const m = nodePath.basename(pluginDir).match(VERSIONED);
+		if (!m) return undefined;
+		const loaded = nodePath.basename(pluginDir).slice(m[1].length);
+		const current = installedAtlasVersion(pluginDir, m[1].slice(0, -"___atlas___".length));
+		if (typeof current !== "string" || !current || current === loaded) return undefined;
+		return `atlas: this omp session runs atlas ${loaded} but ${current} is installed; restart omp to pick up ${current}.`;
+	} catch {
+		return undefined;
+	}
+}

@@ -93,7 +93,7 @@ Done when one of these lines is printed with its sentences and recap.
 
 ## Provider notes
 
-- **GitHub Actions CI**: prefer the `xd://github` device `run_watch` op as armed in `references/ci-classification.md` (`{"op": "run_watch", "run": "<id>", "tail": 50}`); its failure artifact spills logs for you.
+- **GitHub Actions CI**: prefer the `github` tool command `run_watch` op as armed in `references/ci-classification.md` (`{"op": "run_watch", "run": "<id>", "tail": 50}`); its failure artifact spills logs for you.
 - **Non-GitHub CI (Jenkins/GitLab/URL)**: fetch status fresh each tick (curl/CLI), classify per Step 3, spill response bodies to the run ledger like any log.
 - [Watch modes and tick recipes](references/watch-modes.md)
 - [Run ledger spec](references/run-ledger.md)

@@ -7,7 +7,7 @@
  *    only when a lean-ctx replacement is actually callable in THIS session,
  *    decided per call: a bare `ctx_search` / `ctx_glob` tool being named when
  *    the session exposes one directly, otherwise the connected lean-ctx MCP
- *    device named as `xd://mcp__lean_ctx_ctx_search` / `…_ctx_glob`. When
+ *    tool command named `mcp__lean_ctx_ctx_search` (bash; xd:// write device without bash) / `…_ctx_glob`. When
  *    neither is reachable the call is allowed with a one-time nudge saying
  *    lean-ctx is not reachable here — the lean-ctx binary on PATH alone no
  *    longer arms the deny. `read` / `bash` receive a one-time per-tool
@@ -253,38 +253,52 @@ export type { LeanKind };
 
 /**
  * A lean-ctx replacement actually callable in the session right now: either a
- * first-class tool to call directly, or an xd:// device route to write JSON
- * args to.
+ * first-class tool to call directly, a tool command run through `bash` (omp >= 19.1),
+ * or (older omp with `write` but no `bash`) an xd:// device route to write JSON args to.
  */
-export type LeanReplacement = { via: "tool"; name: string } | { via: "device"; device: string };
+export type LeanReplacement = { via: "tool"; name: string } | { via: "command"; command: string } | { via: "device"; device: string };
 
 const CONTEXT_MODE_SERVER = /context[-_]?mode/i;
 
 /**
- * The xd:// device route for one MCP tool. omp mints MCP tool names as
- * `mcp__<sanitized server>_<tool>` and presents connected MCP tools as `xd://`
- * devices; the route is live exactly when the minted name is in the session's
+ * The minted tool name of one connected MCP tool. omp mints MCP tool names as
+ * `mcp__<sanitized server>_<tool>` and runs them as bash tool commands (omp >= 19.1) or,
+ * on older omp, `xd://` devices; the route is live exactly when the minted name is in the session's
  * enabled set (session-tools: every connected MCP tool is enabled; loadMode
  * only decides top-level vs device presentation). Matching is by tool-name
  * suffix plus server-name shape, so mint collisions/caps and server spellings
  * (`lean-ctx`, `lean_ctx`) both resolve.
  */
-function deviceRoute(active: string[], serverName: RegExp, mcpToolName: string): string | undefined {
+function mcpName(active: string[], serverName: RegExp, mcpToolName: string): string | undefined {
 	for (const name of active) {
 		if (!name.startsWith("mcp__")) continue;
 		const rest = name.slice("mcp__".length);
 		if (!rest.toLowerCase().endsWith(`_${mcpToolName.toLowerCase()}`)) continue;
 		const server = rest.slice(0, rest.length - mcpToolName.length - 1);
-		if (serverName.test(server)) return `xd://${name}`;
+		if (serverName.test(server)) return name;
 	}
 	return undefined;
+}
+
+/** A tool command via `bash` when active (omp >= 19.1), else the legacy `write` to its xd:// device, else unreachable. */
+function mcpRoute(active: string[], serverName: RegExp, mcpToolName: string): LeanReplacement | undefined {
+	const bash = active.includes("bash");
+	if (!bash && !active.includes("write")) return undefined;
+	const name = mcpName(active, serverName, mcpToolName);
+	if (!name) return undefined;
+	return bash ? { via: "command", command: name } : { via: "device", device: `xd://${name}` };
+}
+
+/** How to invoke a non-tool route, as prose. */
+function routeUse(route: Exclude<LeanReplacement, { via: "tool" }>): string {
+	return route.via === "command" ? `run the bash command ${route.command} -j '<JSON args>'` : `write JSON args to ${route.device}`;
 }
 
 /**
  * Resolve the lean-ctx replacement for one kind from the session's currently
  * enabled tool names: a bare builtin/custom `ctx_*` tool first (callable
  * directly), otherwise the connected lean-ctx MCP device route
- * (`xd://mcp__lean_ctx_ctx_search`; context-mode's execute device is accepted
+ * (bash command `mcp__lean_ctx_ctx_search`; context-mode's execute device is accepted
  * as a shell surrogate). `undefined` means nothing is reachable in this
  * session and the caller must allow the native tool (fail open).
  */
@@ -295,12 +309,10 @@ export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefi
 	for (const { tool } of replacements) {
 		if (active.includes(tool)) return { via: "tool", name: tool };
 	}
-	// xd:// devices are invoked by writing to them, so without `write` the route is not callable.
-	if (!active.includes("write")) return undefined;
 	for (const { tool, servers } of replacements) {
 		for (const server of servers) {
-			const route = deviceRoute(active, server, tool);
-			if (route) return { via: "device", device: route };
+			const route = mcpRoute(active, server, tool);
+			if (route) return route;
 		}
 	}
 	return undefined;
@@ -308,8 +320,8 @@ export function resolveLeanReplacement(kind: LeanKind, active: string[] | undefi
 
 /**
  * Route to one specific lean-ctx tool by name (ctx_read, ctx_search, ctx_glob,
- * ctx_tree, ctx_shell): a bare tool of that name, else the lean-ctx device
- * `xd://mcp__lean_ctx_<tool>`. ctx_shell defers to the shell kind so the
+ * ctx_tree, ctx_shell): a bare tool of that name, else the lean-ctx tool command
+ * `mcp__lean_ctx_<tool>` (xd:// device on omp without bash). ctx_shell defers to the shell kind so the
  * context-mode execute surrogate still counts. `undefined` = that exact tool
  * is not reachable, and the caller must not deny toward it.
  */
@@ -317,9 +329,7 @@ export function resolveLeanToolRoute(tool: string, active: string[] | undefined)
 	if (!Array.isArray(active)) return undefined;
 	if (tool === "ctx_shell") return resolveLeanReplacement("shell", active);
 	if (active.includes(tool)) return { via: "tool", name: tool };
-	if (!active.includes("write")) return undefined;
-	const device = deviceRoute(active, /lean[-_]?ctx/i, tool);
-	return device ? { via: "device", device } : undefined;
+	return mcpRoute(active, /lean[-_]?ctx/i, tool);
 }
 
 const REPLACEMENT_EXAMPLES: Record<"search" | "glob", { tool: string; example: string }> = {
@@ -333,7 +343,7 @@ function denyReason(tool: "grep" | "glob", replacement: LeanReplacement): string
 	if (replacement.via === "tool") {
 		return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: call ${replacement.name} directly, e.g. ${spec.example}`;
 	}
-	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: write JSON to ${replacement.device}, e.g. ${spec.example}`;
+	return `Atlas enforcement: use lean-ctx ${spec.tool} instead of ${tool}: ${routeUse(replacement)}, e.g. ${spec.example}`;
 }
 
 /** One-time nudge when grep/glob is allowed because nothing lean-ctx is reachable. */
@@ -345,7 +355,7 @@ function readNudge(replacement: LeanReplacement): string {
 	const how =
 		replacement.via === "tool"
 			? `call the lean-ctx ${replacement.name} tool directly`
-			: `write JSON args to ${replacement.device}`;
+			: routeUse(replacement);
 	return `Atlas nudge: for exploration, prefer lean-ctx ctx_read (${how}). Native Read is still fine immediately before an Edit.`;
 }
 
@@ -354,9 +364,9 @@ function bashNudge(replacement: LeanReplacement, active: string[]): string {
 	const via =
 		replacement.via === "tool"
 			? `the lean-ctx ${replacement.name} tool`
-			: `lean-ctx ctx_shell (write JSON args to ${replacement.device})`;
-	const contextMode = deviceRoute(active, CONTEXT_MODE_SERVER, "ctx_execute");
-	const alt = contextMode && !(replacement.via === "device" && contextMode === replacement.device) ? ` or context-mode ctx_execute (${contextMode})` : "";
+			: `lean-ctx ctx_shell (${routeUse(replacement)})`;
+	const contextMode = mcpRoute(active, CONTEXT_MODE_SERVER, "ctx_execute");
+	const alt = contextMode && contextMode.via !== "tool" && JSON.stringify(contextMode) !== JSON.stringify(replacement) ? ` or context-mode ctx_execute (${routeUse(contextMode)})` : "";
 	return `Atlas nudge: for anything producing output (~20+ lines, logs, data), prefer ${via}${alt}. Native Bash remains fine for mutations and short fixed output.`;
 }
 

@@ -14,7 +14,7 @@ import type { ActivityEntry, LiveSnapshot } from '../../orchestra-types'
 import { openItems } from '../../data/core'
 import { activeCount, liveWorkers } from '../../data/live'
 import type { LiveWorker } from '../../data/live'
-import { bubbleTree, waveTree, workerCard } from './cards'
+import { bubbleTree, teamCard, waveTree, workerCard } from './cards'
 import type { CardExtra } from './cards'
 import { cardExtra, launchedId, notificationRow } from './outcome'
 import { barFade, cardAged, cardFade, hideNotification, placedTree, runCardPlaced, runSecs } from './placed'
@@ -156,20 +156,58 @@ function agentStatus(
  return { state: STATUS_TO_STATE[raw] ?? 'running', label: raw, name: agent?.name }
 }
 
+/** The team a spawn-team call launched: id from the output (JSON `team_id` or `team <id>`), members are the mux-launched squad rows. Null without rows. */
+function teamTreeOf(snap: AtlasSnapshot, props: ToolUsePropsLike, ui: Ui): RenderElement | null {
+ const out = typeof props.output === 'string' ? props.output : JSON.stringify(props.output ?? '')
+ const mux = (snap.squad ?? []).filter((a) => a.transport)
+ const named = namedMembers(mux, out)
+ return teamCard(teamIdOf(out), named.length > 0 ? named : mux, snap.todos ?? [], ui)
+}
+
+const teamIdOf = (out: string): string =>
+ /"team_id"\s*:\s*"([^"]+)"/.exec(out)?.[1] ?? /\bteam[ :]+([\w.-]+)/.exec(out)?.[1] ?? 'new'
+
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/** The launch output names this team's members: another team running beside it is not on this card. */
+const namedMembers = <T extends { name: string }>(mux: T[], out: string): T[] =>
+ mux.filter((a) => new RegExp(`(^|[^\\w-])${escapeRegExp(a.name)}([^\\w-]|$)`).test(out))
+
+const bashCommandOf = (props: ToolUsePropsLike): string =>
+ String((props.input as { command?: unknown } | null)?.command ?? '')
+
+const isSpawnTeam = (cmd: string): boolean => cmd.includes('atlas_mux.py') && cmd.includes('spawn-team')
+
 /** Deployment card: bordered `◆ impl-auth · implementer · sonnet·low ● running`. Null keeps the engine's row. */
 export function toolUseTree(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns = 0, extra: CardExtra = {}): RenderElement | null {
- if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props, extra.ui ?? lookUi())
- const input = (props.input ?? {}) as { subagentType?: string; subagent_type?: string; name?: string; description?: string }
+ const ui = extra.ui ?? lookUi()
+ if (props.tool === 'Bash' && isSpawnTeam(bashCommandOf(props))) return teamTreeOf(snap, props, ui) ?? noisyTree(props, ui)
+ if (props.tool !== 'Agent' && props.tool !== 'Task') return noisyTree(props, ui)
+ return agentCard(snap, props, agents, columns, extra)
+}
+
+function agentCard(snap: AtlasSnapshot, props: ToolUsePropsLike, agents: AgentInfo[], columns: number, extra: CardExtra): RenderElement | null {
+ const input = (props.input ?? {}) as AgentInput
  const persona = personaFor(snap, input.subagentType ?? input.subagent_type)
  if (!persona) return null
  const status = agentStatus(agents, { ...input, subagentType: input.subagentType ?? input.subagent_type }, props)
  const call = { ...props, input: { model: persona.model, effort: persona.effort, ...input } }
  const now = nowOf(snap, status.name ?? input.name)
- // A worker the mod saw end is finished whatever the host row still says (cardExtra read the same record the HUD row does).
- const ended = extra.ended !== undefined && extra.ended !== '' && !call.isRunning
- const state = ended && (status.state === 'running' || status.state === 'spawning' || status.state === 'input') ? 'finished' : status.state
- return workerCard(call, state, columns > 8 ? columns - 2 : 0, status.name ?? persona.name, ended && state !== status.state ? 'completed' : status.label, { ...(now ? { now } : {}), ...extra })
+ const state = settledState(status.state, hasEnded(extra, call.isRunning))
+ const label = state !== status.state ? 'completed' : status.label
+ return workerCard(call, state, cardWidth(columns), status.name ?? persona.name, label, { ...(now ? { now } : {}), ...extra })
 }
+
+type AgentInput = { subagentType?: string; subagent_type?: string; name?: string; description?: string }
+
+const LIVE_STATES: ReadonlySet<AgentState> = new Set<AgentState>(['running', 'spawning', 'input'])
+
+// A worker the mod saw end is finished whatever the host row still says (cardExtra read the same record the HUD row does).
+const hasEnded = (extra: CardExtra, isRunning: boolean | undefined): boolean => !!extra.ended && !isRunning
+
+const settledState = (state: AgentState, ended: boolean): AgentState => (ended && LIVE_STATES.has(state) ? 'finished' : state)
+
+const cardWidth = (columns: number): number => (columns > 8 ? columns - 2 : 0)
 
 const activityOf = (snap: AtlasSnapshot, name?: string): ActivityEntry | undefined => (snap as Partial<LiveSnapshot>).activity?.[name ?? '']
 

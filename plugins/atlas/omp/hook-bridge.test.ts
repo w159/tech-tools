@@ -542,6 +542,48 @@ test("an unrecognised xd://mcp__ device fails closed to an MCP name, a file writ
 	expect(claudeNamesForCall("write", { path: "xd://report_issue", content: "x" })).toEqual(["Write"]); // not an MCP device
 });
 
+test("a bash tool command that runs an MCP tool classifies as that MCP tool, like its xd:// device; lookalikes stay Bash", () => {
+	expect(claudeNamesForCall("bash", { command: `mcp__lean_ctx_ctx_search -j '{"pattern":"x"}'` })).toEqual(["mcp__lean_ctx__ctx_search"]);
+	expect(claudeNamesForCall("bash", { command: "mcp__lean_ctx_ctx_search" })).toEqual(["mcp__lean_ctx__ctx_search"]);
+	expect(claudeNamesForCall("bash", { command: `mcp__lean_ctx_ctx_search -j '{}'` })).toEqual(claudeNamesForCall("write", { path: "xd://mcp__lean_ctx_ctx_search", content: "{}" }));
+	for (const command of ["ls", "echo mcp__lean_ctx_ctx_search -j '{}'", "mcp__lean_ctx_ctx_search -j '{}' ; rm -rf x", `mcp__lean_ctx_ctx_search -j "{}"`, "mcp__lean_ctx_ctx_search -j '{}' && git push"]) {
+		expect(claudeNamesForCall("bash", { command })).toEqual(["Bash"]);
+	}
+});
+
+test("a bash MCP tool command reaches the bridged hooks as the same MCP tool and args as the xd:// write", async () => {
+	const pre = hookScript("mcp_pre.py", {});
+	const post = hookScript("mcp_post.py", {});
+	const { handlers, ctx } = harness(
+		writeConfig(
+			{ PreToolUse: [{ matcher: "mcp__.*", hooks: [{ command: `python3 "${pre}"` }] }], PostToolUse: [{ matcher: "mcp__.*", hooks: [{ command: `python3 "${post}"` }] }] },
+			["mcp_pre.py", "mcp_post.py"],
+		),
+	);
+	const json = JSON.stringify({ pattern: "bridge route" });
+	const events = [
+		{ toolName: "bash", input: { command: `mcp__lean_ctx_ctx_search -j '${json}'` }, content: "ok", isError: false },
+		{ toolName: "write", input: { path: "xd://mcp__lean_ctx_ctx_search", content: json }, content: "ok", isError: false },
+	];
+	for (const event of events) {
+		await handlers.tool_call(event, ctx());
+		await handlers.tool_result(event, ctx());
+	}
+	for (const name of ["mcp_pre.py", "mcp_post.py"]) {
+		const [bashPayload, writePayload] = logOf(name);
+		expect(bashPayload).toMatchObject({ tool_name: "mcp__lean_ctx__ctx_search", tool_input: { pattern: "bridge route" } });
+		expect(bashPayload).toEqual(writePayload);
+	}
+});
+
+test("a plain bash command, an echoed MCP name and a chained MCP command all stay Bash for the bridged hooks", async () => {
+	const gate = hookScript("bash_gate.py", {});
+	const { handlers, ctx } = harness(writeConfig({ PreToolUse: [{ matcher: "Bash", hooks: [{ command: `python3 "${gate}"` }] }] }, ["bash_gate.py"]));
+	const commands = ["ls -la", "echo mcp__lean_ctx_ctx_search -j '{}'", "mcp__lean_ctx_ctx_search -j '{}' && rm -rf x"];
+	for (const command of commands) await handlers.tool_call({ toolName: "bash", input: { command } }, ctx());
+	expect(logOf("bash_gate.py").map(p => ({ tool_name: p.tool_name, tool_input: p.tool_input }))).toEqual(commands.map(command => ({ tool_name: "Bash", tool_input: { command } })));
+});
+
 test("every MCP call reaches the connector_credential_watch matcher; the hook itself filters content servers", () => {
 	const watch = loadBridgedHooks().find(h => h.command.includes("connector_credential_watch.py"));
 	if (!watch?.matcher) throw new Error("connector_credential_watch is not bridged with a matcher");

@@ -602,6 +602,58 @@ class WorkerHandbackAndWait(unittest.TestCase):
         _, out, _ = self._wait(rec, [{"owner": "a", "ts": now, "text": "STATUS: DONE\nexit 0"}], "--timeout", "1")
         self.assertAlmostEqual(out["members"][0]["duration_s"], 5.0, delta=0.2)
 
+    def _spawn_dry(self, task: str, effort: str = "medium") -> tuple:
+        import contextlib as cl
+
+        d = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, d, True)
+        tf = os.path.join(d, "t.md")
+        pathlib.Path(tf).write_text(task)
+        buf = io.StringIO()
+        env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
+        with mock.patch.dict(os.environ, env, clear=True), cl.redirect_stdout(buf):
+            code = mux.main(["spawn-team", "--json", "--class", "implement", "--effort", effort, "--paths",
+                             "plugins/atlas", "--task-file", tf, "--dry-run", "--root", d])
+        return code, json.loads(buf.getvalue().strip().splitlines()[-1])
+
+    def test_spawn_team_refuses_two_implementers_sharing_one_unsplit_task(self):
+        code, out = self._spawn_dry("port it all\n")  # implement/medium seats two implementers
+        self.assertEqual(code, 2)
+        self.assertIn("## member: implementer-1", out["error"])
+        code, _ = self._spawn_dry("## member: implementer-1\nA\n## member: implementer-2\nB\n")
+        self.assertEqual(code, 0)
+
+    def test_spawn_team_allows_one_implementer_on_an_unsplit_task(self):
+        code, _ = self._spawn_dry("one slice\n", "low")
+        self.assertEqual(code, 0)
+
+    def test_brief_carries_the_budget_line_and_omits_it_at_zero(self):
+        rec = {"team_id": "t", "task": "x", "file_scope": [], "members": [{"name": "w1", "role": "r"}]}
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_BUDGET_MIN": "12"}):
+            self.assertIn("Budget: 12 min for this one slice. Past it, stop and report STATUS: BLOCKED",
+                          mux.team_brief(rec, rec["members"][0], "/r", "c", "lead"))
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_BUDGET_MIN": "0"}):
+            self.assertNotIn("Budget:", mux.team_brief(rec, rec["members"][0], "/r", "c", "lead"))
+
+    def test_wait_marks_a_member_past_the_budget_failed_and_closes_its_pane(self):
+        import time
+
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux",
+               "created": time.time() - 3600}
+        calls = []
+
+        def fake_tmux(*a):
+            calls.append(a)
+            return subprocess.CompletedProcess(a, 0, "a\t%7\n" if a[0] == "list-panes" else "", "")
+
+        with mock.patch.dict(os.environ, {"ATLAS_WORKER_BUDGET_MIN": "30"}), mock.patch.object(mux, "_tmux", fake_tmux):
+            code, out, _ = self._wait(rec, [], "--timeout", "5", exited=False)
+        self.assertEqual(out["over_budget"], ["a"])
+        self.assertEqual(out["members"][0]["failure"], "over budget (30 min)")
+        self.assertEqual(out["members"][0]["exit"], 1)
+        self.assertEqual(code, 1)
+        self.assertIn(("kill-pane", "-t", "%7"), calls)
+
     def test_t3_wait_prints_member_state_on_an_interval_and_returns_when_all_reported(self):
         import time
 

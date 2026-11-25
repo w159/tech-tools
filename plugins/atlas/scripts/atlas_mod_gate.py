@@ -87,7 +87,7 @@ import { expect, mock, test } from 'claude-code/testing';
 const CONTRACT = JSON.stringify({
   phases: ['research', 'theory', 'test', 'validate', 'implement', 'verify', 'done', 'blocked'].map((id) => ({ id, glyph: '.' })),
   todoPhases: ['research', 'theory', 'test', 'validate', 'implement', 'verify'],
-  headerFirstLinePattern: '^ATLAS',
+  headerFirstLinePattern: '__HEADER_PATTERN__',
   itemPhasePrefix: '[<phase>] ',
 });
 
@@ -117,6 +117,39 @@ test('atlas mod: the hooks module loads in the host and the band renders', async
   await ui.unmount();
   expect(text).toContain('ATLAS');
 });
+
+// The lead reply header must draw as a coloured chip: phase word shown, markdown brand gone, a coloured Text on it.
+test('atlas mod: an ATLAS reply header draws as a coloured chip', async ($, on) => {
+  mock.clock(on);
+  mock.env(on, { ATLAS_PROJECT_ROOT: '/repo' });
+  on('session.id', async () => ({ value: 'abcdef-0000' }) as never);
+  on('session.start', async (_$, e) => ({ cwd: (e as { cwd: string }).cwd }) as never);
+  on('ui.log', async () => ({ value: undefined }) as never);
+  on('fs.exists', async (_$, e) => ({ value: String((e as { path: string }).path).endsWith('/.atlas') }) as never);
+  on('fs.read', async (_$, e) => {
+    if (String((e as { path: string }).path).endsWith('/contracts/operating-contract.json')) return { value: CONTRACT } as never;
+    throw new Error('no such file');
+  });
+  on('fs.stat', async () => { throw new Error('no such file'); });
+  on('fs.list', async () => ({ value: [] }) as never);
+  on('agent.list', async () => ({ value: [] }) as never);
+  on('command.register', async (_$, e) => ({ value: { command: (e as { name: string }).name } }) as never);
+  on('ui.open', async () => ({ value: { isPlaced: true } }) as never);
+  on('process.run', async () => ({ value: { exitCode: 0, stdout: 'main', stderr: '' } }) as never);
+  on('ui.toast', async () => ({ value: undefined }) as never);
+  // What the mod's `next(e)` reaches: the engine's own raw row, so a header the mod fails to restyle shows up as `**ATLAS**` text.
+  on('ui.render', async ($, e) => $.ui.resolve(e).Text({ children: String((e as { props: { text?: string } }).props.text ?? '') }) as never);
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true } as never);
+  const ui = await $.ui.mount({ plugin: 'atlas', surface: 'terminal', component: 'AssistantMessage', requestId: 'chip', props: { text: '**ATLAS** | \\u{1F50D} research | reading the gate', isFirstOfReply: true } as never });
+  const nodes = await ui.findAll({});
+  const text = nodes.map((n) => n.text ?? '').join('\\n');
+  const colored = nodes.filter((n) => n.type === 'Text' && (n.text ?? '').includes('research') && typeof (n.props as { color?: unknown }).color === 'string' && String((n.props as { color?: unknown }).color) !== '');
+  await ui.unmount();
+  if (!text.includes('research') || colored.length === 0) console.log('chip nodes: ' + JSON.stringify(nodes.map((n) => ({ type: n.type, props: n.props, text: n.text }))));
+  expect(text).toContain('research');
+  expect(text).not.toContain('**ATLAS**');
+  expect(colored.length).toBeGreaterThan(0);
+});
 """
 HOST_COPY = ("hooks/hooks.json", "mod", "contracts", "omp", "types", "package.json")
 
@@ -142,6 +175,13 @@ def classify_live(rc: int, txt: str, probes: int, require_live: bool) -> tuple[s
         return (FAIL, why) if require_live else (SKIP, why)
     hit = next((l.strip() for l in txt.splitlines() if "hooks module did not load" in l), tail(txt))
     return FAIL, f"exit {rc}: {hit}"
+
+
+def render_host_probe(contract_path: Path) -> str:
+    """HOST_PROBE with the real header pattern: the mod adopts the snapshot's pattern at boot, so a stale one fails the chip test."""
+    pattern = json.loads(contract_path.read_text())["headerFirstLinePattern"]
+    # json.dumps output is a valid JS string literal; the quotes in the template are replaced with it
+    return HOST_PROBE.replace("'__HEADER_PATTERN__'", json.dumps(pattern))
 
 
 def tail(text: str, n: int = 12) -> str:
@@ -254,9 +294,10 @@ def gate(root: Path, live: bool, require_live: bool = False) -> int:
                 for t in [*trim.rglob("*.test.ts"), *trim.rglob("*.test.tsx")]:
                     t.unlink()
                 probes = 0
+                probe_src = render_host_probe(root / "contracts" / "operating-contract.json")
                 for j, rel in enumerate(rels):
                     moddir = (trim / "hooks" / rel).resolve().parent
-                    (moddir / f"zz_gate_probe_{j}.test.ts").write_text(HOST_PROBE)
+                    (moddir / f"zz_gate_probe_{j}.test.ts").write_text(probe_src)
                     probes += 1
                 home = tmp / "home"
                 cfg = tmp / "claude-config"

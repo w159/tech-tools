@@ -1,0 +1,27 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts
+command: cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3
+exit: 0
+seconds: 71.21
+--- output tail ---
+5 mode='rb' closefd=True>
+  def _execute_child(self, args, executable, preexec_fn, close_fds,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py:1313: ResourceWarning: subprocess 46825 is still running
+  _warn("subprocess %s is still running" % self.pid,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py:1992: ResourceWarning: unclosed file <_io.FileIO name=6 mode='rb' closefd=True>
+  def _execute_child(self, args, executable, preexec_fn, close_fds,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts/test_atlas_mux_more.py:424: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='utf-8'>
+  rc = mux.cmd_run_worker(args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+./Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts/test_atlas_mux_more.py:424: ResourceWarning: unclosed file <_io.TextIOWrapper name=4 encoding='utf-8'>
+  rc = mux.cmd_run_worker(args)
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+...........................................
+----------------------------------------------------------------------
+Ran 315 tests in 71.018s
+
+OK
+

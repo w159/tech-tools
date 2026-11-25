@@ -403,6 +403,7 @@ class PullRequestTests(GuardBase):
                 },
                 "cwd": str(repo),
             },
+            bash("github -j '{\"op\": \"pr_create\", \"title\": \"x\"}'", repo),
         ]
         for p in payloads:
             with self.subTest(p=p.get("tool_input")):
@@ -443,6 +444,8 @@ class PullRequestTests(GuardBase):
                 "tool_input": {"file_path": "xd://github", "content": "not json"},
                 "cwd": str(repo),
             },
+                   bash("github -j '{\"op\": \"issue_create\"}'", repo),
+            bash("github -j 'not json'", repo),
         ):
             with self.subTest(p=p.get("tool_input")):
                 self.assertIsNone(self.kind(p))

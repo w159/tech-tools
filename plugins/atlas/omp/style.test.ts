@@ -139,15 +139,15 @@ test("phrase keys are gone; single-token names still translate across wraps", ()
 	for (const key of Object.keys(MAP.claudeToOmp)) expect(key).not.toMatch(/\s/);
 	expect(Object.keys(MAP.claudeToOmp).filter(k => /^[A-Z]\w*$/.test(k)).length).toBeGreaterThan(0);
 	expect(translateToolNames("carries the ToolSearch\n+ lean-ctx TOOLS block", MAP)).toBe(
-		"carries the xd:// device catalog\n+ lean-ctx TOOLS block",
+		"carries the bash tool-command list\n+ lean-ctx TOOLS block",
 	);
-	expect(translateToolNames("(`ToolSearch(\"select:TodoWrite\")`)", MAP)).toBe("(`xd:// device catalog(\"select:todo\")`)");
+	expect(translateToolNames("(`ToolSearch(\"select:TodoWrite\")`)", MAP)).toBe("(`bash tool-command list(\"select:todo\")`)");
 });
 
-test("mcp__server__tool maps to omp's xd device mint", () => {
-	expect(mcpDevice("lean-ctx", "ctx_search", MAP)).toBe("xd://mcp__lean_ctx_ctx_search");
-	expect(mcpDevice("claude-mem", "claude-mem_search", MAP)).toBe("xd://mcp__claude_mem_search");
-	expect(translateToolNames("call mcp__lean-ctx__ctx_read now", MAP)).toBe("call xd://mcp__lean_ctx_ctx_read now");
+test("mcp__server__tool maps to omp's minted tool-command name", () => {
+	expect(mcpDevice("lean-ctx", "ctx_search", MAP)).toBe("mcp__lean_ctx_ctx_search");
+	expect(mcpDevice("claude-mem", "claude-mem_search", MAP)).toBe("mcp__claude_mem_search");
+	expect(translateToolNames("call mcp__lean-ctx__ctx_read now", MAP)).toBe("call mcp__lean_ctx_ctx_read now");
 });
 
 test("drift: the injected block is exactly the translated single-source style", () => {
@@ -189,19 +189,19 @@ test("drift: every Claude tool name in the style source has an omp mapping", () 
 	expect(bareUsed.length).toBeGreaterThan(0);
 	const bareUnmapped = bareUsed.filter(t => !((MAP.bareTools ?? {})[t]));
 	expect(bareUnmapped).toEqual([]);
-	const bareLeaked = bareUsed.filter(t => new RegExp(`\\b${t}\\b`).test(rendered.replace(/\bxd:\/\/mcp__\w+/g, "")));
+	const bareLeaked = bareUsed.filter(t => new RegExp(`\\b${t}\\b`).test(rendered.replace(/\bmcp__\w+/g, "")));
 	expect(bareLeaked).toEqual([]);
 });
 
-test("bare lean-ctx and context-mode names map to the devices a real omp session mints", () => {
+test("bare lean-ctx and context-mode names map to the tool commands a real omp session mints", () => {
 	expect(translateToolNames("use `ctx_search`/`ctx_glob` when lean-ctx MCP is configured", MAP)).toBe(
-		"use `xd://mcp__lean_ctx_ctx_search`/`xd://mcp__lean_ctx_ctx_glob` when lean-ctx MCP is configured",
+		"use `mcp__lean_ctx_ctx_search`/`mcp__lean_ctx_ctx_glob` when lean-ctx MCP is configured",
 	);
 	expect(translateToolNames("exploration Read uses `ctx_read`, noisy Bash uses `ctx_shell`", MAP)).toBe(
-		"exploration read uses `xd://mcp__lean_ctx_ctx_read`, noisy bash uses `xd://mcp__lean_ctx_ctx_shell`",
+		"exploration read uses `mcp__lean_ctx_ctx_read`, noisy bash uses `mcp__lean_ctx_ctx_shell`",
 	);
 	expect(translateToolNames("context-mode `ctx_execute`", MAP)).toBe(
-		"context-mode `xd://mcp__context_mode_context_mode_ctx_execute`",
+		"context-mode `mcp__context_mode_context_mode_ctx_execute`",
 	);
 	expect(translateToolNames("ctx_searching and my_ctx_search stay", MAP)).toBe("ctx_searching and my_ctx_search stay");
 });
@@ -210,7 +210,11 @@ test("bare lean-ctx and context-mode names map to the devices a real omp session
 
 const BARE_PROSE = "`ctx_search` `ctx_glob` `ctx_read` `ctx_shell` `ctx_execute`";
 
-test("active tools: a directly callable ctx_* tool keeps its bare name; a connected MCP device maps to its xd route", () => {
+test("active tools: a directly callable ctx_* tool keeps its bare name; a connected MCP tool maps to its bash command, or xd route without bash", () => {
+	const names = ["ctx_search", "mcp__lean_ctx_ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__context_mode_context_mode_ctx_execute"];
+	const viaBash = resolveBareTools(MAP, ["bash", "write", ...names]);
+	expect(viaBash.ctx_glob).toBe("mcp__lean_ctx_ctx_glob");
+	expect(viaBash.ctx_execute).toBe("mcp__context_mode_context_mode_ctx_execute");
 	const active = ["write", "ctx_search", "mcp__lean_ctx_ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__context_mode_context_mode_ctx_execute"];
 	expect(resolveBareTools(MAP, active)).toEqual({
 		ctx_search: "ctx_search",
@@ -223,8 +227,9 @@ test("active tools: a directly callable ctx_* tool keeps its bare name; a connec
 	);
 });
 
-test("active tools: a device route needs `write`, and an unreachable tool is left bare rather than pointed at a dead device", () => {
-	expect(resolveBareTools(MAP, ["mcp__lean_ctx_ctx_glob"])).toEqual({}); // no write: devices are not callable
+test("active tools: a tool route needs `bash` or `write`, and an unreachable tool is left bare rather than pointed at a dead device", () => {
+	expect(resolveBareTools(MAP, ["mcp__lean_ctx_ctx_glob"])).toEqual({}); // neither bash nor write: not callable
+	expect(resolveBareTools(MAP, ["bash", "mcp__lean_ctx_ctx_glob"])).toEqual({ ctx_glob: "mcp__lean_ctx_ctx_glob" });
 	expect(resolveBareTools(MAP, ["write", "read", "bash"])).toEqual({}); // nothing lean-ctx connected
 	// a differently spelled server still resolves through the contract's server pattern
 	expect(resolveBareTools(MAP, ["write", "mcp__lean-ctx_ctx_search"])).toEqual({ ctx_search: "xd://mcp__lean-ctx_ctx_search" });
@@ -248,7 +253,10 @@ test("registerStyle resolves bareTools from activeTools at injection time, and f
 	const throwing = render(() => { throw new Error("boom"); });
 	const omitted = render();
 	expect(live).not.toBe(dead); // the active set changes what is rendered
-	expect(live).toContain("xd://mcp__lean_ctx_ctx_read");
+	expect(live).toContain("xd://mcp__lean_ctx_ctx_read"); // write but no bash: legacy device route
+	const modern = render(() => ["bash", "write", "ctx_search", "ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__lean_ctx_ctx_shell"]);
+	expect(modern).toContain("mcp__lean_ctx_ctx_read");
+	expect(modern).not.toContain("xd://");
 	expect(live).not.toContain("xd://mcp__lean_ctx_ctx_search"); // callable directly, so no device rewrite
 	expect(dead).not.toMatch(/xd:\/\/mcp__lean_ctx_ctx_/); // unreachable: nothing points at a dead device
 	for (const fallback of [unknown, throwing, omitted]) expect(fallback).toBe(renderOmpStyle());
@@ -353,7 +361,7 @@ test("loadToolNames rejects a contract whose claudeToOmp or mcp section is not a
 		writeFileSync(path, JSON.stringify(body));
 		return loadToolNames(path);
 	};
-	const mcp = { prefix: "xd://mcp__", separator: "_" };
+	const mcp = { prefix: "mcp__", separator: "_" };
 	expect(load({ claudeToOmp: { Bash: "bash" }, mcp })).toEqual({ claudeToOmp: { Bash: "bash" }, bareTools: {}, mcp });
 	expect(load({ claudeToOmp: { Bash: "bash" }, bareTools: { ctx_read: "d" }, mcp })?.bareTools).toEqual({ ctx_read: "d" });
 	expect(load({ claudeToOmp: { Bash: "bash" }, bareTools: ["x"], mcp })?.bareTools).toEqual({});
@@ -380,7 +388,7 @@ test("the minimal header rule lists only phases that carry both an id and a glyp
 
 
 test("translateToolNames prefers the longest key whichever order the contract lists them", () => {
-	const mcp = { prefix: "xd://mcp__", separator: "_" };
+	const mcp = { prefix: "mcp__", separator: "_" };
 	const a = translateToolNames("use Bash(git) then Bash", { claudeToOmp: { Bash: "bash", "Bash(git)": "gitbash" }, bareTools: {}, mcp });
 	const b = translateToolNames("use Bash(git) then Bash", { claudeToOmp: { "Bash(git)": "gitbash", Bash: "bash" }, bareTools: {}, mcp });
 	expect(a).toBe("use gitbash then bash");

@@ -19,7 +19,7 @@ discipline from `SKILL.md` (reused from `atlas-run-watch/SKILL.md:52-63`).
 
 ## Mode: `ci:<url-or-run-id>` - CI URL / API
 
-1. GitHub Actions: arm the `xd://github` device `run_watch` op per `atlas-run-watch/references/ci-classification.md:7-17` (`{"op": "run_watch", "run": "<id>", "tail": 50}`). Its failure artifact is the `full.log` equivalent - cite its `artifact://<id>` path, never paste.
+1. GitHub Actions: arm the `github` tool command `run_watch` op per `atlas-run-watch/references/ci-classification.md:7-17` (`{"op": "run_watch", "run": "<id>", "tail": 50}`). Its failure artifact is the `full.log` equivalent - cite its `artifact://<id>` path, never paste.
 2. Any other CI (Jenkins, GitLab, raw URL): fetch status fresh each tick (curl or the platform CLI if installed). Parse only status fields; if the response body is the evidence, save it to `runs/<id>/full.log` and pass the path.
 3. No device, no CLI, no network access -> BLOCKED with the missing capability; never fake CI state from memory (`ci-classification.md:26`).
 

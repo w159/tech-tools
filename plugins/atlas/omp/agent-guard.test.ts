@@ -239,6 +239,15 @@ test("read-only agents are blocked from lean-ctx edit devices; reads and writabl
 	}
 });
 
+test("read-only agents are blocked from the lean-ctx edit tool as a bash command too; other commands pass", () => {
+	const h = harness();
+	const denied = h.call(sub("verifier"), "bash", { command: `mcp__lean_ctx_ctx_patch -j '{}'` });
+	expect(denied?.block).toBe(true);
+	expect(denied?.reason).toContain("agents/verifier.md");
+	expect(h.call(sub("implementer"), "bash", { command: `mcp__lean_ctx_ctx_patch -j '{}'` })).toBeUndefined();
+	expect(h.call(sub("verifier"), "bash", { command: `mcp__lean_ctx_ctx_read -j '{}'` })).toBeUndefined();
+});
+
 test("every real read-only agent definition lists no edit tool in its load list and denies every MCP edit tool", () => {
 	for (const [name, list] of Object.entries(EXPECTED)) {
 		const text = readFileSync(join(AGENTS_DIR, `${name}.md`), "utf8");

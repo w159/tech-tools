@@ -88,7 +88,7 @@ const defaultRun = async (argv: string[]): Promise<void> => {
 
 /**
  * Claude tool name the CLI logs for an omp call, or undefined when it is not tracked. Classified by call, not by tool
- * name alone: an omp `write` to an `xd://mcp__…` URI is an MCP device call (claude-mem, lean-ctx, …), so it is that MCP
+ * name alone: an omp `write` to an `xd://mcp__…` URI, or a bash tool command running an MCP tool, is an MCP device call (claude-mem, lean-ctx, …), so it is that MCP
  * tool and is not an inline Write, which would count toward the inline-op threshold and can read as a code write.
  */
 function trackedTool(toolName: string, input: unknown): "Task" | "Edit" | "Write" | undefined {

@@ -64,6 +64,12 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 <!-- atlas-findings:start -->
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
+| 2026-11-25 | worker-budget-unsplit | verified | atlas_mux: refuse unsplit multi-editor teams; worker wall-clock budget enforced by wait | [2026-11-25_worker-budget-unsplit.md](2026-11-25_worker-budget-unsplit.md) |
+| 2026-11-25 | team-launch-card | verified | mod: atlas_mux spawn-team draws a team card (role colour, name, role, state, own todos) | [2026-11-25_team-launch-card.md](2026-11-25_team-launch-card.md) |
+| 2026-11-25 | push-gate-green | verified | gate.sh push green with team card, worker budget, unsplit refusal, host chip probe | [2026-11-25_push-gate-green.md](2026-11-25_push-gate-green.md) |
+| 2026-11-25 | host-chip-probe | verified | mod gate: host probe checks the reply header chip with the real contract pattern (offline run only) | [2026-11-25_host-chip-probe.md](2026-11-25_host-chip-probe.md) |
+| 2026-11-25 | gate-push-slice-f024 | verified | mux brief/hygiene + cards.tsx slice passes gates | [2026-11-25_gate-push-slice-f024.md](2026-11-25_gate-push-slice-f024.md) |
+| 2026-11-25 | fallow-hookbridge-teamcard | verified | No introduced fallow complexity finding in hook-bridge.ts / team-card.test.tsx; omp+transcript tests pass | [2026-11-25_fallow-hookbridge-teamcard.md](2026-11-25_fallow-hookbridge-teamcard.md) |
 | 2026-11-24 | worktree-hygiene | verified | reap auto-commits dirty workers, snapshot base for a dirty lead, reap-stale at boot; team t033ece merged and removed itself | [2026-11-24_worktree-hygiene.md](2026-11-24_worktree-hygiene.md) |
 | 2026-11-24 | unwatched-team-gate | verified | Stop gate (w) blocks a stop while this session tmux team runs with no live atlas_mux wait | [2026-11-24_unwatched-team-gate.md](2026-11-24_unwatched-team-gate.md) |
 | 2026-11-24 | standards-feature | verified | Project standards: docs/standards + standards_nudge hook + curator/auditor/review/setup | [2026-11-24_standards-feature.md](2026-11-24_standards-feature.md) |

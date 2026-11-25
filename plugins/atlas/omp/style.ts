@@ -33,7 +33,7 @@ const PREFACE =
 
 export interface ToolNameMap {
 	claudeToOmp: Record<string, string>;
-	/** Bare lean-ctx/context-mode names (`ctx_search`) → the omp device a real session mints. */
+	/** Bare lean-ctx/context-mode names (`ctx_search`) → the tool-command name a real omp session mints. */
 	bareTools: Record<string, string>;
 	mcp: { prefix: string; separator: string };
 }
@@ -86,7 +86,7 @@ function sanitize(part: string): string {
 	return part.toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/_+/g, "_").replace(/^_|_$/g, "");
 }
 
-/** `mcp__<server>__<tool>` → `xd://mcp__<server>_<tool>` (tool loses a redundant `<server>_` prefix). */
+/** `mcp__<server>__<tool>` → `mcp__<server>_<tool>`, omp's minted tool-command name (tool loses a redundant `<server>_` prefix). */
 export function mcpDevice(server: string, tool: string, map: ToolNameMap): string {
 	const s = sanitize(server);
 	let t = sanitize(tool);
@@ -144,7 +144,7 @@ let cached: { key: string; text: string } | undefined;
  * injection time resolve each name against the tools actually callable now (same rules as
  * index.ts `resolveLeanReplacement`, which cannot be imported here: index.ts imports this
  * module): a directly callable bare tool keeps its name, a connected MCP device maps to
- * its `xd://` route (devices are invoked by writing to them, so that needs `write`), and
+ * its minted tool-command name (run through `bash`; the legacy `xd://` route when only `write` exists), and
  * anything unreachable is left bare instead of pointing at a dead device. `active`
  * unknown (undefined or not an array) → the static map.
  */
@@ -152,27 +152,38 @@ export function resolveBareTools(map: ToolNameMap, active: string[] | undefined)
 	if (!Array.isArray(active)) return map.bareTools;
 	const contract = loadNativeTools();
 	if (!contract) return map.bareTools; // cannot tell which servers own which tool: keep the static map
-	const servers: Record<string, RegExp[]> = {};
-	for (const { replacements } of Object.values(contract.kinds)) {
-		for (const { tool, servers: patterns } of replacements) servers[tool] = [...(servers[tool] ?? []), ...patterns];
-	}
-	const canWrite = active.includes("write");
+	const servers = serverPatternsByTool(contract);
+	const bash = active.includes("bash");
+	const reachable = bash || active.includes("write");
 	const resolved: Record<string, string> = {};
 	for (const bare of Object.keys(map.bareTools)) {
 		if (active.includes(bare)) {
 			resolved[bare] = bare;
 			continue;
 		}
-		if (!canWrite) continue;
-		const patterns = servers[bare] ?? [];
-		const device = active.find(name => {
-			if (!name.startsWith("mcp__") || !name.toLowerCase().endsWith(`_${bare}`)) return false;
-			const server = name.slice("mcp__".length, name.length - bare.length - 1);
-			return patterns.some(p => p.test(server));
-		});
-		if (device) resolved[bare] = `xd://${device}`;
+		if (!reachable) continue;
+		const device = findMcpDevice(active, bare, servers[bare] ?? []);
+		if (device) resolved[bare] = bash ? device : `xd://${device}`; // xd:// only on omp < 19.1 (write, no bash)
 	}
 	return resolved;
+}
+
+/** Every server-name pattern the native-tools contract lists for each bare tool, across all kinds. */
+function serverPatternsByTool(contract: NonNullable<ReturnType<typeof loadNativeTools>>): Record<string, RegExp[]> {
+	const servers: Record<string, RegExp[]> = {};
+	for (const { replacements } of Object.values(contract.kinds)) {
+		for (const { tool, servers: patterns } of replacements) servers[tool] = [...(servers[tool] ?? []), ...patterns];
+	}
+	return servers;
+}
+
+/** The active `mcp__<server>_<bare>` tool whose server matches one of `patterns`, if any. */
+function findMcpDevice(active: string[], bare: string, patterns: RegExp[]): string | undefined {
+	return active.find(name => {
+		if (!name.startsWith("mcp__") || !name.toLowerCase().endsWith(`_${bare}`)) return false;
+		const server = name.slice("mcp__".length, name.length - bare.length - 1);
+		return patterns.some(p => p.test(server));
+	});
 }
 
 /** The style block appended to the omp system prompt; undefined when sources are unreadable. */
@@ -248,7 +259,7 @@ export interface StyleDeps {
 
 /**
  * The blocks injected for one session. Rendered once and then re-served byte for byte: the style text depends on
- * which tools are callable (`resolveBareTools`), so re-rendering after xd:// devices mount changes the system
+ * which tools are callable (`resolveBareTools`), so re-rendering after tool commands mount changes the system
  * prompt mid-session, and the provider's prompt cache then rewrites every token after the shared prefix
  * (measured: one gated stop cost a 55k-token cache write). `undefined` means "not rendered yet or failed", so
  * a failed render is retried on the next turn instead of being frozen.

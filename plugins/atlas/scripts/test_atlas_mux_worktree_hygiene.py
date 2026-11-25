@@ -150,7 +150,8 @@ class HygieneTests(unittest.TestCase):
                 mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-hy")), \
                 contextlib.redirect_stdout(io.StringIO()):
-            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium",
+                                   "--task", "## member: implementer-1\nslice one\n## member: implementer-2\nslice two",
                                    "--team-id", "te", "--root", self.repo])
         self.assertEqual(0, code)
         rec = json.loads(pathlib.Path(self.repo, ".atlas/.run/teams/te.json").read_text())

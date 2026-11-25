@@ -1,5 +1,19 @@
 # Changelog
 
+## 17.42.0 - 2026-11-25
+
+- Added, mod (`mod/view/transcript/cards.tsx` `teamCard`, `restyle.tsx`): a Bash `atlas_mux.py spawn-team` call draws a team card: `◆ team <id> · N workers`, then each worker the launch output names with a role-coloured mark, name, role and state, and up to 5 of its own todos (theme state glyphs), else the first line of its task. Only `Agent`/`Task` calls drew a card before, so tmux workers never had one.
+- Changed, `scripts/atlas_mux.py spawn-team`: 2+ editing members (implementer, test-engineer, docs-curator) need their own `## member: <role>-N` task section or the spawn is refused (exit 2). Cause: team t718d64 ran two implementers on one unsplit "port in full" brief; one ran about 2.5 hours.
+- Added, `scripts/atlas_mux.py`: the worker brief carries `Budget: <N> min for this one slice` (`ATLAS_WORKER_BUDGET_MIN`, default 30, 0 off) and `wait` closes a tmux worker past it (`over budget (<N> min)`, JSON `over_budget`). The brief cap test is 960 bytes.
+- Added, `scripts/atlas_mod_gate.py --live`: a host probe checks that a `**ATLAS** | ...` reply header draws as the coloured chip; the probe's contract fixture reads the real `headerFirstLinePattern`.
+
+- Changed, doctor (`scripts/atlas_doctor.py`): `omp-bridge` reports a version mismatch between omp and this install as a warning instead of a failure, so SessionStart no longer prints a doctor failure whenever one harness is a release behind. The detail names the omp upgrade command and the restart. An unreadable omp registry or missing bridge files still fail. Cause: from 11-23 to 11-25 every Claude Code session on 17.36-17.41 warned because omp had stayed on 17.34.0.
+- Added, doctor check `omp-orphan-cache` (warn): lists omp cache version dirs that omp's registry no longer points at; `--fix` moves them to `.trash-atlas-setup-<stamp>` under omp's plugins dir and never touches the registered dir or other plugins.
+- Added, omp: a session whose extension was loaded from a different atlas version than the one omp's registry now names says so once at start (toast and session context) and names the restart (`omp/plugin-path.ts` `staleSessionNotice`, wired in `omp/hook-bridge.ts`). omp auto-upgrades plugins seconds after loading them, so a session could run old gates all day without notice.
+- Fixed, omp: since omp 19.1.0 replaced `xd://` tool devices with bash tool commands, every omp-facing route (recall gate, lean-ctx and context-mode routes, native-tool denials, generated agent bodies, style and skill text) names `<tool> -j '<JSON args>'` when `bash` is active; the `xd://` write remains only as the fallback for sessions without `bash`. Gates (recall, git_guard PR policy, agent-guard, dispatch tripwire) and the hook bridge accept both forms, so bridged `mcp__*` hooks fire for tool commands.
+- Fixed, session boot update notice: under omp it prints `omp plugin marketplace update <mkt> && omp plugin upgrade atlas@<mkt>` instead of the Claude Code commands.
+- Added, repo `scripts/sync_installs.sh`: after a release push it updates the Claude Code and omp installs through their own CLIs and checks both registries report the new version (`--dry-run` to preview).
+
 ## 17.41.2 - 2026-11-24
 
 - Fixed, Stop gate (`hooks/completion_gate_core.py`, new letter (w)): a lead can no longer end its turn while a tmux team it launched is still running and no `atlas_mux wait` process is alive. A member's exit notifies no one, so on 2026-11-24 four workers finished at 17:02 and the lead sat idle until the user asked at 18:39. `atlas_mux wait` now writes `.atlas/.run/teams/<id>.waiter` (its pid) and removes it on exit; `atlas_mux.team_watched()` reads it. The block names the exact `wait --team <id>` command to run in the background. Loop-capped like the other letters.

@@ -294,6 +294,8 @@ def _brief_wait(out: dict) -> str:
         lines.append(f"worker-to-worker notes: {out['notes_worker_to_worker']}")
     if out.get("killed_on_timeout"):
         lines.append("killed on timeout")
+    if out.get("over_budget"):
+        lines.append(f"over budget, pane closed: {', '.join(out['over_budget'])}")
     return "\n".join(lines)
 
 
@@ -2290,7 +2292,20 @@ def team_brief(rec: dict, member: dict, root: str, chan: str, lead: str) -> str:
         f"Note {lead} 1st, peers last. End: STATUS/STEPS/FILES_CHANGED/EVIDENCE/DELIVERABLE/NEXT\n"
         # no tool name: the callable name differs per harness, and a wrong one is worse than none
         "Read big files in ranges; use lean-ctx, not shell, to read."
+        + (
+            f"\nBudget: {budget} min for this one slice. Past it, stop and report STATUS: BLOCKED + what remains."
+            if (budget := _worker_budget_min())
+            else ""
+        )
     )
+
+
+def _worker_budget_min() -> int:
+    """Wall-clock minutes a worker gets for its slice (ATLAS_WORKER_BUDGET_MIN, default 30); 0 disables."""
+    try:
+        return max(0, int(os.environ.get("ATLAS_WORKER_BUDGET_MIN", "30")))
+    except ValueError:
+        return 30
 
 
 # Roles that edit files; read-only roles (verifier, explorer, ...) stay in the main root.
@@ -2960,6 +2975,15 @@ def cmd_spawn_team(args) -> int:
         if rec["member_tasks"]:
             # members with no section get the shared text, else an explicit no-op: never a peer's slice
             rec["task"] = shared or "No slice was assigned to you in the task file. Change nothing and end with STATUS: DONE."
+        # two editors on one unsplit task duplicate the whole job (team t718d64: 2.5 h on a "port in full" brief)
+        editors = [m["name"] for m in rec["members"] if m["role"] in _EDIT_ROLES]
+        unsplit = [n for n in editors if n not in rec["member_tasks"]]
+        if len(editors) > 1 and unsplit:
+            raise ValueError(
+                f"{', '.join(unsplit)} share one unsplit task with other editing members. Give each its own slice "
+                "in the task file: a `## member: implementer-1` heading, its slice, then `## member: implementer-2` "
+                "and so on (text before the first heading is shared context)"
+            )
     except ValueError as exc:
         return _emit({"ok": False, "error": str(exc)}, 2)
     if not NAME_RE.match(rec["team_id"]):
@@ -3151,13 +3175,34 @@ def _wait_team(args, root: str, rec: dict) -> int:
             if p["dead"] and not _exited(root, p["name"], since)
         }
 
+    budget_min = _worker_budget_min()
+    over_budget: set = set()
+
+    def close_over_budget(silent: set) -> None:
+        # a worker past its wall-clock budget: close its pane (the kill-on-timeout tmux path, one pane) and fail its row
+        if not budget_min or started is None or time.time() - started <= budget_min * 60:
+            return
+        if rec.get("transport") in ("claude-bg", "herdr"):
+            return
+        waiting = held()
+        for n in names:
+            if n in over_budget or n in silent or n in waiting or n in never_launched or _exited(root, n, since):
+                continue
+            over_budget.add(n)
+            res = _tmux("list-panes", "-s", "-t", _session(rec["team_id"]), "-F", "#{@atlas_worker}\t#{pane_id}")
+            for line in res.stdout.splitlines() if res.returncode == 0 else []:
+                name, _, pane_id = line.partition("\t")
+                if name == n and pane_id:
+                    _tmux("kill-pane", "-t", pane_id)
+
     while time.time() - t0 < args.timeout:
         silent = dead_silent()
         if (failed_now := _release_held_members(root, rec, since, silent)):
             never_launched |= failed_now
             rec["failed_members"] = (_load_team(root, args.team) or rec).get("failed_members") or {}
             silent = dead_silent()
-        if all(_exited(root, n, since) or n in silent for n in names):
+        close_over_budget(silent)
+        if all(_exited(root, n, since) or n in silent or n in over_budget for n in names):
             break
         if progress_s > 0 and time.time() - last_progress >= progress_s:
             # a long wait used to print nothing for the whole timeout; stderr keeps the --json stdout clean
@@ -3176,7 +3221,8 @@ def _wait_team(args, root: str, rec: dict) -> int:
             )
         time.sleep(args.poll)
     silent = dead_silent()
-    timed_out = not all(_exited(root, n, since) or n in silent for n in names)
+    close_over_budget(silent)
+    timed_out = not all(_exited(root, n, since) or n in silent or n in over_budget for n in names)
     killed_on_timeout = False
     if timed_out and (args.kill_on_timeout or os.environ.get("ATLAS_WAIT_KILL") == "1"):
         # opt-in: a worker that outlived --timeout keeps costing; close its panes (reap still archives the team)
@@ -3196,13 +3242,14 @@ def _wait_team(args, root: str, rec: dict) -> int:
         members.append(
             {
                 "name": n,
-                "exit": _num(int, found.group(1), None) if found else None,
+                "exit": _num(int, found.group(1), None) if found else (1 if n in over_budget else None),
                 "dead_without_report": n in silent and not found,
                 **({"waiting": True} if n in waiting and not found else {}),
                 **({"never_launched": True, "launch_error": rec["failed_members"][n]} if n in never_launched else {}),
                 "duration_s": _duration(mine[-1].get("ts"), started) if found else None,
                 "last_status": status,
                 **({"failure": why.group(1)} if found and (why := _EXIT_REASON_RE.search(found.group(0))) else {}),
+                **({"failure": f"over budget ({budget_min} min)"} if n in over_budget and not found else {}),
             }
         )
     finished = all(m["exit"] is not None for m in members)
@@ -3226,6 +3273,7 @@ def _wait_team(args, root: str, rec: dict) -> int:
             if finished
             else (round(time.time() - started, 1) if started is not None else None),
             **({"killed_on_timeout": True} if killed_on_timeout else {}),
+            **({"over_budget": sorted(over_budget)} if over_budget else {}),
             **({"timed_out": True, "timeout_s": args.timeout} if timed_out else {}),
             **({"held_not_launched": sorted(waiting)} if timed_out and waiting else {}),
         },

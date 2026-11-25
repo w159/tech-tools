@@ -4,7 +4,7 @@ Read this before interpreting any `run_watch` result.
 
 ## Arming and reading run_watch
 
-The `xd://github` device's `run_watch` op is the only CI source this skill trusts. Write JSON arguments to `xd://github`:
+The `github` tool command's `run_watch` op is the only CI source this skill trusts. Run the bash command `github -j '<JSON args>'` with:
 
 ```json
 {"op": "run_watch"}
@@ -19,7 +19,7 @@ Omitting `run` watches every Actions run for the current HEAD (branch defaults t
 
 If `run_watch` returns with no run in progress (a quiet head: CI just started, or the PR has no checks), do not busy-loop: wait one bounded interval (default 120s) via the harness wait mechanism, then re-check with a fresh arm. An empty watch result tells you nothing about the PR's state - only a fresh arm or a fresh `pr://` read does.
 
-**Device unavailable:** if the `github` device tool is not mounted in this session, poll CI with the locally available `gh` CLI instead (`gh pr checks <N> --watch --fail-fast`, `gh run list --branch <head>`); if neither the device nor `gh` exists, report BLOCKED with the missing capability - never fake CI state from memory or inference.
+**Tool command unavailable:** if the `github` tool command is not mounted in this session, poll CI with the locally available `gh` CLI instead (`gh pr checks <N> --watch --fail-fast`, `gh run list --branch <head>`); if neither the tool command nor `gh` exists, report BLOCKED with the missing capability - never fake CI state from memory or inference.
 
 ## Stale-SHA cancellation
 

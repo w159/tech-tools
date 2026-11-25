@@ -28,6 +28,7 @@ test("exploration deny text names at most one tool identifier per route", () => 
 		{ via: "tool", name: "ctx_search" },
 		{ via: "tool", name: "ctx_execute" },
 		{ via: "tool", name: "run_tool" },
+		{ via: "command", command: "mcp__lean_ctx_ctx_shell" },
 		{ via: "device", device: "xd://mcp__lean_ctx_ctx_shell" },
 	] as const;
 	for (const r of routes)

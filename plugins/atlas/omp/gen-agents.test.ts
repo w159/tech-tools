@@ -135,19 +135,20 @@ test("runner is registered on the mechanic tier: off thinking, @atlas-mechanic h
 	expect(readFileSync(path.join(outDir, "runner.md"), "utf8")).toContain('thinkingLevel: "off"');
 });
 
-test("omp worker bodies carry no Claude-only tool vocabulary and instruct xd:// devices with real device names", () => {
+test("omp worker bodies carry no Claude-only tool vocabulary and instruct bash tool commands with real minted names", () => {
 	for (const [name, content] of Object.entries(generatedAgents())) {
 		expect(content, name).not.toContain("ToolSearch");
 		expect(content, name).not.toContain("SendMessage");
-		expect(content, name).not.toMatch(/(?<!xd:\/\/)\bmcp__/);
-		expect(content, name).toContain("xd://");
+		expect(content, name).not.toMatch(/\bmcp__\w*?(?:-|__)/);
+		expect(content, name).not.toContain("xd://");
+		expect(content, name).toContain("mcp__lean_ctx_ctx_search");
 	}
 	const explorer = generatedAgents().explorer;
 	for (const device of [
-		"xd://mcp__lean_ctx_ctx_compose",
-		"xd://mcp__lean_ctx_ctx_search",
-		"xd://mcp__context_mode_context_mode_ctx_batch_execute",
-		"xd://mcp__claude_mem_mcp_search_search",
+		"mcp__lean_ctx_ctx_compose",
+		"mcp__lean_ctx_ctx_search",
+		"mcp__context_mode_context_mode_ctx_batch_execute",
+		"mcp__claude_mem_mcp_search_search",
 	]) {
 		expect(explorer).toContain(device);
 	}
@@ -162,7 +163,7 @@ test("ompBody refuses a body that would still carry a Claude-only token", () => 
 
 test("read-only agents' omp definitions list no edit device; the writers still may", () => {
 	const generated = generatedAgents();
-	const editDevice = /xd:\/\/mcp__lean_ctx_ctx_patch/;
+	const editDevice = /mcp__lean_ctx_ctx_patch/;
 	for (const [name, content] of Object.entries(generated)) {
 		if (["docs-curator", "implementer", "runner"].includes(name)) continue;
 		expect(content, name).not.toMatch(editDevice);

@@ -1,0 +1,37 @@
+2026-11-25 team launch card, worker focus (unsplit refusal + budget), host chip probe
+
+$ cd plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate
+Ran 315 tests in 67.304s
+OK
+
+$ cd plugins/atlas && bun test mod/view/transcript
+ 0 fail
+Ran 140 tests across 9 files.
+
+$ cd plugins/atlas && bun test $(find mod -name '*.test.*' -not -path '*/node_modules/*')
+ 3815 pass
+ 0 fail
+Ran 3846 tests across 242 files.
+
+$ python3 plugins/atlas/scripts/atlas_mod_gate.py          (offline)
+mod gate: PASS (offline checks are smoke only; 3 pass, 0 fail, 0 skip)
+
+Live host (user-run, before the probe additions):
+$ python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live
+PASS live claude plugin test: 1 probe(s), 1 pass | 0 fail
+Live host with the new chip probe and the stale '^ATLAS' fixture pattern: chip test FAIL (raw "**ATLAS** | ..." row);
+fixture now reads contracts/operating-contract.json; live re-run with the real pattern NOT yet done (needs the user).
+
+Cause of the 2.5 h worker: team t718d64 (.atlas/.run/teams/archive/t718d64.json) ran 2 implementers on one
+2154-char unsplit "port in full" brief; briefs carried no budget.
+
+Live host re-run 2026-11-25 (user, real contract pattern):
+PASS live claude plugin test: 1 probe(s), 2 pass | 0 fail | Ran 2 tests across 1 file.
+mod gate: PASS (4 pass, 0 fail, 0 skip)
+
+$ bash scripts/gate.sh push   (2026-11-25, after gate fixes)
+tsc-relative-imports atlas-py-fast bun-omp bun-mod bun-scripts-colony root-pytest leftover-pytest versions attribution telemetry-node mod-gate-live: all pass
+GATE_RC=0
+
+$ fallow audit --base origin/main  -> verdict pass (0 introduced)
+$ bash scripts/gate.sh push  -> GATE_RC=0 (final tree, 17.42.0)

@@ -118,7 +118,7 @@ Work one item at a time in cursor order. Never batch across the read-back.
    `existing_ack` (own identity: the configured ack label already present)
    is true, skip the ack write; else perform the configured ack action
    (GitHub: add the configured ack label via the host's GitHub write path  -
-   the `xd://github` device has no label op, so this is `gh issue edit
+   the `github` tool command has no label op, so this is `gh issue edit
    <number> --add-label <label>` where `gh` is available; when no write path
    exists, record `ack_deferred`).
 2. Read back and confirm the ack is visible at the source before trusting it.
@@ -157,7 +157,7 @@ fix ref and verify it merged to the default branch.
 - Verify with the host's GitHub read path: `gh pr view "<validated-number>"
   --json mergedAt,baseRefName` (merged, base is the default branch) or
   `git merge-base --is-ancestor "<validated-sha>" "<default-branch-head>"`.
-  The xd://github device's `search_issues`/`search_prs` may substitute for
+  The `github` tool command's `search_issues`/`search_prs` may substitute for
   reads where `gh` is absent.
 - **Adversarial verification:** the merge claim itself is verified by a
   fresh `atlas:verifier` dispatch (one batched dispatch covering all claimed

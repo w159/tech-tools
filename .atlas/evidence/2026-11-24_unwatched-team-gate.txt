@@ -1,0 +1,15 @@
+# 2026-11-24 unwatched tmux team Stop gate (w)
+tsc-relative-imports           21s
+atlas-py-fast                  15s
+bun-omp                         8s
+bun-mod                        10s
+bun-scripts-colony              5s
+root-pytest                    10s
+leftover-pytest                 4s
+versions                        0s
+attribution                     0s
+telemetry-node                  0s
+mod-gate-live                   1s
+total 21s
+GATE_RC=0
+50 passed, 837 deselected, 18 subtests passed in 3.54s

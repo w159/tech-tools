@@ -1,5 +1,16 @@
 # Changelog
 
+## atlas 17.42.0 -- team launches draw a card; workers get one slice and a time budget; omp drift no longer fails the doctor
+
+- Added, atlas mod: a Bash `atlas_mux.py spawn-team` call draws a team card in the transcript: `◆ team <id> · N workers`, then each worker with a role-coloured mark, name, role and state, and up to 5 of its own todos (else the first line of its task). Only the workers the launch output names are on the card. Before this, only `Agent`/`Task` calls drew a card, so tmux workers never had one (`mod/view/transcript/cards.tsx` `teamCard`, `restyle.tsx` `teamTreeOf`, `team-card.test.tsx`).
+- Changed, `atlas_mux.py spawn-team`: two or more editing members (implementer, test-engineer, docs-curator) need their own `## member: <role>-N` section in the task file, or the spawn is refused with exit 2. Cause: team t718d64 ran two implementers on one 2154-character "port in full" brief; one ran about 2.5 hours.
+- Added, `atlas_mux.py`: every worker brief carries `Budget: <N> min for this one slice` (`ATLAS_WORKER_BUDGET_MIN`, default 30, 0 turns it off), and `wait` closes a tmux worker past its budget, fails its row with `over budget (<N> min)` and lists it under `over_budget`.
+- Added, `scripts/atlas_mod_gate.py --live`: a second host probe draws a reply whose first line is `**ATLAS** | 🔍 research | ...` and fails unless it comes out as the coloured chip. The probe's contract fixture now carries the real `headerFirstLinePattern` from `contracts/operating-contract.json`; the old `'^ATLAS'` fixture made the chip test fail on its own fixture.
+- Changed, atlas doctor: an omp/Claude Code version mismatch is a warning with the upgrade command, not a SessionStart failure; new `omp-orphan-cache` check and `--fix` quarantine for stale omp cache dirs (`plugins/atlas/scripts/atlas_doctor.py`).
+- Added, atlas omp: a session running older in-memory atlas code than omp's registry says so once and names the restart (`omp/plugin-path.ts`, `omp/hook-bridge.ts`).
+- Fixed, atlas omp: routes use bash tool commands instead of `xd://` devices removed in omp 19.1.0; gates and the hook bridge accept both forms. The session boot update notice names omp's commands under omp.
+- Added, `scripts/sync_installs.sh`: one post-push step upgrades both the Claude Code and omp installs and verifies their registries (`docs/README.md` Releases).
+
 ## atlas 17.41.2 -- the lead can no longer stop while its team runs unwatched
 
 - Fixed, atlas Stop gate (w): the lead cannot stop while its tmux team runs with no live `atlas_mux wait`; `wait` writes a `.waiter` pid marker (`hooks/completion_gate_core.py`, `scripts/atlas_mux.py`). Cause: the 2026-11-24 atlas-taste session idled 97 minutes after its workers finished.

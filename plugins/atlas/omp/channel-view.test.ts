@@ -589,6 +589,8 @@ test("lane tool chip and target come from one event: an omp `write xd://<mcp too
 	expect(laneTool(f.root, "explorer-1903")).toEqual({ tool: "search", target: "atlas team peer-sync", active: true });
 	w.tool_result?.({ toolName: "write", input }, main);
 	expect(laneTool(f.root, "explorer-1903")).toEqual({ tool: "search", target: "atlas team peer-sync", active: false });
+	w.tool_call?.({ toolName: "bash", input: { command: `mcp__claude_mem_mcp_search_search -j '{"query":"bash route"}'` } }, main); // omp >= 19.1 tool command
+	expect(laneTool(f.root, "explorer-1903")).toEqual({ tool: "search", target: "bash route", active: true });
 	w.tool_call?.({ toolName: "mcp__claude_mem_mcp_search_search", input: { query: "peer sync" } }, main); // omp mints mcp__<server>_<tool>
 	expect(laneTool(f.root, "explorer-1903")).toEqual({ tool: "search", target: "peer sync", active: true });
 	w.tool_call?.({ toolName: "write", input: { path: "/x/notes.md", content: "{}" } }, main); // a real file write stays `write`

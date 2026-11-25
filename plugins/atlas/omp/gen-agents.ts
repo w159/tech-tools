@@ -35,15 +35,15 @@ const HEADER = (sourceFile: string) => [
 	"# Re-generate with: bun plugins/atlas/omp/gen-agents.ts (idempotent; commit the output).",
 ];
 
-/** Claude-only tool vocabulary that must not survive into an omp worker prompt (omp has no ToolSearch, SendMessage or `mcp__` names). */
-const CLAUDE_ONLY_TOKENS = /ToolSearch|SendMessage|(?<!xd:\/\/)\bmcp__/;
+/** Claude-only tool vocabulary that must not survive into an omp worker prompt (omp has no ToolSearch, SendMessage or Claude-form `mcp__<server>__<tool>` names). */
+const CLAUDE_ONLY_TOKENS = /ToolSearch|SendMessage|\bmcp__[A-Za-z0-9_]*?(?:-|__)/; // a minted `mcp__<server>_<tool>` has no dash or doubled underscore, Claude's `mcp__<server>__<tool>` does
 
 /** The ToolSearch intro paragraph (both phrasings) with its `select:` list, plus the optional re-search line that follows. */
 const TOOL_LOAD_BLOCK =
 	/(?:Deferred MCP tools are absent|Load your tools first)[^\n]*\n\n[ \t]+ToolSearch\("select:([^"]*)"\)\n(?:\nIf a tool never appears[^\n]*\n)?/;
 
 /**
- * Rewrites a Claude-dialect worker body for omp: the ToolSearch batch becomes the matching `xd://` devices
+ * Rewrites a Claude-dialect worker body for omp: the ToolSearch batch becomes the matching bash tool commands
  * (derived from the same list, through the shared contracts/tool-names.json mint), SendMessage becomes an IRC
  * `write agent://`, and the report container is pointed at the structured `yield` result. Throws when a Claude-only
  * token survives, so a new agent body cannot silently ship a prompt omp cannot follow.
@@ -53,22 +53,22 @@ export function ompBody(body: string): string {
 	if (!map) throw new Error("contracts/tool-names.json is unreadable: cannot translate agent bodies for omp");
 	const out = body
 		.replace(TOOL_LOAD_BLOCK, (_m, list: string) => {
-			const devices = translateToolNames(list.replace(/mcp__plugin_/g, "mcp__"), map).split(",");
+			const commands = translateToolNames(list.replace(/mcp__plugin_/g, "mcp__"), map).split(",");
 			return [
-				"Every MCP tool below is an `xd://` device: call it with `write`, `path` = the device, `content` = its JSON args (e.g. `write path=xd://mcp__lean_ctx_ctx_search content={\"pattern\":\"...\"}`). Read `xd://<device>` once for its schema before the first call. Your devices (a missing one costs nothing; skip it):",
+				"Every MCP tool below is a tool command: run it with the `bash` tool as `<tool> -j '<JSON args>'` (e.g. `mcp__lean_ctx_ctx_search -j '{\"pattern\":\"...\"}'`). Run `<tool> --help` once for its schema before the first call. Your tool commands (a missing one costs nothing; skip it):",
 				"",
-				...devices.map(device => "    " + device),
+				...commands.map(command => "    " + command),
 				"",
-				"Do not probe devices one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.",
+				"Do not probe tool commands one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.",
 				"",
 			].join("\n");
 		})
 		.replace(/\bmcp__cmux-browser__[a-z_]+/g, name => translateToolNames(name, map))
 		.replace(/SendMessage that sibling by name/g, "`write agent://<name>` to that sibling")
 		.replace(/On Claude Code use SendMessage to the lead by name\. On omp use `write`/g, "Use `write`")
-		.replace(/the ToolSearch call above exists/g, "the xd:// devices above exist")
-		.replace(/Load deferred\/MCP tool schemas \(`ToolSearch`\) before calling them([.,])/g, "Read an `xd://<device>` schema before the first call$1")
-		.replace(/Load deferred\/MCP tool schemas before calling them\*\* \(`ToolSearch` to fetch the schema\)/g, "Read an `xd://<device>` schema before the first call**")
+		.replace(/the ToolSearch call above exists/g, "the tool commands above exist")
+		.replace(/Load deferred\/MCP tool schemas \(`ToolSearch`\) before calling them([.,])/g, "Run `<tool> --help` for its schema before the first call$1")
+		.replace(/Load deferred\/MCP tool schemas before calling them\*\* \(`ToolSearch` to fetch the schema\)/g, "Run `<tool> --help` for its schema before the first call**")
 		.replace(
 			/(Your final message is exactly the container below[^\n]*\n)/g,
 			"$1On omp, return these same fields through `yield` as the structured result (`status`, `stepsDone`, `stepsTotal`, `filesChanged`, `evidence[{step, command, output}]`, `deliverable`, `next`); do not write the container as prose.\n",

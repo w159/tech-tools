@@ -4,7 +4,7 @@ Watch a single open PR move toward merge-ready by reacting to two streams as eac
 
 **Outcome:** the PR is left in a truthfully reported state - looks-ready, looks-ready-with-residuals, out-of-budget, blocked, or paused. **Done:** a stop condition was reached and the Step 5 report written. Settled != merged; a pushed fix needs a user yes before it leaves the machine.
 
-Apply the operating contract (`${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md`) to this mode. Merging and pushing stay with the user: this target requires explicit push consent at the point of risk and trusts observed state from the `xd://github` device (`run_watch`, `pr_checkout`, `pr_push`) and `pr://` reads.
+Apply the operating contract (`${CLAUDE_PLUGIN_ROOT}/references/operating-contract.md`) to this mode. Merging and pushing stay with the user: this target requires explicit push consent at the point of risk and trusts observed state from the `github` tool command (`run_watch`, `pr_checkout`, `pr_push`) and `pr://` reads.
 
 ## Arguments
 

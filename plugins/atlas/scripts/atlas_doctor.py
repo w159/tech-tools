@@ -1051,17 +1051,19 @@ def _omp_plugins_dir():
 
 
 def check_omp_bridge(plugin_name, version):
-    """(ok, detail): can omp actually reach this plugin's bridge, and is it the
-    same version? n/a (ok) when omp does not carry the plugin at all."""
+    """(ok, detail, severity): can omp actually reach this plugin's bridge, and is it the
+    same version? n/a (ok) when omp does not carry the plugin at all. A version skew with a
+    reachable install is only a warning (a restart or upgrade fixes it); an unreadable
+    registry or missing bridge files are failures."""
     reg_path = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
     if not os.path.exists(reg_path):
-        return True, "omp not installed (n/a)"
+        return True, "omp not installed (n/a)", "fail"
     try:
-        _, reg = find_registration(_load_json(reg_path), plugin_name)
+        key, reg = find_registration(_load_json(reg_path), plugin_name)
     except Exception as e:
-        return False, f"cannot read {reg_path}: {e}"
+        return False, f"cannot read {reg_path}: {e}", "fail"
     if not reg:
-        return True, f"{plugin_name} not registered with omp (n/a)"
+        return True, f"{plugin_name} not registered with omp (n/a)", "fail"
     ip = reg.get("installPath", "")
     missing = [
         rel
@@ -1069,13 +1071,61 @@ def check_omp_bridge(plugin_name, version):
         if not os.path.exists(os.path.join(ip, rel))
     ]
     if missing:
-        return False, f"omp install {ip or '?'} unreachable: missing {missing}"
+        return False, f"omp install {ip or '?'} unreachable: missing {missing}", "fail"
     if version and reg.get("version") != version:
+        mkt = key.split("@", 1)[1] if "@" in key else "<marketplace>"
         return False, (
-            f"omp runs {reg.get('version')} but this plugin is {version}: "
-            "omp enforcement is stale"
-        )
-    return True, f"omp bridge {reg.get('version')} at {ip}"
+            f"omp runs {reg.get('version')} but this plugin is {version}. If omp is behind: "
+            f"omp plugin marketplace update {mkt} && omp plugin upgrade {plugin_name}@{mkt}, "
+            "then restart omp sessions (running sessions keep the old code)"
+        ), "warn"
+    return True, f"omp bridge {reg.get('version')} at {ip}", "fail"
+
+
+def omp_orphan_dirs(plugin_name):
+    """omp cache version dirs of this plugin (same marketplace as the omp registration)
+    that the omp registry does not point at. Never other plugins or marketplaces."""
+    reg_path = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
+    try:
+        key, reg = find_registration(_load_json(reg_path), plugin_name)
+    except Exception:
+        return []
+    if not (reg and key and "@" in key):
+        return []
+    cache = os.path.join(_omp_plugins_dir(), "cache", "plugins")
+    if not os.path.isdir(cache):
+        return []
+    live = os.path.realpath(reg.get("installPath", ""))
+    prefix = f"{key.split('@', 1)[1]}___{plugin_name}___"
+    return [
+        p
+        for d in sorted(os.listdir(cache))
+        if d.startswith(prefix)
+        and os.path.isdir(p := os.path.join(cache, d))
+        and os.path.realpath(p) != live
+    ]
+
+
+def quarantine_omp_orphans(plugin_name, stamp=None):
+    """Move (never delete) orphaned omp cache dirs into a trash dir under the omp plugins dir."""
+    orphans = omp_orphan_dirs(plugin_name)
+    actions = []
+    if not orphans:
+        return actions
+    omp = _omp_plugins_dir()
+    trash = os.path.join(omp, f"{TRASH_PREFIX}{stamp if stamp is not None else int(time.time())}")
+    os.makedirs(trash, exist_ok=True)
+    for p in orphans:
+        dest = os.path.join(trash, os.path.basename(p))
+        try:
+            shutil.move(p, dest)
+            actions.append(f"quarantined orphaned omp cache {p} -> {dest}")
+        except Exception as e:
+            actions.append(f"could not quarantine {p}: {e}")
+    pruned = cap_trash_dirs(omp)
+    if pruned:
+        actions.append(f"capped omp trash dirs: removed {pruned} old")
+    return actions
 
 
 # --- display checks: why Atlas's TODO tree, Subagents block, band and status line are missing ---
@@ -1494,7 +1544,7 @@ def display_checks(settings_path=None, env=None, plugin_root=None, plugin_name="
 
     # 7. harness
     if env.get("ATLAS_HARNESS") == "omp":
-        ok, detail = check_omp_bridge(plugin_name, version)
+        ok, detail, _ = check_omp_bridge(plugin_name, version)
         add("display-harness", ok, "omp: mission control is drawn by the omp extension; " + detail)
     else:
         add("display-harness", True, "claude-code")
@@ -1954,8 +2004,18 @@ def behaviour_checks(add, plugin_name, version, now=None):
             severity="warn",
         )
     # B3: omp bridge
-    ok, detail = check_omp_bridge(plugin_name, version)
-    add("omp-bridge", ok, detail)
+    ok, detail, sev = check_omp_bridge(plugin_name, version)
+    add("omp-bridge", ok, detail, severity=sev)
+    orphans = omp_orphan_dirs(plugin_name)
+    add(
+        "omp-orphan-cache",
+        not orphans,
+        f"{len(orphans)} orphaned omp cache dir(s) the omp registry does not use: "
+        f"{[os.path.basename(p) for p in orphans]}; --fix quarantines them"
+        if orphans
+        else "no orphaned omp cache dirs",
+        severity="warn",
+    )
     # B3b: omp copy matches the reference in content, not only version
     try:
         omp_reg = os.path.join(_omp_plugins_dir(), "installed_plugins.json")
@@ -2644,6 +2704,7 @@ def apply_fixes(ctx, plugin_name="atlas", trash_stamp=None):
             oreg.update(installPath=omp_dir, version=mkt_ver)
             _save_json(omp_reg_path, omp_installed)
             actions.append(f"re-registered omp {plugin_name} at {mkt_ver}")
+    actions += quarantine_omp_orphans(plugin_name, trash_stamp)
 
     # Quarantine every cached version dir the registry no longer points at.
     plugin_cache = os.path.join(PLUGINS_DIR, "cache", mkt_name, plugin_name)
@@ -4927,6 +4988,8 @@ def main(argv=None):
 
     if args.fix:
         # own branch: the check is severity "warn", so `failed` never holds it
+        for a in quarantine_omp_orphans(args.plugin):  # warn-only drift: apply_fixes may not have run
+            print(f"FIX: {a}")
         print(f"FIX: {fix_context_tooling()}")
         for line in fix_display():
             print(f"FIX: {line}")

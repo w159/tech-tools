@@ -87,3 +87,7 @@ Assumption to avoid (tech-tools): The final grep never ran, because `.venv` was 
 Assumption to avoid (tech-tools): team (`t718d64`) by killing its tmux session and deleting its branches by hand. I never ran `atlas_mux reap`, the command that closes a team's record. [noted 2026-11-24]
 §
 Assumption to avoid (tech-tools): **Three push attempts.** I didn't run the full pre-push check before the first commit. [noted 2026-11-24]
+§
+Assumption to avoid (tech-tools): A raw `Text` node is exactly what you'd see if the mod called `next(e)` or never ran. [noted 2026-11-25]
+§
+Assumption to avoid (tech-tools): One small difference: the hook payload keys are now built in a different order. I assumed the hooks read them as JSON, so order doesn't matter, and I didn't check that separately. [noted 2026-11-25]

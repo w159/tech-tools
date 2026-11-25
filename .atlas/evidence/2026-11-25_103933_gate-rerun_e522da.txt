@@ -1,0 +1,27 @@
+completion-gate re-run (independent of the model)
+cwd: /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts
+command: cd /Users/jerry/MEGA/Projects/Agentic/tech-tools/plugins/atlas/scripts && python3 -m unittest test_atlas_mux test_atlas_mux_more test_atlas_mod_gate 2>&1 | tail -3
+exit: 0
+seconds: 74.66
+--- output tail ---
+le <_io.FileIO name=4 mode='rb' closefd=True>
+  def __init__(self, name, parent):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py:1313: ResourceWarning: subprocess 75169 is still running
+  _warn("subprocess %s is still running" % self.pid,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/unittest/mock.py:2263: ResourceWarning: unclosed file <_io.FileIO name=5 mode='rb' closefd=True>
+  def __init__(self, name, parent):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/subprocess.py:1313: ResourceWarning: subprocess 75211 is still running
+  _warn("subprocess %s is still running" % self.pid,
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+/opt/homebrew/Cellar/python@3.15/3.15.2/Frameworks/Python.framework/Versions/3.15/lib/python3.15/unittest/mock.py:2263: ResourceWarning: unclosed file <_io.FileIO name=6 mode='rb' closefd=True>
+  def __init__(self, name, parent):
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+........................................
+----------------------------------------------------------------------
+Ran 315 tests in 74.463s
+
+OK
+

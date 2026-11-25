@@ -15,7 +15,7 @@ Run them in order - the existing-PR check needs the branch name from `git branch
 | `git rev-parse --abbrev-ref origin/HEAD` | Remote default branch | No `origin/HEAD` set - resolve per below |
 | `gh pr list --head <branch> --state open --json number,url,title,body,state,isDraft,headRefName,headRepositoryOwner` | Open PR for this branch (only once `<branch>` is non-empty) | Exit 0 with `[]` = no open PR. Non-zero = `gh` missing, unauthenticated, or offline - PR state is **unknown**, not "none"; re-check before creating |
 
-The device path for PR queries is the `xd://github` device (`repo_view`); the `gh` row above is its fallback. Whatever path queries PR state, the exit-code semantics are identical: only an exit-0 `[]` means "no open PR", and a non-zero result is **unknown**.
+The tool-command path for PR queries is the `github` tool command (`repo_view`); the `gh` row above is its fallback. Whatever path queries PR state, the exit-code semantics are identical: only an exit-0 `[]` means "no open PR", and a non-zero result is **unknown**.
 
 Substitute `<branch>` with the current branch, name only. Two traps:
 

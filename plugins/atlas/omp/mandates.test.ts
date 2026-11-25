@@ -53,7 +53,8 @@ test("recall line is appended once, naming the reachable claude-mem route", () =
 	const result = h.start(["base"]);
 	const line = result?.systemPrompt?.[1] ?? "";
 	expect(line).toContain(RECALL_MARKER);
-	expect(line).toContain("xd://mcp__claude_mem_mcp_search_search");
+	expect(line).toContain("run the bash command mcp__claude_mem_mcp_search_search -j");
+	expect(line).not.toContain("xd://");
 	expect(h.start(result?.systemPrompt ?? [])).toBeUndefined();
 });
 
@@ -89,8 +90,11 @@ test("session_start drops the frozen recall line", () => {
 test("claude-mem name matching is anchored to the server part of the tool name", () => {
 	expect(claudeMemRoute(["write", "mcp__evil__claude_mem_dump_search"])).toBeUndefined();
 	expect(claudeMemRoute(["write", "mcp__evil_claude_mem_search"])).toBeUndefined();
-	expect(claudeMemRoute(["write", "mcp__plugin_claude-mem_mcp-search__search"])).toBe("xd://mcp__plugin_claude-mem_mcp-search__search");
-	expect(claudeMemRoute(["write", "mcp__claude_mem_mcp_search_search"])).toBe("xd://mcp__claude_mem_mcp_search_search");
+	expect(claudeMemRoute(["write", "mcp__plugin_claude-mem_mcp-search__search"])).toBe("write JSON args to xd://mcp__plugin_claude-mem_mcp-search__search");
+	expect(claudeMemRoute(["write", "mcp__claude_mem_mcp_search_search"])).toBe("write JSON args to xd://mcp__claude_mem_mcp_search_search");
+	// bash active (omp >= 19.1): the command route wins over the dead xd:// device
+	expect(claudeMemRoute(["write", "bash", "mcp__claude_mem_mcp_search_search"])).toBe("run the bash command mcp__claude_mem_mcp_search_search -j '<JSON args>'");
+	expect(claudeMemRoute(["bash", "mcp__claude_mem_mcp_search_search"])).toContain("bash command");
 	const h = harness();
 	h.start(["base"]);
 	expect(h.call("mcp__evil__claude_mem_dump", {})?.block).toBe(true);
@@ -143,15 +147,17 @@ test("ponytail nudge is unarmed without the skill, in subagents, and when killed
 
 type GateCase = { name: string; ompName?: string; input: Record<string, unknown> };
 const GATE = contract.recallGateCases as { satisfy: GateCase[]; block: GateCase[]; exempt: GateCase[] };
-const OMP_ROUTE = "xd://mcp__claude_mem_mcp_search_search";
+// omp >= 19.1.0 has no xd:// devices (tool commands replaced them), so with bash active the gate names the bash command.
+const OMP_ROUTE = "mcp__claude_mem_mcp_search_search";
+const GATE_ROUTE = `run the bash command ${OMP_ROUTE} -j '<JSON args>'`;
 const GATE_REASON = contract.recallGate
-	.replace("{route}", `write JSON args to ${OMP_ROUTE}`)
+	.replace("{route}", GATE_ROUTE)
 	.replace("{example}", contract.recallGateExample);
 
 
 test("recall gate blocks every non-claude-mem call until a real recall, with the contract reason", () => {
 	expect(GATE.block.length).toBeGreaterThan(0);
-	expect(GATE_REASON).toContain(OMP_ROUTE);
+	expect(GATE_REASON).toContain(GATE_ROUTE);
 	expect(GATE_REASON).not.toMatch(/\{(route|example)\}/);
 	for (const c of GATE.block) {
 		const h = harness();
@@ -455,4 +461,13 @@ test("matchGitCommit agrees with bash_advisor._match_git_commit on a shared stri
 	const py = JSON.parse(proc.stdout.toString()) as boolean[];
 	expect(py.length).toBe(PARITY_COMMANDS.length);
 	PARITY_COMMANDS.forEach((cmd, i) => expect({ cmd, ts: matchGitCommit(cmd) }).toEqual({ cmd, ts: py[i] }));
+});
+
+test("a bash command that runs the claude-mem tool satisfies the recall gate; a lookalike or other command does not", () => {
+	const h = harness();
+	h.start(["base"]);
+	expect(h.bash(`mcp__evil__claude_mem_dump -j '{}'`)).toEqual({ block: true, reason: GATE_REASON });
+	expect(h.bash("echo mcp__claude_mem_mcp_search_search")).toEqual({ block: true, reason: GATE_REASON });
+	expect(h.bash(`mcp__claude_mem_mcp_search_search -j '{"query":"x"}'`)).toBeUndefined();
+	expect(h.bash("git status")).toBeUndefined(); // gate satisfied
 });

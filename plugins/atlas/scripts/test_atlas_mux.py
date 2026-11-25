@@ -3491,7 +3491,7 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as d:
             tf = os.path.join(d, "t.md")
-            pathlib.Path(tf).write_text("## member: implementer\nSLICE-ONE\n## member: verifier\nSLICE-TWO\n")
+            pathlib.Path(tf).write_text("## member: implementer\nSLICE-ONE\n## member: implementer-2\nSLICE-THREE\n## member: verifier\nSLICE-TWO\n")
             buf = io.StringIO()
             env = {k: v for k, v in os.environ.items() if k != "ATLAS_MUX"}
             with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stdout(buf):
@@ -3500,8 +3500,8 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
             self.assertEqual(0, code)
             rec = json.loads(buf.getvalue())["team"]
             tasks = rec["member_tasks"]
-            self.assertEqual(2, len(tasks))
-            self.assertEqual({"SLICE-ONE", "SLICE-TWO"}, set(tasks.values()))
+            self.assertEqual(3, len(tasks))
+            self.assertEqual({"SLICE-ONE", "SLICE-TWO", "SLICE-THREE"}, set(tasks.values()))
             m0 = rec["members"][0]
             m1 = next(m for m in rec["members"] if m["role"] == "verifier")
             b0 = atlas_mux.team_brief(rec, m0, d, "c", "lead")
@@ -3509,6 +3509,10 @@ class DefaultTransportAndMemberTaskTests(unittest.TestCase):
             self.assertIn("SLICE-ONE", b0)
             self.assertNotIn("SLICE-TWO", b0)
             self.assertIn("SLICE-TWO", b1)
+
+
+# two editing members need their own `## member:` section or spawn-team refuses the unsplit task
+SPLIT_TASK = "## member: implementer-1\nslice one\n## member: implementer-2\nslice two"
 
 
 def _worktree_cells():
@@ -3547,7 +3551,7 @@ class WorktreeIsolationTests(unittest.TestCase):
         with cells, mock.patch.dict(os.environ, env), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-wt")), \
                 contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", SPLIT_TASK,
                                    "--root", self.repo, *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1]), seen
 
@@ -3633,7 +3637,7 @@ class TeamFlowFixTests(unittest.TestCase):
         with _worktree_cells(), mock.patch.dict(os.environ, e), mock.patch.object(atlas_mux, "cmd_spawn", fake_spawn), \
                 mock.patch.object(atlas_mux, "_lead_run", return_value=(None, "sess-tf")), \
                 contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--json", "--class", "implement", "--effort", "medium", "--task", SPLIT_TASK,
                                    "--root", root or self.repo, "--poll", "0.01", *extra])
         return code, json.loads(buf.getvalue().strip().splitlines()[-1])
 
@@ -4442,8 +4446,10 @@ class BriefOutputTests(unittest.TestCase):
     def run_wait(self, *extra):
         import atlas_mux
 
-        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}], "created": 1.0, "transport": "tmux"}
-        notes = [{"owner": "a", "text": "STATUS: DONE\nexit 0", "ts": 13.5}]
+        # created = now: a 1970 epoch would put the running member past the worker budget, and wait would close it
+        created = time.time()
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}, {"name": "b", "role": "r"}], "created": created, "transport": "tmux"}
+        notes = [{"owner": "a", "text": "STATUS: DONE\nexit 0", "ts": created + 12.5}]
         buf = io.StringIO()
         with mock.patch.object(atlas_mux, "_load_team", return_value=rec), \
                 mock.patch.object(atlas_mux, "_team_panes", return_value=[]), \
@@ -4780,7 +4786,7 @@ class IsolationSelectorTests(unittest.TestCase):
         buf = io.StringIO()
         env = {"ATLAS_ISOLATION": "", "ATLAS_MUX_WORKER_CMD": "true"}
         with mock.patch.dict(os.environ, env), contextlib.redirect_stdout(buf):
-            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", "t",
+            code = atlas_mux.main(["spawn-team", "--class", "implement", "--effort", "medium", "--task", SPLIT_TASK,
                                    "--paths", "src", "--root", self.repo, "--dry-run"])
         self.assertEqual(0, code)
         head = buf.getvalue().splitlines()[0]

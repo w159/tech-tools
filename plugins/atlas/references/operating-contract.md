@@ -117,7 +117,7 @@ The loop above does not depend on any tool. When these are installed in a sessio
 - claude-mem: recall prior sessions before re-deriving (the recall gate enforces one search per session).
 - Context7: current documentation for third-party libraries and SDKs.
 - Microsoft Learn MCP: current documentation for Microsoft surfaces (Graph, Entra, Intune, M365, Azure, PowerShell, .NET).
-- lean-ctx: code navigation and shaped search and reads (load it once per session; in Claude Code that is one ToolSearch batch, in omp the `xd://` devices).
+- lean-ctx: code navigation and shaped search and reads (load it once per session; in Claude Code that is one ToolSearch batch, in omp the lean-ctx tool commands, run through `bash`).
 - context-mode: sandbox for output over about 20 lines.
 - fallow: audit of changed JS/TS code.
 

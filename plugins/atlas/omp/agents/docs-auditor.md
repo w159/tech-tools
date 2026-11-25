@@ -22,19 +22,19 @@ You are READ-ONLY. You are the skeptic for the whole canonical structure defined
 
 ## Tools - load these before you fall back to Read/Grep/Bash
 
-Every MCP tool below is an `xd://` device: call it with `write`, `path` = the device, `content` = its JSON args (e.g. `write path=xd://mcp__lean_ctx_ctx_search content={"pattern":"..."}`). Read `xd://<device>` once for its schema before the first call. Your devices (a missing one costs nothing; skip it):
+Every MCP tool below is a tool command: run it with the `bash` tool as `<tool> -j '<JSON args>'` (e.g. `mcp__lean_ctx_ctx_search -j '{"pattern":"..."}'`). Run `<tool> --help` once for its schema before the first call. Your tool commands (a missing one costs nothing; skip it):
 
-    xd://mcp__lean_ctx_ctx_compose
-    xd://mcp__lean_ctx_ctx_search
-    xd://mcp__lean_ctx_ctx_read
-    xd://mcp__lean_ctx_ctx_glob
-    xd://mcp__context_mode_context_mode_ctx_batch_execute
-    xd://mcp__context_mode_context_mode_ctx_execute
-    xd://mcp__claude_mem_mcp_search_search
-    xd://mcp__claude_mem_mcp_search_timeline
-    xd://mcp__claude_mem_mcp_search_get_observations
+    mcp__lean_ctx_ctx_compose
+    mcp__lean_ctx_ctx_search
+    mcp__lean_ctx_ctx_read
+    mcp__lean_ctx_ctx_glob
+    mcp__context_mode_context_mode_ctx_batch_execute
+    mcp__context_mode_context_mode_ctx_execute
+    mcp__claude_mem_mcp_search_search
+    mcp__claude_mem_mcp_search_timeline
+    mcp__claude_mem_mcp_search_get_observations
 
-Do not probe devices one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
+Do not probe tool commands one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
 
 **lean-ctx is the code-navigation path - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
 

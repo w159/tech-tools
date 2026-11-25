@@ -591,3 +591,19 @@ test("REAL dispatch_tripwire through the bridge: spec and TOOLS carried by the b
 		expect(String((await fire({ context: SHARED, tasks: [{ name: "C", agent: "implementer", task: "GOAL: and also rewrite billing\n# Target\nsrc/c.py" }] }))?.reason)).toContain("2 GOAL: blocks");
 	});
 }, REAL_HOOK_TEST_TIMEOUT_MS);
+
+test("a session older than the installed atlas gets exactly one notice, in the prompt and as a user toast", async () => {
+	const line = "atlas: this omp session runs atlas 17.34.0 but 17.41.2 is installed; restart omp to pick up 17.41.2.";
+	const { handlers, ctx } = harness([], {}, { staleNotice: () => line });
+	const toasts: string[] = [];
+	const c = { ...ctx(), hasUI: true, ui: { notify: (m: string) => void toasts.push(m) } };
+	const first = await handlers.before_agent_start({ prompt: "a", systemPrompt: ["base"] }, c as never);
+	await handlers.before_agent_start({ prompt: "b", systemPrompt: ["base"] }, c as never);
+	expect(toasts).toEqual([line]);
+	expect(JSON.stringify(first)).toContain(line);
+});
+
+test("no stale notice when the check finds nothing", async () => {
+	const { handlers, ctx } = harness([], {}, { staleNotice: () => undefined });
+	expect(await handlers.before_agent_start({ prompt: "a", systemPrompt: ["base"] }, ctx() as never)).toBeUndefined();
+});

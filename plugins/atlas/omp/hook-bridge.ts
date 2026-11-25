@@ -33,7 +33,7 @@ import * as fs from "node:fs";
 import * as nodePath from "node:path";
 import { resolveTarget } from "./contracts";
 import { ATLAS_AGENT_TARGETABLE } from "./atlas-agents";
-import { pluginRoot } from "./plugin-path";
+import { pluginRoot, staleSessionNotice } from "./plugin-path";
 import { openLeadChannel } from "./channels";
 import { recordFault, taskItems } from "./fault-log";
 import type { WidgetUi } from "./channel-view";
@@ -382,17 +382,89 @@ export function matcherNames(names: string[]): string[] {
 	});
 }
 
+/** `mcp__<server>_<tool>` as omp mints it: one `mcp__` prefix, no doubled underscore (the doubled form is the Claude split). */
+const isMintedMcpName = (name: string): boolean => /^mcp__[A-Za-z0-9_]+$/.test(name) && !name.slice("mcp__".length).includes("__");
+
+/** A whole plain command: spaces, tabs, single-quoted runs and bare characters only. */
+const PLAIN_COMMAND = /^(?:[ \t]|'[^']*'|[A-Za-z0-9_./=:,+@%-])*$/;
+/** One word: adjacent single-quoted runs and bare characters. */
+const PLAIN_WORD = /(?:'[^']*'|[A-Za-z0-9_./=:,+@%-])+/g;
+
+/**
+ * Words of a plain shell command: bare words and single-quoted text, split on spaces and tabs. Any other character
+ * (an operator, `$`, a backtick, a double quote, a backslash, a newline) can make the command more than one command,
+ * so the result is undefined: such a command is never read as an MCP tool call and keeps its Bash hooks.
+ */
+function plainWords(command: string): string[] | undefined {
+	if (!PLAIN_COMMAND.test(command)) return undefined;
+	return (command.match(PLAIN_WORD) ?? []).map(word => word.replace(/'/g, ""));
+}
+
+/** `input[key]` when it is a string, else "" (a missing or non-string field reads as empty). */
+function stringField(input: unknown, key: string): string {
+	const value = (input as Record<string, unknown> | null | undefined)?.[key];
+	return typeof value === "string" ? value : "";
+}
+
+/** The value after `-j` in a plain command's words; undefined when there is no `-j`. */
+function jsonFlagValue(words: string[]): string | undefined {
+	const j = words.indexOf("-j");
+	return j >= 0 ? words[j + 1] : undefined;
+}
+
+/** An MCP call's args: the JSON object in `text`, else {} (absent, a file reference such as `@x`, not JSON, or not an object). */
+function mcpArgs(text: unknown): Record<string, unknown> {
+	if (typeof text !== "string") return {};
+	try {
+		const parsed: unknown = JSON.parse(text);
+		return parsed !== null && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+	} catch {
+		return {};
+	}
+}
+
+/**
+ * A bash tool command that runs one minted MCP tool, `mcp__<server>_<tool> [-j '<JSON>']` (omp >= 19.1), as its name and
+ * parsed args. Undefined for any other command: the first word decides, so `echo mcp__x` is not one.
+ */
+function mcpToolCommand(input: unknown): { name: string; args: Record<string, unknown> } | undefined {
+	const words = plainWords(stringField(input, "command").trim()) ?? [];
+	const name = words[0] ?? "";
+	if (!isMintedMcpName(name)) return undefined;
+	return { name, args: mcpArgs(jsonFlagValue(words)) };
+}
+
+/** The `xd://mcp__` device an omp `write` targets: an MCP device call, not a file edit. Undefined for anything else. */
+function mcpDeviceOf(tool: string, input: unknown): string | undefined {
+	const path = stringField(input, "path");
+	return tool === "write" && path.startsWith("xd://mcp__") ? path : undefined;
+}
+
 /**
  * The Claude tool names for one omp call. An omp `write` whose `path` is an `xd://mcp__…` URI is an MCP device CALL, not a
- * file edit, so it is that MCP tool, whatever its name shape (the production-edit deny and the Edit/Write matchers must
- * not see it: an unrecognised device is still `mcp__<rest>`, never a file Write); every other call maps by tool name.
+ * file edit, and so is a `bash` tool command that runs a minted MCP tool: each is that MCP tool, whatever its name shape
+ * (the production-edit deny and the Edit/Write matchers must not see it: an unrecognised device is still `mcp__<rest>`,
+ * never a file Write). Every other call maps by tool name.
  */
 export function claudeNamesForCall(tool: string, input: unknown, namesPath?: string): string[] {
-	if (tool === "write" && input && typeof input === "object" && "path" in input && typeof input.path === "string" && input.path.startsWith("xd://mcp__")) {
-		return [mcpClaudeName(input.path.slice("xd://".length))];
+	const device = mcpDeviceOf(tool, input);
+	if (device !== undefined) return [mcpClaudeName(device.slice("xd://".length))];
+	if (tool === "bash") {
+		const mcp = mcpToolCommand(input);
+		if (mcp) return [mcpClaudeName(mcp.name)];
 	}
-	if (/^mcp__[A-Za-z0-9_]+$/.test(tool) && !tool.slice("mcp__".length).includes("__")) return [mcpClaudeName(tool)];
+	if (isMintedMcpName(tool)) return [mcpClaudeName(tool)];
 	return claudeNamesFor(tool, namesPath).map(claudeMcpName);
+}
+
+/**
+ * The Claude tool_input of an omp MCP call: the args of a bash tool command, or the JSON body of an `xd://mcp__` write.
+ * Undefined when the call is not an MCP call. Both forms hand the hooks the same input.
+ */
+function mcpCallInput(tool: string, input: unknown): Record<string, unknown> | undefined {
+	if (mcpDeviceOf(tool, input) !== undefined) return mcpArgs(stringField(input, "content"));
+	if (tool === "bash") return mcpToolCommand(input)?.args;
+	return undefined;
 }
 
 /**
@@ -506,6 +578,12 @@ function claudeToolInputs(input: unknown, cwd: string): Record<string, unknown>[
 	return targets.length > 1 ? targets.map(withFile) : [withFile(targets[0])];
 }
 
+/** Claude-shaped tool_input(s) for one omp call: an MCP call's args as one input, else claudeToolInputs (Task has its own mapping). */
+function bridgedToolInputs(tool: string, input: unknown, cwd: string): Record<string, unknown>[] {
+	const mcp = mcpCallInput(tool, input);
+	return mcp ? [mcp] : claudeToolInputs(input, cwd);
+}
+
 /** Resolves to `promise`'s value, or undefined once `ms` has passed (a rejection also yields undefined). The loser keeps running; callers bound it with their own timeout. */
 async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
 	const expired = Promise.withResolvers<undefined>();
@@ -607,6 +685,8 @@ export interface BridgeDeps {
 	now?: () => number;
 	/** Runner for the SessionStart lead-channel open (tests inject a recorder); default channels.ts defaultRun. */
 	channelRun?(argv: string[], cwd: string): string | undefined;
+	/** Stale-session check seam (tests inject); default plugin-path.ts staleSessionNotice. */
+	staleNotice?(): string | undefined;
 	/** Called once the SessionStart lead channel is open (the live channel view subscribes). */
 	onChannelOpen?(ui: WidgetUi, info: { channel: string; members: string[]; cwd: string; sessionId?: string }): void;
 }
@@ -702,10 +782,13 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 			const base = Array.isArray(event.systemPrompt) ? event.systemPrompt : [];
 			const common = { session_id: sessionIdOf(ctx), cwd: ctx.cwd };
 			const deadline = now() + HANDLER_BUDGET_MS;
-			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(outs => ({
-				text: join(outs),
-				notices: outs.map(o => o.systemMessage).filter((m): m is string => Boolean(m)),
-			}));
+			sessionContext ??= runAll("SessionStart", undefined, { ...common, hook_event_name: "SessionStart", source: "startup" }, deadline).then(outs => {
+				const stale = (deps.staleNotice ?? staleSessionNotice)();
+				return {
+					text: [join(outs), stale].filter(Boolean).join("\n\n"),
+					notices: [...outs.map(o => o.systemMessage).filter((m): m is string => Boolean(m)), ...(stale ? [stale] : [])],
+				};
+			});
 			const { text: startText, notices } = await sessionContext;
 			// SessionStart `systemMessage` is for the user (the first-run telemetry notice rides on it); omp has no such channel, so show it once per session.
 			if (!noticesShown) {
@@ -722,36 +805,55 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 		}
 	});
 
+	/** Shared setup of a tool event: one budget, the Claude names, the transcript path and the hook inputs (one per batch item). */
+	const toolEventSetup = async (event: { toolName?: string; input?: unknown }, ctx: BridgeCtx) => {
+		// ONE budget for the whole call (hooks of every batch item and the transcript lookup): omp blocks the
+		// call when its handler passes its own 30 s tool_call timeout, so the bridge must give up first.
+		const deadline = Date.now() + toolBudgetMs();
+		const tool = event.toolName ?? "";
+		// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
+		const names = claudeNamesForCall(tool, event.input, deps.namesPath);
+		const cwd = ctx.cwd;
+		const sessionId = sessionIdOf(ctx);
+		const transcriptPath = (await withDeadline(transcriptPathOf(deps, ctx), Math.max(0, deadline - Date.now()))) ?? "";
+		// omp `task` carries a batch; each item is one Claude Task dispatch.
+		const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : bridgedToolInputs(tool, event.input, cwd);
+		return { deadline, tool, names, cwd, sessionId, transcriptPath, inputs: inputs.length ? inputs : [{}] };
+	};
+
+	/** Run one hook event per input; with `stopOnDeny` the first deny ends the loop and is returned. */
+	const runPerInput = async (
+		hookEvent: ClaudeEvent,
+		setup: Awaited<ReturnType<typeof toolEventSetup>>,
+		payloadOf: (toolInput: Record<string, unknown>) => Record<string, unknown>,
+		stopOnDeny: boolean,
+	): Promise<{ runs: HookRun[]; deny?: string }> => {
+		const runs: HookRun[] = [];
+		for (const toolInput of setup.inputs) {
+			const batch = await runAllRuns(hookEvent, setup.names, {
+				hook_event_name: hookEvent,
+				session_id: setup.sessionId,
+				cwd: setup.cwd,
+				tool_name: setup.names[0],
+				tool_input: toolInput,
+				transcript_path: setup.transcriptPath,
+				...payloadOf(toolInput),
+			}, setup.deadline);
+			const deny = stopOnDeny ? batch.find(r => r.out.deny)?.out.deny : undefined;
+			if (deny) return { runs, deny };
+			runs.push(...batch);
+		}
+		return { runs };
+	};
+
 	pi.on("tool_call", async (event, ctx) => {
 		try {
 			if (off()) return undefined;
-			// ONE budget for the whole call (hooks of every batch item and the transcript lookup): omp blocks the
-			// call when its handler passes its own 30 s tool_call timeout, so the bridge must give up first.
-			const deadline = Date.now() + toolBudgetMs();
-			const tool = event.toolName ?? "";
-			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
-			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
-			const cwd = ctx.cwd;
-			const sessionId = sessionIdOf(ctx);
-			const transcriptPath = (await withDeadline(transcriptPathOf(deps, ctx as BridgeCtx), Math.max(0, deadline - Date.now()))) ?? "";
-			// omp `task` carries a batch; each item is one Claude Task dispatch and any deny blocks the batch.
-			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : claudeToolInputs(event.input, cwd);
-			const runs: HookRun[] = [];
-			for (const toolInput of inputs.length ? inputs : [{}]) {
-				const sessionModel = sessionModelOf(ctx as BridgeCtx);
-				const batch = await runAllRuns("PreToolUse", names, {
-					hook_event_name: "PreToolUse",
-					session_id: sessionId,
-					cwd,
-					tool_name: names[0],
-					tool_input: toolInput,
-					transcript_path: transcriptPath,
-					...(sessionModel ? { session_model: sessionModel } : {}),
-				}, deadline);
-				const deny = batch.find(r => r.out.deny)?.out.deny;
-				if (deny) return { block: true, reason: deny };
-				runs.push(...batch);
-			}
+			const setup = await toolEventSetup(event, ctx as BridgeCtx);
+			const { tool, cwd, sessionId } = setup;
+			const sessionModel = sessionModelOf(ctx as BridgeCtx);
+			const { runs, deny } = await runPerInput("PreToolUse", setup, () => (sessionModel ? { session_model: sessionModel } : {}), true);
+			if (deny) return { block: true, reason: deny };
 			notifySink(deps.onToolAllowed, { toolName: tool, input: event.input, cwd, sessionId, tripwireRan: tripwireRan(runs), isError: false });
 			const context = join(runs.map(r => r.out));
 			return context ? { additionalContext: context } : undefined;
@@ -764,32 +866,12 @@ export function registerHookBridge(pi: Pick<ExtensionAPI, "on">, deps: BridgeDep
 	pi.on("tool_result", async (event, ctx) => {
 		try {
 			if (off() || event.isError) return undefined;
-			const deadline = Date.now() + toolBudgetMs();
-			const tool = event.toolName ?? "";
-			// omp mints `mcp__<server>_<tool>` and a `write` to an xd:// device is an MCP call; hooks.json matchers expect Claude's names.
-			const names = claudeNamesForCall(tool, event.input, deps.namesPath);
-			const cwd = ctx.cwd;
-			const sessionId = sessionIdOf(ctx);
-			const transcriptPath = (await withDeadline(transcriptPathOf(deps, ctx as BridgeCtx), Math.max(0, deadline - Date.now()))) ?? "";
+			const setup = await toolEventSetup(event, ctx as BridgeCtx);
+			const { tool, cwd, sessionId } = setup;
 			const toolResponse = toolResponseText(event.content);
-			const inputs = names[0] === "Task" ? claudeTaskInputs(event.input) : claudeToolInputs(event.input, cwd);
-			const runs: HookRun[] = [];
-			for (const toolInput of inputs.length ? inputs : [{}]) {
-				runs.push(
-					...(await runAllRuns("PostToolUse", names, {
-						hook_event_name: "PostToolUse",
-						session_id: sessionId,
-						cwd,
-						tool_name: names[0],
-						tool_input: toolInput,
-						tool_response: toolResponse,
-						is_error: false,
-						transcript_path: transcriptPath,
-						// omp subagents carry no env: their agent id lets worker_inbox.py resolve the channel member
-						...(ctx.agent?.kind === "sub" && (ctx.agent as { id?: string }).id ? { agent_name: (ctx.agent as { id?: string }).id } : {}),
-					}, deadline)),
-				);
-			}
+			// omp subagents carry no env: their agent id lets worker_inbox.py resolve the channel member
+			const agentId = ctx.agent?.kind === "sub" ? (ctx.agent as { id?: string }).id : undefined;
+			const { runs } = await runPerInput("PostToolUse", setup, () => ({ tool_response: toolResponse, is_error: false, ...(agentId ? { agent_name: agentId } : {}) }), false);
 			notifySink(deps.onToolResult, { toolName: tool, input: event.input, cwd, sessionId, tripwireRan: tripwireRan(runs), isError: false });
 			const context = join(runs.map(r => r.out));
 			return context ? { additionalContext: context } : undefined;

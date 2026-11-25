@@ -56,7 +56,7 @@ afterEach(() => {
 	if (oldDb === undefined) delete process.env.ATLAS_DB; else process.env.ATLAS_DB = oldDb;
 });
 // omp tool surfaces. A connected lean-ctx MCP server presents its tools as
-// xd:// devices under minted names (mcp__lean_ctx_ctx_search); a first-class
+// tool commands (bash; xd:// devices on older omp) under minted names (mcp__lean_ctx_ctx_search); a first-class
 // registration exposes plain ctx_* names. Both are "callable in this session".
 const BASE_TOOLS = ["read", "write", "edit", "bash", "grep", "glob", "task", "todo"];
 const ACTIVE_DEVICES: string[] = [...BASE_TOOLS, "mcp__lean_ctx_ctx_search", "mcp__lean_ctx_ctx_glob", "mcp__lean_ctx_ctx_read", "mcp__lean_ctx_ctx_shell"];
@@ -86,8 +86,13 @@ function harness(
 }
 test("grep and glob deny with exact reachable replacements", () => {
 	const h = harness();
-	expect(h.call("grep")).toMatchObject({ block: true, reason: expect.stringContaining("xd://mcp__lean_ctx_ctx_search") });
-	expect(h.call("glob")).toMatchObject({ block: true, reason: expect.stringContaining("xd://mcp__lean_ctx_ctx_glob") });
+	expect(h.call("grep")).toMatchObject({ block: true, reason: expect.stringContaining("run the bash command mcp__lean_ctx_ctx_search -j") });
+	expect(h.call("glob")).toMatchObject({ block: true, reason: expect.stringContaining("run the bash command mcp__lean_ctx_ctx_glob -j") });
+});
+test("without bash the legacy xd:// write route is named", () => {
+	const legacy = harness(() => ACTIVE_DEVICES.filter(name => name !== "bash"));
+	expect(legacy.call("grep")?.reason).toContain("write JSON args to xd://mcp__lean_ctx_ctx_search");
+	expect(legacy.call("read")?.additionalContext).toContain("write JSON args to xd://mcp__lean_ctx_ctx_read");
 });
 test("no reachable lean-ctx allows native search with one nudge per tool", () => {
 	const h = harness(() => ACTIVE_NONE);
@@ -102,9 +107,11 @@ test("builtin ctx tools are named directly in the deny", () => {
 	expect(r?.reason).toContain("call ctx_search directly");
 	expect(r?.reason).not.toContain("xd://");
 });
-test("device routes need the write tool to be callable", () => {
-	const h = harness(() => ACTIVE_DEVICES.filter(name => name !== "write"));
+test("tool routes need the bash or write tool to be callable", () => {
+	const h = harness(() => ACTIVE_DEVICES.filter(name => name !== "write" && name !== "bash"));
 	expect(h.call("grep")?.block).toBeUndefined();
+	// bash alone is enough on omp >= 19.1
+	expect(harness(() => ACTIVE_DEVICES.filter(name => name !== "write")).call("grep")?.block).toBe(true);
 });
 test("outside docs scope all checks are silent", () => {
 	const h = harness(); h.ctx.cwd = root;
@@ -119,9 +126,9 @@ test("ancestor docs scope covers nested project cwd", () => {
 });
 test("read and bash nudge once independently, naming the reachable route", () => {
 	const h = harness();
-	expect(h.call("read")?.additionalContext).toContain("xd://mcp__lean_ctx_ctx_read");
+	expect(h.call("read")?.additionalContext).toContain("mcp__lean_ctx_ctx_read -j");
 	expect(h.call("read")).toBeUndefined();
-	expect(h.call("bash")?.additionalContext).toContain("xd://mcp__lean_ctx_ctx_shell");
+	expect(h.call("bash")?.additionalContext).toContain("mcp__lean_ctx_ctx_shell -j");
 	expect(h.call("bash")).toBeUndefined();
 });
 test("exploration deny names the device of the ctx tool the command maps to", () => {
@@ -130,12 +137,12 @@ test("exploration deny names the device of the ctx tool the command maps to", ()
 	const deny = (command: string) => h.call("bash", { command })?.reason ?? "";
 	const read = deny("cat x");
 	expect(read).toContain("lean-ctx ctx_read");
-	expect(read).toContain("xd://mcp__lean_ctx_ctx_read");
+	expect(read).toContain("mcp__lean_ctx_ctx_read -j");
 	expect(read).not.toContain("ctx_shell");
-	expect(deny("grep -rn x .")).toContain("xd://mcp__lean_ctx_ctx_search");
-	expect(deny("find . -name '*.ts'")).toContain("xd://mcp__lean_ctx_ctx_glob");
-	expect(deny("ls -la .atlas/.run 2>&1")).toContain("xd://mcp__lean_ctx_ctx_tree");
-	expect(deny("cat a | wc -l")).toContain("xd://mcp__lean_ctx_ctx_shell");
+	expect(deny("grep -rn x .")).toContain("mcp__lean_ctx_ctx_search -j");
+	expect(deny("find . -name '*.ts'")).toContain("mcp__lean_ctx_ctx_glob -j");
+	expect(deny("ls -la .atlas/.run 2>&1")).toContain("mcp__lean_ctx_ctx_tree -j");
+	expect(deny("cat a | wc -l")).toContain("mcp__lean_ctx_ctx_shell -j");
 });
 test("exploration deny names a builtin ctx tool directly, per the picked tool", () => {
 	const h = harness(() => ACTIVE_BUILTINS);

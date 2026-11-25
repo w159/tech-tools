@@ -921,7 +921,7 @@ def _scope_gate(deny, tinput, root, session, run_key=None, cwd=None):
 def _lean_ctx_reachable(root=None):
     """True when the lean-ctx tools can actually be loaded: the binary is on PATH AND an MCP server
     for it is configured for this project (the detection the native-tool policy uses). The omp
-    bridge always has its xd:// devices. Demanding a tool that is not installed only denies the
+    bridge always has its bash tool commands. Demanding a tool that is not installed only denies the
     dispatch for something nobody can comply with."""
     if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
         return True
@@ -1008,7 +1008,7 @@ def _toolkit_gap(tinput, root=None):
     # (or in a decoy sentence) are not an instruction the subagent can follow.
     prompt = _block_body(str(tinput.get("prompt") or ""), ("TOOLS:",)) or ""
     low = prompt.lower()
-    # ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge: omp has no ToolSearch (tools are xd:// devices),
+    # ATLAS_TOOLKIT_LOAD=omp is set only by the omp hook bridge: omp has no ToolSearch (tools are bash tool commands),
     # so the load step cannot be asked of it. The named-navigation-tool requirement below still applies.
     has_load = (
         "ToolSearch" in prompt
@@ -1018,7 +1018,7 @@ def _toolkit_gap(tinput, root=None):
     has_nav = (
         "lean-ctx" in low
         or "lean_ctx" in low
-        # Any ctx_* device mention or xd:// device path routes the subagent to
+        # Any ctx_* tool mention or (legacy omp) xd:// device path routes the subagent to
         # real tools: the whitelist used to need a code edit per new device
         # name, and every such miss was a denied round-trip (friction F12).
         # Keep the deny only when the TOOLS block is empty.
@@ -1038,7 +1038,7 @@ def _toolkit_gap_reason(tool, gap):
     if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
         return (
             f"DENY - this {tool} dispatch is missing the code-nav TOOLS block. Add one line to the task, "
-            "e.g. `TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
+            "e.g. `TOOLS: use lean-ctx via its bash tool commands (run mcp__lean_ctx_ctx_search -j '<JSON>', "
             "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute`. "
             f"Without it {gap} greps the tree."
         )
@@ -1411,7 +1411,7 @@ def _role_block(agent, root=None):
     role = agent.split(":", 1)[-1]
     if os.environ.get("ATLAS_TOOLKIT_LOAD") == "omp":
         tools = (
-            "TOOLS: use lean-ctx via its xd:// devices (write JSON to xd://mcp__lean_ctx_ctx_search, "
+            "TOOLS: use lean-ctx via its bash tool commands (run mcp__lean_ctx_ctx_search -j '<JSON>', "
             "_ctx_read, _ctx_glob); noisy output via context-mode ctx_execute"
         )
     elif not _lean_ctx_reachable(root):
@@ -3138,7 +3138,7 @@ def _device_args_overwrite(payload):
         return False
     _deny(
         f"DENY - this looks like device arguments written over {os.path.basename(path)}; send them to the "
-        "xd:// device path instead."
+        "tool instead (omp: run it as a bash command, `<tool> -j '<JSON>'`)."
     )
     return True
 

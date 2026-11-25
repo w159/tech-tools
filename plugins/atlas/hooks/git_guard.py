@@ -344,10 +344,21 @@ def _bash_verdicts(command: str, cwd: str, g) -> list:
     return out
 
 
+def _github_command_op(cmd) -> str | None:
+    """The `op` of an omp >= 19.1 github tool command (`github -j '{"op": ...}'`); None when `cmd` is not one."""
+    if not isinstance(cmd, str) or not re.match(r"\s*github\s", cmd):
+        return None
+    m = re.search(r"""\s-j\s+(['"])(.*)\1\s*$""", cmd, re.S)
+    try:
+        return str(json.loads(m.group(2)).get("op")) if m else ""
+    except (ValueError, AttributeError):
+        return ""
+
+
 def _relevant(tool: str, ti: dict) -> bool:
     if tool == "Bash":
         cmd = ti.get("command")
-        return isinstance(cmd, str) and bool(
+        return _github_command_op(cmd) is not None or isinstance(cmd, str) and bool(
             any(
                 re.search(r"\b(?:git|gh|hub)\b|atlas_git\.py", t)
                 for t in (cmd, "".join(c for c in cmd if c not in "\"\\" + chr(39)))
@@ -374,6 +385,9 @@ def verdict(payload: dict, g=None) -> dict | None:
         import atlas_git as g  # noqa: N813
     cwd = str(payload.get("cwd") or os.getcwd())
     if tool == "Bash":
+        op = _github_command_op(ti["command"])
+        if op is not None:  # omp >= 19.1 runs the github device as a bash tool command: same PR policy as the xd:// write
+            return g.check_action(cwd, "pr", policy=g.load_policy(_safe_root(g, cwd))) if op == "pr_create" else None
         return _strongest(_bash_verdicts(ti["command"], cwd, g))
     if _PR_TOOL.search(tool):
         return g.check_action(cwd, "pr", policy=g.load_policy(_safe_root(g, cwd)))

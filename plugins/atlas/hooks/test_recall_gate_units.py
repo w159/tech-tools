@@ -64,6 +64,12 @@ class IsRecallTest(unittest.TestCase):
             self.assertIs(recall_gate._is_recall("Write", {key: target}), True, key)
             self.assertIs(recall_gate._is_recall("write", {key: target}), True, key)
 
+    def test_bash_tool_command_for_a_claude_mem_tool_is_a_recall(self):
+        self.assertIs(recall_gate._is_recall("bash", {"command": CC_SEARCH + " -j '{}'"}), True)
+        self.assertIs(recall_gate._is_recall("Bash", {"command": "ls " + CC_SEARCH}), False)
+        self.assertIs(recall_gate._is_recall("bash", {"command": "  "}), False)
+        self.assertIs(recall_gate._is_recall("bash", {}), False)
+
     def test_write_needs_a_dict_input(self):
         for bad in (None, "xd://" + CC_SEARCH, ["xd://" + CC_SEARCH], 5):
             self.assertIs(recall_gate._is_recall("Write", bad), False, bad)

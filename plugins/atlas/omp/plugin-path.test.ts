@@ -8,7 +8,7 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as nodePath from "node:path";
 
-import { pluginRoot, pluginRootFallback, pluginScript, pluginScriptFallback } from "./plugin-path";
+import { pluginRoot, pluginRootFallback, pluginScript, pluginScriptFallback, staleSessionNotice } from "./plugin-path";
 
 const root = fs.mkdtempSync(nodePath.join(os.tmpdir(), "atlas-plugin-path-"));
 afterAll(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -139,4 +139,29 @@ test("pluginRootFallback ignores sibling files that are not directories", () => 
 	fs.writeFileSync(nodePath.join(cache, "tech-tools___atlas___99.0.0"), "not a dir");
 	const real = install("1.0.0", true);
 	expect(pluginRootFallback(nodePath.join(cache, "tech-tools___atlas___0.1.0"))).toBe(real);
+});
+
+/** Registry beside the versioned dirs: `<tmp>/plugins/installed_plugins.json` + `<tmp>/plugins/cache/plugins/<mkt>___atlas___<ver>`. */
+function loadedFrom(version: string, registry: unknown): string {
+	const plugins = nodePath.join(tmp, "plugins");
+	const dir = nodePath.join(plugins, "cache", "plugins", `tech-tools___atlas___${version}`);
+	fs.mkdirSync(dir, { recursive: true });
+	if (registry !== undefined) fs.writeFileSync(nodePath.join(plugins, "installed_plugins.json"), typeof registry === "string" ? registry : JSON.stringify(registry));
+	return dir;
+}
+const reg = (version: string) => ({ plugins: { "atlas@tech-tools": [{ version }] } });
+
+test("stale session notice names both versions and the restart remedy", () => {
+	expect(staleSessionNotice(loadedFrom("17.34.0", reg("17.41.2")))).toBe(
+		"atlas: this omp session runs atlas 17.34.0 but 17.41.2 is installed; restart omp to pick up 17.41.2.",
+	);
+});
+
+test("stale session notice is silent on match, missing or malformed registry, no entry, or an unversioned dir", () => {
+	expect(staleSessionNotice(loadedFrom("17.41.2", reg("17.41.2")))).toBeUndefined();
+	expect(staleSessionNotice(loadedFrom("17.34.0", "{not json"))).toBeUndefined();
+	expect(staleSessionNotice(loadedFrom("17.34.0", { plugins: {} }))).toBeUndefined();
+	fs.rmSync(nodePath.join(tmp, "plugins", "installed_plugins.json"));
+	expect(staleSessionNotice(loadedFrom("17.34.0", undefined))).toBeUndefined();
+	expect(staleSessionNotice(nodePath.join(tmp, "plain"))).toBeUndefined();
 });

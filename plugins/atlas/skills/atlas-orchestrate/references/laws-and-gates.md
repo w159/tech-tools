@@ -91,7 +91,7 @@ Related switches: `ATLAS_GATE=off` disables the whole gate; `ATLAS_GATE_REPORT=o
 
 - Run `atlas_mux.py wait --team T` as the command of a Monitor (`timeout_ms` 1800000, re-arm on expiry). A background Bash call can be killed at 120 s by a Bash hook such as lean-ctx (exit 137), and a worker's exit wakes no one. The Stop gate's (w) block refuses a stop while a team of this session runs with no live wait (`.atlas/.run/teams/<id>.waiter`).
 - Stop a team with `atlas_mux.py reap --team T`, never a bare `tmux kill-session`.
-- Give each worker brief one file or one small group, so progress shows per worker.
+- Give each worker brief one file or one small group, so progress shows per worker. Size each worker to one slice it can finish inside `ATLAS_WORKER_BUDGET_MIN` (default 30; `wait` closes a worker past it). 2+ editing members need a `## member: <role>-N` section each in `--task-file`, or spawn-team refuses.
 - Before porting a third-party project, inventory it (file count, what it hard-codes) and confirm scope with the user before any implement dispatch.
 
 ## omp agent guard

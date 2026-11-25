@@ -41,7 +41,7 @@ class UpdateNoticeTests(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         env = mock.patch.dict(
-            os.environ, {"ATLAS_HOME": self.home, "ATLAS_UPDATE_CHECK": "on"}
+            os.environ, {"ATLAS_HOME": self.home, "ATLAS_UPDATE_CHECK": "on", "ATLAS_HARNESS": "claude"}
         )
         env.start()
         self.addCleanup(env.stop)
@@ -95,6 +95,17 @@ class UpdateNoticeTests(unittest.TestCase):
             line,
             f"atlas 999.0.0 is published (installed {own_version()}): "
             "claude plugin marketplace update tech-tools && claude plugin update atlas@tech-tools",
+        )
+
+    def test_notice_names_omp_commands_under_omp_harness(self):
+        self.write("update-check-state.json", {"last_start": 1_000_000.0})
+        self.write("update-check.json", {"published": "999.0.0", "marketplace": "tech-tools"})
+        with mock.patch.dict(os.environ, {"ATLAS_HARNESS": "omp"}):
+            line = self.notice()
+        self.assertEqual(
+            line,
+            f"atlas 999.0.0 is published (installed {own_version()}): "
+            "omp plugin marketplace update tech-tools && omp plugin upgrade atlas@tech-tools",
         )
 
     def test_notice_not_shown_when_installed_is_current(self):

@@ -25,7 +25,7 @@ def _run_cli(*argv) -> dict:
 
 
 class BriefAndArgvTests(unittest.TestCase):
-    def test_three_member_brief_is_at_most_860_bytes_and_keeps_the_contract(self):
+    def test_three_member_brief_is_at_most_960_bytes_and_keeps_the_contract(self):
         rec = atlas_mux.build_team("audit", "medium", ["src/a.py"], "check the parser")
         rec["members"] = [
             {"name": n, "role": "explorer"}
@@ -42,8 +42,8 @@ class BriefAndArgvTests(unittest.TestCase):
                 "proj@main/lead-6d0ddb",
                 "lead-6d0ddb",
             )
-        # 860: the ranges/lean-ctx guidance line adds ~58 bytes over the old 800 budget
-        self.assertLessEqual(len(brief.encode()), 860, len(brief.encode()))
+        # 960: the budget line (ATLAS_WORKER_BUDGET_MIN) is part of the contract; measured 951 bytes
+        self.assertLessEqual(len(brief.encode()), 960, len(brief.encode()))
         for needle in (
             "check the parser",
             "src/a.py",

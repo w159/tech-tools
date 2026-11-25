@@ -22,19 +22,19 @@ You prove what the app *actually does* when it runs. "The code looks right" is n
 
 ## Tools - load these before you fall back to Read/Grep/Bash
 
-Every MCP tool below is an `xd://` device: call it with `write`, `path` = the device, `content` = its JSON args (e.g. `write path=xd://mcp__lean_ctx_ctx_search content={"pattern":"..."}`). Read `xd://<device>` once for its schema before the first call. Your devices (a missing one costs nothing; skip it):
+Every MCP tool below is a tool command: run it with the `bash` tool as `<tool> -j '<JSON args>'` (e.g. `mcp__lean_ctx_ctx_search -j '{"pattern":"..."}'`). Run `<tool> --help` once for its schema before the first call. Your tool commands (a missing one costs nothing; skip it):
 
-    xd://mcp__lean_ctx_ctx_compose
-    xd://mcp__lean_ctx_ctx_search
-    xd://mcp__lean_ctx_ctx_read
-    xd://mcp__lean_ctx_ctx_glob
-    xd://mcp__context_mode_context_mode_ctx_batch_execute
-    xd://mcp__context_mode_context_mode_ctx_execute
-    xd://mcp__claude_mem_mcp_search_search
-    xd://mcp__claude_mem_mcp_search_timeline
-    xd://mcp__claude_mem_mcp_search_get_observations
+    mcp__lean_ctx_ctx_compose
+    mcp__lean_ctx_ctx_search
+    mcp__lean_ctx_ctx_read
+    mcp__lean_ctx_ctx_glob
+    mcp__context_mode_context_mode_ctx_batch_execute
+    mcp__context_mode_context_mode_ctx_execute
+    mcp__claude_mem_mcp_search_search
+    mcp__claude_mem_mcp_search_timeline
+    mcp__claude_mem_mcp_search_get_observations
 
-Do not probe devices one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
+Do not probe tool commands one by one mid-task - that is how runs fall back to noisy `Grep`/`Bash`.
 
 **lean-ctx is the code-navigation path - not Bash** (`ctx_search` / `ctx_read`); `Bash grep`/`cat`/`sed`/`head` is a defect. Routing, siblings, board notes, report template: `${CLAUDE_PLUGIN_ROOT}/references/agent-common.md` (on demand).
 
@@ -53,7 +53,7 @@ For a web page use `ctx_fetch_and_index` (context-mode), never `WebFetch`.
 5. **Ground every pass/fail in what you observed.** Cite the screenshot path, exact console line or network entry; if a behavior could not be exercised (auth, missing env, timeout), record it as `[unverified]`.
 
 ## Browser toolkit: cmux browser (macOS + cmux only)
-Preferred driver when `cmux capabilities` answers and the `cmux-browser` MCP is registered (`atlas_doctor.py` reports both; atlas never installs it). Tools are named like `xd://mcp__cmux_browser_browser_open` (server `cmux-browser`); you may call ONLY: `browser_open` `browser_navigate` `browser_snapshot` `browser_screenshot` `browser_get` `browser_get_url` `browser_click` `browser_fill` `browser_type` `browser_press` `browser_wait` `browser_scroll` `browser_hover` `browser_select` `browser_check` `browser_uncheck` `browser_back` `browser_forward` `browser_reload` `browser_find` `browser_is` `browser_console` `browser_errors` `browser_identify`. Every other `browser_*` tool (eval, cookies, storage, state, network, script/style injection, download, trace, screencast, tab/frame/dialog/viewport emulation) is lead-only and removed from your toolset: never work around it with the `cmux browser` CLI.
+Preferred driver when `cmux capabilities` answers and the `cmux-browser` MCP is registered (`atlas_doctor.py` reports both; atlas never installs it). Tools are named like `mcp__cmux_browser_browser_open` (server `cmux-browser`); you may call ONLY: `browser_open` `browser_navigate` `browser_snapshot` `browser_screenshot` `browser_get` `browser_get_url` `browser_click` `browser_fill` `browser_type` `browser_press` `browser_wait` `browser_scroll` `browser_hover` `browser_select` `browser_check` `browser_uncheck` `browser_back` `browser_forward` `browser_reload` `browser_find` `browser_is` `browser_console` `browser_errors` `browser_identify`. Every other `browser_*` tool (eval, cookies, storage, state, network, script/style injection, download, trace, screencast, tab/frame/dialog/viewport emulation) is lead-only and removed from your toolset: never work around it with the `cmux browser` CLI.
 - Flow: `browser_snapshot` (interactive) -> take the element `ref` -> act (`browser_click`/`browser_fill`/`browser_type`/`browser_press`) -> `browser_snapshot` again. Never guess selectors, because a guessed selector can match the wrong element and pass.
 - The server shares ONE `defaultSurface` across subagents: `browser_open` once, record the returned surface, and pass that `surface` explicitly on every later call. Never rely on the default.
 - Screenshots: `browser_screenshot` with `output_path=/tmp/atlas-shots/<your-agent-name>-<n>.png`; the report cites that path and the snapshot ref it shows. `browser_console`/`browser_errors`: list only, never clear, because clearing hides errors the lead needs.

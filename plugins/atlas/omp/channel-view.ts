@@ -259,13 +259,21 @@ function jsonBody(content: unknown): Record<string, unknown> {
 }
 
 /**
- * Chip and target of ONE tool event. omp runs a device tool as `write xd://<tool>` with the tool's JSON args as the
- * body, so that event is <tool> with its own args as the target, not `write` of a file named after the tool.
+ * Chip and target of ONE tool event. omp runs an MCP tool as the bash command `<tool> -j '<JSON>'` (>= 19.1) or as
+ * `write xd://<tool>` with the JSON args as the body (older), so that event is <tool> with its own args as the
+ * target, not `bash`/`write` of a file named after the tool.
  */
 function laneToolOf(toolName: string, input: unknown): { tool: string; target: string } {
 	const i = asRecord(input);
 	if (toolName === "write" && typeof i.path === "string" && i.path.startsWith(XD_PREFIX)) {
 		return { tool: shortTool(i.path.slice(XD_PREFIX.length)), target: toolTarget(jsonBody(i.content)) };
+	}
+	const command = typeof i.command === "string" ? i.command.trimStart() : "";
+	if (toolName === "bash" && command.startsWith("mcp__")) {
+		// omp >= 19.1 runs an MCP tool as the bash command `<minted name> -j '<JSON args>'`
+		const [name, ...rest] = command.split(/\s+/);
+		const json = /(?:^|\s)-j\s+'([^']*)'/.exec(rest.join(" "));
+		return { tool: shortTool(name), target: toolTarget(jsonBody(json?.[1])) };
 	}
 	return { tool: shortTool(toolName), target: toolTarget(input) };
 }

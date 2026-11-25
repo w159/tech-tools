@@ -518,6 +518,44 @@ class AtlasDoctorTest(unittest.TestCase):
             )
         )
 
+    def _omp_orphan_setup(self):
+        omp = os.environ["ATLAS_OMP_PLUGINS_DIR"]
+        cache = os.path.join(omp, "cache", "plugins")
+        live = os.path.join(cache, "tech-tools___atlas___2.3.0")
+        write_json(
+            os.path.join(omp, "installed_plugins.json"),
+            {"plugins": {"atlas@tech-tools": [{"version": "2.3.0", "installPath": live}]}},
+        )
+        names = [
+            "tech-tools___atlas___2.3.0",
+            "tech-tools___atlas___17.34.0",
+            "tech-tools___atlas___8.0.1",
+            "tech-tools___atlas-extra___1.0.0",
+            "other-mkt___atlas___1.0.0",
+        ]
+        for n in names:
+            os.makedirs(os.path.join(cache, n))
+        return omp, cache
+
+    def test_omp_orphan_check_reports_and_fix_quarantines(self):
+        omp, cache = self._omp_orphan_setup()
+        c = self.by_check(atlas_doctor.run_checks("atlas")[0])["omp-orphan-cache"]
+        self.assertFalse(c["ok"])
+        self.assertEqual(c["severity"], "warn")
+        self.assertIn("17.34.0", c["detail"])
+        self.assertNotIn("atlas-extra", c["detail"])
+        actions = atlas_doctor.apply_fixes(self._ctx(), "atlas", trash_stamp=123)
+        self.assertTrue(any("orphaned omp cache" in a for a in actions))
+        self.assertEqual(
+            sorted(os.listdir(cache)),
+            ["other-mkt___atlas___1.0.0", "tech-tools___atlas-extra___1.0.0", "tech-tools___atlas___2.3.0"],
+        )
+        trash = os.path.join(omp, f"{atlas_doctor.TRASH_PREFIX}123")
+        self.assertEqual(
+            sorted(os.listdir(trash)),
+            ["tech-tools___atlas___17.34.0", "tech-tools___atlas___8.0.1"],
+        )
+
     def test_fix_without_omp_registry_adds_no_omp_action(self):
         actions = atlas_doctor.apply_fixes(self._ctx(), "atlas")
         self.assertFalse(any("omp" in a for a in actions))
@@ -1168,12 +1206,17 @@ class AtlasDoctorTest(unittest.TestCase):
 
     def test_omp_bridge_fails_on_version_skew_and_missing_files(self):
         self._omp_registry("2.3.0", with_files=False)
-        self.assertIn("unreachable", self._checks()["omp-bridge"]["detail"])
+        c = self._checks()["omp-bridge"]
+        self.assertIn("unreachable", c["detail"])
+        self.assertEqual(c["severity"], "fail")
         shutil.rmtree(os.path.join(self.tmp, ".omp"))
         self._omp_registry("1.0.0")
         c = self._checks()["omp-bridge"]
         self.assertFalse(c["ok"])
-        self.assertIn("stale", c["detail"])
+        self.assertEqual(c["severity"], "warn")
+        self.assertIn("omp plugin upgrade atlas@tech-tools", c["detail"])
+        failed = [r for r in atlas_doctor.run_checks("atlas")[0] if not r["ok"] and r.get("severity") != "warn"]
+        self.assertNotIn("omp-bridge", [r["check"] for r in failed])
         shutil.rmtree(os.path.join(self.tmp, ".omp"))
         self._omp_registry("2.3.0")
         self.assertTrue(self._checks()["omp-bridge"]["ok"])

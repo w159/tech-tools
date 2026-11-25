@@ -3,8 +3,8 @@
 // ToolUse / ToolGroup / UserMessage and falls back to next(e) on null or a throw.
 
 import type { RenderElement, RenderNode } from 'claude-code'
-import type { AgentState } from '../../contract'
-import { brandMark, elapsedClock, hexIn, PALETTE5, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../../design/atlas-ui'
+import type { AgentState, SquadAgent, TodoItem } from '../../contract'
+import { brandMark, elapsedClock, hexIn, PALETTE5, roleHex, stateGlyph, stateRun, stateWordTone, surfaceHex, type Run as UiRun, type Ui, type UiState, runHex } from '../../design/atlas-ui'
 import { lookUi } from '../../design/look'
 import { CARD_W, cardBarTone, toastRuns } from '../panel/panel-layout'
 import { cells } from '../../design/atlas-ui'
@@ -212,6 +212,31 @@ export function notificationTree(name: string, role: string, outcome: string, fa
  return finishRow('done', displayName(name, role), o.fact ?? '', timeOf(text), ui, { ...o, who: name }) // wave 32 (critique 30): `● done` says it once; no `explorer finished` after the name
 }
 
+/** Team card for a tmux `spawn-team` call: `◆ team <id> · N workers`, then per member a role-coloured mark, name, role and state, with up to 5 of its todos
+ * (owner === name) as the theme's done / running / queued marks, or the first line of its task when it has none. NO_COLOR keeps the words and drops every colour prop. */
+export function teamCard(teamId: string, members: ReadonlyArray<SquadAgent>, todos: ReadonlyArray<TodoItem>, ui: Ui = lookUi()): RenderElement | null {
+ if (members.length === 0) return null
+ const col = (hex: string | undefined): Record<string, string> => (hex && ui.color !== 'none' ? { color: hex } : {})
+ const mark = ui.ascii ? '*' : '◆'
+ const glyphOf = (s: string): string => stateGlyph(s === 'completed' ? 'done' : s === 'in_progress' ? 'running' : 'queued', ui)
+ const rows = members.flatMap((m) => {
+  const role = m.persona.replace(/^atlas:/, '')
+  const own = todos.filter((x) => x.owner === m.name).slice(0, 5).map((x) => `${glyphOf(x.status)} ${x.content}`)
+  const first = (m.task ?? '').split('\n').map((l) => l.trim()).find(Boolean)
+  const lines = own.length > 0 ? own : first ? [first] : []
+  return [
+   el('Box', { flexDirection: 'row' },
+    t(col(roleHex(role, ui.color, ui.theme)), `${mark} `),
+    t({ ...col(hexIn(PALETTE5.body, ui)), bold: true }, `${m.name} `),
+    t(col(roleHex(role, ui.color, ui.theme)), `${role} `),
+    t(col(hexIn(PALETTE5.secondary, ui)), m.state)),
+   ...lines.map((l) => t(col(hexIn(PALETTE5.secondary, ui)), `  ${l}`)),
+  ]
+ })
+ return el('Box', { flexDirection: 'column' },
+  t({ ...col(hexIn(PALETTE5.body, ui)), bold: true }, `${mark} team ${teamId} ${ui.ascii ? '|' : '·'} ${members.length} workers`),
+  ...rows)
+}
 /** Chat bubble for a message another agent or channel sent; null without a sender. */
 export function bubbleTree(text: string, from: string | undefined, to = 'lead', columns = 0, ui: Ui = lookUi()): RenderElement | null {
  if (!from || !text) return null

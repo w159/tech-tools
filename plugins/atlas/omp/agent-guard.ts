@@ -15,8 +15,8 @@
  * `xd://` MCP device calls, outbound IRC (`write agent://<id>`) and shared artifacts
  * (`local://`, `proc://`), so removing `write` from a child would cut all of those. The
  * handler therefore blocks `write` only when its `path` is not a `scheme://` target.
- * `mcp__<server>__<tool>` entries in `disallowedTools` are enforced on their `xd://` device path (deviceReason), so a
- * read-only agent cannot reach lean-ctx's ctx_patch through `write xd://...`.
+ * `mcp__<server>__<tool>` entries in `disallowedTools` are enforced on their bash tool command and legacy `xd://` device path (deviceReason), so a
+ * read-only agent cannot reach lean-ctx's ctx_patch through either route.
  *
  * NOT COVERED: writes made through the `bash` tool (`sed -i`, `tee`, `>` redirects, ...).
  * `disallowedTools` names no shell restriction and omp has no per-agent shell policy, so a
@@ -262,24 +262,30 @@ function restrictedAgent(ctx: GuardCtx, deps: AgentGuardDeps): { agent: string; 
 	return disallowed.length > 0 ? { agent, disallowed } : undefined;
 }
 
-/** The `xd://` device an `mcp__<server>__<tool>` disallowed entry resolves to on omp (same mint as translateToolNames). */
+/** The minted tool-command name an `mcp__<server>__<tool>` disallowed entry resolves to on omp (same mint as translateToolNames). */
 function deviceOf(claudeName: string, deps: AgentGuardDeps): string | undefined {
 	const m = /^mcp__(.+?)__(.+)$/.exec(claudeName);
 	const map = m ? loadToolNames(deps.contractPath ?? nodePath.join(pluginRoot(), "contracts", "tool-names.json")) : undefined;
 	return m && map ? mcpDevice(m[1], m[2], map) : undefined;
 }
 
-/** omp's `write` also carries `xd://` MCP device calls: a disallowed `mcp__*` tool is blocked on its device path (lean-ctx ctx_patch, ...). */
+/**
+ * A disallowed `mcp__*` tool is blocked on both routes to it (lean-ctx ctx_patch, ...): a bash tool command
+ * (omp >= 19.1: `bash` runs `<minted name> -j '<JSON>'`) and the legacy `write` to its `xd://` device (older omp).
+ */
 function deviceReason(event: GuardEvent, who: { agent: string; disallowed: string[] }, deps: AgentGuardDeps): string | undefined {
-	if (toolKey(event) !== "write") return undefined;
-	const target = (event.input as Record<string, unknown> | undefined)?.path;
-	if (typeof target !== "string") return undefined;
-	const device = target.trim().toLowerCase();
-	const claudeTool = who.disallowed.find(name => name.startsWith("mcp__") && deviceOf(name, deps) === device);
-	return claudeTool ? blockReason(who.agent, device, claudeTool, "") : undefined;
+	const tool = toolKey(event);
+	const input = event.input as Record<string, unknown> | undefined;
+	let route: string | undefined;
+	if (tool === "write" && typeof input?.path === "string") route = input.path.trim().toLowerCase();
+	else if (tool === "bash" && typeof input?.command === "string") route = input.command.trimStart().split(/\s/, 1)[0].toLowerCase();
+	if (!route) return undefined;
+	const name = route.startsWith("xd://") ? route.slice("xd://".length) : route;
+	const claudeTool = who.disallowed.find(d => d.startsWith("mcp__") && deviceOf(d, deps) === name);
+	return claudeTool ? blockReason(who.agent, route, claudeTool, "") : undefined;
 }
 
-const MISUSE_FORM = "to message an agent write path=agent://<id>; to call a device write path=xd://<tool> with JSON content; to read use read";
+const MISUSE_FORM = "to message an agent write path=agent://<id>; to call an MCP tool run it as a bash command (`<tool> -j '<JSON>'`); to read use read";
 const BARE_TOOL_NAMES = new Set(["write", "read", "bash", "edit", "grep", "glob", "find", "task", "eval", "ask", "todo", "wait", "search", "lsp", "ast_grep", "ast_edit", "debug", "github", "retain", "recall", "reflect", "web_fetch", "lens_diagnostics", "symbol_search"]);
 const SCHEME_RE = /^[a-z][a-z0-9+.-]*:\/\//i;
 

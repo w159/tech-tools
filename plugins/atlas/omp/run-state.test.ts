@@ -136,6 +136,17 @@ test("an xd:// device write is an MCP call: it is neither armed nor logged as an
 	expect(calls.map(c => c.slice(2).join(" "))).toEqual(["event --session-id s-1 --cwd /p --tool Write"]);
 });
 
+test("a bash tool command that runs an MCP tool is an MCP call too, like the xd:// write: not armed, not logged as an inline Write", async () => {
+	const { s, calls, flush } = sink();
+	const mcp = { toolName: "bash", input: { command: `mcp__lean_ctx_ctx_search -j '{"pattern":"x"}'` } };
+	s.onToolAllowed(info(mcp));
+	s.onToolResult(info(mcp));
+	s.onToolResult(info({ toolName: "bash", input: { command: "echo mcp__lean_ctx_ctx_search" } })); // a lookalike is plain bash: not tracked
+	s.onToolResult(info({ toolName: "edit", input: { path: "src/a.ts" } })); // control: a real edit is still logged
+	await flush();
+	expect(calls.map(c => c.slice(2).join(" "))).toEqual(["event --session-id s-1 --cwd /p --tool Edit --path /p/src/a.ts"]);
+});
+
 test("nothing is written when the bridged dispatch_tripwire already ran (no double-counting)", async () => {
 	const { s, calls, flush } = sink();
 	s.onToolAllowed(info({ tripwireRan: true, input: { agent: "implementer" } }));

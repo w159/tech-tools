@@ -1294,9 +1294,10 @@ def update_notice(now=None, popen=None):
 
         if tup(published) <= tup(installed):
             return None
+        cli, upd = ("omp", "upgrade") if os.environ.get("ATLAS_HARNESS") == "omp" else ("claude", "update")
         return (
             f"atlas {published} is published (installed {installed}): "
-            f"claude plugin marketplace update {mkt} && claude plugin update atlas@{mkt}"
+            f"{cli} plugin marketplace update {mkt} && {cli} plugin {upd} atlas@{mkt}"
         )
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return None
