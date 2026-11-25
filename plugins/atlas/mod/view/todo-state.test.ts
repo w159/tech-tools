@@ -57,14 +57,14 @@ function wordsOf(rows: readonly string[], s: LiveSnapshot, byGlyph = false): Rec
 }
 
 describe('HUD TODO block and the route tab agree row by row', () => {
-  test('a handed-back owner reads `done` on both (the settled rule), not `queued`', () => {
+  test('a handed-back owner reads done (no row on either surface), not `queued`', () => {
     const s = openStore();
     const hud = wordsOf(hudRows(s, 120), s);
     const route = wordsOf(panelText(panelModelOf(worldSidebar('route', 119, s), ui, 119)), s, true);
-    const hudWords = Object.fromEntries(Object.entries(hud).map(([k, v]) => [k, v === 'absent' ? 'done' : v])); // the settled block draws no word on a done row
+    const hudWords = Object.fromEntries(Object.entries(hud).map(([k, v]) => [k, v === 'done' || v === 'absent' ? 'absent' : v])); // the status tab hides a done row (`N done` stands for it)
     expect(route).toEqual(hudWords);
     expect(Object.values(hud)).not.toContain('returned');
-    expect(Object.values(route)).toContain('done');
+    expect(Object.values(route)).toContain('absent');
     expect(Object.values(hud)).toContain('running');
   });
 });

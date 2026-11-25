@@ -12,6 +12,7 @@ import os
 import pathlib
 import signal
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -531,11 +532,6 @@ class KillNotesSinceTests(TmpCase):
         self.assertEqual(["exit 137 [failed: killed by atlas_mux kill]"], texts)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
-
 class WorkerHandbackAndWait(unittest.TestCase):
     """Audit T1 (worker may run the report command), T3 (wait progress), T4 (no epoch duration)."""
 
@@ -570,7 +566,7 @@ class WorkerHandbackAndWait(unittest.TestCase):
 
         def fake_wait(args, root_, rec_):
             seen["watched"] = mux.team_watched(root_, "kw")
-            seen["pid"] = mux._waiter_path(root_, "kw").read_text()
+            seen["pid"] = mux._waiter_path(root_, "kw", os.getpid()).read_text()
             raise RuntimeError("wait died")  # the marker must go even when the wait raises
 
         with mock.patch.object(mux, "_load_team", return_value=rec), mock.patch.object(mux, "_wait_team", fake_wait):
@@ -578,7 +574,41 @@ class WorkerHandbackAndWait(unittest.TestCase):
                 mux.cmd_wait(argparse.Namespace(root=root, team="kw"))
         self.assertTrue(seen["watched"])
         self.assertEqual(seen["pid"], str(os.getpid()))
-        self.assertFalse(mux._waiter_path(root, "kw").exists())
+        self.assertFalse(mux._waiter_path(root, "kw", os.getpid()).exists())
+        self.assertFalse(mux.team_watched(root, "kw"))
+
+    def test_an_older_wait_ending_leaves_a_newer_live_wait_watching(self):
+        root = os.path.realpath(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, root, True)
+        mux._team_dir(root).mkdir(parents=True)
+        rec = {"team_id": "kw", "members": [{"name": "a", "role": "r"}], "transport": "tmux"}
+        newer_wait = (
+            "import argparse, sys, time\n"
+            "sys.path.insert(0, sys.argv[1])\n"
+            "import atlas_mux as mux\n"
+            "mux._load_team = lambda *a: {'team_id': 'kw'}\n"
+            "mux._wait_team = lambda *a: print('waiting', flush=True) or time.sleep(60)\n"
+            "mux.cmd_wait(argparse.Namespace(root=sys.argv[2], team='kw'))\n"
+        )
+        newer = []
+
+        def older_wait(args, root_, rec_):
+            proc = subprocess.Popen(
+                [sys.executable, "-c", newer_wait, os.path.dirname(mux.__file__), root_],
+                stdout=subprocess.PIPE, text=True,
+            )
+            newer.append(proc)
+            self.addCleanup(proc.communicate)
+            self.addCleanup(proc.kill)  # cleanups run last-in first-out: kill, then reap
+            self.assertEqual(proc.stdout.readline().strip(), "waiting")
+            return 0
+
+        with mock.patch.object(mux, "_load_team", return_value=rec), mock.patch.object(mux, "_wait_team", older_wait):
+            mux.cmd_wait(argparse.Namespace(root=root, team="kw"))
+        self.assertIsNone(newer[0].poll())
+        self.assertTrue(mux.team_watched(root, "kw"))
+        newer[0].kill()  # SIGKILL skips the finally: the stale marker of a dead pid must not count
+        newer[0].wait()
         self.assertFalse(mux.team_watched(root, "kw"))
 
     def test_t4_a_missing_or_zero_start_time_yields_no_duration(self):
@@ -670,3 +700,7 @@ class WorkerHandbackAndWait(unittest.TestCase):
         self.assertLess(time.time() - t0, 5)
         self.assertEqual(code, 0)
         self.assertRegex(err, r"1/2 reported: a reported, b running")
+
+
+if __name__ == "__main__":
+    unittest.main()

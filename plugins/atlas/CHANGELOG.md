@@ -1,5 +1,16 @@
 # Changelog
 
+## 17.43.0 - 2026-11-25
+- Fixed, `hooks/completion_gate_core.py` (m), non-orchestrating path: `_rerun_clears_m` re-runs the run's last plain test command as the orchestrating path does; green writes `gate-proof.json` and clears (m). Tests: `test_gate_rerun.py` `*_non_orchestrating_session`.
+
+- Fixed, `hooks/completion_gate_core.py` (b)/(g): test commands match across newlines, subshells and output shaping (`2>&1`, `> file`, `| tail` etc.); `python3 test_*.py` counts as a test run; batch commands are separate segments; a bun `N fail` summary (N > 0) earns nothing.
+- Changed, mod band (`mod/view/band/slot.ts`, `mission-layout.ts`, `band.tsx`): at most 3 rows (status row, health strip, key chips); no TODO rows, worker lanes, ticker, board rows or expanded health card.
+- Changed, mod side panel (`mod/view/panel/panel-tabs.ts`): tabs are `status`, `health`, `channel`, `bored`; the gates tab is removed and its content follows the health rows, with the denial badge. Channel is a chat-room layout.
+- Added, mod `bored` tab (`mod/view/panel/bored-vt.ts`, `bored-render.ts`, `mod/host/bored.ts`): `ssh -tt -o StrictHostKeyChecking=no watch.ascii.theater` while the tab is open, redraw at most every 100 ms. `StrictHostKeyChecking=no` skips host-key verification (user-requested; display-only, no credentials sent).
+- Fixed, mod timers (`mod/data/live.ts`): a worker first seen already finished kept counting because `endedAt` fell back to `now`; finished timers now freeze.
+- Fixed, `scripts/atlas_mux.py` `cmd_wait`, `team_watched`: `wait` writes `<team>.waiter.<pid>`, so an older wait ending no longer deletes a live wait's marker; the bare `<team>.waiter` is still honoured.
+- Fixed, `hooks/completion_gate_core.py` gate (w): two or more unwatched teams get "one Monitor per team", with numbered commands, in place of a `wait A ; wait B` chain. A chained Monitor left the second team unwatched, so the next Stop was refused again.
+
 ## 17.42.0 - 2026-11-25
 
 - Added, mod (`mod/view/transcript/cards.tsx` `teamCard`, `restyle.tsx`): a Bash `atlas_mux.py spawn-team` call draws a team card: `◆ team <id> · N workers`, then each worker the launch output names with a role-coloured mark, name, role and state, and up to 5 of its own todos (theme state glyphs), else the first line of its task. Only `Agent`/`Task` calls drew a card before, so tmux workers never had one.

@@ -10,7 +10,7 @@ import { type PanelTab, type PanelWorker, dot, type PanelModel, countedGates, ga
 
 /** Tabs in strip order (no key letters: a tab answers a click only). The ids stay internal: `core` is the health view, `route` the status view. */
 export const PANEL_TABS: readonly { id: PanelTab; label: string }[] = [
-  { id: 'core', label: 'health' }, { id: 'route', label: 'status' }, { id: 'gates', label: 'gates' }, { id: 'channel', label: 'channel' },
+  { id: 'route', label: 'status' }, { id: 'core', label: 'health' }, { id: 'channel', label: 'channel' }, { id: 'bored', label: 'bored' },
 ];
 /** The tab strip both hosts draw (the band's footer buttons, mod/view/band/band.tsx BAND_BUTTONS, are this list). Each tab is a click chip named by its label alone. */
 export const STRIP_TABS: readonly { id: PanelTab | 'board'; label: string }[] = [...PANEL_TABS];
@@ -82,12 +82,12 @@ export function gatesFigure(m: Pick<PanelModel, 'gates' | 'core'>): { text: stri
   const t = gatesTotal(countedGates(gatesOf(m)).map((g) => gateCounts({ ok: groupOk(g), pending: groupPending(g), lines: g.lines.length, pass: g.lines.length - groupFailing(g) })));
   return { text: t.text, tone: t.tone, deny: t.deny, fired: t.fired };
 }
-/** The badges of the strip: gates its denial count, channel its unread count; a tab with nothing to count has none. */
+/** The badges of the strip: health (core) its gate denial count, channel its unread count; a tab with nothing to count has none. */
 export function stripBadges(m: Pick<PanelModel, 'gates' | 'core' | 'unread'>): Record<string, string> {
   const deny = gatesFigure(m).deny;
-  return { ...(deny > 0 ? { gates: String(deny) } : {}), ...(m.unread > 0 ? { channel: String(m.unread) } : {}) };
+  return { ...(deny > 0 ? { core: String(deny) } : {}), ...(m.unread > 0 ? { channel: String(m.unread) } : {}) };
 }
-const badgeTone = (id: string): Tone => (id === 'gates' ? 'bad' : 'accent');
+const badgeTone = (id: string): Tone => (id === 'core' ? 'bad' : 'accent'); // the denial count (red) sits on health, which now holds the gates
 /** The tab the strip lights: the team view is the status one. */
 const litOf = (tab: PanelTab): string => (tab === 'team' ? 'route' : tab);
 /** `project`, `branch` as the header reads them: from the channel name (`tech-tools@main`) and the health's branch. */

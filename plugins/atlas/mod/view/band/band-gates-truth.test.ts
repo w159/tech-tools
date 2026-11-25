@@ -24,13 +24,13 @@ const all = (m: MissionModel): string => missionLines(m).map((l) => runsText(l.r
 
 describe('B1: one word for a failing check without a Stop refusal', () => {
   const g = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'verify', label: 'verification coverage', ok: false, fix: 'run the hooks suite' }, { id: 'docs', label: 'docs updated', ok: true }] }];
-  test('the gates tab says pending or denied, never failing', () => {
-    const out = panelText(panelWorld('gates', 100, ui, { rows: 24, gates: g })).join('\n');
+  test('the gates block of the health tab says pending or denied, never failing', () => {
+    const out = panelText(panelWorld('core', 100, ui, { rows: 24, gates: g })).join('\n');
     expect(out).toMatch(/○ verification coverage/); // fix1728: a completion line is pending (the hollow mark) until a Stop refuses
     expect(out).not.toMatch(/✗ verification coverage/);
     expect(out).not.toContain('failing');
     const trip = [{ id: 'tripwire', title: 'Dispatch tripwire', lines: [{ id: 'inline', label: 'Inline ops since last dispatch', ok: false, fix: 'dispatch a worker' }] }];
-    const real = panelText(panelWorld('gates', 100, ui, { rows: 24, gates: trip })).join('\n');
+    const real = panelText(panelWorld('core', 100, ui, { rows: 24, gates: trip })).join('\n');
     expect(real).toMatch(/✗ Inline ops since last dispatch/); // a real failure (a denied call) without a Stop refusal: the failing mark and a DENIED entry with its fix
     expect(real).toContain('fix  dispatch a worker');
     expect(real).not.toContain('failing');

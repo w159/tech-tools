@@ -5,7 +5,6 @@ import { beatStale, END_GRACE_MS, FRAME_MS, newRunClock, ranSecsOf, restSecsOf, 
 import { demoFrames } from '../../motion/motion-demo';
 import { MOTION_STEP_MS } from '../../motion/motion';
 import { bandLines, IDLE_AFTER_SECS, runsText, type MissionModel, type MissionWorker } from './mission-layout';
-import { fitHudToBand } from '../../register';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
 const PHASES = ['research', 'plan', 'build', 'verify', 'done'] as const;
@@ -113,22 +112,6 @@ describe('step 2: the run clock', () => {
   test('a frame in each of four consecutive ticks differs: the band spinner moves every frame', () => {
     const frames = [0, 1, 2, 3].map((tick) => head(model({ busy: true, turnSecs: 5, workers: live, tick })));
     expect(new Set(frames).size).toBe(4);
-  });
-});
-
-describe('step 2: the band row can never vanish', () => {
-  const gap = (rows: readonly string[]): number => (rows.length ? 1 : 0);
-  test('the HUD gives up rows until at least one row of the budget is left for the band', () => {
-    const rows = ['a', 'b', 'c', 'd', 'e', 'f'];
-    expect(fitHudToBand(rows, 8, gap)).toHaveLength(6);
-    expect(fitHudToBand(rows, 6, gap).length + 1 + 1).toBeLessThanOrEqual(6 + 1); // rows + gap + band row never pass the budget
-    for (let budget = 1; budget <= 10; budget++) {
-      const kept = fitHudToBand(rows, budget, gap);
-      expect(kept.length + gap(kept) + 1).toBeLessThanOrEqual(budget);
-    }
-  });
-  test('a closed slot (budget under one) is left alone: the band draws nothing by design', () => {
-    expect(fitHudToBand(['a', 'b'], 0, gap)).toHaveLength(2);
   });
 });
 

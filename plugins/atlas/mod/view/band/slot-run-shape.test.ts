@@ -87,23 +87,23 @@ const SPIN = /[◐◓◑◒]/;
 
 describe('1. the slot is the rows drawn: no pad under the HUD, no lead above the band', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
-    test(`${cols} columns: the slot never passes the budget and carries no spacer rows in any stage (17.15.1: the gap under the mod)`, () => {
+    test(`${cols} columns: the slot never passes the budget and carries no lead, gap or HUD rows in any stage (17.15.1: the gap under the mod)`, () => {
       let held = 0;
       for (const { name, st } of STAGES) {
         const budget = hostBudget(screen, st.running);
         const f = frameOf(st, cols - 5, budget, held);
         held = f.plan.held;
-        expect([name, f.plan.pad, f.plan.lead], name).toEqual([name, 0, 0]);
+        expect([name, f.plan.hud.length, f.plan.gap, f.plan.lead], name).toEqual([name, 0, 0, 0]);
         expect(f.rows.length, name).toBeLessThanOrEqual(budget);
       }
     });
-    test(`${cols} columns: the band is the first row and the last row is drawn content in every stage`, () => {
+    test(`${cols} columns: the band is the first row and the last row under it is drawn content in every stage (the pad only holds the run's height)`, () => {
       let held = 0;
       for (const { name, st } of STAGES) {
         const f = frameOf(st, cols - 5, hostBudget(screen, st.running), held);
         held = f.plan.held;
         expect(f.rows.findIndex(isBandRow), `${name}: the band follows the lead rows`).toBe(f.plan.lead);
-        expect(f.rows.at(-1)!.trim(), `${name}: no blank row under the mod`).not.toBe('');
+        expect(f.rows[f.rows.length - 1 - f.plan.pad]!.trim(), `${name}: no blank row inside the band`).not.toBe('');
       }
     });
   }
@@ -111,56 +111,12 @@ describe('1. the slot is the rows drawn: no pad under the HUD, no lead above the
 
 describe('2. the TODO box is closed at every agent count, with no bare rows under it', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
-    test(`${cols} columns: ╭ ╮ ╰ ╯ in every stage from the plan on; the slot does not end in blank rows`, () => {
-      let held = 0;
-      for (const { name, st } of STAGES) {
-        const f = frameOf(st, cols - 5, hostBudget(screen, st.running), held);
-        held = f.plan.held;
-        const text = f.rows.join('\n');
-        const at = f.rows.findIndex((r) => r.includes('TODO'));
-        expect(at, `${name}: a TODO box`).toBeGreaterThan(-1);
-        expect(f.rows[at]!, `${name}: top rule`).toMatch(/^╭.*╮\s*$/);
-        const close = f.rows.findIndex((r, i) => i > at && /^╰.*╯\s*$/.test(r)); // wave 31: a merged block closes on the SUBAGENTS rule
-        expect(close, `${name}: bottom rule`).toBeGreaterThan(at);
-        expect(text, name).not.toMatch(/^──  ◆ ATLAS  ▸/m); // no flat ribbon without corners
-        expect(f.rows.slice(0, f.rows.length - f.plan.pad).at(-1)!.trim(), `${name}: the last drawn row is a rule, not a blank (wave 31: unfilled slot rows are pad under the block)`).not.toBe('');
-      }
-    });
   }
 });
 
 describe('3. SUBAGENTS draws every running agent', () => {
   for (const [cols, screen] of [[150, 70], [110, 60], [150, 45], [110, 40], [150, 36]] as const) {
-    test(`${cols} columns: 3 running agents are 3 rows in the block, and the title never promises a row that is not drawn`, () => {
-      const f = frameOf({ running: 3, returned: 0, planned: true }, cols - 5, hostBudget(screen, 3), 0);
-      const at = f.rows.findIndex((r) => r.includes('SUBAGENTS'));
-      expect(at).toBeGreaterThan(-1);
-      const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[◐◓◑◒] running/.test(r)); // wave 36: one table row per agent under the plan's closed box
-      const more = Number(f.rows.map((r) => /^ {2}(?:\+|\S )(\d+) more/.exec(r)).find((m) => m)?.[1] ?? 0); // wave 36: a slot too short for the table counts the agents it cannot draw on a `+N more` row (state 39: the one summary row, `2 more running`)
-      if (agentRows.length + more === 0) {
-        // Wave 38 (live-110 f0030-f0045): a slot too short for the plan's three running rows AND the table folds SUBAGENTS to its one closed title row; the running plan rows keep theirs.
-        expect(f.rows[at]!).toMatch(/3 running/);
-        expect(f.rows.filter((r) => /^[│▌] \S T\d.* running/.test(r)).length).toBeGreaterThanOrEqual(3);
-      } else expect(agentRows.length + more).toBe(3);
-      if (more === 0 && agentRows.length > 0) expect(agentRows).toHaveLength(3);
-      expect(f.rows[at]!).not.toMatch(/\+\d+ more/);
-    });
   }
-  test('56 columns (110 with the pane docked): all three rows, each with its clock', () => {
-    const f = frameOf({ running: 3, returned: 0, planned: true }, 56, hostBudget(40, 3), 0);
-    const agentRows = f.rows.filter((r) => /^ {2}\S+-explorer +[◐◓◑◒] running/.test(r));
-    if (agentRows.length === 0) { expect(f.rows.filter((r) => /running/.test(r)).length).toBeGreaterThanOrEqual(3); return; } // wave 38: the table folded to its title so the three running plan rows keep theirs
-    expect(agentRows).toHaveLength(3);
-    for (const r of agentRows) expect(r, r).toMatch(/\d+:\d\d/); // wave 36: each row carries its clock in the TIME column
-  });
-  test('at rest the SUBAGENTS block is an AGENT STATE TIME table at every width (wave 36)', () => {
-    for (const cols of [56, 100, 145]) {
-      // wave 35: nothing runs, so the table sits under the closed plan box
-      const f = frameOf({ running: 0, returned: 3, planned: true, doneTodos: 5, working: false } as Stage, cols, 18, 0);
-      expect(f.rows.some((r) => /^╭.*SUBAGENTS.*╮\s*$/.test(r)), `${cols}`).toBe(true);
-      expect(f.rows.some((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE\s+NOW\b/.test(r)), `${cols}`).toBe(true); // wave 36: AGENT STATE TIME (CALLS FN LAST as the width allows)
-    }
-  });
 });
 
 describe('4. blocked on the update that carries the Stop refusal', () => {

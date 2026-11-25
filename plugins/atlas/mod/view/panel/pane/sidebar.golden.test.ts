@@ -1,5 +1,5 @@
 // Characterization (NOT design evidence; the design mocks are in contracts/panel-golden.ts): sidebarTree over representative models serializes identically across refactors.
-// Regenerate the fixture only on an intended visual change (see sidebar.golden-cases.ts). Regenerated on purpose for the panel redesign (tabs health / status / gates / channel).
+// Regenerate the fixture only on an intended visual change (see sidebar.golden-cases.ts). Regenerated on purpose for the panel redesign (tabs status / health / channel / bored).
 import { describe, expect, test } from 'claude-code/testing';
 import { goldenText, serializeGolden } from './sidebar.golden-cases';
 import { GOLDEN } from './sidebar.golden-fixture';
@@ -14,27 +14,28 @@ describe('sidebar golden', () => {
 
 describe('sidebar golden text', () => {
   test('every tab opens on the pill row, a blank row, the strip with four labelled tabs and the rule under it', () => {
-    for (const k of ['route', 'team', 'channel', 'gates', 'core']) {
+    for (const k of ['route', 'team', 'channel', 'core']) {
       const r = rows(k);
       expect(r[0]).toContain('◆ ATLAS');
       expect(r[1]!.trim()).toBe('');
-      expect(r[2]!.trim().replace(/ +/g, ' ').replace(/ \d+/g, '')).toBe('health status gates channel');
+      expect(r[2]!.trim().replace(/ +/g, ' ').replace(/ \d+/g, '')).toBe('status health channel bored');
       expect(r[3]).toMatch(/^ [─━]+$/);
     }
   });
   test('the lit tab is the filled chip with one accent segment of the rule under it', () => {
-    for (const k of ['route', 'channel', 'gates', 'core']) expect(rows(k)[3]!.match(/━+/g)).toHaveLength(1);
+    for (const k of ['route', 'channel', 'core']) expect(rows(k)[3]!.match(/━+/g)).toHaveLength(1);
   });
   test('route: the phase timeline, the plan with `n of m`, the team tally in words', () => {
     const r = rows('route');
     expect(r.some((l) => l.trim().startsWith('PHASE'))).toBe(true);
     expect(r.some((l) => l.includes('PLAN') && l.includes('1 of 7'))).toBe(true);
     expect(r.some((l) => l.includes('TEAM') && l.includes('1 running') && l.includes('1 failed') && l.includes('1 waiting'))).toBe(true);
-    expect(r[2]).toMatch(/gates {2}1 /); // the tool-routing group holds no data: it is not a third gate (gateTally); the unmet completion line is pending until a Stop refuses, so the badge is the one denial
+    expect(r[2]).toMatch(/health {2}1 /); // the tool-routing group holds no data: it is not a third gate (gateTally); the unmet completion line is pending until a Stop refuses, so the badge is the one denial
   });
-  test('route lists every plan task with its state mark, not only the current phase', () => {
+  test('route lists every open plan task, not only the current phase; the completed one is folded into `N done`', () => {
     const r = rows('route').join('\n');
-    for (const id of ['a', 'b', 'c', 'd', 'n1', 'n2', 'n3']) expect(r).toContain(`task ${id} `);
+    for (const id of ['b', 'c', 'd', 'n1', 'n2', 'n3']) expect(r).toContain(`task ${id} `);
+    expect(r).not.toContain('task a ');
   });
   test('route with a tick turns the spinner glyph', () => {
     expect(rows('route')).not.toEqual(rows('routeSpinning'));
@@ -48,7 +49,7 @@ describe('sidebar golden text', () => {
   });
   test('team at 38 columns (the 110-column pane) draws the strip as one row of chips with the trailing tabs behind `more ›` (D14), and keeps name and state', () => {
     const r = rows('cols38');
-    expect(r[2]!.trim().replace(/ +/g, ' ').replace(/ \d+/g, '')).toBe('health status more ›');
+    expect(r[2]!.trim().replace(/ +/g, ' ').replace(/ \d+/g, '')).toBe('status health more ›');
     expect(r[3]!.match(/━+/g)).toHaveLength(1); // the lit status chip's segment
     expect(r.join('\n')).toContain('explorer-1');
     for (const l of r) expect([...l].length).toBeLessThanOrEqual(37);
@@ -62,20 +63,20 @@ describe('sidebar golden text', () => {
   test('channel: the online count in words', () => {
     expect(rows('channel').join('\n')).toMatch(/\d+ online/);
   });
-  test('gates: the grid lists the failing line and its fix is on the card, copyable', () => {
-    const t = goldenText('gates');
+  test('health: the gates section lists the failing line and its fix is on the card, copyable', () => {
+    const t = goldenText('core');
     expect(t).toContain('GATES');
     expect(t).toContain('○ verifica'); // the unmet completion line is pending until a Stop refuses: a hollow mark in the grid, no DENIED card (the fix of a denied line is tested in sidebar.test.ts)
-    expect(goldenText('gatesExpanded')).toContain('○ verifica');
+    expect(goldenText('coreGatesExpanded')).toContain('○ verifica');
   });
-  test('core: the empty ledger says so in one centred line rather than a blank pane', () => {
-    expect(goldenText('core')).toContain('no verdicts, workers or gates yet');
+  test('health: with no core ledger the tab shows the gates section rather than a blank pane', () => {
+    expect(goldenText('core')).toContain('GATES');
   });
   test('an empty squad reads as nothing running, not a blank pane', () => {
     expect(goldenText('empty').trim().length).toBeGreaterThan(0);
   });
   test('no legacy glyphs: no bullet, and no ASCII `...`, in any case (the circle quarters are the one spinner)', () => {
-    for (const k of ['route', 'team', 'channel', 'gates', 'core', 'cols38', 'cols30', 'cols120', 'channelLog', 'routeOpenPending', 'routeOpenDone'])
+    for (const k of ['route', 'team', 'channel', 'core', 'cols38', 'cols30', 'cols120', 'channelLog', 'routeOpenPending', 'routeOpenDone'])
       { expect(goldenText(k)).not.toMatch(/•/u); expect(goldenText(k)).not.toContain('...'); } // a cut is one `…` (wave 24)
   });
 });

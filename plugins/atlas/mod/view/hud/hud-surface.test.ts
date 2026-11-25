@@ -11,10 +11,11 @@ import type { SquadAgent, TodoItem } from '../../contract';
 import { blockedText, STOP_REFUSED } from '../../data/runstate';
 import { liveWorkers, queuedMembers } from '../../data/live';
 import { ownTodos } from '../../data/todos';
-import { agentModel, hudAgents, isRunning, type HudInput } from './hud';
+import { agentModel, hudAgents, hudRows, isRunning, type HudInput } from './hud';
 import { busySnap, NOW } from '../../live_fixture';
 import type { LiveSnapshot } from '../../orchestra-types';
 import { composeSlot } from '../band/slot';
+import type { Segment } from '../../design/runs';
 import { agentRows, fitStack, padRows, rowSpinnerGlyph, sortAgents, stack, stateCounts, taskCell, todoRows, windowRows, type AgentRow, type SurfaceOpts, type TodoRow } from './hud-surface';
 
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -457,7 +458,9 @@ function fxFrame(cols: number, o: Parameters<typeof fxSnap>[0] = {}, budget = 18
   const bandIn = (_h: unknown, maxRows: number | undefined): BandModel => ({ snapshot, live, gates: [], working, workSecs: 72, ...(working ? {} : { ranSecs: 72 }), columns: cols, tick: 3, ui: PLAIN, rich: false, workersInHud: true, maxRows }) as BandModel;
   const plan = composeSlot({ budget, hasSlot: true, hudOn: true, runOn: true, columns: cols, hudIn, hudView: { cols, tick: 3, ui: PLAIN, rich: false, now: snapshot.now }, running: agents.some(isRunning), agentsListed: agents.length > 0, orchestrated: true, now: snapshot.now, bandIn: bandIn as never, held: 0 } as never);
   const band = fxRows(bandTree(fxEls, plan.band, { openView: () => undefined, toggleTodos: () => undefined }) as unknown as FxNode)[0]!;
-  return { band, hud: plan.hud.map((r) => r.map((x) => x.t).join('')) };
+  // The slot is the band alone now: the HUD rows are drawn straight from hudLines, the table the status tab reads.
+  const hud = hudRows(hudIn, { cols, tick: 3, ui: PLAIN, rich: false, now: snapshot.now, maxRows: Math.max(0, budget - 1), reserve: true, settled: true, ...(working ? { working: true } : { idle: true }) }) as Segment[][];
+  return { band, hud: hud.map((r) => r.map((x) => x.t).join('')) };
 }
 const ELLIPSIS = String.fromCharCode(0x2026);
 

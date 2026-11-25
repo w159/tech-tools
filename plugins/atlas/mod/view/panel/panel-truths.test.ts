@@ -1,4 +1,4 @@
-// Truths of the old side panel tests that the redesigned panel (tabs health / status / gates / channel) still shows, each asserted against the new rendering.
+// Truths of the old side panel tests that the redesigned panel (tabs status / health / channel / bored; the gates content sits under the health tab) still shows, each asserted against the new rendering.
 // The table of every removed test, with its class and where it is re-expressed: .atlas/evidence/2026-11-20_mod-redesign/removed-tests.md
 import { describe, expect, test } from 'claude-code/testing';
 import { panelWorld } from '../../../contracts/panel-world';
@@ -57,9 +57,9 @@ describe('the stepper tells which phases the run entered', () => {
 });
 
 describe('gate marks and the header figure say one thing', () => {
-  const grid = (m: PanelModel): string => body(m).slice(0, 12).join('\n');
+  const grid = (m: PanelModel): string => { const b = body(m); const i = b.findIndex((l) => l.startsWith(' GATES')); return b.slice(i, i + 12).join('\n'); };
   test('the header counts the passed and the denied gates, and the grid marks add up to it', () => {
-    const m = live('gates', 62, { gates: refusedGates });
+    const m = live('core', 62, { gates: refusedGates });
     const text = grid(m);
     expect(text).toMatch(/GATES +this run +✓ 2 +✗ 1/);
     expect(text.match(/✓ [A-Z]/g)).toHaveLength(2);
@@ -67,17 +67,17 @@ describe('gate marks and the header figure say one thing', () => {
   });
   test('a line only Stop decides is pending: drawn `○`, never counted as a pass, so figure and marks agree', () => {
     const pending = [{ id: 'completion', title: 'Completion gate', lines: [{ id: 'a', label: 'Evidence captured', ok: true }, { id: 'i', label: 'Todos drained', ok: true, pending: true }] }] as never;
-    const text = grid(live('gates', 62, { gates: pending }));
+    const text = grid(live('core', 62, { gates: pending }));
     expect(text).toContain('○ Todos drained');
     expect(text).toMatch(/✓ 1 +✗ 0/);
     expect(text.match(/✓ [A-Z]/g)).toHaveLength(1);
   });
   test('a failing gate is listed under DENIED with its fix', () => {
-    const rows = body(live('gates', 62, { gates: refusedGates }));
+    const rows = body(live('core', 62, { gates: refusedGates }));
     expect(rows.slice(rows.indexOf(' DENIED')).join('\n')).toMatch(/Team gate[\s\S]*fix +run spawn-team/);
   });
   test('the strip and the gates header never print the gates as a ratio', () => {
-    const all = panelText(live('gates', 62, { gates: refusedGates })).join('\n') + panelText(live('route', 62, { gates: refusedGates })).join('\n');
+    const all = panelText(live('core', 62, { gates: refusedGates })).join('\n') + panelText(live('route', 62, { gates: refusedGates })).join('\n');
     expect(all).not.toMatch(/\bgates?\b[^\n]*\d+\/\d+/);
   });
 });
@@ -88,12 +88,14 @@ describe('workers and their states', () => {
   test('a failed worker is `failed` once, in the error tone, and nothing says `killed`', () => {
     const m = live('route', 62, { workers: [w('a-impl', 'done'), w('b-impl', 'failed', { detail: 'tests red 3' })] });
     const tally = bodyLines(m).find((l) => lineText(l).includes(' TEAM'))!;
-    expect(lineText(tally)).toMatch(/✓ 1 done +✗ 1 failed/);
+    expect(lineText(tally)).toMatch(/✗ 1 failed/);
+    expect(lineText(tally)).not.toMatch(/done/); // the finished worker left the list: the `1 done` line below counts it
+    expect(body(m).some((l) => /^ +\d+ done$/.test(l))).toBe(true);
     expect(tally.runs.find((x) => x.t.includes('failed'))?.tone).toBe('bad');
     const row = bodyLines(m).find((l) => lineText(l).includes('b-impl'))!;
     expect(lineText(row)).toMatch(/✗ b-impl/);
     expect(row.runs.find((x) => x.t.includes('✗'))?.tone).toBe('bad');
-    for (const tab of ['route', 'core', 'gates', 'channel'] as PanelTab[]) expect(panelText(live(tab, 62, { workers: [w('b-impl', 'failed')] })).join('\n')).not.toMatch(/killed|worker killed/i);
+    for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) expect(panelText(live(tab, 62, { workers: [w('b-impl', 'failed')] })).join('\n')).not.toMatch(/killed|worker killed/i);
   });
   test('a plan row that failed says why on the line under it, once', () => {
     const rows = body(live('route', 62, { todos: [{ id: 'T1', label: 'Changelog', state: 'failed', owner: 'b-impl', detail: 'tests red 3' }] as never, workers: [] }));
@@ -103,7 +105,8 @@ describe('workers and their states', () => {
   });
   test('the tally names a state only when a worker is in it', () => {
     const tally = (ws: PanelModel['workers']): string => lineText(bodyLines(live('route', 62, { workers: ws })).find((l) => lineText(l).includes(' TEAM'))!).trim();
-    expect(tally([w('a', 'done'), w('b', 'done')])).toBe('TEAM  ✓ 2 done');
+    expect(tally([w('a', 'done'), w('b', 'done')])).toBe('TEAM  no agents yet'); // finished workers leave the tally and are counted on the `N done` line
+    expect(body(live('route', 62, { workers: [w('a', 'done'), w('b', 'done')], todos: [] })).some((l) => /^ +2 done$/.test(l))).toBe(true);
     expect(tally([w('a', 'running'), w('b', 'queued')])).toBe('TEAM  ◐ 1 running  ○ 1 queued');
   });
   test('a parked worker keeps its row as queued, with a dash for its time', () => {
@@ -111,15 +114,15 @@ describe('workers and their states', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatch(/^▸ ○ parked-impl +implementer +waits on a +-$/);
   });
-  test('one row per worker however tall the pane is', () => {
+  test('one row per unfinished worker however tall the pane is; the finished one is not a row', () => {
     const ws = [w('a', 'running'), w('b', 'done'), w('c', 'failed')];
-    for (const rows of [24, 40, 80]) expect(body(live('route', 62, { workers: ws, todos: [], rows })).filter((l) => /^▸ [◐✓✗] [abc] /.test(l))).toHaveLength(3);
+    for (const rows of [24, 40, 80]) expect(body(live('route', 62, { workers: ws, todos: [], rows })).filter((l) => /^▸ [◐✓✗] [abc] /.test(l)).map((l) => l[2])).toEqual(['◐', '✗']);
   });
 });
 
 describe('clocks are frozen by the data, never the render clock', () => {
-  test('a finished worker prints its own seconds at any render time', () => {
-    const ws = [{ name: 'a-impl', role: 'implementer', state: 'done', detail: 'finished', secs: 13 }] as never;
+  test('a stopped worker (failed: finished workers leave the list) prints its own seconds at any render time', () => {
+    const ws = [{ name: 'a-impl', role: 'implementer', state: 'failed', detail: 'finished', secs: 13 }] as never;
     const at = (now: number) => body(live('route', 62, { workers: ws, now })).filter((l) => l.includes('a-impl') && l.startsWith('▸'));
     expect(at(1_000)[0]).toMatch(/0:13$/);
     expect(at(9_000_000)).toEqual(at(1_000));
@@ -134,14 +137,14 @@ describe('clocks are frozen by the data, never the render clock', () => {
 });
 
 describe('the plan keeps the Board order and the owner whole', () => {
-  test('rows come in the order the Board lists them, done rows included (no done-last reshuffle)', () => {
+  test('rows come in the order the Board lists them (no reshuffle); a done row is not listed, only counted', () => {
     const todos = [{ id: 'T1', label: 'Zeta', state: 'running' }, { id: 'T2', label: 'Alpha', state: 'done' }, { id: 'T3', label: 'Mid', state: 'queued' }] as never;
     const rows = body(live('route', 62, { todos, workers: [] })).filter((l) => /^▸ [✓◐○] (Zeta|Alpha|Mid)/.test(l));
-    expect(rows.map((l) => l.match(/Zeta|Alpha|Mid/)![0])).toEqual(['Zeta', 'Alpha', 'Mid']);
+    expect(rows.map((l) => l.match(/Zeta|Alpha|Mid/)![0])).toEqual(['Zeta', 'Mid']);
   });
   test('a long title is cut with one `…` and never `...`; the owner is whole where it is shown and never cut, and the time keeps its column', () => {
     const owner = 'implementer-layout';
-    const todos = [{ id: 'T1', label: 'A very long title that cannot possibly fit the narrow pane', state: 'done', owner }] as never;
+    const todos = [{ id: 'T1', label: 'A very long title that cannot possibly fit the narrow pane', state: 'queued', owner }] as never;
     let shown = 0;
     for (let cols = 40; cols <= 110; cols += 5) {
       const row = body(live('route', cols, { todos, workers: [] })).find((l) => l.includes('A very'))!;
@@ -157,17 +160,17 @@ describe('the plan keeps the Board order and the owner whole', () => {
 
 describe('every tab at every width', () => {
   test('no row is wider than the pane and a cut is the one-cell `…`, never `...`', () => {
-    for (const tab of ['route', 'core', 'gates', 'channel'] as PanelTab[]) {
+    for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
       for (const cols of [30, 37, 45, 62, 80, 110, 150]) {
         for (const l of panelText(live(tab, cols, { health: HEALTH }))) {
           expect([tab, cols, l, cells(l) <= cols]).toEqual([tab, cols, l, true]);
-          expect([tab, cols, l.includes('...')]).toEqual([tab, cols, false]);
+          if (tab !== 'bored') expect([tab, cols, l.includes('...')]).toEqual([tab, cols, false]); // bored is a streamed canvas: its `connecting to ascii.theater...` line is the stream's own text
         }
       }
     }
   });
   test('the pane is exactly its rows tall, on every tab, in every run state', () => {
-    for (const tab of ['route', 'core', 'gates', 'channel'] as PanelTab[]) {
+    for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
       for (const rows of [24, 30, 40, 60]) {
         for (const kind of ['working', 'idle', 'done', 'blocked'] as const) {
           const n = panelLines(live(tab, 62, { rows, run: { kind, secs: 5, startMs: 0, frame: 0 }, health: HEALTH })).length;
@@ -182,7 +185,7 @@ describe('colour', () => {
   test('the divider rule under the strip is one colour in every run state; only the lit tab segment is the accent', () => {
     const seen = new Set<string>();
     for (const kind of ['working', 'idle', 'done', 'blocked'] as const) {
-      for (const tab of ['route', 'core', 'gates', 'channel'] as PanelTab[]) {
+      for (const tab of ['route', 'core', 'channel', 'bored'] as PanelTab[]) {
         for (const x of tabRule(live(tab, 62, { run: { kind, secs: 5, startMs: 0, frame: 0 }, health: HEALTH })).runs.filter((y) => /─/.test(y.t))) seen.add(`${x.tone}/${x.fg ?? ''}`);
       }
     }
@@ -215,7 +218,7 @@ describe('the channel', () => {
   const notes = [{ at: '08:41:00', ms: T, from: 'lead', text: 'go', lead: true }];
   const chips = (over: Partial<PanelModel>) => {
     const m = live('channel', 62, { notes, people: 2, channel: 'x', workers: [{ name: 'a-impl', role: 'implementer', state: 'running', detail: 'step', secs: 3 }] as never, ...over });
-    return bodyLines(m).at(-1)!.runs.filter((x) => x.press).map((x) => [x.press, x.bg === 'accent'] as const);
+    return bodyLines(m).at(-4)!.runs.filter((x) => x.press).map((x) => [x.press, x.bg === 'accent'] as const);
   };
   test('exactly one chip is filled: the recipient on the roster, the lead when none is picked', () => {
     const lit = (over: Partial<PanelModel>) => chips(over).filter(([, on]) => on).map(([p]) => p);
@@ -226,19 +229,19 @@ describe('the channel', () => {
   test('a recipient that is not on the roster is named by its own chip, never swapped for another worker', () => {
     expect(chips({ recipient: 'ghost' }).filter(([, on]) => on).map(([p]) => p)).toEqual(['to:ghost']);
   });
-  test('a note to a peer shows ↳ to <peer>; a note to everyone shows no recipient', () => {
+  test('a note to a peer reads `from -> peer` in its header; a note to everyone shows no recipient', () => {
     const m = live('channel', 62, { notes: [{ at: '08:41:00', ms: T, from: 'lead', to: 'a-impl', text: 'one', lead: true }, { at: '08:42:00', ms: T + 60_000, from: 'a-impl', text: 'two' }] as never, people: 2, channel: 'x' });
     const rows = body(m).join('\n');
-    expect(rows).toContain('↳ to a-impl');
-    expect(rows.match(/↳ to/g)).toHaveLength(1);
+    expect(rows).toContain('lead -> a-impl');
+    expect(rows.match(/ -> /g)).toHaveLength(1);
   });
 });
 
 describe('row geometry and glyph vocabulary, on every tab', () => {
-  const TABS = ['route', 'core', 'gates', 'channel'] as PanelTab[];
+  const TABS = ['route', 'core', 'channel'] as PanelTab[]; // not bored: it is a streamed canvas, with no gutter and no panel rows
   test('a plan or team row puts the state glyph in the third cell and the name in the fifth', () => {
     const rows = body(live('route', 62)).filter((l) => /^▸ [✓◐○✗▲] /.test(l));
-    expect(rows.length).toBeGreaterThan(8);
+    expect(rows.length).toBeGreaterThan(4); // the finished rows are folded into `N done`
     for (const l of rows) { expect([...l][0]).toBe('▸'); expect(/[✓◐○✗▲]/.test([...l][2]!)).toBe(true); expect([...l][3]).toBe(' '); expect([...l][4]).not.toBe(' '); }
   });
   test('every body row starts in the one-cell gutter (a space, or the `▸` marker of a pressable row)', () => {
@@ -274,10 +277,10 @@ describe('row geometry and glyph vocabulary, on every tab', () => {
   });
 });
 
-describe('the gates tab under stress', () => {
+describe('the gates section of the health tab under stress', () => {
   const errored = [{ id: 'routing', title: 'Tool routing', error: 'route drifted', lines: [] }] as never;
   test('a gate group that errors is a failing check, never a green one', () => {
-    const text = body(live('gates', 62, { gates: errored })).join('\n');
+    const text = body(live('core', 62, { gates: errored })).join('\n');
     expect(text).toMatch(/GATES +this run +✓ 0 +✗ 1/);
     expect(text).toMatch(/✗ Tool routing/);
     expect(text).toContain('route drifted');
@@ -285,7 +288,7 @@ describe('the gates tab under stress', () => {
   test('a long reason wraps on its words and never past the pane; the whole fix is what a press copies', () => {
     const fix = 'run the fix command with a long enough tail to wrap onto a second row of the pane';
     const gates = [{ id: 'c', title: 'C', lines: [{ id: 'x', label: 'Long gate', ok: false, detail: 'a very long reason that goes on and on and on and on until it wraps around the pane edge more than once', fix }] }] as never;
-    const m = live('gates', 50, { gates });
+    const m = live('core', 50, { gates });
     const rows = body(m).filter((l) => l.startsWith(' ▌'));
     expect(rows.length).toBeGreaterThanOrEqual(4);
     for (const l of rows) expect(cells(l)).toBeLessThanOrEqual(50);
@@ -294,11 +297,11 @@ describe('the gates tab under stress', () => {
   });
   test('the strip count of the gates tab is the denied figure of its header', () => {
     for (const gates of [refusedGates, errored, [] as never]) {
-      const m = live('gates', 62, { gates });
+      const m = live('core', 62, { gates });
       const header = body(m).find((l) => l.startsWith(' GATES'));
       const denied = header ? Number(/✗ (\d+)/.exec(header)?.[1] ?? 0) : 0;
-      const strip = lineText(panelLines(m).find((l) => /health +status +gates/.test(lineText(l)))!);
-      const shown = Number(/gates +(\d+)/.exec(strip)?.[1] ?? 0);
+      const strip = lineText(panelLines(m).find((l) => /status +health/.test(lineText(l)))!);
+      const shown = Number(/health +(\d+)/.exec(strip)?.[1] ?? 0);
       expect([denied, shown]).toEqual([denied, denied]);
     }
   });
@@ -318,7 +321,7 @@ describe('the status tab, the rest of what it still says', () => {
     const m = live('route', 62);
     const tally = lineText(bodyLines(m).find((l) => lineText(l).includes(' TEAM'))!);
     const counted = [...tally.matchAll(/[◐○✓✗▲] (\d+)/g)].reduce((n, x) => n + Number(x[1]), 0);
-    expect(counted).toBe(m.workers.length);
+    expect(counted).toBe(m.workers.filter((x) => x.state !== 'done').length); // finished workers are counted on the `N done` line, not in the tally
   });
   test('the hook p95 reads a dash until 5 samples back it, and its p50 is always the figure', () => {
     const few = body(live('core', 110, { health: { ...HEALTH, hooks: { ...HEALTH.hooks!, latency: { n: 3, p50: 12, p95: 40 } } } })).find((l) => l.includes('hook p50'))!;

@@ -196,7 +196,7 @@ describe('step 5: the side panel lists agents in the SUBAGENTS dispatch order (c
     todo('4', 'T4 combine the reports', 'completed', null, 21, 22), todo('5', 'T5 write the final summary', 'completed', null, 22, 23),
   ] });
   const namesOf = (lines: string[]): string[] => lines.map((l) => /(alpha|ghost|beta)-explorer/.exec(l)?.[0]).filter((x): x is string => !!x);
-  test('the TEAM section lists the agents in the order the SUBAGENTS table does', () => {
+  test('the status tab folds the finished agents into one `N done` line; their dispatch order is the SUBAGENTS table order', () => {
     resetAgentSeq();
     forgetPhases();
     const s = reversedPlan();
@@ -208,8 +208,10 @@ describe('step 5: the side panel lists agents in the SUBAGENTS dispatch order (c
       const at = t.findIndex((l) => /^\s+TEAM\b/.test(l));
       return namesOf(t.slice(at, at + 5)).slice(0, 3);
     };
-    expect(agentsBlock('route')).toEqual(subagents);
-    expect(agentsBlock('team')).toEqual(subagents);
+    // alpha and beta are finished: the status tab folds them into its `N done` line and keeps only the failed ghost row on the TEAM list
+    expect(agentsBlock('route')).toEqual(['ghost-explorer']);
+    expect(agentsBlock('team')).toEqual(['ghost-explorer']);
+    expect(render(s, 'route', 57, 41, run).some((l) => /\b\d+ done\b/.test(l))).toBe(true);
   });
   test('the order survives a host that lists the squad in another order', () => {
     resetAgentSeq();

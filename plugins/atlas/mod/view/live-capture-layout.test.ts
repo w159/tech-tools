@@ -77,7 +77,7 @@ describe('1. titles use the width the row has', () => {
 });
 
 describe('2. the tab strip fits the pane and the lit tab is the filled chip', () => {
-  const tabs = ['route', 'channel', 'gates', 'core'] as const; // redesign: the team view lives in the status tab, so the strip has four chips
+  const tabs = ['route', 'channel', 'bored', 'core'] as const; // redesign: the team view lives in the status tab, so the strip has four chips
   for (const cols of PANE_WIDTHS) {
     for (const tab of tabs) {
       test(`pane ${cols}, ${tab} lit: whole words (a second strip row where one does not fit), the lit label filled, no rule`, () => {
@@ -91,7 +91,7 @@ describe('2. the tab strip fits the pane and the lit tab is the filled chip', ()
         const lit = prows.flatMap((p) => p.runs).filter((x) => x.bg === 'accent').map((x) => x.t.trim());
         expect(rows.join('\n')).not.toMatch(/\b[rtcgko]: /); // wave 43: no key letter is drawn
         expect(lit).toHaveLength(1);
-        expect(['status', 'team', 'chan', 'channel', 'gates', 'core', 'health', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
+        expect(['status', 'team', 'chan', 'channel', 'bored', 'core', 'health', 'more ›']).toContain(lit[0]); // a lit tab folded behind `more ›` fills that chip
         if (cols >= 55) expect(lit[0]).toBe(entry.label);
       });
     }
@@ -110,7 +110,7 @@ describe('3. every row of every surface is exactly its slot wide in terminal cel
   }
   const states = ['running', 'done', 'failed', 'blocked', 'waiting', 'queued'] as const;
   for (const cols of PANE_WIDTHS) {
-    for (const tab of ['route', 'team', 'channel', 'gates', 'core'] as const) {
+    for (const tab of ['route', 'team', 'channel', 'bored', 'core'] as const) {
       test(`side panel ${tab} at ${cols}: every painted row is ${cols} cells`, () => {
         const todos = PLAN.map((t, i) => ({ id: t.id, label: t.content, state: states[i % states.length]! }));
         const m: PanelModel = panelWorld(tab, cols, ui, { todos, tick: 1 });

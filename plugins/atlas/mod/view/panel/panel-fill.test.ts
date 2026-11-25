@@ -28,9 +28,9 @@ describe('C5: the tab bodies use the pane height', () => {
   for (const rows of [30, 40]) for (const tab of ['channel', 'core'] as PanelTab[]) {
   }
   test('core with less to show than the pane keeps its rows (nothing is stretched)', () => {
-    const few = panelLines(panelWorld('core', 37, ui, { core: core0, rows: 50 })).length;
-    expect(few).toBeLessThan(50);
-    expect(panelLines(panelWorld('core', 37, ui, { core: core0, rows: 60 })).length).toBe(few);
+    const few = panelLines(panelWorld('core', 37, ui, { core: core0, rows: 70 })).length; // the health tab (figures, gates, then CORE) is taller than 50 rows at 37 columns
+    expect(few).toBeLessThan(70);
+    expect(panelLines(panelWorld('core', 37, ui, { core: core0, rows: 80 })).length).toBe(few);
   });
 });
 
@@ -43,7 +43,6 @@ const body = (t: PanelTab, cols: number, over: Partial<PanelModel> = {}) => body
 const CASES: { tab: PanelTab; over: Partial<PanelModel>; said: string; head: number; left?: boolean }[] = [ // `left`: wave 32 (critique 30) moved the empty channel's line from the pane's middle to the left edge, under the head
   { tab: 'team', over: { workers: [], mates: [], lead: undefined }, said: 'nobody dispatched yet', head: 0 },
   { tab: 'channel', over: { notes: [], workers: [], mates: [], lead: undefined }, said: '○ no messages', head: 1, left: true },
-  { tab: 'gates', over: { gates: [] }, said: 'no gates reported yet', head: 0 },
   { tab: 'core', over: { core: null }, said: 'no verdicts, workers or gates yet', head: 0 },
 ];
 

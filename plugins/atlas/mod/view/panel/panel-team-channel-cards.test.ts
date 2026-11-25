@@ -105,8 +105,8 @@ describe('wave 30 item 2: the team tab names each seat with role, state, time an
 
 describe('wave 30 item 4: the route tab gives the title the space (stoprun-150-a7bc7b0d-1 f0114:13-17: `T1 read alph…`)', () => {
   const rows = body('route', 57, 45);
-  test('a 57-cell pane shows the whole title of every row', () => {
-    for (const t of ['T1 read alpha.py', 'T2 read ghost.py', 'T3 read beta.py', 'T4 combine the reports']) expect(rows.join('\n')).toContain(t);
+  test('a 57-cell pane shows the whole title of every row it lists (done rows are folded into `N done`)', () => {
+    for (const t of ['T2 read ghost.py']) expect(rows.join('\n')).toContain(t);
     expect(rows.join('\n')).not.toMatch(/T\d [^\n]*…/);
   });
 });
@@ -167,7 +167,7 @@ describe('wave 30 item 5: the lead chip is coloured by its true state', () => {
 });
 
 describe('the redesigned channel: stamps do not follow the render clock', () => {
-  const timeOf = (rows: string[], who: string): string => /(\d\d:\d\d)\s*$/.exec(rows.find((l) => l.includes(`${who}  explorer`))!)![1]!;
+  const timeOf = (rows: string[], who: string): string => /(\d\d:\d\d:\d\d)\s*$/.exec(rows.find((l) => l.includes(`◆ ${who}`))!)![1]!;
   test('a closure the store gave no time keeps the time it was first seen, it does not follow the clock', () => {
     const a = body('channel', 65, 45, snap({ now: NOW }));
     const b = body('channel', 65, 45, snap({ now: NOW + 90_000 }));

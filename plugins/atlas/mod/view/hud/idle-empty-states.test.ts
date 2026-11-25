@@ -24,7 +24,7 @@ const leaves = (n: Node): Node[] => (kids(n).length ? kids(n).flatMap(leaves) : 
 const textOf = (n: Node): string => (n.kind === 'Text' || typeof n.props.children === 'string' ? String(n.props.children ?? '') : kids(n).map(textOf).join(''));
 
 const ui = { ...uiFromEnv({}), color: 'truecolor' as const };
-const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
+const handlers: BandHandlers = { openView() {}, toggleTodos() {} };
 const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
 const GATES = [green('completion'), green('tripwire'), green('routing'), green('header')];
 const HOOKS = { total: 6, byLabel: [{ label: 'tool.call', n: 3 }, { label: 'session.measure', n: 2 }, { label: 'session.start', n: 1 }], recent: [{ label: 'tool.call Bash', ageSecs: 12 }, { label: 'session.measure', ageSecs: 40 }, { label: 'session.start', ageSecs: 70 }], lastEventSecs: 12 };

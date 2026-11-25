@@ -87,28 +87,26 @@ const trailingBlanks = (rows: string[]): number => { let n = 0; for (let i = row
 
 describe('no empty rows between the mod and the prompt', () => {
   for (const [screen, , cols] of SCREENS.map(([c, s, w]) => [s, c, w] as const)) {
-    test(`${cols} cells on a ${screen}-row screen: the slot ends on a drawn row in idle, working, blocked and done, SUBAGENTS folded or not`, () => {
+    test(`${cols} cells on a ${screen}-row screen: the only blank rows under the band are the run's held pad and the band's own blank key row`, () => {
       let held = 0;
       for (const st of STAGES) {
         const f = frameOf(st, cols, hostBudget(screen, st.running), held);
         held = f.plan.held;
-        expect([st.name, 'pad', f.plan.pad]).toEqual([st.name, 'pad', 0]);
+        // The slot is the band alone (no HUD rows). Under a run the pad holds the slot at the height it reached, so the band stays on one screen row; it is the only blank under the band
+        // besides the band's own blank key row below 80 cells.
+        const band = rowsOf(bandTree(els, f.plan.band, handlers) as unknown as Node);
         expect([st.name, 'lead', f.plan.lead]).toEqual([st.name, 'lead', 0]);
-        expect([st.name, 'blank rows under the mod', trailingBlanks(f.rows)]).toEqual([st.name, 'blank rows under the mod', 0]);
-        expect(f.rows.length, `${st.name}: the slot requests exactly the rows it draws`).toBe(rowsOf(bandTree(els, f.plan.band, handlers) as unknown as Node).length + f.plan.gap + f.hud.length);
+        expect([st.name, 'hud', f.hud.length]).toEqual([st.name, 'hud', 0]);
+        expect([st.name, 'blank rows under the mod', trailingBlanks(f.rows)]).toEqual([st.name, 'blank rows under the mod', f.plan.pad + trailingBlanks(band)]);
+        expect(f.rows.length, `${st.name}: the slot requests exactly the rows it draws`).toBe(band.length + f.plan.gap + f.plan.pad);
       }
     });
     test(`${cols} cells on a ${screen}-row screen: a slot shorter than the budget stays short (the roomy budget is not filled)`, () => {
       const idle = frameOf(STAGES.find((s) => s.name === 'idle')!, cols, 200, 0);
       expect(idle.rows.length).toBeLessThan(40);
-      expect(trailingBlanks(idle.rows)).toBe(0);
+      expect(trailingBlanks(idle.rows)).toBe(cols < 80 ? 1 : 0); // below 80 cells the idle band keeps its key row blank, so it never moves when the pane docks
     });
   }
-  test('a folded SUBAGENTS (five agents in a small budget) still ends on a drawn row', () => {
-    const f = frameOf(STAGES.find((s) => s.name === '5 running')!, 110, 9, 0);
-    expect(f.hud.length).toBeGreaterThan(0);
-    expect(trailingBlanks(f.rows)).toBe(0);
-  });
 });
 
 describe('the status line is never asked to shrink', () => {

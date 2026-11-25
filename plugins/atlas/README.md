@@ -915,10 +915,10 @@ python3 "$ATLAS/scripts/atlas_statusline.py" uninstall
 
 ### In-terminal mod
 
-`mod/register.ts` (the entry; it calls `register` in `mod/host/hooks.ts`), wired by the `modules` entry in `hooks/hooks.json`, draws four
-things in Claude Code: a band above the prompt, the TODO and SUBAGENTS HUD under
-it, a side panel with a tab strip, and cards in the transcript. The band's `open` chip opens
-and focuses the panel, and its `close` chip closes it. `ATLAS_MOD=off` disables the whole mod. Gate readings come
+`mod/register.ts` (the entry; it calls `register` in `mod/host/hooks.ts`), wired by the `modules` entry in `hooks/hooks.json`, draws three
+things in Claude Code: a band above the prompt (at most 3 rows), a side panel with a tab strip, and cards in the transcript.
+The band's `open` chip opens and focuses the panel, and its `close` chip closes it.
+`ATLAS_MOD=off` disables the whole mod. Gate readings come
 from `scripts/atlas_gates.py --session <id> --root <repo> --json`, which shares
 its evaluation with the Stop hook. Detail:
 [docs/architecture/atlas-mod.md](../../docs/architecture/atlas-mod.md). The
@@ -934,10 +934,10 @@ picture is cropped above the status line.
 
 **One clock and one glyph key.** A single 100 ms frame loop (`FRAME_MS` in
 `mod/view/band/band-motion.ts`, armed by `armFrameLoop` in `mod/host/frame.ts`) advances one spinner index: at
-most 10 redraws a second, the host's cap. The band, the HUD and the side panel
+most 10 redraws a second, the host's cap. The band and the side panel
 all read that index (`sharedSpinFrame`, `withSpinFrame`), so every spinner on
-screen shows the same frame. One glyph set turns on it: the band, the TODO and
-SUBAGENTS rows and titles, the side panel, the board and the dispatch cards all
+screen shows the same frame. One glyph set turns on it: the band, the side panel,
+the board and the dispatch cards all
 draw the four circle quarters `◐◓◑◒` (`SPIN_FRAMES` in `mod/design/atlas-ui.ts`); ASCII
 mode draws `|/-\`. The capture scorer reads a row's state from these marks.
 `ATLAS_REDUCED_MOTION` and `NO_COLOR` stop the row transitions; the spinner still
@@ -952,24 +952,26 @@ steps.
 
 The row marks are `STATE_GLYPHS` in `mod/design/atlas-ui.ts`.
 
-**The band.** The band is one row above the prompt: the `◆ ATLAS` pill, then slots
-joined by a thin divider (`mod/view/band/band-frame.ts`):
+**The band.** The band above the prompt is at most 3 rows (`BAND_MAX_ROWS`,
+`mod/view/band/slot.ts`; `mission-layout.ts`, `band.tsx`): a status row, a health strip and a row of key chips.
+The first row is the `◆ ATLAS` pill, then slots joined by a thin divider
+(`mod/view/band/band-frame.ts`):
 
 ```
-STATE (phase word, n/m, bar)  |  gates pill  |  tool rate  [ | hook p50 | ctx ]
+STATE (phase word, n/m, bar)  |  gates pill  |  tool rate  [ | hook p50 | ctx ]  [ ▸ health ]
 ```
 
 The state slot reads a spinner, the phase word, `n/m` and a segmented bar while a
 run is on (`research 1/6`), `done 6/6` after it, and `idle up 1:26` at rest. The gates
-pill reads `■ 1 denied ›` in red or `✓ gates ok ›` in green and opens the gates tab.
-The tool rate is `tools` with a spark and a per-minute figure (`12/m`). Wider
+pill reads `■ 1 denied ›` in red or `✓ gates ok ›` in green and opens the pane on the
+health tab. The tool rate is `tools` with a spark and a per-minute figure (`12/m`). Wider
 terminals add the hook median and the context figure. Every figure is fixed width, so
-the dividers do not move when digits change. A three-segment form (state, `todo n/m`,
-worker counts) is drawn by omp's widget.
-
-![Three explorers running: the band, the TODO box with two rows shown and the rest folded, the SUBAGENTS box titled 3 running, and the status tab](img/showcase/live-band-running.png)
-
-![The same run finished: run card, band done 6/6, TODO and SUBAGENTS boxes all done, status tab](img/showcase/live-band-done.png)
+the dividers do not move when digits change. The key chips are the side panel's tabs
+(`BAND_BUTTONS` is `STRIP_TABS`: `status`, `health`, `channel`, `bored`), each opening
+the pane on that tab; with the pane closed the chip is `open`, with it open the
+chips and `close` show. The band lists no TODO rows, subagent or worker lanes, ticker or
+board rows; the plan and the agents are in the status tab. A three-segment form (state,
+`todo n/m`, worker counts) is drawn by omp's widget.
 
 The state reads one of four words (`runStateOf` in
 `mod/view/band/mission-layout.ts`): `working`, `done`, `blocked` or `idle`.
@@ -1000,21 +1002,21 @@ draws a taller form when the slot has at least three rows, with a phase rail
 `mod/data/datastate.ts`: `no data yet` when nothing has been read or recorded, `read failed` when the read
 itself failed (in a table cell, a dash and `err`), and an age such as `stale 3m` (cell `~3m`) when data is older
 than its refresh interval. It replaces the old `unknown` in the facts line, the routing rows and note toasts.
-Worker counts come from one tally (`mod/data/tally.ts`), so the band, the HUD and the panel agree, and a
-`thinking` worker counts as running on all three.
+Worker counts come from one tally (`mod/data/tally.ts`), so the band and the panel agree, and a
+`thinking` worker counts as running on both.
 
 **Idle health.** An idle session shows what is healthy, with history, instead of an
 empty band (`mod/data/idle-health.ts`, figures from `mod/data/metrics.ts`). The
 band is built from fixed-width slots, so the separators do not move between idle,
-working and done. Its gates chip opens the gates tab and its health chip toggles the
-HEALTH card above the prompt (`BAND_GATES_KEY` and the chip keys in
-`mod/view/band/band-frame.ts`). The captures below show the side panel docked at rest at both 150 and 110 columns;
+working and done. Its gates pill opens the pane on the health tab (`openView('core')`,
+`mod/view/band/band.tsx`; `core` is the id of the health tab). Its `▸ health` chip and
+the idle health strip open the same health tab; the band draws no expanded health card. The captures below show the side panel docked at rest at both 150 and 110 columns;
 the two-row idle strip (`mod/view/hud/strip-frame.ts`) appears only when the host
 does not dock the pane.
 
-The health card and the health tab draw the same sections from the same figures
-(`mod/view/hud/status-frame.ts`, `mod/view/panel/health-tab.ts`), so the band, the
-card and the panel print one number. History is kept in `.atlas/.run/history.json`
+The health tab draws its sections from the same figures the band reads
+(`mod/view/panel/health-tab.ts`, `mod/data/idle-health.ts`), so the band and the
+panel print one number. History is kept in `.atlas/.run/history.json`
 (project runtime state, written atomically, never under `plugins/`): the last 50
 runs and the last 64 latency samples per hook. A returning project therefore shows
 its last run, run count and median at idle; a missing or corrupt file is an empty
@@ -1035,57 +1037,27 @@ the message input is labelled `✎ to lead`. No surface prints key hints; the
 `Enter sends` placeholder were removed because the keys do not work in Claude
 Code. Click a chip to switch tabs and a `▸` row to expand it.
 
-**TODO and SUBAGENTS.** `mod/view/hud/hud.ts` and `mod/view/hud/hud-surface.ts` draw the HUD under
-the band as closed rounded boxes with one blank row between them. The slot above
-the prompt is exactly the rows drawn: the band row, then the HUD rows, with no
-spacer rows above or below (`composeFixed` in `mod/view/band/slot.ts`). The HUD takes every
-row of the slot's budget the band leaves and folds when the plan is longer, so a
-host clip eats HUD rows and never the band. 17.15.0 padded the slot to the whole
-budget with blank rows under the HUD; that left an empty gap between the mod and
-the prompt and is removed.
-`ATLAS_HUD=off` (exactly that value) hides both blocks.
-
-*TODO.* The title carries the done count and a segmented bar (`2/5 · ×1`, the
-`×1` counting failed items). The columns are `ITEM`, `STATE`, `OWNER` and `TIME`,
-with a state glyph before each item (`○` queued, `◐` running, `✓` done, `✗`
-failed). A queued row shows `-` in the owner and time cells. An item owned by the
-lead, or by no worker, reads `running` while the lead's turn is on and the plan has
-started, and `waiting` if the turn stopped; it is never `queued` once work on it
-began. When the slot has fewer rows than the plan, the rows that do not fit are
-counted on one dim summary row inside the box, by state (`● 2 done  ◇ 1 queued`
-in the code's own wording, `mod/view/hud/hud-surface.ts`). Failed rows hide last,
-so a failure is never folded into the done count.
-
-*SUBAGENTS.* A table with the columns `AGENT`, `ROLE`, `STATE`, `NOW / RESULT` and
-`TIME`, one row per agent in dispatch order. `STATE` is a spinner and `running`,
-`✓ done` or `✗ failed`. `NOW / RESULT` is the worker's last tool action
-(`read alpha.py`) while it works and its result after (`stopped` for a failed
-worker). `TIME` is measured from the worker's start on the band's clock and freezes
-when the worker ends. The title carries the same tally as the band (`3 running`,
-`✗ 1 failed  ✓ 2 done`).
-
-The band and boxes above show three workers running, then the same run done.
-In the running capture the TODO box folds its extra rows into one summary row
-and the SUBAGENTS box shows only its title (`3 running`); the agent rows are in the
-status tab's TEAM section. An in-process subagent is one row: the host row and the
+**Plan and agents.** The band draws no TODO or SUBAGENTS rows. The slot above the
+prompt is the band alone, at most 3 rows (`BAND_MAX_ROWS`, `composeSlot` in
+`mod/view/band/slot.ts:81-90`, whose HUD rows are always empty); the plan and the agent rows
+are in the side panel's status tab. An in-process subagent is one row: the host row and the
 channel member are joined by agent id, then name. An `Agent` call that a PreToolUse
 hook refuses (the `ROUTE - this work goes to a tmux team` message) leaves no row, card
-or count (`isHookRefusal`, `mod/input/routing.ts`).
+or count (`isHookRefusal`, `mod/input/routing.ts`). A done plan row whose worker was
+killed reads `closed · worker killed` in the error colour. `ATLAS_HUD=off` (exactly
+that value) is still read (`mod/host/hooks.ts:364`); in the slot it only decides whether the
+run's height is held (`composeSlot`).
 
-The selected row is a full-width bar (xterm 236) with the `▸ ` cursor kept. A done
-plan row whose worker was killed reads `closed · worker killed` in the error
-colour. The TODO block needs the legacy `TodoWrite` tool: set
+The plan needs the legacy `TodoWrite` tool: set
 `CLAUDE_CODE_ENABLE_TODO_TOOLS=1` (TodoWrite on every model) and
 `CLAUDE_CODE_ENABLE_TASKS=0` (without it Claude Code uses TaskCreate and
 TaskUpdate and draws its own checklist above the prompt, re-expanding it on every
-update, which squeezes the Atlas blocks to about 6 rows). Claude Code's fullscreen
-renderer gives everything under the transcript (prompt, status line, mode line,
-agent list) one slot capped at half the terminal, and a status line command is
-told no row budget. The mod writes `.atlas/.run/hud-state.json`
-(`{ts, maxRows, wanted, shown, fullscreen, starved}`, `wanted` being the rows the
-HUD would draw unrestricted). Since 17.15.1 `starved` is always `false`: the mod
-never asks the status line to shrink, and a plan longer than the slot folds
-inside the HUD. The status line prints its full grid whenever it is configured;
+update). Claude Code's fullscreen renderer gives everything under the transcript
+(prompt, status line, mode line, agent list) one slot capped at half the terminal, and
+a status line command is told no row budget. The mod writes `.atlas/.run/hud-state.json`
+(`{ts, maxRows, wanted, shown, fullscreen, starved}`, `publishHudState` in
+`mod/host/handlers.ts:83`). Since 17.15.1 `starved` is always `false`: the mod
+never asks the status line to shrink. The status line prints its full grid whenever it is configured;
 `atlas_statusline.py` still prints one row (folder, timer, model, `· ctx N%`)
 when it reads a fresh file with `starved` set, which only an older mod writes.
 `atlas_statusline.py install` and
@@ -1103,33 +1075,42 @@ TODO tree from the board until the first native todo result.
 **The side panel.** The panel is a ribbon (`◆ ATLAS`, `project · branch`, the version
 flush right), a tab strip of clickable chips with the lit tab filled, and one view
 under it. The strip names four tabs, in this order (`PANEL_TABS` in
-`mod/view/panel/panel-tabs.ts`): `health`, `status`, `gates` and `channel`. Team
-content lives in status and the core figures in health. `gates` carries its denial
-count and `channel` its unread count as badges. A tab answers a click only; no key
-hint is printed. The panel draws the snapshot as it is, with no hold: the Stop
-verdict is read on every frame beat, and the phase is never `done` while a dispatch
-row is open or a worker runs (`currentPhase` in `mod/data/todos.ts`).
+`mod/view/panel/panel-tabs.ts:12-16`): `status`, `health`, `channel` and `bored`. There is
+no gates tab: its content is part of the health view (`healthBody` in
+`mod/view/panel/panel-body.ts`). `channel` is drawn `chan` when the strip is short
+(`SHORT_LABEL`), and a tab can carry a count badge beside its chip (`stripLayout`'s
+`badges`). A tab answers a click only; no key hint is printed. The panel draws the
+snapshot as it is, with no hold: the Stop verdict is read on every frame beat, and the
+phase is never `done` while a dispatch row is open or a worker runs (`currentPhase` in
+`mod/data/todos.ts`).
 
-- **health** (`mod/view/panel/health-tab.ts`): SESSION with its state word, the
-  context bar (`27%  339k / 1M`), hook p50 and p95, tools per minute, denials and
-  the age of the last one, then RUNS (the run count, median and p90, a bar chart
-  with failed runs in red) and the last run times.
 - **status** (`mod/view/panel/status-tab.ts`): PHASE with the run's state word and
-  the rail `research theory test validate implement verify`, PLAN with the plan rows
-  and their times, TEAM with one row per agent (role, last action, time), and
-  SESSION (uptime, branch, last run, release).
-- **gates** (`mod/view/panel/gates-tab.ts`): GATES with passed and denied counts and
-  a mark per gate, DENIED with a card per denied gate (the rule, the reason and the
-  fix command), and a TIMELINE with one tick per gate check.
-- **channel** (`mod/view/panel/channel-chat.ts`): the channel name and who is
-  online, the posts and dispatch notes with their times, and at the bottom a
-  composer with recipient chips (`@lead`, one chip per agent).
+  the phase dots, PLAN with a segmented bar and the plan rows with their times, TEAM
+  with a tally and one row per agent (role, last action, time), and SESSION key/value
+  rows. It is where the plan and the agents are listed, since the band draws neither.
+- **health** (`mod/view/panel/health-tab.ts`, `mod/view/panel/gates-tab.ts`): SESSION
+  with its state word, the context bar, hook p50 and p95, tools per minute, denials and
+  the age of the last one, then RUNS (run count, median and p90, a bar chart with
+  failed runs in red) and the last run times; under them the gate rows with a mark per
+  gate, a card per denied gate (the rule, the reason and the fix command), a timeline of
+  the hook events, and the CORE sections (contract, verdicts, routing). A figure the mod
+  does not hold reads as a dash glyph.
+- **channel** (`mod/view/panel/channel-chat.ts`, `channel-bubbles.ts`): the channel as a
+  chat. An online-count header, a `today` divider, messages grouped under one header per
+  sender (speaker colour, `HH:MM:SS` flush right, `from -> to` for a note to someone),
+  centred dim system lines, the user's own messages as right-aligned bubbles, a
+  `<name> is typing` line, and at the bottom a bordered composer with `@name`
+  recipient chips.
+- **bored** (`mod/view/panel/bored-render.ts`, `bored-vt.ts`; controller
+  `mod/host/bored.ts`): while the tab is open the mod runs
+  `ssh -tt -o StrictHostKeyChecking=no watch.ascii.theater` through `$.process.spawn`
+  and draws the output, with connecting and error states. It stops when you leave the
+  tab, on `ui.close` or on `session.end`. `StrictHostKeyChecking=no` skips host-key
+  verification (the stream is display-only and no credentials are sent).
 
-The health, gates and channel tabs of the finished run:
+The health and channel tabs of the finished run:
 
 ![Health tab: session, context, hook latency, tool rate, denials and the RUNS chart](img/showcase/live-tab-health.png)
-
-![Gates tab: each gate with a pass mark, and the denial count](img/showcase/live-tab-gates.png)
 
 ![Channel tab: the lead's channel with the workers' posts and finish notes, and the composer](img/showcase/live-tab-channel.png)
 
@@ -1206,7 +1187,7 @@ These are read by the mod (`mod/design/atlas-ui.ts`, `mod/motion/motion.ts`, `mo
 | Variable | Default | Effect |
 | -------- | ------- | ------ |
 | `ATLAS_MOD` | on | `off` makes every mod handler a pass-through (`mod/host/hooks.ts`, `mod/view/transcript/restyle.tsx`) |
-| `ATLAS_HUD` | on | `off` hides the TODO and SUBAGENTS blocks (`mod/host/hooks.ts`) |
+| `ATLAS_HUD` | on | `off` stops the slot holding its run height; the band draws no TODO or SUBAGENTS blocks either way (`mod/host/hooks.ts:364`, `mod/view/band/slot.ts:88`) |
 | `ATLAS_BAND_RICH` | off | `1` draws the tall band when the rows allow (`mod/view/band/band.tsx`, `mod/design/look.ts`) |
 | `ATLAS_THEME` | auto | `latte` or `light`, `mocha` or `dark`; otherwise `COLORFGBG` (background 7 or 15 is light), else mocha (`themeName`, `mod/design/atlas-ui.ts`) |
 | `ATLAS_ASCII` | off | Set and not `0` or `false` forces ASCII marks; unset, ASCII is used when `LC_ALL`, `LC_CTYPE` or `LANG` is set and is not UTF-8 (`asciiMode`, `mod/design/atlas-ui.ts`) |

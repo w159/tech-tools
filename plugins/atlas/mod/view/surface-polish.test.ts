@@ -96,11 +96,14 @@ describe('4: no side panel row is nameless or wrapped', () => {
       for (const cols of [37, 60]) {
         const rows = textOf(withSpinFrame(1, () => sidebarTree(els, sidebarModel(scene(kind), 'route', cols, UI256), on))).map((l) => l.trimEnd());
         for (const r of rows) expect([cols, r, [...r].length <= cols - 1]).toEqual([cols, r, true]);
+        let drawn = 0;
         for (const id of ['T1', 'T2', 'T3']) {
           const own = rows.filter((l) => new RegExp(`^▸ \\S ${id}\\b`).test(l));
-          expect([kind, cols, id, own.length]).toEqual([kind, cols, id, 1]);
-          expect(own[0]).toMatch(/\(\w+-explorer\)\s+(\d+:\d\d|-)$/); // the task text is what the cut takes, the name and the time stay
+          expect([kind, cols, id, own.length <= 1]).toEqual([kind, cols, id, true]); // a done task folds into `N done`: one row when open, none when done
+          if (own[0]) expect(own[0]).toMatch(/\(\w+-explorer\)\s+(\d+:\d\d|-)$/); // the task text is what the cut takes, the name and the time stay
+          drawn += own.length;
         }
+        expect([kind, cols, drawn > 0]).toEqual([kind, cols, true]);
         expect(rows.filter((l) => /^\s+(worker killed|killed)\b/.test(l))).toEqual([]);
         if (kind === 'killed') expect(rows.find((l) => /^▸ ✗ gamma-explorer/.test(l))).toMatch(/failed\s+\d+:\d\d$/);
       }

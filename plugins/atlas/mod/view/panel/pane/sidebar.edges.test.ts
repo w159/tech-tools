@@ -19,7 +19,7 @@ const textOf = (n: Node): string => (n.kind === 'Text' ? String(n.props.children
 const tree = (columns: number, view: SidebarModel['ui']['view'] = 'team'): Node =>
   sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns, rows: 40 }, on) as unknown as Node;
 const isTabsRow = (n: Node): boolean => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs');
-const VIEWS = ['core', 'route', 'gates', 'channel'] as const;
+const VIEWS = ['route', 'core', 'channel', 'bored'] as const;
 
 describe('pane box', () => {
   test('the width is the columns less the border, but never under 10', () => {

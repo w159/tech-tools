@@ -186,7 +186,8 @@ declare module 'claude-code' {
 			sidebarRecipient: string | null;
 			sidebarExpanded: string | null;
 			sidebarDraft: string;
-			atlasView: 'team' | 'channel' | 'route' | 'gates' | 'core' | 'board';
+			atlasView: 'team' | 'channel' | 'route' | 'bored' | 'core' | 'board';
+			bored: import('../mod/view/panel/bored-types').BoredView;
 			gates: { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: { id: string; label: string; ok: boolean; detail?: string; fix?: string }[]; error?: string }[];
 			lastHeader: { matched: boolean; phase: string | null } | null;
 			core: CoreState | null;

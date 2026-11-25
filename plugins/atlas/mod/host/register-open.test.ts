@@ -227,7 +227,7 @@ describe('sidebar open requests', () => {
     const { on, pick } = captureOn();
     const { engine } = stubEngine();
     await register(on, {});
-    await engine.state.set({ plugin: 'atlas', key: 'atlasView' }, 'gates');
+    await engine.state.set({ plugin: 'atlas', key: 'atlasView' }, 'core');
     await pick('ui.close')(engine, { id: 'atlas' }, noopNext);
     expect((await engine.state.get({ plugin: 'atlas', key: 'atlasView' })).value).toBe('route');
   });

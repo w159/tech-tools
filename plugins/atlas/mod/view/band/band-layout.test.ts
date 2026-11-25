@@ -22,7 +22,7 @@ const textOf = (n: Node): string => (n.kind === 'Text' || typeof n.props.childre
 const rows = (b: BandModel, on: BandHandlers | undefined = handlers): string[] => kids(bandTree(els, b, on) as unknown as Node).map(textOf);
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
-const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
+const handlers: BandHandlers = { openView() {}, toggleTodos() {} };
 const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
 const GATES = ['completion', 'tripwire', 'routing', 'header'].map(green);
 const PULSE: Pulse = { events: [0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], ctx: [], runs: [] };

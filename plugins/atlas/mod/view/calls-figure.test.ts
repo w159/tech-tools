@@ -6,10 +6,9 @@ import { hudPhases } from './band/band';
 import type { SquadAgent } from '../contract';
 import { liveWorkers, queuedMembers } from '../data/live';
 import { ownTodos } from '../data/todos';
-import { hudAgents, isRunning, type HudInput } from './hud/hud';
+import { hudAgents, hudLines, type HudInput } from './hud/hud';
 import { busySnap, NOW } from '../live_fixture';
 import type { LiveSnapshot } from '../orchestra-types';
-import { composeSlot } from './band/slot';
 import { notificationTree } from './transcript/cards';
 import { finishedWorkers } from './transcript/placed';
 
@@ -42,8 +41,9 @@ function tableRow(snap: LiveSnapshot): string {
   const live = liveWorkers(snap, snap.now);
   const agents = hudAgents(live, snap.squad, queuedMembers(snap));
   const hudIn: HudInput = { todos: ownTodos(snap.todos ?? [], snap.sessionId), agents, root: snap.root, phases: hudPhases(snap, null) };
-  const plan = composeSlot({ budget: 20, hasSlot: true, hudOn: true, runOn: true, columns: 93, hudView: { cols: 93, tick: 3, ui, rich: false, now: snap.now }, running: agents.some(isRunning), agentsListed: true, orchestrated: true, now: snap.now, hudIn, bandIn: (_h: unknown, maxRows: number | undefined) => ({ snapshot: snap, live, gates: [], working: false, workSecs: 42, ranSecs: 72, columns: 93, tick: 3, ui, rich: false, maxRows, lastPhase: null, core: null }) as never, held: 0 } as never);
-  return plan.hud.map((r) => r.map((x) => x.t).join('')).find((r) => /^[│▌] \S alpha-explorer\s/.test(r)) ?? '';
+  // The slot no longer draws the SUBAGENTS table (the status tab owns it); hudLines is the same table both read.
+  const rows = hudLines(hudIn, { cols: 93, maxRows: 20, ui, now: snap.now, tick: 3 }).map((r) => r.map((x) => x.t).join(''));
+  return rows.find((r) => /^[│▌] \S alpha-explorer\s/.test(r)) ?? '';
 }
 
 describe('CALLS column and finish card share one count', () => {

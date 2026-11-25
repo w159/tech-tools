@@ -198,6 +198,29 @@ describe('step 5: the status view (critique 35: `events · no events yet` over a
 });
 noteRunSecs(undefined);
 
+describe('status tab motion', () => {
+  const workerAct = (mood: string, tool: string | null = null) => act({ mood, tool, startedAt: NOW - 20000, since: NOW - 4000, toolCount: 1 });
+  const mixed = (): never => ({
+    ...(snap() as object), notes: [],
+    squad: [['run', 'running'], ['dead', 'failed'], ['wait', 'input']].map(([n, state]) => ({ name: `${n}-explorer`, persona: 'explorer', state, source: 'task' })),
+    activity: { lead: act({ mood: 'working' }), 'run-explorer': workerAct('working', 'Read'), 'dead-explorer': workerAct('failed'), 'wait-explorer': workerAct('blocked') },
+    todos: [todo('1', 'T1 read run.py', 'in_progress', 'run-explorer', 0, 1), todo('2', 'T2 read dead.py', 'in_progress', 'dead-explorer', 1, 2), todo('3', 'T3 read wait.py', 'in_progress', 'wait-explorer', 2, 3)],
+  }) as never;
+  const at = (tick: number) => { forgetRefusals(); forgetBandFrame(); return panelModelOf({ ...model(mixed(), 'route', 91, 60), tick }, ui, 90); };
+  const rowRuns = (tick: number, re: RegExp) => bodyLines(at(tick)).filter((l) => re.test(lineText(l))).map((l) => l.runs);
+  test('only a worker with a tool in flight animates: failed and waiting rows render identically across two ticks', () => {
+    expect(at(0).workers.map((w) => w.state)).toEqual(['running', 'failed', 'waiting']);
+    for (const re of [/T2 read dead/, /T3 read wait/, /dead-explorer +explorer/, /wait-explorer +explorer/]) {
+      expect(rowRuns(0, re).length, `${re}`).toBeGreaterThan(0);
+      expect(rowRuns(1, re), `${re}`).toEqual(rowRuns(0, re));
+    }
+    for (const re of [/T1 read run/, /run-explorer +explorer/]) {
+      expect(rowRuns(0, re).length, `${re}`).toBeGreaterThan(0);
+      expect(rowRuns(1, re), `${re}`).not.toEqual(rowRuns(0, re));
+    }
+  });
+});
+
 describe('one state per item at every width (redesigned status tab: critique 35, a plan row over a failed worker)', () => {
   const planRow = (cols: number, s: never): { text: string; runs: { t: string; tone: string }[] } => {
     forgetRefusals(); forgetBandFrame();
@@ -214,7 +237,8 @@ describe('one state per item at every width (redesigned status tab: critique 35,
   });
   test('the plan says `failed` for it and the team tally counts the failed worker once', () => {
     const rows = body('route', 57, 41, snap());
-    expect(rows.find((l) => l.includes(' TEAM'))).toMatch(/✓ 2 done +✗ 1 failed/);
+    expect(rows.find((l) => l.includes(' TEAM'))).toMatch(/✗ 1 failed/); // the two finished workers left the list: they are counted on the `N done` line
+    expect(rows.some((l) => /^ +\d+ done$/.test(l))).toBe(true);
     expect(rows.filter((l) => /✗ ghost-explorer/.test(l))).toHaveLength(1);
   });
 });

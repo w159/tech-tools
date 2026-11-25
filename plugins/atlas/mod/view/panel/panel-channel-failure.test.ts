@@ -39,8 +39,8 @@ describe('critique 19 C5: the channel tab under failure', () => {
     const at = (s: string): number => rows.findIndex((l) => l.includes(s));
     expect(at('handed off alpha.py')).toBeGreaterThan(-1);
     expect(at('✗ failed')).toBeGreaterThan(-1);
-    expect(at('ghost-explorer  explorer')).toBeGreaterThan(at('handed off alpha.py'));
-    expect(at('Stop refused')).toBeGreaterThan(at('ghost-explorer  explorer'));
+    expect(at('◆ ghost-explorer')).toBeGreaterThan(at('handed off alpha.py'));
+    expect(at('Stop refused')).toBeGreaterThan(at('◆ ghost-explorer'));
   });
   test('failureNotes: the same worker is one row however often it is built, and a stable time (the kill instant, never the clock)', () => {
     const a = failureNotes({ workers: [{ name: 'ghost-explorer', state: 'failed', endedMs: Date.parse('2026-11-12T10:05:00.000Z') }], stop: null });

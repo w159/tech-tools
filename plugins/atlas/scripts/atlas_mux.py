@@ -3117,20 +3117,25 @@ def _load_team(root: str, team_id: str) -> dict | None:
         return None
 
 
-def _waiter_path(root: str, team_id: str) -> Path:
-    return _team_dir(root) / f"{team_id}.waiter"
+def _waiter_path(root: str, team_id: str, pid: int | None = None) -> Path:
+    """One marker per wait process; without a pid, the old single-file name."""
+    suffix = "" if pid is None else f".{pid}"
+    return _team_dir(root) / f"{team_id}.waiter{suffix}"
 
 
 def team_watched(root: str, team_id: str) -> bool:
     """True while an `atlas_mux wait` process for this team is alive. A tmux member's exit wakes no one, so a
     lead that ends its turn with no live waiter idles until the user speaks (2026-11-24: 97 minutes)."""
-    try:
-        os.kill(int(_waiter_path(root, team_id).read_text().strip()), 0)
-        return True
-    except PermissionError:
-        return True  # the pid exists under another user
-    except (OSError, ValueError):
-        return False
+    # the bare name is still honoured: a wait started by an older install writes it
+    for marker in (_waiter_path(root, team_id), *_team_dir(root).glob(f"{team_id}.waiter.*")):
+        try:
+            os.kill(int(marker.read_text().strip()), 0)
+            return True
+        except PermissionError:
+            return True  # the pid exists under another user
+        except (OSError, ValueError):
+            continue
+    return False
 
 
 def cmd_wait(args) -> int:
@@ -3138,7 +3143,8 @@ def cmd_wait(args) -> int:
     rec = _load_team(root, args.team)
     if rec is None:
         return _emit({"ok": False, "error": f"no team record for {args.team}"}, 1)
-    marker = _waiter_path(root, rec["team_id"])
+    # owned by this process alone: overlapping waits (expired Monitor, re-arm) never unmark each other
+    marker = _waiter_path(root, rec["team_id"], os.getpid())
     try:
         marker.write_text(str(os.getpid()))
     except OSError:

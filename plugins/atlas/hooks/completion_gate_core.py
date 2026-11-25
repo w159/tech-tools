@@ -303,7 +303,8 @@ _FINDINGS_WHY = {
 }  # why (b) rejected a verified row this Stop; read by the (b) block text
 _EVIDENCE_TEST_RE = lre(
     r"(?:^|[\s;&|(])(?:python3?\s+-m\s+)?(?:pytest|py\.test|unittest|vitest|bun\s+test|go\s+test|"
-    r"cargo\s+test|npm\s+(?:run\s+)?test|yarn\s+test)\b",
+    r"cargo\s+test|npm\s+(?:run\s+)?test|yarn\s+test)\b"
+    r"|(?:^|[\s;&|(])(?:\S*/)?python(?:3(?:\.\d+)?)?\s+(?:-[A-Za-z]+\s+)*(?:\S*/)?test_\w+\.py\b",
     re.I,
 )
 _NOT_INDEPENDENT = {"", "?", "lead"}
@@ -326,10 +327,37 @@ def _canon_cmd(cmd: str) -> str:
     return _CMD_PREFIX_RE.sub("", cmd, count=1).strip()
 
 
+# a trailing redirect, or a trailing pipe into an output filter (quoted args may hold `|`)
+_SHAPING_RE = lre(
+    r"\s*(?:\|&?\s*(?:tail|head|grep|wc|cat|tee|sed\s+-n)\b(?:'[^']*'|\"[^\"]*\"|[^|'\"])*"
+    r"|\d?>&\d|(?:\d|&)?>>?\s*(?:'[^']*'|\"[^\"]*\"|[^\s|<>&'\"]+))\s*$"
+)
+
+
+def _unshape(seg: str) -> str:
+    """A segment without surrounding subshell parentheses and trailing output shaping."""
+    prev = None
+    while seg != prev:
+        prev = seg
+        seg = _SHAPING_RE.sub("", seg.strip().lstrip("( "))
+        if seg.endswith(")") and seg.count(")") > seg.count("("):
+            seg = seg[:-1]
+    return seg
+
+
 def _canon_segments(cmd: str) -> list:
-    """`_canon_cmd` of each `;`, `&&`, `||` segment outside quotes, so a compound command's
-    `cd X && env K=V bun test a` segment compares equal to a row naming `bun test a`.
-    Known limit: a compound command's pass or fail status is that of the whole command, not of one segment."""
+    """`_canon_cmd` of each newline, `;`, `&&`, `||` segment outside quotes, minus subshell parentheses and
+    output shaping, so `(cd X && env K=V bun test a 2>&1 | tail -5)` compares equal to a row naming `bun test a`.
+    Heredoc bodies and comments are dropped: they never ran.
+    Known limit: pass or fail status is that of the whole command, not of one segment (a pipe's exit status is
+    the filter's, and an untaken `if` branch still yields segments)."""
+    cmd = re.sub(
+        r"(?<!<)<<-?[ \t]*(['\"]?)(\w+)\1([^\n]*)(?:\n.*?(?:^[ \t]*\2[ \t]*$|\Z))",
+        r"\3",
+        cmd,
+        flags=re.S | re.M,
+    )
+    cmd = re.sub(r"\\\n|(?<=\|)[ \t]*\n", " ", cmd)  # line and pipe continuations
     segs, cur, quote, i = [], [], "", 0
     while i < len(cmd):
         ch = cmd[i]
@@ -337,15 +365,19 @@ def _canon_segments(cmd: str) -> list:
             quote = "" if ch == quote else quote
         elif ch in "'\"":
             quote = ch
-        elif ch == ";" or cmd[i : i + 2] in ("&&", "||"):
+        elif ch == "#" and (i == 0 or cmd[i - 1].isspace()):
+            end = cmd.find("\n", i)
+            i = len(cmd) if end < 0 else end
+            continue
+        elif ch in ";\n" or cmd[i : i + 2] in ("&&", "||"):
             segs.append("".join(cur))
             cur = []
-            i += 1 if ch == ";" else 2
+            i += 1 if ch in ";\n" else 2
             continue
         cur.append(ch)
         i += 1
     segs.append("".join(cur))
-    return [c for c in (_canon_cmd(s) for s in segs) if c]
+    return [c for c in (_canon_cmd(_unshape(s)) for s in segs) if c]
 
 
 def _log_gate_fail_open(why: str) -> None:
@@ -560,7 +592,7 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                             if isinstance(c, dict)
                         ]
                         calls[block.get("id", "")] = _canon_segments(
-                            " ".join(str(x) for x in parts if x)
+                            "\n".join(str(x) for x in parts if x)
                         )
                     elif block.get("type") == "tool_result":
                         cmd = calls.pop(block.get("tool_use_id", ""), None)
@@ -577,6 +609,9 @@ def _passing_shell_commands(transcript_path: str, started: float | None) -> list
                         ):
                             continue
                         if done_claim._FAIL_OUT.search(body):
+                            continue
+                        # bun's summary line; behind `| tail` the run still exits 0
+                        if re.search(r"^\s*[1-9]\d*\s+fail\s*$", body, re.M):
                             continue
                         passing.extend(cmd)
         return passing
@@ -1857,6 +1892,28 @@ def _delegation_state(data: dict, root: Path) -> tuple[bool, list, str]:
     return missing_delegation, delegation_paths, solo_delegation_note
 
 
+def _rerun_clears_m(data: dict, root: Path, session: str) -> bool:
+    """Non-orchestrating (m): re-run this run's last plain test command, as the orchestrating path does.
+    A green, conclusive exit writes the proof and clears (m); anything else leaves the block. Fails closed."""
+    if gate_rerun.switched_off():
+        return False
+    try:
+        cmd = gate_rerun.last_test_command(
+            str(data.get("transcript_path") or ""), _run_started_at(session), root
+        )
+        if not cmd or gate_rerun.timed_out_before(root, session, cmd):
+            return False
+        result = gate_rerun.rerun(cmd, root, ran=True)
+        if not result or result["exit"] != 0 or result.get("inconclusive"):
+            if result and result.get("inconclusive"):
+                gate_rerun.note_timed_out(root, session, result["command"])
+            return False
+        gate_rerun.write_proof(root, session, result)
+        return True
+    except Exception:
+        return False
+
+
 def _gate_proof(data: dict, root: Path, session: str, run_paths: list, started):
     """The gate's own test proof (valid re-run or crew proof) for this run, or
     None. Shared by evaluate() and the non-orchestrating (m) path in main()."""
@@ -2254,6 +2311,8 @@ def _main() -> int:
                 data, root, session, _run_paths_for(session, root), _run_started_at(session)
             ):
                 missing_delegation = False  # green re-run proof clears (m), as in evaluate()
+            if missing_delegation and _rerun_clears_m(data, root, session):
+                missing_delegation = False  # the block text promises this re-run; without it a green run never counted
             if missing_delegation and not _has_in_flight_dispatch(data, root):
                 # Same loop cap as an orchestrating run: the continuation is
                 # re-checked, so without it an unfixable (m) never ends.
@@ -2319,9 +2378,16 @@ def _main() -> int:
                     mux = Path(__file__).resolve().parent.parent / "scripts" / "atlas_mux.py"
                     w_reason = (
                         f"Team {', '.join(unwatched)} is still running and nothing will wake you when it ends: "
-                        "a tmux member's exit does not notify this session. Before you stop, run "
-                        + " ; ".join(f'python3 "{mux}" wait --team {t} --progress 60' for t in unwatched)
-                        + " as the command of a Monitor (timeout_ms 1800000; ToolSearch select:Monitor) so its exit "
+                        "a tmux member's exit does not notify this session. Before you stop, start "
+                        # One Monitor per team, all in one reply: a single Monitor chaining `wait A ; wait B` leaves B
+                        # unwatched until A ends, so the next Stop was refused again for B (2026-11-25).
+                        + ("one Monitor per team, all in this reply (never chain them with ;), with these commands: "
+                           if len(unwatched) > 1 else "a Monitor with the command ")
+                        + " ".join(
+                            (f"({i}) " if len(unwatched) > 1 else "") + f'python3 "{mux}" wait --team {t} --progress 60'
+                            for i, t in enumerate(unwatched, 1)
+                        )
+                        + " (timeout_ms 1800000; ToolSearch select:Monitor) so its exit "
                         "re-invokes you, then reap and continue. A background Bash call is the fallback only: "
                         "a Bash hook such as lean-ctx kills it at 120 s."
                     )

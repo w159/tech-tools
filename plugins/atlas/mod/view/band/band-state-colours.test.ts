@@ -185,30 +185,6 @@ describe('3. blocked is debounced: only on the host Stop event, or after two con
 describe('4. the TODO HUD: one state per failed row, one count, one anchored child', () => {
   const titleSegs = (f: Frame): Segment[] => f.hudSegs[f.hud.findIndex((r) => r.includes('TODO'))]!;
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: the stop run reads \`4/5 · ■1\`; the meter is 114 cells for the done rows plus one 203 cell per failed row`, () => {
-      const f = frameOf(STOP, body, screen);
-      const title = f.hud.find((r) => r.includes('TODO'))!;
-      expect(title).toMatch(/TODO ─+ 4\/5 · ✗1/);
-      const cellsOf = titleSegs(f).filter((x) => /^[▰▱]+$/.test(x.t));
-      expect(cellsOf.some((x) => x.t.includes('▰') && x.color === ok), 'done cells in 114').toBe(true);
-      expect(cellsOf.filter((x) => x.color === bad).map((x) => x.t).join('')).toBe('▰');
-    });
-    test(`${cols} columns: the band count is the title count, and a failed row is \`■\` in 203, never a green \`✓\``, () => {
-      const f = frameOf(STOP, body, screen);
-      expect(f.band).toMatch(/(todo )?4\/5 ✗1/);
-      const at = f.hud.findIndex((r) => /^[│▌] [✗✓○◐◓◑◒] T3/.test(r));
-      expect(f.hud[at]).toMatch(/^[│▌] ✗ T3/);
-      expect(f.hudSegs[at]!.find((x) => x.t === '✗')?.color).toBe(bad);
-      expect(f.hud.filter((x) => /^[│▌] ✓ T3/.test(x)), 'T3 is never a green mark').toHaveLength(0);
-      expect(f.hud.filter((x) => /^[│▌] ✓ T\d/.test(x)).map((x) => /T(\d)/.exec(x)![1]), 'the green discs are the completed rows').toEqual(['1', '2', '4', '5']);
-    });
-    test(`${cols} columns: a row the lead owns shows \`lead\` in 245 where an agent's name would be`, () => {
-      const lead: Shape = { ...RUNNING, plan: ['in_progress', 'in_progress', 'in_progress', 'in_progress', 'pending'] };
-      const f = frameOf(lead, body, screen);
-      const at = f.hud.findIndex((r) => /T4 /.test(r));
-      expect(f.hud[at]).toMatch(/\blead\b/);
-      expect(f.hudSegs[at]!.find((x) => x.t.trim() === 'lead')?.color).toBe(sub);
-    });
   }
   const NOW_MS = 1_800_000_000_000;
   const plan = (): TodoItem[] => PLAN.map((c, i) => ({ id: `t${i + 1}`, content: c, status: i < 2 ? 'completed' : 'pending', ...(i < 2 ? { owner: NAMES[i]! } : {}) }) as unknown as TodoItem);
@@ -228,40 +204,7 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
   const nameAt = (n: string, _body: number): string => n; // the redesigned grid keeps a whole name at every width the table shows
   const tableOf = (f: Frame): string[] => { const at = f.hud.findIndex((r) => r.includes('SUBAGENTS')); return f.hud.slice(at); };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: running, done and failed all draw a title, bold 245 dim headers AGENT ROLE STATE NOW TIME, one row per agent in dispatch order, a closing rule`, () => {
-      for (const sh of [RUNNING, FINISHED, STOP]) {
-        const f = frameOf(sh, body, screen);
-        const t = tableOf(f);
-        expect(t[0]).toMatch(/^╭─ SUBAGENTS /);
-        expect(t[1]).toMatch(/^│ {3}AGENT\s+(ROLE\s+)?STATE\s+NOW\b/);
-        expect(t.at(-1)).toMatch(/^╰─+╯$/);
-        const h = f.hudSegs[f.hud.indexOf(t[1]!)]!.find((x) => x.t.includes('AGENT'))!;
-        expect([h.color, h.bold]).toEqual(['#767676', undefined]); // the dim column names
-        expect(t.slice(2, -1).map((r) => r.replace(/^[│▌]\s*\S\s+/, '').trim().split(/\s+/)[0]!)).toEqual(NAMES.map((n) => nameAt(n, body)));
-      }
-    });
-    test(`${cols} columns: STATE is a 141 spinner and \`running\`, \`✓ done\` in 114, \`■ failed\` in 203; TIME is a clock; no row is a bare list of times`, () => {
-      const run = frameOf(RUNNING, body, screen);
-      const rr = run.hud.findIndex((r) => new RegExp(`^[│▌] [◐◓◑◒] ${nameAt('alpha-explorer', body)}`).test(r) && /\srunning\s+.*\d+:\d\d/.test(r));
-      expect(rr).toBeGreaterThan(0);
-      expect(run.hudSegs[rr]!.find((x) => SPIN_MARK.test(x.t) && x.t.trim().length === 1)?.color).toBe(PALETTES.mocha.accent);
-      const stop = frameOf(STOP, body, screen);
-      const ds = stop.hud.findIndex((r) => new RegExp(`^[│▌] ✓ ${nameAt('alpha-explorer', body)}`).test(r) && /\sdone/.test(r));
-      expect(stop.hudSegs[ds]!.find((x) => x.t === '✓')?.color).toBe(ok);
-      const fs = stop.hud.findIndex((r) => new RegExp(`^[│▌] ✗ ${nameAt('gamma-explorer', body)}`).test(r) && /\sfailed/.test(r));
-      expect(stop.hudSegs[fs]!.find((x) => x.t === '✗')?.color).toBe(bad);
-      for (const f of [run, stop, frameOf(FINISHED, body, screen)]) for (const r of f.hud) expect(r, 'never a bare list of clocks').not.toMatch(/^[\s│]*(?:\d+:\d\d\s+)+\d+:\d\d\s*$/);
-    });
   }
-  test('TIME is a right-aligned column and the frozen header always carries FN (`-` for an unknown count)', () => {
-    const f = frameOf(RUNNING, 93, 45);
-    const head = f.hud.find((r) => /^│ {3}AGENT\s/.test(r))!;
-    expect(head).toMatch(/AGENT {2,}ROLE {2,}STATE {2,}NOW( \/ RESULT)? {2,}(?:\S+ +)*TIME/); // one header in every state and width: CALLS and FN come only when a row has a figure
-    const rows = f.hud.filter((r) => /^[│▌] [◐◓◑◒] \S+-explorer\s+(?:\S+\s+)?running/.test(r));
-    expect(rows).toHaveLength(3);
-    const ends = rows.map((r) => /\d+:\d\d/.exec(r)!).map((m) => m.index + m[0].length);
-    expect(new Set(ends).size, 'the TIME column ends on one cell').toBe(1);
-  });
   test('maxRows is respected: a short slot counts what it cannot draw on one summary row (`◒ N more running`)', () => {
     const ags = ['a', 'b', 'c', 'd', 'e'].map((n, i) => ({ name: `${n}-explorer`, role: 'explorer', state: 'working', ui: 'running', model: 'haiku', startedAt: 5_000_000 - 9000 - i, since: 5_000_000 - 3000, tool: 'Read', target: 'x.py', lastTool: 'Read', calls: i + 1 }) as never);
     for (const maxRows of [9, 10, 12, 16]) {
@@ -276,7 +219,7 @@ describe('5. SUBAGENTS is a full-width table in every state', () => {
 
 describe('6. the strip tab reads `status` (wave 43: no key is bound)', () => {
   test('the first band button', () => {
-    expect(BAND_BUTTONS[1]).toMatchObject({ id: 'route', label: 'status' }); // the strip's second tab (the first is `health`)
+    expect(BAND_BUTTONS[0]).toMatchObject({ id: 'route', label: 'status' }); // the strip's first tab (health follows)
     expect(BAND_BUTTONS.some((b) => 'key' in b)).toBe(false);
   });
 });

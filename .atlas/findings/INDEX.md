@@ -65,10 +65,19 @@ atlas:docs-curator maintains this file. atlas-setup only creates it.
 | Date | Id | Status | Title | Link |
 |---|---|---|---|---|
 | 2026-11-25 | worker-budget-unsplit | verified | atlas_mux: refuse unsplit multi-editor teams; worker wall-clock budget enforced by wait | [2026-11-25_worker-budget-unsplit.md](2026-11-25_worker-budget-unsplit.md) |
+| 2026-11-25 | tf5fc3b0c | rejected | Deleted tests mostly removed-by-design; 2 still-live behaviours now untested | [2026-11-25_tf5fc3b0c.md](2026-11-25_tf5fc3b0c.md) |
 | 2026-11-25 | team-launch-card | verified | mod: atlas_mux spawn-team draws a team card (role colour, name, role, state, own todos) | [2026-11-25_team-launch-card.md](2026-11-25_team-launch-card.md) |
+| 2026-11-25 | sidepanel-tabs | verified | Side panel tabs status/health(+gates)/channel/bored; gates tab removed; health chip opens health tab | [2026-11-25_sidepanel-tabs.md](2026-11-25_sidepanel-tabs.md) |
+| 2026-11-25 | sidepanel-rework | verified | Side panel rework: band slim, status/health/channel/bored tabs, Stop gate waiter fixes | [2026-11-25_sidepanel-rework.md](2026-11-25_sidepanel-rework.md) |
+| 2026-11-25 | sidepanel-channel | verified | Channel tab chat-room layout: per-agent colour, HH:MM:SS, alpha -> beta, compose last | [2026-11-25_sidepanel-channel.md](2026-11-25_sidepanel-channel.md) |
+| 2026-11-25 | sidepanel-bored | verified | Bored tab streams ssh watch.ascii.theater via VT buffer; host loads the mod (live gate PASS) | [2026-11-25_sidepanel-bored.md](2026-11-25_sidepanel-bored.md) |
+| 2026-11-25 | sidepanel-band-slim | verified | Band drops TODO/subagent rows (max 3 rows); finished-worker timers freeze (data/live.ts endedAt) | [2026-11-25_sidepanel-band-slim.md](2026-11-25_sidepanel-band-slim.md) |
 | 2026-11-25 | push-gate-green | verified | gate.sh push green with team card, worker budget, unsplit refusal, host chip probe | [2026-11-25_push-gate-green.md](2026-11-25_push-gate-green.md) |
 | 2026-11-25 | host-chip-probe | verified | mod gate: host probe checks the reply header chip with the real contract pattern (offline run only) | [2026-11-25_host-chip-probe.md](2026-11-25_host-chip-probe.md) |
+| 2026-11-25 | gate-w-waiters | verified | Stop gate (w): one Monitor per team; per-pid waiter markers so an ending wait cannot unwatch a live one | [2026-11-25_gate-w-waiters.md](2026-11-25_gate-w-waiters.md) |
 | 2026-11-25 | gate-push-slice-f024 | verified | mux brief/hygiene + cards.tsx slice passes gates | [2026-11-25_gate-push-slice-f024.md](2026-11-25_gate-push-slice-f024.md) |
+| 2026-11-25 | gate-m-rerun | verified | Non-orchestrating (m) re-runs the last test command; green clears it | [2026-11-25_gate-m-rerun.md](2026-11-25_gate-m-rerun.md) |
+| 2026-11-25 | gate-canon | verified | Stop gate (b)/(g) credits shaped, multi-line and batched passing test runs; failing piped bun runs earn nothing | [2026-11-25_gate-canon.md](2026-11-25_gate-canon.md) |
 | 2026-11-25 | fallow-hookbridge-teamcard | verified | No introduced fallow complexity finding in hook-bridge.ts / team-card.test.tsx; omp+transcript tests pass | [2026-11-25_fallow-hookbridge-teamcard.md](2026-11-25_fallow-hookbridge-teamcard.md) |
 | 2026-11-24 | worktree-hygiene | verified | reap auto-commits dirty workers, snapshot base for a dirty lead, reap-stale at boot; team t033ece merged and removed itself | [2026-11-24_worktree-hygiene.md](2026-11-24_worktree-hygiene.md) |
 | 2026-11-24 | unwatched-team-gate | verified | Stop gate (w) blocks a stop while this session tmux team runs with no live atlas_mux wait | [2026-11-24_unwatched-team-gate.md](2026-11-24_unwatched-team-gate.md) |

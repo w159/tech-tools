@@ -91,3 +91,7 @@ Assumption to avoid (tech-tools): **Three push attempts.** I didn't run the full
 Assumption to avoid (tech-tools): A raw `Text` node is exactly what you'd see if the mod called `next(e)` or never ran. [noted 2026-11-25]
 §
 Assumption to avoid (tech-tools): One small difference: the hook payload keys are now built in a different order. I assumed the hooks read them as JSON, so order doesn't matter, and I didn't check that separately. [noted 2026-11-25]
+§
+User correction (tech-tools): with stdin closed from the start (no `input`). It may exit early on stdin EOF. You said the stream was probed live, but possibly not with closed stdin. [noted 2026-11-25]
+§
+Assumption to avoid (tech-tools): - **Cause:** when a wait ends, its `finally` deletes the team's waiter file without checking whose file it is. [noted 2026-11-25]

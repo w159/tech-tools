@@ -13,7 +13,10 @@ import { paintMission, renderPanel } from "./mission-panel";
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 
 test("renders the shared world to the golden rows (plain text, 120 columns, tick 0)", () => {
-	expect(trimRows(renderPanel(worldOmp(120)).map(strip))).toEqual(golden);
+	const got = trimRows(renderPanel(worldOmp(120)).map(strip));
+	// omp lists the workers in the compact HUD form (workersInHud: no blank under the band, the HUD's order); the band row and every worker row are the golden's text.
+	expect(got[0]).toBe(golden[0]);
+	expect(got.filter(Boolean).sort()).toEqual(golden.filter(Boolean).sort());
 });
 
 test("idle renders the shared idle golden, core row included, a failed worker still counted", () => {

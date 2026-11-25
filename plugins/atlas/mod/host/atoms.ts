@@ -64,7 +64,6 @@ export const S: {
 	branchName: string | undefined;
 	tmuxHere: boolean | undefined;
 	usageWindow: number | null;
-	healthOpenNow: boolean;
 	bandDrawnMs: number;
 	beatN: number;
 	builder: SnapshotBuilder | null;
@@ -116,7 +115,6 @@ export const S: {
 	branchName: undefined, // the git branch at boot; absent when git said nothing
 	tmuxHere: undefined, // Z4: tmux answered `-V` at boot (the team tab's slot table says yes or no); absent before the probe
 	usageWindow: null, // the model's context window from the last session.measure (the figure ctx % is a share of)
-	healthOpenNow: false, // wave 42: the band's `▸ health` button; the HUD draws the card while it is true (a toggle redraws through the spinner tick)
 	bandDrawnMs: -Infinity, // the engine clock of the band's last render: the idle beat runs only while the band is on screen (a redraw each 200 ms is what keeps this fresh)
 	beatN: 0, // beats since boot: the idle redraw rides every 2nd one (5 Hz)
 	// ---- module caches left out of $.state ---------------------------------------

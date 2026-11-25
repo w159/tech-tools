@@ -147,46 +147,12 @@ const segOf = (f: Frame, re: RegExp): Segment[] => f.segs.find((r) => re.test(r.
 
 describe('2. the SUBAGENTS rule counts agents only; no spinner unless one runs', () => {
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: three agents and three queued dispatches read \`3 running\`, never \`queued\``, () => {
-      const f = frameOf(HASHED, body, screen);
-      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+─+ ● 3 running/);
-      expect(ruleOf(f)).not.toMatch(/queued/);
-    });
-    test(`${cols} columns: nothing runs: a static \`✗ 1 failed · 2 done\`, no spinner`, () => {
-      const f = frameOf(SUFFIXED, body, screen);
-      expect(ruleOf(f)).toMatch(/SUBAGENTS\s+─+ ✗ 1 failed  ✓ 2 done/);
-      expect(ruleOf(f)).not.toMatch(SPIN_MARK);
-    });
   }
-  test('the failed count is drawn in the error colour', () => {
-    const f = frameOf(SUFFIXED, 93, 45);
-    const failed = segOf(f, /SUBAGENTS/).find((x) => /failed/.test(x.t))!;
-    const err = segOf(f, /T3 read/).find((x) => x.t.includes('✗'))!;
-    expect(failed.color).toBeDefined();
-    expect(failed.color).toBe(err.color);
-  });
 });
 
 describe('3. dispatches fold into the plan: one row per plan item', () => {
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: five plan items draw five rows and \`/5\` in the title and the band, three hash-named dispatches open`, () => {
-      const f = frameOf(HASHED, body, screen);
-      expect(todoRowsOf(f)).toHaveLength(5);
-      expect(titleOf(f)).toMatch(/0\/5/);
-      expect(f.band).toMatch(/todo 0\/5/);
-      expect(f.hud.join('\n')).not.toMatch(/explorer-\d\daf|List the function/);
-    });
-    test(`${cols} columns: a closed plan keeps five rows and the band's denominator`, () => {
-      const f = frameOf(SUFFIXED, body, screen);
-      expect(todoRowsOf(f)).toHaveLength(5);
-      expect(titleOf(f)).toMatch(/4\/5 · ✗1/); // wave 36: one failed row is counted apart from the done rows
-      expect(f.band).toMatch(/(todo )?4\/5 ✗1/); // wave 37: the failed row rides the plan segment; the word `todo` goes first at 56 cells // wave 36: the failed row is not a done row
-    });
   }
-  test('done rows keep their agent and time columns', () => {
-    const f = frameOf(SUFFIXED, 93, 45);
-    for (const name of ['alpha-explorer', 'beta-explorer']) expect(todoRowsOf(f).find((r) => r.includes(name)), name).toMatch(/\d:\d\d/);
-  });
   test('an open dispatch no plan row owns hangs as one dim child line `└ explorer-4e2d queued 0:00` only while the turn is alive, never once it ended (wave 37)', () => {
     const f = frameOf(SUFFIXED, 93, 45); // the host turn is over and the earlier workers ended: no phantom `queued` child
     expect(f.hud.filter((r) => /└/.test(r))).toHaveLength(0);
@@ -194,30 +160,9 @@ describe('3. dispatches fold into the plan: one row per plan item', () => {
     const closed = frameOf({ ...SUFFIXED, dispatch: SUFFIXED.dispatch!.map((d) => ({ ...d, status: 'completed' })), members: [] }, 93, 45);
     expect(closed.hud.join('\n')).not.toMatch(/└|explorer-4e2d/);
   });
-  test('a T row whose worker failed reads `✗ failed` in the same colour as the error mark, never a `●`', () => {
-    const f = frameOf(SUFFIXED, 93, 45);
-    const row = todoRowsOf(f).find((r) => r.includes('T3'))!;
-    expect(row).toMatch(/✗ T3/);
-    expect(row).toMatch(/failed/);
-    const segs = segOf(f, /T3 read/);
-    expect(segs.some((x) => x.t.includes('●'))).toBe(false);
-    expect(segs.find((x) => /failed/.test(x.t))!.color).toBe(segs.find((x) => x.t.includes('✗'))!.color);
-  });
-  test('a T row is never `running` once its agent finished; its neighbour still runs', () => {
-    const done: Shape = { ...HASHED, agents: [{ name: NAMES[0]!, squad: 'finished', mood: 'done' }, HASHED.agents[1]!, HASHED.agents[2]!] };
-    const f = frameOf(done, 93, 45);
-    expect(todoRowsOf(f).find((r) => r.includes('T1'))).not.toMatch(/running/);
-    expect(todoRowsOf(f).find((r) => r.includes('T2'))).toMatch(/running/);
-  });
 });
 
 describe('4. geometry: the band keeps its row, the title takes the free cells', () => {
-  test('110 columns: a title that does not fit the fixed grid ends in `…` on the cell (state 39: owner 12, then the title, shrink before a column drops)', () => {
-    const titles = ['T1 read alpha.py (alpha-explorer)', 'T2 read beta.py (beta-explorer)', 'T3 read gamma.py (gamma-explorer)', 'T4 combine the three reports', 'T5 write the summary'];
-    const f = frameOf({ ...DEFAULT, titles, noOwner: true }, 56, 40);
-    expect(todoRowsOf(f).find((r) => r.includes('T4'))).toContain('T4 combine the…');
-    for (const r of f.hud) expect([...r].length).toBeLessThanOrEqual(56);
-  });
   test('the band is the first row of the slot in every state, within the width', () => {
     for (const sh of [HASHED, SUFFIXED, FROZEN, DEFAULT]) {
       const f = frameOf(sh, 93, 45);

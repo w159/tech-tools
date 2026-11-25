@@ -22,7 +22,7 @@ const rows = (b: BandModel, on: BandHandlers | undefined = handlers): string[] =
 const first = (b: BandModel): string => rows(b)[0]!;
 
 const ui: Ui = { ...uiFromEnv({}), color: 'truecolor' };
-const handlers: BandHandlers = { openView() {}, toggleTodos() {}, toggleHealth() {} };
+const handlers: BandHandlers = { openView() {}, toggleTodos() {} };
 const green = (id: string) => ({ id, title: id, lines: [{ id, label: id, ok: true }] }) as any;
 const GATES = ['completion', 'tripwire', 'routing', 'header'].map(green);
 const PULSE: Pulse = { events: [0, 0, 0, 0, 0, 0, 1, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 5, 1], ctx: [], runs: [] };
@@ -146,14 +146,14 @@ describe('D1 (band half): the chips', () => {
     const btn = all(root).find((n) => n.kind === 'Button' && String(n.props.key).split('#')[0] === key)!;
     btn.props.onPress();
   };
-  test('(h) pane closed: the health chip toggles the card, the gates chip opens the pane on its gates tab', () => {
+  test('(h) pane closed: the health chip and the gates chip both open the pane on its health tab', () => {
     const calls: string[] = [];
-    const on: BandHandlers = { openView: (v: string) => calls.push(`view:${v}`), toggleTodos() {}, toggleHealth: () => calls.push('card') };
+    const on: BandHandlers = { openView: (v: string) => calls.push(`view:${v}`), toggleTodos() {} };
     press(model('idle', 150), on, 'band:health');
     press(model('idle', 150), on, 'band:gates');
-    expect(calls).toEqual(['card', 'view:gates']);
+    expect(calls).toEqual(['view:core', 'view:core']);
   });
-  test('(h) pane open: the band draws no health chip, so a card can never open beside the panel; the gates chip stays', () => {
+  test('(h) pane open: the band draws no health chip; the gates chip stays', () => {
     const root = bandTree(els, model('idle', 150, {}, { panel: true }), handlers) as unknown as Node;
     const keys = all(root).filter((n) => n.kind === 'Button').map((n) => String(n.props.key).split('#')[0]).filter((k, i, a) => a.indexOf(k) === i);
     expect(keys).toEqual(['band:gates']);

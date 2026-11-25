@@ -788,26 +788,15 @@ function idleLines(m: MissionModel): Line[] {
   // The contract row outranks the last-run row: when only one fits, the band keeps the same rows at every width (critique 9, the 110 band had no contract row).
   let { head, footRows, core } = plan(true);
   if (m.core?.length && !core.length) ({ head, footRows, core } = plan(false));
-  const room = m.maxRows - head.length - core.length - footRows;
-  const board = m.boardRows && room >= 1 ? [{ runs: [], board: Math.min(m.boardRows, room) }] : [];
-  return [...head, ...core, ...board, ...foot.slice(foot.length - footRows)];
+  return [...head, ...core, ...foot.slice(foot.length - footRows)];
 }
 
 function runningLines(m: MissionModel): Line[] {
-  const shown = m.workersInHud ? [] : byAttention(m.workers); // the HUD's Subagents block lists them; the band keeps the counts
+  // The band is the status row(s), the health strip and the key chips only: the side panel's status tab lists workers, todos and messages.
   const foot = footerLines(m);
   const band = bandLines(m);
-  const boardWant = m.boardRows ?? 0;
-  const board = boardWant && m.maxRows - band.length >= 4 ? Math.min(boardWant, m.maxRows - band.length - 3) : 0; // keep a worker, the message and the footer
-  const plan = planRows(m.maxRows - board - (band.length - 2), shown.length, !!m.note, foot.length);
-  const nameW = workerNameW(m);
-  const head: Line[] = [...band, ...(board ? [{ runs: [], board }] : [])];
-  const rows: Line[] = shown.slice(0, plan.lanes).map((w) => workerLine(w, m, nameW));
-  const extras: Line[] = [...(plan.more ? [moreLine(shown.slice(plan.lanes), m.cols, uiOf(m))] : []), ...(plan.ticker && m.note ? [noteLine(m.note, m.cols, uiOf(m))] : [])];
-  const tail: Line[] = foot.slice(foot.length - plan.footerRows); // the key row outlasts the checks row
-  // Spare rows breathe: one blank under the band, then one between the workers and the message; the first to go.
-  const spare = m.maxRows - (head.length - (board ? 1 : 0) + board) - rows.length - extras.length - tail.length;
-  return [...head, ...(spare >= 1 ? [blank(m.cols)] : []), ...rows, ...(spare >= 2 && extras.length ? [blank(m.cols)] : []), ...extras, ...tail];
+  const plan = planRows(m.maxRows - (band.length - 2), 0, false, foot.length);
+  return [...band, ...foot.slice(foot.length - plan.footerRows)]; // the key row outlasts the checks row
 }
 
 /** Mission Control rows for `m`, at most `maxRows`, each exactly `cols` cells (board slots aside). Below 80 columns

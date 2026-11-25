@@ -1,0 +1,21 @@
+== atlas_mod_gate --live --require-live
+PASS live claude plugin test: 1 probe(s),  2 pass |  0 fail | Ran 2 tests across 1 file. [0.50s]
+mod gate: PASS (offline checks are smoke only; 4 pass, 0 fail, 0 skip)
+== tsc
+50
+== bun test mod omp
+ 4656 pass
+ 31 skip
+ 0 fail
+ 74308 expect() calls
+Ran 4687 tests across 306 files. [43.19s]
+== plugins/atlas/scripts/test_atlas_mux.py
+OK
+== plugins/atlas/scripts/test_atlas_mux_more.py
+OK
+== plugins/atlas/scripts/test_atlas_mux_brief_tools.py
+OK
+== plugins/atlas/hooks/test_completion_gate.py
+OK
+== gate.sh commit
+exit=0

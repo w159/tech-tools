@@ -40,12 +40,12 @@ const SPIN_MARK = /[◐◓◑◒]/;
 const PUA = /[\uE000-\uF8FF]/;
 const SIZES = [[150, 45, 93], [110, 40, 56]] as const;
 
-type Agent = { name: string; squad: SquadAgent['state']; mood: string; tool?: string | null };
+type Agent = { name: string; squad: SquadAgent['state']; mood: string; tool?: string | null; startedAt?: number };
 type Shape = { agents: Agent[]; plan: ('completed' | 'in_progress' | 'pending')[]; working: boolean; rest?: number; gates?: unknown[]; calls?: number; /** The host's own tally when it lags the rows (critique 34: `todo 0/5` beside `TODO 1/5`). */ countsDone?: number };
 
 function snapshotOf(sh: Shape): LiveSnapshot {
   const squad: SquadAgent[] = sh.agents.map((a) => ({ name: a.name, persona: 'explorer', state: a.squad, source: 'task', task: `${a.name}: read ${a.name.split('-')[0]}.py` }) as SquadAgent);
-  const act = Object.fromEntries(sh.agents.map((a, i) => [a.name, { tool: a.tool ?? null, since: NOW - 4_000, startedAt: NOW - 14_000 - i * 1000, toolCount: 1, tokens: 100, mood: a.mood, lastLine: '' }]));
+  const act = Object.fromEntries(sh.agents.map((a, i) => [a.name, { tool: a.tool ?? null, since: a.startedAt ?? NOW - 4_000, startedAt: a.startedAt ?? NOW - 14_000 - i * 1000,toolCount: 1, tokens: 100, mood: a.mood, lastLine: '' }]));
   const plan: TodoItem[] = PLAN.slice(0, sh.plan.length).map((c, i) => ({ id: `t${i + 1}`, content: c, status: sh.plan[i] ?? 'pending', ...(sh.agents[i] ? { owner: sh.agents[i]!.name } : {}) }) as TodoItem);
   const done = sh.plan.filter((s) => s === 'completed').length;
   return busySnap({
@@ -132,6 +132,11 @@ describe('1. the band is three segments: state | plan | workers, in block elemen
     }
     expect(frameOf(RUNNING, 93, 45).band).toMatch(/working 0:42 ▌ todo 0\/5 ▌ [◐◓◑◒] 3 running/);
   });
+  test('`N running` counts a listed worker as running regardless of age: one started a day ago, no tool in flight, still counts', () => {
+    const dayAgo = NOW - 86_400_000;
+    const old: Shape = { ...RUNNING, agents: [{ ...RUNNING.agents[0]!, tool: null, startedAt: dayAgo }, ...RUNNING.agents.slice(1)] };
+    expect(frameOf(old, 93, 45).band).toMatch(/▌ [◐◓◑◒] 3 running/);
+  });
 });
 
 describe('3. one clock: the band always shows the elapsed time while working, read from runElapsed', () => {
@@ -151,23 +156,28 @@ describe('3. one clock: the band always shows the elapsed time while working, re
   });
 });
 
-describe('4. one count: the band `todo n/m` is the TODO HUD title figure', () => {
-  const figures = (f: Frame): [string, string] => [/(?:todo )?(\d)\/5/.exec(f.band)?.[1] ?? '?', /TODO ─+ (\d)\/5/.exec(f.hud.join('\n'))?.[1] ?? '?'];
+describe('4. one count: the band `todo n/m` is the plan figure the side panel reads (hud.ts planProgress)', () => {
+  const figures = (sh: Shape, body: number, screen: number): [string, string] => {
+    const f = frameOf(sh, body, screen);
+    const snapshot = snapshotOf(sh);
+    const p = hud.planProgress(ownTodos(snapshot.todos ?? [], snapshot.sessionId), liveWorkers(snapshot, snapshot.now), snapshot.squad, queuedMembers(snapshot), snapshot.now);
+    return [/(?:todo )?(\d)\/5/.exec(f.band)?.[1] ?? '?', `${p.done}`];
+  };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: the stop run (a worker died under a plan row marked completed) reads the same figure in the band and the HUD title`, () => {
-      const [band, hud] = figures(frameOf(STOP, body, screen));
+    test(`${cols} columns: the stop run (a worker died under a plan row marked completed) reads the same figure in the band and in planProgress`, () => {
+      const [band, hud] = figures(STOP, body, screen);
       expect(band).not.toBe('?');
       expect(band).toBe(hud);
     });
-    test(`${cols} columns: a stale host tally never decides the band's figure (critique 34: \`todo 0/5\` beside \`TODO 1/5\`)`, () => {
+    test(`${cols} columns: a stale host tally never decides the band's figure (critique 34: \`todo 0/5\` beside planProgress 1/5)`, () => {
       const lagging: Shape = { ...RUNNING, agents: [{ name: NAMES[0]!, squad: 'finished', mood: 'done' }, RUNNING.agents[1]!, RUNNING.agents[2]!], plan: ['completed', 'in_progress', 'in_progress', 'pending', 'pending'], countsDone: 0 };
-      const [band, hud] = figures(frameOf(lagging, body, screen));
+      const [band, hud] = figures(lagging, body, screen);
       expect(hud).toBe('1'); // the row-derived figure: T1 completed, the stale host tally (0) decides nothing
       expect(band).toBe('1');
     });
     test(`${cols} columns: every shape agrees, working, done and idle`, () => {
       for (const sh of [RUNNING, FINISHED, IDLE]) {
-        const [band, hud] = figures(frameOf(sh, body, screen));
+        const [band, hud] = figures(sh, body, screen);
         expect(band).toBe(hud);
       }
     });
@@ -177,69 +187,20 @@ describe('4. one count: the band `todo n/m` is the TODO HUD title figure', () =>
 describe('5. one state per item: a row whose worker died is `✗ failed` from the first frame', () => {
   const dead: Shape = { working: true, agents: [{ name: NAMES[0]!, squad: 'running', mood: 'working', tool: 'Read' }, { name: NAMES[1]!, squad: 'failed', mood: 'failed' }, { name: NAMES[2]!, squad: 'running', mood: 'working', tool: 'Read' }], plan: ['in_progress', 'in_progress', 'in_progress', 'pending', 'pending'] };
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: T2 (its worker failed) reads \`✗ ... failed\` in 203, not running, queued or done`, () => {
-      const f = frameOf(dead, body, screen);
-      const at = f.hud.findIndex((r) => /T2 /.test(r));
-      expect(f.hud[at]).toMatch(/✗ T2 .*failed/);
-      const glyph = f.hudSegs[at]!.find((x) => x.t === '✗');
-      expect(glyph?.color).toBe(PALETTES.mocha.bad);
-    });
-    test(`${cols} columns: a pending row with no worker is queued, never a green disc`, () => {
-      const f = frameOf(RUNNING, body, screen);
-      const row = f.hud.find((r) => /T4 /.test(r))!;
-      expect(row).toMatch(/○ T4/);
-      expect(row).not.toMatch(/● T4/);
-    });
   }
 });
 
 describe('6. SUBAGENTS: one rule while they run, a k9s-style table once they have stopped', () => {
   for (const [cols, screen, body] of SIZES) {
-    test(`${cols} columns: while agents run the same titled table shows, header row included (wave 36)`, () => {
-      const f = frameOf(RUNNING, body, screen);
-      const marks = f.hud.filter((r) => r.includes('SUBAGENTS'));
-      expect(marks).toHaveLength(1);
-      expect(marks[0]).toMatch(/^╭.*● 3 running/);
-      expect(f.hud.some((r) => /^│\s+AGENT\s+(ROLE\s+)?STATE\s+NOW/.test(r)), 'wave 36: the table header shows while they run too').toBe(true);
-    });
-    test(`${cols} columns: at done the table is AGENT STATE TIME, one row per agent with the name, the state and the clock`, () => {
-      const f = frameOf(FINISHED, body, screen);
-      const head = f.hud.findIndex((r) => /^│\s+AGENT\s+(ROLE\s+)?STATE\s+NOW( \/ RESULT)?\s+(?:\S+\s+)*TIME/.test(r));
-      expect(head).toBeGreaterThan(0);
-      expect(f.hud[head - 1]).toMatch(/^╭─ SUBAGENTS ─+ ✓ 3 done/);
-      const header = f.hudSegs[head]!.find((x) => x.t.includes('AGENT'))!;
-      expect(header.color).toBe('#767676'); // the dim column names
-      NAMES.forEach((n, i) => {
-        const row = f.hud[head + 1 + i]!;
-        expect(row, n).toMatch(new RegExp(`^│ ✓ ${nameAt(n, body)}\\s+(?:\\S+\\s+)?done\\s+.*\\d+:\\d\\d`));
-      });
-    });
-    test(`${cols} columns: a failed agent's row is \`✗\` in 203`, () => {
-      const f = frameOf(STOP, body, screen);
-      const at = f.hud.findIndex((r) => new RegExp(`^[│▌] ✗ ${nameAt('gamma-explorer', body)}`).test(r) && /\sfailed/.test(r));
-      expect(at).toBeGreaterThan(0);
-      const segs = f.hudSegs[at]!;
-      expect(segs.find((x) => x.t === '✗')?.color).toBe(PALETTES.mocha.bad);
-      expect(segs.find((x) => x.t.trim() === 'failed')?.color).toBe(PALETTES.mocha.bad); // the glyph, the word and the result are red; the name keeps its quiet tone
-    });
   }
-  test('at 110 columns the narrow table keeps the names and the times', () => {
-    const f = frameOf(FINISHED, 56, 40);
-    for (const n of NAMES) expect(f.hud.join('\n')).toMatch(new RegExp(`${nameAt(n, 56)}\\s+.*\\d+:\\d\\d`));
-  });
-  test('the TODO HUD rows for the same input are unchanged by the table (the table is a separate box under the closed plan box)', () => {
-    const f = frameOf(FINISHED, 93, 45);
-    expect(f.hud[0]).toMatch(/^╭─ TODO /);
-    expect(f.hud.filter((r) => /^╰/.test(r))).toHaveLength(2);
-  });
 });
 
-describe('4b. one count: the band takes its figure from hud.ts planProgress, the reading the TODO title is built on', () => {
-  test('planProgress equals the TODO title figure for the stop run (the dead worker included)', () => {
+describe('4b. one count: the band takes its figure from hud.ts planProgress', () => {
+  test('planProgress equals the band figure for the stop run (the dead worker included)', () => {
     const f = frameOf(STOP, 93, 45);
     const snapshot = snapshotOf(STOP);
     const live = liveWorkers(snapshot, snapshot.now);
     const p = hud.planProgress(ownTodos(snapshot.todos ?? [], snapshot.sessionId), live, snapshot.squad, queuedMembers(snapshot), snapshot.now);
-    expect(`${p.done}`).toBe(/TODO ─+ (\d)\/5/.exec(f.hud.join('\n'))?.[1]);
+    expect(`${p.done}`).toBe(/(?:todo )?(\d)\/5/.exec(f.band)?.[1]);
   });
 });

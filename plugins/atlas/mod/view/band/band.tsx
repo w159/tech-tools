@@ -19,13 +19,11 @@ import type { UiState } from '../../design/atlas-ui';
 import { bandLines, bandMotionItems, isMessageKind, runStateOf, type Line, type BandKind, type MissionModel, type MissionWorker, type Run, type WorkerState, missionLines, healthStripBg } from './mission-layout';
 import type { GateGroup, SidebarView } from '../panel/pane/sidebar-types';
 import { fitRuns, rowOf, type Segment } from '../../design/runs';
-import { todoRows } from '../board/todo-panel';
 import { contractRail, railOf, type Rail } from '../../design/rail';
 import { chipText, STRIP_TABS } from '../panel/panel-layout';
 import { fitText, textWidth } from '../../design/theme';
 import { chipStyle, hoverStyle } from '../../input/clickable';
 import type { Health, HealthIn } from '../../data/idle-health';
-import { BAND_GATES_KEY } from './band-frame';
 
 export { planRows } from './mission-layout';
 
@@ -40,8 +38,8 @@ export type BandModel = { /** Wave 42: idle health inputs (uptime, version, bran
 const WAVE_GAP_MS = 10_000; // spawns further apart than this start a new wave
 /** Brand mark: one cell (the U+25E2 triangles of the mockup draw 2 cells in Ghostty; theme.test.ts). */
 export const MARK = '◆';
-/** Press handlers: `openView` opens (or focuses) the Atlas pane on a view (the gates chip, and the footer tabs); `toggleTodos` opens the Board pane; `toggleHealth` opens and closes the HUD's health card (the `▸ health` chip, drawn only while the pane is closed). Absent in fixtures that wire neither. */
-export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; toggleHealth?(): void; /** Whether the Atlas pane is open (the render reads it from state): the one-row bar draws `open`, or the tab chips and `close`; absent in fixtures that wire no pane controls (the bar then draws none). */ paneOpen?: boolean; /** Closes the Atlas pane; absent: the bar draws no `close` chip. */ closePane?(): void };
+/** Press handlers: `openView` opens (or focuses) the Atlas pane on a view (the gates pill and the `▸ health` chip, both on the health tab, and the footer tabs); `toggleTodos` opens the Board pane. */
+export type BandHandlers = { openView(v: SidebarView): void; toggleTodos(): void; /** Whether the Atlas pane is open (the render reads it from state): the one-row bar draws `open`, or the tab chips and `close`; absent in fixtures that wire no pane controls (the bar then draws none). */ paneOpen?: boolean; /** Closes the Atlas pane; absent: the bar draws no `close` chip. */ closePane?(): void };
 /** The band's controls: click chips, one per tab of the side panel's strip (wave 43: no key letters are drawn or bound). */
 export const BAND_BUTTONS: readonly { id: SidebarView | 'board'; label: string }[] = STRIP_TABS; // the side panel's own tab strip (wave 36: the first tab, still the `r` key, reads `status`, as its header does)
 const buttonWidth = (b: { label: string }): number => textWidth(chipText(b.label)); // a chip is its label with a space each side
@@ -205,13 +203,12 @@ function missionModel(b: BandModel & { maxRows: number }): MissionModel {
     elapsedSecs: working.length ? Math.round((now - Math.min(...working.map((w) => w.startedAt))) / 1000) : undefined,
     lastRun: lastRun(all, now, ownTodos(s.todos, s.sessionId).filter((t) => t.origin === 'dispatch' && t.owner).map((t) => t.owner!)),
     core: coreCells(b.core, Math.max(1, b.columns), b.ui, total),
-    boardRows: b.todoExpanded && ownTodos(s.todos, s.sessionId).length ? ownTodos(s.todos, s.sessionId).length + 1 : 0,
     ctx: s.contextPct > 0 && b.ranSecs === undefined ? Math.min(1, s.contextPct / 100) : undefined, // after a run the turn footer prints `ctx N%`: the band says it once (critique 28)
     rich: b.rich ?? lookRich(),
     ui: b.ui ?? lookUi(),
     turnSecs: b.hostOnly ? undefined : b.workSecs, ranSecs: b.ranSecs, ...(b.hostOnly ? { hostOnly: true } : {}), ...(b.restSecs !== undefined ? { restSecs: b.restSecs } : {}), ...(closed ? { closed } : {}),
     ...(b.health ? { health: healthOf(b, s, tally, progress, withCoreTally(b.gates, b.core)) } : {}),
-    workersInHud: b.workersInHud, eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
+    eased: b.eased, bar: true, ...(b.blockedConfirmed === false ? { holdBlocked: true } : {}), ...(b.heldKind ? { heldKind: b.heldKind } : {}), ...(b.motion ? { motion: b.motion } : {}),
   };
 }
 
@@ -239,11 +236,10 @@ export function bandRows(m: MissionModel): string[] {
   return bandLines(m).map((l) => l.runs.map((x) => x.t).join(''));
 }
 
-/** A row that holds clickable runs: the runs around a control are Texts, a control is a Button of one Text with the hover style. The gates chip opens the pane on its gates tab, the `▸ health` chip toggles the card
+/** A row that holds clickable runs: the runs around a control are Texts, a control is a Button of one Text with the hover style. The gates pill and the `▸ health` chip both open the pane on its health tab
  * (band-frame.ts keys); a chip of several pieces keys each `<key>#<n>` and the hover scope is the key before the `#`, so the whole chip lights together. */
 function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, ui: Ui, tail: { chips: RenderElement[]; width: number } = { chips: [], width: 0 }): RenderElement {
   const ss = segs(l, ui);
-  const press = (key: string): (() => void) => (key.startsWith(BAND_GATES_KEY) ? () => on.openView('gates') : () => on.toggleHealth?.());
   const room0 = Math.max(1, cols - tail.width); // the control chips keep their cells: the left runs are fitted first, so the row never wraps
   let left = room0;
   const children = l.runs.flatMap((x, i): RenderElement[] => {
@@ -252,7 +248,7 @@ function pressRow(els: ClientElements, l: Line, cols: number, on: BandHandlers, 
     if (tail.width > 0 && room <= 0) return []; // the control chips took the cells: a run past the room is dropped, not drawn as a bare `…`
     left -= textWidth(sg.t);
     if (!x.press) return fitRuns(els, [sg], room);
-    return [els.Button({ key: x.press, plain: true, onPress: press(x.press), children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press.split('#')[0]!), children: fitText(sg.t, room) })] })];
+    return [els.Button({ key: x.press, plain: true, onPress: () => on.openView('core'), children: [els.Text({ color: sg.color, backgroundColor: sg.bg, bold: true, hover: hoverStyle(ui, x.press.split('#')[0]!), children: fitText(sg.t, room) })] })];
   });
   if (tail.chips.length === 0) return els.Box({ flexDirection: 'row', flexShrink: 0, children });
   const used = Math.min(room0, ss.reduce((n, x) => n + textWidth(x.t), 0));
@@ -318,7 +314,7 @@ const panel = (els: ClientElements, rows: Row[], cols: number, ui: Ui): RenderEl
 /** Any MissionModel as the band tree (the shared-world goldens and the renderer feed models directly). */
 export function missionTree(els: ClientElements, m: MissionModel, todoRows: (rows: number) => Segment[][] = () => [], on?: BandHandlers): RenderElement {
   const ui = m.ui ?? lookUi();
-  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.board ? todoRows(l.board) : l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
+  const rows: Row[] = missionLines(m).flatMap((l): Row[] => (l.keys && on ? [keysRow(els, l, m.cols, on, ui)] : on && l.runs.some((x) => x.press) ? [pressRow(els, l, m.cols, on, ui)] : [segs(l, ui)]));
   return panel(els, rows, m.cols, ui);
 }
 
@@ -355,14 +351,10 @@ function bandPlan(b: BandModel, on: boolean): { cols: number; ui: Ui; m: Mission
   return { cols, ui, m, lines, keysW };
 }
 
-/** The board slot's rows: the todo list at the rows the layout gave it. */
-const boardRowsOf = (b: BandModel, m: MissionModel, cols: number, ui: Ui, rows: number): Segment[][] =>
-  todoRows(withOwnerStates(ownTodos(b.snapshot.todos, b.snapshot.sessionId), workerStates(b.snapshot, b.live)), { cols, tick: b.tick, expanded: true, maxRows: rows, now: Math.floor(b.snapshot.now / 1000), nowMs: spinClock(b.snapshot.now, b.tick), ui, rich: m.rich, motion: b.motion });
-
 /** Rows the band draws for `b`: what the slot holds above the HUD (register.ts pads the slot to one height for the whole run from it). */
 export function bandRowCount(b: BandModel, on = false): number {
   const plan = bandPlan(b, on);
-  return plan ? plan.lines.reduce((n, l) => n + (l.board ? boardRowsOf(b, plan.m, plan.cols, plan.ui, l.board).length : 1), 0) : 0;
+  return plan ? plan.lines.length : 0;
 }
 
 const isBandHead = (l: Line): boolean => !l.board && !l.keys;
@@ -392,7 +384,6 @@ export function bandTree(els: ClientElements, b: BandModel, on?: BandHandlers): 
 /** One band line as rows. `tail`: the control chips, passed only for the first (head) row. */
 function bandRowsOf(els: ClientElements, b: BandModel, plan: NonNullable<ReturnType<typeof bandPlan>>, l: Line, on: BandHandlers | undefined, tail: ReturnType<typeof controlChips> | undefined): Row[] {
   const { cols, ui, m } = plan;
-  if (l.board) return boardRowsOf(b, m, cols, ui, l.board);
   if (on && tail) return [pressRow(els, l, cols, on, ui, tail)]; // the one-row bar always ends in its controls
   if (l.keys && on) return cols >= 80 ? [keysRow(els, l, cols, on, ui)] : [[seg({ t: ' '.repeat(cols), tone: 'text' }, ui)]];
   if (on && l.runs.some((x) => x.press)) return [pressRow(els, l, cols, on, ui)];

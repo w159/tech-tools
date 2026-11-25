@@ -43,7 +43,7 @@ describe('E6: the pane is filled, RECENT takes the rest, the footer is the last 
 
 describe('E8: carets, tabs and the gates tab', () => {
   const gates = [{ id: 'tripwire', title: 'Tripwire', lines: [{ id: 'team', label: 'Team mode: off', ok: true }, { id: 'rule', label: 'Rule held', ok: true }, { id: 'bad', label: 'Needs a fix', ok: false, fix: 'run it' }] }];
-  const gm = (cols: number): PanelModel => world(cols, 40, 'working', { gates, expanded: 'group:tripwire' }, 'gates');
+  const gm = (cols: number): PanelModel => world(cols, 40, 'working', { gates, expanded: 'group:tripwire' }, 'core');
 });
 
 describe('E9: the stepper has one form at every width', () => {
@@ -52,7 +52,7 @@ describe('E9: the stepper has one form at every width', () => {
 
 describe('E12: a tab with nothing to show is a ribbon, one sentence, one measured fact and the footer (frame spec 2.5), never one centred line', () => {
   const empty = { workers: [], notes: [], gates: [], todos: [], core: null, lead: undefined } as Partial<PanelModel>;
-  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['no workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['gates', /── GATES ─+/, ['pass deny last']], ['core', /── CORE ─+/, ['no verdicts yet']]];
+  const cases: [PanelTab, RegExp, string[]][] = [['team', /── TEAM ─+ off/, ['no workers']], ['channel', /── CHAT ─+/, ['no notes yet']], ['core', /── CORE ─+/, ['no verdicts yet']]];
   for (const [tab, ribbon, words] of cases) for (const cols of [54, 37]) {
   }
 });

@@ -84,11 +84,4 @@ describe('bandLines: the model carries its own look, and the rich band needs thr
 describe('idleLines: the board slot takes what the head, the core row and the footer leave', () => {
   const core = [{ t: 'contract  3 of 4', tone: 'text' as const }];
   const idle = (maxRows: number): MissionModel => worldModel(120, ui, { workers: [], maxRows, core, boardRows: 40, checks: [{ id: 'routing', ok: true }] });
-  test('one head row, one core row, one footer row: the slot is maxRows - 3, and the whole stack is maxRows', () => {
-    for (const maxRows of [6, 9, 12]) {
-      const lines = missionLines(idle(maxRows));
-      expect(lines.find((l) => l.board !== undefined)?.board).toBe(maxRows - 3);
-      expect(lines.reduce((n, l) => n + (l.board ?? 1), 0)).toBe(maxRows);
-    }
-  });
 });

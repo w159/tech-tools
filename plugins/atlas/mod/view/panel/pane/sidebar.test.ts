@@ -38,8 +38,8 @@ const tree = (over: Partial<SidebarModel> = {}, view: SidebarModel['ui']['view']
     ui: { recipient: null, expanded: null, draft: '', view }, columns: 70, rows: 40, ...over,
   }, on) as unknown as Node;
 
-const TABS = ['core', 'route', 'gates', 'channel'] as const;
-const LABELS = ['health', 'status', 'gates', 'channel'];
+const TABS = ['route', 'core', 'channel', 'bored'] as const;
+const LABELS = ['status', 'health', 'channel', 'bored'];
 const buttons = (root: Node): Node[] => all(root).filter((n) => n.kind === 'Button');
 const strip = (root: Node): Node[] => buttons(root).filter((b) => String(b.props.key).startsWith('tab:') && !String(b.props.key).endsWith(':key'));
 /** No key is bound and no zero-width key layer exists: the strip is click chips. */
@@ -57,16 +57,16 @@ describe('sidebar shell', () => {
     expect(tabs.every((b) => b.plain === true)).toBe(true);
   });
 
-  test('the strip is exactly health status gates channel: no team, core or board chip', () => {
+  test('the strip is exactly status health channel bored: no team, gates or board chip', () => {
     expect(strip(tree()).map((b) => b.props.label)).toEqual(LABELS);
     expect(() => tab(tree(), 'todos')).toThrow();
     expect(() => tab(tree(), 'team')).toThrow();
     expect(layerKeys(tree())).toEqual([]);
   });
 
-  test('gates carries its denial count and channel its unread count as a badge inside the chip', () => {
+  test('health carries its denial count and channel its unread count as a badge inside the chip', () => {
     const t = tree({}, 'route');
-    const gatesBadge = kids(tab(t, 'gates'))[1];
+    const gatesBadge = kids(tab(t, 'core'))[1];
     expect(gatesBadge?.props.children).toBe(' 1'); // the open fixture's one denial
     expect(gatesBadge?.props.bold).toBe(true);
   });
@@ -87,7 +87,7 @@ describe('sidebar shell', () => {
   });
 
   test('an accent segment of the rule sits under the lit chip, as wide as the chip', () => {
-    for (const v of ['route', 'gates', 'channel'] as const) {
+    for (const v of ['route', 'core', 'channel'] as const) {
       const rule = kids(tree({}, v)).find((n) => n.kind === 'Box' && textOf(n).includes('━'))!;
       const heavy = kids(rule).find((n) => String(n.props.children).includes('━'))!;
       const lit = kids(tab(tree({}, v), v))[0]!.props.children as string;
@@ -109,11 +109,11 @@ describe('sidebar shell', () => {
   });
 
   test('critique 18, D14: at 110 columns (38 inner) the strip is one row of chips, the trailing tabs behind `more ›`, no key layer', () => {
-    const t = tree({ columns: 38 }, 'gates');
+    const t = tree({ columns: 38 }, 'core');
     const rowsOf = kids(t).filter((n) => n.kind === 'Box' && String(n.props.key ?? '').startsWith('tabs'));
     expect(rowsOf.map((r) => r.props.key)).toEqual(['tabs']); // one strip row, never `tabs:1`
     const visible = rowsOf.flatMap((r) => kids(r).filter((c) => c.kind === 'Button'));
-    expect(visible.map((b) => b.props.label)).toEqual(['health', 'status', 'more ›']); // the order never changes and the lit tab (gates) is not swapped in
+    expect(visible.map((b) => b.props.label)).toEqual(['status', 'health', 'more ›']); // the order never changes and the lit tab (health) is not swapped in
     expect(visible.map((b) => b.props.hotkey)).toEqual([undefined, undefined, undefined]); // the host draws no `k: ` for a Button without a hotkey
     visible.find((b) => b.props.label === 'status')!.props.onPress();
     expect(calls).toContain('view:route');
@@ -131,11 +131,11 @@ describe('sidebar shell', () => {
   });
 
   test('L21 (D14): a narrow pane keeps the strip on one row with a `more ›` chip; the lit tab behind it fills that chip', () => {
-    for (const [columns, label, folded] of [[32, 'more ›', true], [56, 'gates', false]] as const) {
-      const t = tree({ columns }, 'gates');
+    for (const [columns, label, folded] of [[32, 'more ›', true], [56, 'channel', false]] as const) {
+      const t = tree({ columns }, 'channel');
       const rowsOf = kids(t).filter((n) => n.kind === 'Box');
       expect(rowsOf.filter((r) => String(r.props.key ?? '').startsWith('tabs:')).length).toBe(0); // closed: never a second strip row
-      const lit = kids(t).flatMap((n) => (String(n.props.key ?? '').startsWith('tabs') ? kids(n) : [])).find((n) => n.kind === 'Button' && String(n.props.key) === (folded ? 'tab:more' : 'tab:gates'));
+      const lit = kids(t).flatMap((n) => (String(n.props.key ?? '').startsWith('tabs') ? kids(n) : [])).find((n) => n.kind === 'Button' && String(n.props.key) === (folded ? 'tab:more' : 'tab:channel'));
       expect(lit && String(kids(lit)[0]!.props.children).trim()).toBe(label); // a lit tab behind `more ›` fills that chip
     }
   });
@@ -173,7 +173,7 @@ describe('sidebar interactions', () => {
   });
   test('pressing a failing gate\'s fix line toggles it, and a second press copies the fix', () => {
     const got: string[] = [];
-    const at = (expanded: string | null) => sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded, draft: '', view: 'gates' }, columns: 70, rows: 40 }, { ...on, toggle: (k: string) => got.push(`toggle:${k}`), copy: (c: string) => got.push(`copy:${c}`) }) as unknown as Node;
+    const at = (expanded: string | null) => sidebarTree(els, { snapshot: { ...busySnap(), phase: 'implement', now: NOW }, gates: open, ui: { recipient: null, expanded, draft: '', view: 'core' }, columns: 70, rows: 40 }, { ...on, toggle: (k: string) => got.push(`toggle:${k}`), copy: (c: string) => got.push(`copy:${c}`) }) as unknown as Node;
     const row = buttons(at(null)).find((b) => String(b.props.key).startsWith('fix:'));
     expect(row).toBeDefined();
     row!.props.onPress();

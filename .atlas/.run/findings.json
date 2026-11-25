@@ -15876,5 +15876,185 @@
     "status": "verified",
     "verified_at": "2026-11-25T12:52:31+00:00",
     "verified_by": "completion-gate"
+  },
+  {
+    "id": "tf5fc3b0c",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Deleted tests mostly removed-by-design; 2 still-live behaviours now untested",
+    "evidence": [
+      "plugins/atlas/mod/view/band/band-run-consistency.test.ts:9 (notifiedEnds imported, unasserted); data/live.ts notifiedEnds used by host/poll.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "git diff -U0 HEAD -- plugins/atlas/mod plugins/atlas/omp | grep -cE '^-\\s*(test|it|describe)\\(' (150); grep -rn notifiedEnds plugins/atlas/mod",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "rejected",
+    "verified_at": "2026-11-25T16:29:29+00:00",
+    "verified_by": "atlas:verifier",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-band-slim",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Band drops TODO/subagent rows (max 3 rows); finished-worker timers freeze (data/live.ts endedAt)",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt; mod/view/band/band-slim.test.ts; mod/view/panel/status-lifecycle.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp && bunx --package typescript@5 tsc --noEmit -p tsconfig.json; cd ../.. && python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:47:36+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-tabs",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Side panel tabs status/health(+gates)/channel/bored; gates tab removed; health chip opens health tab",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt; mod/view/panel/panel-tab-order.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp && bunx --package typescript@5 tsc --noEmit -p tsconfig.json; cd ../.. && python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:47:36+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-channel",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Channel tab chat-room layout: per-agent colour, HH:MM:SS, alpha -> beta, compose last",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt; mod/view/panel/channel-room.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp && bunx --package typescript@5 tsc --noEmit -p tsconfig.json; cd ../.. && python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:47:36+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-bored",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Bored tab streams ssh watch.ascii.theater via VT buffer; host loads the mod (live gate PASS)",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt; mod/view/panel/bored-vt.test.ts; mod/host/bored.test.ts"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp && bunx --package typescript@5 tsc --noEmit -p tsconfig.json; cd ../.. && python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:47:36+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-w-waiters",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Stop gate (w): one Monitor per team; per-pid waiter markers so an ending wait cannot unwatch a live one",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt; test_completion_gate.py; test_atlas_mux_more.py overlap test"
+    ],
+    "doc_refs": [],
+    "reproduction": "python3 plugins/atlas/hooks/test_completion_gate.py && python3 plugins/atlas/scripts/test_atlas_mux_more.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:47:36+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-rework",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Side panel rework: band slim, status/health/channel/bored tabs, Stop gate waiter fixes",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "cd plugins/atlas && bun test mod omp; cd ../.. && python3 plugins/atlas/scripts/atlas_mod_gate.py --live --require-live",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T16:48:05+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "sidepanel-rework",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Side panel rework: band slim, status/health/channel/bored tabs, Stop gate waiter fixes",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-sidepanel-rework.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": "bun test mod omp > /tmp/bt-final.txt 2>&1",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T17:19:59+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-canon",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Stop gate (b)/(g) credits shaped, multi-line and batched passing test runs; failing piped bun runs earn nothing",
+    "evidence": [
+      ".atlas/evidence/2026-11-25-gate-canon-pytest.txt"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_completion_gate.py > /tmp/cg-final.txt 2>&1",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T17:39:53+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
+  },
+  {
+    "id": "gate-m-rerun",
+    "surface": "backend",
+    "category": "correctness",
+    "severity": "medium",
+    "title": "Non-orchestrating (m) re-runs the last test command; green clears it",
+    "evidence": [
+      "plugins/atlas/hooks/test_gate_rerun.py"
+    ],
+    "doc_refs": [],
+    "reproduction": ".venv/bin/python -m pytest -q -p no:cacheprovider plugins/atlas/hooks/test_completion_gate.py plugins/atlas/hooks/test_gate_rerun.py",
+    "proposed_fix": "",
+    "blast_radius": "module",
+    "status": "verified",
+    "verified_at": "2026-11-25T18:28:18+00:00",
+    "verified_by": "lead",
+    "stamped_by": "lead"
   }
 ]

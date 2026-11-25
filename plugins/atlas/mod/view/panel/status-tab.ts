@@ -113,19 +113,20 @@ function planDetail(m: PanelModel, t: PanelTodo): PanelLine[] {
 }
 const expandedRows = (m: PanelModel, t: PanelTodo): PanelLine[] => (m.expanded === `task:${t.id}` ? [row(m, [r(clipUi(m.ui, `${t.id}${t.evidence ? ` · ${oneLine(t.evidence)}` : ''}`, usable(m) - 6), 'muted')], [], undefined, 4)] : []);
 
-function planRows(m: PanelModel, cap = Infinity): PanelLine[] {
+/** `settled` counts the done todos the status tab folded away, so `N of M` and the bar still read the whole plan. */
+function planRows(m: PanelModel, cap = Infinity, settled = 0): PanelLine[] {
   const ui = m.ui;
   const todos = m.todos.map(doubted);
-  const total = todos.length;
+  const total = todos.length + settled;
   if (!total) return [head(m, 'PLAN', [], [r('  no tasks yet', 'muted')])];
-  const done = todos.filter((t) => t.state === 'done').length;
+  const done = settled + todos.filter((t) => t.state === 'done').length;
   const running = todos.filter((t) => t.state === 'running').length;
   const U = usable(m);
   const shown = todos.slice(0, Math.max(1, cap));
   // a title that names its owner in its own words prints the owner once (in the title): only the other rows need the owner column
   const longest = Math.max(0, ...shown.map((x) => (x.owner && !oneLine(x.label).includes(x.owner) ? cells(x.owner) : 0)));
   const ow = U >= 44 && longest > 0 ? Math.max(12, Math.min(24, longest + 2, U - 9 - 16)) : 0; // the owner column holds the longest owner whole, with its 2-cell gutter
-  const more = total - shown.length;
+  const more = todos.length - shown.length;
   const fig = [r(`  ${done} of ${total}  `, 'sub'), ...segBar(ui, done, running, total)];
   return [
     head(m, 'PLAN', [], fig),
@@ -202,9 +203,15 @@ function sessionRows(m: PanelModel): PanelLine[] {
 }
 
 /** The whole status tab; the PLAN and TEAM lists give up rows (never the sections) when the pane is shorter than they are. */
-export function statusRows(m: PanelModel, room: number): PanelLine[] {
+export function statusRows(full: PanelModel, room: number): PanelLine[] {
+  // A finished item leaves the lists (a done todo, a done worker): one `N done` line keeps the count. A todo the lead closed over a failed worker stays (doubted reads failed).
+  const finished = (t: PanelTodo): boolean => doubted(t).state === 'done';
+  const m: PanelModel = { ...full, todos: full.todos.filter((t) => !finished(t)), workers: full.workers.filter((x) => x.state !== 'done') };
+  const nSettled = full.todos.length - m.todos.length;
+  const nDone = nSettled + full.workers.length - m.workers.length;
+  const doneRow: PanelLine[] = nDone ? [row(m, [r(`  ${nDone} done`, 'muted')])] : [];
   const build = (np: number, nt: number, session = true): PanelLine[] => {
-    const parts = [phaseRows(m), planRows(m, np), teamRows(m, nt), ...(session ? [sessionRows(m)] : [])].filter((p) => p.length);
+    const parts = [phaseRows(m), planRows(m, np, nSettled), teamRows(m, nt), doneRow, ...(session ? [sessionRows(m)] : [])].filter((p) => p.length);
     return parts.flatMap((p, i) => (i ? [BLANK, ...p] : p));
   };
   let np = Infinity;

@@ -830,6 +830,39 @@ class GateWiringTest(GateOrchestrationTest):
         r2 = self._run(self._transcript())
         self.assertIn("\\n  (c)", r2.stdout)
 
+    def test_green_rerun_clears_m_in_a_non_orchestrating_session(self):
+        """Regression: an unflagged session's (m) said "the gate re-runs it" but never did, so a green
+        test run blocked three times. Now the re-run happens there too and a green exit clears (m)."""
+        self._shared_setup(PASSING)
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.log_event(c, atlas_db.latest_run_id(c, "sess-chat"), "Write", "main", 1, "src/app.py")
+        c.close()
+
+        def run(transcript):
+            env = dict(self.env, ATLAS_GATE_HEADER="off", ATLAS_GATE_DONE="off")
+            return _run_gate({"session_id": "sess-chat", "cwd": self.tmp, "transcript_path": transcript}, env)
+
+        self.assertIn("(m) Delegation mandate", run("").stdout)  # nothing ran: (m) still blocks
+        r = run(self._transcript())
+        self.assertNotIn("(m) Delegation mandate", r.stdout, r.stdout)
+        self.assertTrue(os.path.isfile(os.path.join(self.tmp, ".atlas", ".run", "gate-proof.json")))
+
+    def test_red_rerun_keeps_m_in_a_non_orchestrating_session(self):
+        self._shared_setup(FAILING)
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
+        import atlas_db
+
+        c = atlas_db.connect(self.env["ATLAS_DB"])
+        atlas_db.log_event(c, atlas_db.latest_run_id(c, "sess-chat"), "Write", "main", 1, "src/app.py")
+        c.close()
+        env = dict(self.env, ATLAS_GATE_HEADER="off", ATLAS_GATE_DONE="off")
+        r = _run_gate({"session_id": "sess-chat", "cwd": self.tmp, "transcript_path": self._transcript()}, env)
+        self.assertIn("(m) Delegation mandate", r.stdout)
+        self.assertFalse(os.path.isfile(os.path.join(self.tmp, ".atlas", ".run", "gate-proof.json")))
+
     def test_red_rerun_blocks_with_gate_output(self):
         self._shared_setup(FAILING)
         r = self._run(self._transcript())

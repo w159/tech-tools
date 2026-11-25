@@ -29,7 +29,7 @@ const world = (): LiveSnapshot => (forgetRefusals(), { ...busySnap(), squad: [],
 const model = (view: SidebarModel['ui']['view'], clock: number, over: Partial<SidebarModel> = {}) => panelModelOf(
   { snapshot: world(), gates: [], ui: { recipient: null, expanded: null, draft: '', view }, columns: 121, rows: 60, tick: 0, clock, run: { kind: 'working', secs: 5, startMs: NOW, frame: 0 }, health: health(), ...over } as SidebarModel, ui, 120);
 const status = (clock: number): string[] => panelLines(model('route', clock)).map((l) => lineText(l).trimEnd());
-const gatesTab = (clock: number, gates: PanelGate[]): string[] => bodyLines(model('gates', clock, { gates: gates as never })).map((l) => lineText(l).trimEnd());
+const gatesTab = (clock: number, gates: PanelGate[]): string[] => bodyLines(model('core', clock, { gates: gates as never })).map((l) => lineText(l).trimEnd());
 const row = (rows: string[], name: string): string => rows.find((l) => l.includes(name)) ?? '';
 const gatesHead = (clock: number): string => row(gatesTab(clock, parseGates(GOOD) as never), 'GATES'); // the gates tab's header carries how the gates were read: nothing for a fresh read, `~1m` for a stale one, `err` for a failed one
 const gatesOf = (stdout: string) => parseGates(stdout);

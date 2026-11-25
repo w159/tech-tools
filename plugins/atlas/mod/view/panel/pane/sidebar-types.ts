@@ -5,10 +5,11 @@ import type { Ui } from '../../../design/atlas-ui';
 import type { MotionCtx } from '../../../motion/motion';
 import type { LiveSnapshot } from '../../../orchestra-types';
 import { textWidth } from '../../../design/theme';
+import type { BoredView } from '../bored-types';
 
 export type GateLine = { id: string; label: string; ok: boolean; detail?: string; fix?: string };
 export type GateGroup = { id: 'completion' | 'tripwire' | 'routing' | 'header'; title: string; lines: GateLine[]; error?: string };
-export type SidebarView = 'team' | 'channel' | 'route' | 'gates' | 'core' | 'board';
+export type SidebarView = 'team' | 'channel' | 'route' | 'bored' | 'core' | 'board';
 export type SidebarModel = {
   snapshot: LiveSnapshot;
   gates: GateGroup[];
@@ -29,6 +30,8 @@ export type SidebarModel = {
   run?: { kind: 'working' | 'idle' | 'done' | 'blocked'; secs?: number; startMs?: number; frame?: number };
   /** Wave 42: the idle health the band shows (register.ts, from the band's own inputs); the idle status view draws it as pressable rows. */
   health?: Health;
+  /** The bored tab's ASCII Theater stream (slice 3's view); absent: nothing connected. */
+  bored?: BoredView;
 };
 export type SidebarHandlers = {
   selectRecipient(name: string): void;

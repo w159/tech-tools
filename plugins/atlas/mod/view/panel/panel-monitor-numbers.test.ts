@@ -80,7 +80,7 @@ describe('item 1: the route tab is a timeline, not a copy of the HUD plan (criti
 describe('item 2: one panel width in every state (critique 33: 93 -> 83 transcript columns, the divider 236 -> 153)', () => {
   const states: Array<[string, Run | null]> = [['working', RUN], ['done', { kind: 'done', secs: 52 }], ['idle', { kind: 'idle' }], ['blocked', { kind: 'blocked', secs: 20 }], ['none', null]];
   test('the pane is the same width on every tab in every state, and no row is wider than it', () => {
-    for (const v of ['route', 'team', 'channel', 'gates', 'core', 'board'] as const) {
+    for (const v of ['route', 'team', 'channel', 'core', 'board'] as const) {
       const widths = new Set<number>();
       for (const [, run] of states) {
         const t = tree(v, 65, 45, snap(), run);

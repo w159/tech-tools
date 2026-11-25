@@ -63,13 +63,15 @@ describe('A1: the HUD and the route tab draw the same mark and colour for the sa
         const s = surfaces({ ...after, now: NOW + 5000 + dt }, ui, m.ctx(NOW + 5000 + dt));
         for (const [label, word] of [['wire the gate', 'done'], ['map the auth flow', 'done'], ['edit auth middleware', 'returned']] as const) {
           const [h, p] = [markOf(rowWith(s.hud, label), word), markOf(rowWith(s.panel, label), word)];
+          // The status tab hides a done row (one `N done` line stands for them): only the HUD draws the finish transition, so there is no panel row to compare.
+          if (word === 'done') expect([name, dt, label, rowWith(s.panel, label).length]).toEqual([name, dt, label, 0]);
           expect([name, dt, label, h.includes('no-glyph') || (word !== 'done' && h.includes('no-word'))]).toEqual([name, dt, label, false]); // both rows were found, with a mark and a word (wave 32: a finished HUD row draws no `done` word, the mark says it)
           // Critique 21: the HUD flash is the `✓` itself stepping from bright to ok, never the `◌`/`◍` pop (animateRow `pop: false`). The panel's pop is the side panel slice's to retire; until then its
           // pop glyph is read as the disc it lands on, so the colour and the word are still compared beat by beat.
           expect([name, dt, label, /^[◌◍@]/.test(h)]).toEqual([name, dt, label, false]);
           // Critique 22: the HUD draws a hand-back as the done disc and the dim word `returned` (the scorer counts `◃` as unknown); the panel and the board keep their own mark until their slices follow.
           if (word === 'returned') expect([name, dt, label, /^[◉?]/.test(h)]).toEqual([name, dt, label, true]); // critique 27: the neutral hand-back mark, never the green done disc
-          else {
+          else if (word !== 'done') {
             // redesign: the HUD's finish flash is a green-tinted fill under a mark that stays `ok` (the panel's mark itself steps through the fade), so inside the window only the mark and the word are compared; at rest the colour too
             const part = (x: string): string => (dt < MOTION_MS && word === 'done' ? x.split('/')[0]! : x.split(' ')[0]!);
             expect([name, dt, label, part(h)]).toEqual([name, dt, label, part(p.replace(/^◌|^◍/, '✓').replace(/^@/, '*'))]);
@@ -112,7 +114,7 @@ describe('A2: `returned` has a mark of its own', () => {
 });
 
 describe('wave 32: a handed-back agent reads done on the settled HUD block and the route tab alike', () => {
-  test('the settled HUD row and the panel row carry the same mark and word, never `returned`', () => {
+  test('the settled HUD row reads done, never `returned`, and the panel hides it', () => {
     for (const [, ui] of UIS) {
       const snap = snapOf(['pending', 'pending', 'in_progress']);
       const input: HudInput = { todos: ownTodos(snap.todos ?? [], snap.sessionId), agents: hudAgents(liveWorkers(snap, snap.now), snap.squad, queuedMembers(snap)), root: snap.root, phases: hudPhases(snap) };
@@ -122,8 +124,8 @@ describe('wave 32: a handed-back agent reads done on the settled HUD block and t
       expect(h!.some((r) => r.t.trim() === 'returned')).toBe(false);
       expect(p!.some((r) => r.t.trim() === 'returned')).toBe(false);
       const glyph = (row: readonly Run[]): string => inner(row).find((r) => [...r.t.trim()].length === 1 && ENDS.has(r.t.trim()))!.t.trim();
-      expect(glyph(p!)).toBe(glyph(h!));
-      expect(glyph(p!)).toBe(ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done); // the panel's plan row reads done by its mark: it has no state word column now
+      expect(p!.length).toBe(0); // the status tab hides a done row (`N done` stands for it)
+      expect(glyph(h!)).toBe(ui.ascii ? STATE_ASCII.done : STATE_GLYPHS.done); // the settled HUD row reads done by its mark
     }
   });
 });
@@ -158,7 +160,7 @@ describe('A3: the deterministic ramp has no duplicate frames, and the HUD state 
       const s = surfaces({ ...after, now: NOW + 5000 }, ui, m.ctx(NOW + 5000));
       expect(rowWith(s.hud, 'wire the gate').some((r) => r.t.trim() === 'done')).toBe(true); // state 39: the fixed grid draws the state word on every row, in the quiet 245
       expect(mark(s.hud).bgHex).toBeDefined(); // the HUD finish flash is a green-tinted fill under the mark (the panel's own mark steps its colour)
-      expect(mark(s.hud).t.trim()).toBe(mark(s.panel).t.trim().replace(/^◌|^◍/, '✓')); // the same mark
+      expect(rowWith(s.panel, 'wire the gate').length).toBe(0); // the status tab hides a done row, so only the HUD fades the mark
       expect(mark(surfaces(after, ui, undefined).hud).bgHex).toBeUndefined(); // and at rest the plain row
     });
   }

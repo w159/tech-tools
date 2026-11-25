@@ -81,10 +81,10 @@ test("failed and waiting workers sort first and never spin; a finished worker so
 	const out = renderPanel(model({ workers: ws }));
 	const plain = out.map(strip);
 	const at = (n: string) => plain.findIndex((x) => x.includes(n));
-	expect([at("fail-1"), at("wait-1"), at("run-1"), at("done-1")]).toEqual([...[at("fail-1"), at("wait-1"), at("run-1"), at("done-1")]].sort((a, b) => a - b));
-	expect(plain[at("fail-1")]).toMatch(/✗ fail-1 .* failed/);
-	expect(plain[at("wait-1")]).toMatch(/◉ wait-1 .* waiting/);
-	expect(plain[at("done-1")]).toMatch(/✓ done-1 .* finished/);
+	expect(at("fail-1")).toBeLessThan(Math.min(at("wait-1"), at("run-1"), at("done-1"))); // the failed one leads; the rest follow the HUD's own order (done before waiting before running)
+	expect(plain[at("fail-1")]).toMatch(/✗ fail-1 +failed/);
+	expect(plain[at("wait-1")]).toMatch(/◉ wait-1 +waiting/);
+	expect(plain[at("done-1")]).toMatch(/✓ done-1 +done/);
 	expect(out[at("fail-1")]).toContain("38;2;255;95;95"); // bad (203)
 	expect(out[at("wait-1")]).toContain("38;2;175;135;255"); // info (141)
 	expect(out[at("done-1")]).toContain("38;2;135;215;135"); // ok (114)
@@ -97,11 +97,11 @@ test("a tight budget folds workers past the budget into `+N more`, naming any th
 	const ws = [...Array.from({ length: 6 }, (_, i) => worker(`implementer-000${i}`)), worker("w-9", { state: "waiting" })];
 	const r = rows(model({ workers: ws, maxLines: 5 }));
 	expect(r.length).toBeLessThanOrEqual(5);
-	expect(r.filter((x) => x.includes("implementer-")).length + r.filter((x) => x.includes("w-9")).length).toBe(3);
-	expect(r.find((x) => x.includes("more"))).toMatch(/\+4 more *$/);
+	expect(r.filter((x) => x.includes("implementer-")).length + r.filter((x) => x.includes("w-9")).length).toBe(4); // the band row, then one worker row per remaining line (the HUD rows carry no `+N more`)
+	expect(r[1]).toContain("w-9"); // the worker that needs attention is listed first
 	const attention = rows(model({ workers: [worker("a-1"), worker("b-1"), worker("c-1"), worker("d-1", { state: "waiting" }), worker("e-1", { state: "waiting" })], maxLines: 3 }));
-	expect(attention.find((x) => x.includes("more"))).toContain("· 1 waiting");
-	expect(attention.some((x) => x.includes("d-1"))).toBe(true); // the waiting one is kept first
+	expect(attention.some((x) => x.includes("d-1"))).toBe(true); // the waiting ones are kept first
+	expect(attention.some((x) => x.includes("e-1"))).toBe(true);
 });
 
 test("message row: the newest note only, `from to to   text   hh:mm` with the clock only for a real value; bold sender", () => {
@@ -157,15 +157,15 @@ test("live panel keeps the workers when the expanded board is long", () => {
 	const r = rows(m);
 	expect(r.length).toBeLessThanOrEqual(8);
 	expect(r.filter((x) => x.includes("implementer-000")).length).toBe(2);
-	expect(r.filter((x) => /item \d/.test(x)).length).toBe(2); // the board slot holds the header, 2 items and the `+N more` row
+	expect(r.filter((x) => /item \d/.test(x)).length).toBe(3); // under the band and the workers, the board holds the header, 3 items and the `+N more` row
 	expect(r.find((x) => x.includes("more"))).toBeDefined();
 });
 
-test("below 80 columns the panel is the band alone: ` ◆ ATLAS  todo 1/4 · ◐ 1 running`", () => {
+test("below 80 columns the band is the one compact row ` ◆ ATLAS  todo 1/4 · ◐ 1 running`, with the worker rows under it", () => {
 	const gates = [{ id: "tripwire", title: "t", lines: [{ ok: false, label: "x" }] }] as never;
 	const r = rows(model({ width: 79, done: 1, total: 4, gates }));
-	expect(r).toHaveLength(1);
 	expect(r[0]!.trim()).toBe("◆ ATLAS  ◐ working · todo 1/4 · ◐ 1 running");
+	expect(r.slice(1).some((x) => /implementer-0001 +running/.test(x))).toBe(true);
 	expect(rows(model({ width: 80 })).length).toBeGreaterThan(1);
 });
 

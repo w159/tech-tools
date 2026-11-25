@@ -4,8 +4,7 @@ import { describe, expect, test } from 'claude-code/testing';
 import { runsString, type Ui } from '../../design/atlas-ui';
 import type { TodoItem } from '../../contract';
 import { ownTodos } from '../../data/todos';
-import { hudCompactRows, hudFloorRows, hudLines, agentModel, type HudAgent, type HudInput } from './hud';
-import { hudGapRows, hudSlotCap } from '../../register';
+import { hudLines, agentModel, type HudAgent, type HudInput } from './hud';
 
 const NOW = 1_794_458_960_000;
 const ui: Ui = { theme: 'mocha', ascii: false, color: 'truecolor' };
@@ -17,13 +16,11 @@ const agent = (name: string, ui: HudAgent['ui'], state: string, model = 'haiku')
 // stoprun-150-562576ed-1/f0080.ans: alpha done, ghost killed, beta running.
 const stop: HudInput = { todos: ownTodos(plan(['completed', 'blocked', 'pending'])), agents: [agent('alpha-explorer', 'done', 'done'), agent('ghost-explorer', 'failed', 'failed', ''), agent('beta-explorer', 'running', 'working')] };
 
-/** What register.ts draws for a slot: the HUD at the slot cap, the gap row, the rows left for the band. */
-function slot(input: HudInput, cols: number, budget: number) {
-  const cap = hudSlotCap(budget, hudCompactRows(input, cols), hudFloorRows(input, cols, NOW), 7, true, true);
-  const hud = hudLines(input, { merge: false, cols, maxRows: cap, ui, rich: false, now: NOW }).map(runsString);
-  const lists = hud.some((r) => r.includes('SUBAGENTS')) && !hud.at(-1)!.includes('SUBAGENTS');
-  return { hud, band: budget - hud.length - hudGapRows(lists, hud.length, budget) };
-}
+/** The HUD in `budget` rows less one. */
+const slot = (input: HudInput, cols: number, budget: number): { hud: string[]; band: number } => {
+  const hud = hudLines(input, { merge: false, cols, maxRows: budget - 1, ui, rich: false, now: NOW }).map(runsString);
+  return { hud, band: budget - hud.length };
+};
 
 describe('C1: the SUBAGENTS header row and the fixed MODEL / TASK grid', () => {
   // Rev 5: the column names stay while the grid shows. Of the blank between the blocks and the names (one row each) the blank goes first; then the plan is capped, never the names.

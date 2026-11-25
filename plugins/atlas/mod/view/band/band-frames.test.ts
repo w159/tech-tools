@@ -236,10 +236,10 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
     const got = row({ kind: 'done', cols: 145, panel: false, rest: 12, ctx: 6, health: { pulse: pulse([0, 0, 2, 2, 3, 2, 2, 0, 0, 0, 0, 0, 1, 0, 0, 1, 5, 3, 7, 0], 0.01), hooks: hooks({ ...WORK_HOOKS, lastEventSecs: 10, latency: lat }) } });
     expect(got).toBe(fill(' ◆ ATLAS  ✓ done 6/6 ▰▰▰▰▰▰ · ended 12s     │ ✓ gates ok ›    │ tools ▄▁▁█▁▁▁▁ 15/m │ hook p50   3ms │ ctx ━━━━━━━   6%                 ▸ health', 145)); // Y1c: one age per state
   });
-  test('the chips: gates opens the gates tab, health toggles the card; both on the 239 fill, one chip each', () => {
+  test('the chips: gates and health both open the health tab; both on the 239 fill, one chip each', () => {
     const calls: string[] = [];
     const els = { Box: (p: object) => ({ kind: 'Box', props: p }), Text: (p: object) => ({ kind: 'Text', props: p }), Button: (p: object) => ({ kind: 'Button', props: p }), Input: (p: object) => ({ kind: 'Input', props: p }) } as unknown as ClientElements;
-    const tree = bandTree(els, model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } }), { openView: (v) => calls.push(`view:${v}`), toggleTodos: () => calls.push('todos'), toggleHealth: () => calls.push('health') });
+    const tree = bandTree(els, model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }) } }), { openView: (v) => calls.push(`view:${v}`), toggleTodos: () => calls.push('todos') });
     const buttons: { key: string; onPress: () => void; children: { props: { children: string; backgroundColor: string } }[] }[] = [];
     const walk = (n: any): void => { if (!n || typeof n !== 'object') return; if (n.kind === 'Button') buttons.push(n.props); for (const c of [n.props?.children].flat()) walk(c); };
     walk(tree);
@@ -248,7 +248,7 @@ describe('B9: 150, pane closed (band 145): idle, working, done; the health chip 
     expect(buttons.map((b) => b.children[0]!.props.children)).toEqual(['✓ ', 'gates ok', ' ›   ', ' ▸ health ']);
     expect(buttons.map((b) => b.children[0]!.props.backgroundColor)).toEqual([xtermHex(235), xtermHex(235), xtermHex(235), xtermHex(239)]); // the gates pill sits on the band fill (235); the health chip is the one raised chip, on the 239 fill
     buttons.forEach((b) => b.onPress());
-    expect(calls).toEqual(['view:gates', 'view:gates', 'view:gates', 'health']);
+    expect(calls).toEqual(['view:core', 'view:core', 'view:core', 'view:core']);
   });
   test('chip columns: gates 44-55 and health 136-145 (1-based), as the spec legend says', () => {
     const rs = bandRuns(model({ kind: 'working', cols: 145, panel: false, ctx: 6, health: { pulse: pulse(SPARK15), hooks: hooks({ ...WORK_HOOKS, latency: { n: 3, p50: 3, p95: 4 } }), } }), true);

@@ -83,10 +83,10 @@ describe('fill height: a tall pane shows detail already in the snapshot', () => 
 
   test('team: the detail adds no blank rows between agents (wave 30: the only blanks are the gaps before the summary and the recent posts)', () => {
     const rows = body(panelWorld('team', 100, ui, { workers: team, rows: 36 }));
-    expect(rows.filter((l) => l === '').length).toBeLessThanOrEqual(3);
+    expect(rows.filter((l) => l === '').length).toBeLessThanOrEqual(4); // the gaps before the summary and the recent posts, plus the one before the `N done` line
   });
   test('gates: each gate lists its checks from 30 rows', () => {
-    const rows = body(panelWorld('gates', 100, ui, { gates, rows: 36 })).join('\n');
+    const rows = body(panelWorld('core', 100, ui, { gates, rows: 36 })).join('\n');
     expect(rows).toContain('every item has evidence');
     expect(rows).toContain('no unverified done claim');
   });
@@ -96,7 +96,7 @@ describe('fill height: a tall pane shows detail already in the snapshot', () => 
     { id: 'tripwire', title: 'tripwire', lines: [{ id: 't1', label: 'no unverified done claim', ok: false, fix: 'run atlas_finding.py' }] },
   ];
   test('gates: the grid lists every line of every group by name, on a short pane too (the groups are not folded)', () => {
-    const rows = body(panelWorld('gates', 100, ui, { gates, rows: 24 })).join('\n');
+    const rows = body(panelWorld('core', 100, ui, { gates, rows: 24 })).join('\n');
     expect(rows).toContain('every item has evidence');
   });
 

@@ -880,6 +880,67 @@ class FindingsSelfStampTest(unittest.TestCase):
         self._row(reproduction=self._COMPOUND_REPRO)
         self.assertFalse(self.check(self._transcript(cmd="bun test omp")))
 
+    # 2026-11-25: real passing runs never matched: newlines, output shaping and subshell parens stayed attached
+    _SHAPED_RUNS = (
+        "set -e\n(cd plugins/atlas && bun test mod omp 2>&1 | tail -5)\nfor t in a b; do echo $t; done",
+        "bun test mod omp 2>&1 | tail -5",
+        "# don't stop\nbun test \\\n  mod omp > /tmp/bt.txt 2>&1",
+        "(cd plugins/atlas && bun test mod omp) | grep -E 'pass|fail' | head -3",
+    )
+
+    def test_shaped_and_multiline_passing_runs_are_credited(self):
+        self._row(reproduction="bun test mod omp")
+        for cmd in self._SHAPED_RUNS:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(self.check(self._transcript(cmd=cmd, out="4656 pass\n 0 fail")))
+
+    def test_shaped_and_multiline_failing_runs_earn_nothing(self):
+        self._row(reproduction="bun test mod omp")
+        for cmd in self._SHAPED_RUNS:
+            for out, is_error in (("Exit code 1\n 3 fail", True), ("1 passed, 3 failed", False)):
+                with self.subTest(cmd=cmd, out=out):
+                    self.assertFalse(self.check(self._transcript(cmd=cmd, out=out, is_error=is_error)))
+
+    def test_piped_bun_failure_summary_earns_nothing(self):
+        # `| tail` exits 0, so bun's own `N fail` summary line is the only failure signal
+        self._row(reproduction="bun test mod omp")
+        out = " 4650 pass\n 31 skip\n 3 fail\nRan 4684 tests across 300 files."
+        self.assertFalse(self.check(self._transcript(cmd="bun test mod omp 2>&1 | tail -5", out=out)))
+
+    def test_each_batch_command_is_its_own_segment(self):
+        self._row(reproduction="bun test mod omp")
+        tp = self._transcript(cmd="x", out="4656 pass\n 0 fail")
+        rows = [json.loads(line) for line in Path(tp).read_text().splitlines()]
+        rows[1]["message"]["content"][0].update(
+            name="mcp__plugin_context-mode_context-mode__ctx_batch_execute",
+            input={"commands": [{"command": "git status"}, {"command": "bun test mod omp"}]},
+        )
+        Path(tp).write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+        self.assertTrue(self.check(tp))
+
+    def test_heredoc_body_and_comment_lines_are_not_runs(self):
+        self._row(reproduction="bun test mod omp")
+        for cmd in ("cat > run.sh <<'EOF'\nbun test mod omp\nEOF", "git status # then:\n# bun test mod omp"):
+            with self.subTest(cmd=cmd):
+                self.assertFalse(self.check(self._transcript(cmd=cmd, out="")))
+
+    def test_direct_unittest_file_run_is_a_test_command(self):
+        for cmd in (
+            "python3 plugins/atlas/hooks/test_completion_gate.py",
+            ".venv/bin/python plugins/atlas/scripts/test_atlas_mux.py",
+        ):
+            with self.subTest(cmd=cmd):
+                self._row(reproduction=cmd)
+                self.assertTrue(self.check(self._transcript(cmd=cmd + " 2>&1 | tail -3", out="OK")))
+                self.assertFalse(
+                    self.check(self._transcript(cmd=cmd, out="Exit code 1\nFAILED (failures=1)", is_error=True))
+                )
+                self.assertFalse(self.check(self._transcript(cmd=cmd + " | tail -3", out="FAILED (failures=1)")))
+
+    def test_non_test_python_script_is_not_a_test_command(self):
+        self._row(reproduction="python3 plugins/atlas/scripts/atlas_todo.py")
+        self.assertFalse(self.check(self._transcript(cmd="python3 plugins/atlas/scripts/atlas_todo.py", out="ok")))
+
     def test_semicolon_inside_quotes_does_not_split(self):
         self._row(reproduction="pytest -k 'a; b' -q")
         self.assertTrue(self.check(self._transcript(cmd="pytest -k 'a; b' -q")))
@@ -4007,6 +4068,18 @@ class UnwatchedTeamStopTest(GateOrchestrationTest):
         self.assertIn('"decision": "block"', r.stdout)
         self.assertIn(f"wait --team {self.TID}", r.stdout)
         self.assertIn("Monitor", r.stdout)
+
+    def test_two_unwatched_teams_get_one_monitor_each_not_a_chain(self):
+        # 2026-11-25: `wait A ; wait B` in one Monitor left B unwatched, so the next Stop was refused again for B
+        self._seed_team()
+        rec = json.loads((self.teams / f"{self.TID}.json").read_text())
+        rec["team_id"] = "t444444"
+        (self.teams / "t444444.json").write_text(json.dumps(rec), encoding="utf-8")
+        reason = json.loads(self._stop().stdout)["reason"]
+        self.assertIn("one Monitor per team", reason)
+        self.assertIn("(1) python3", reason)
+        self.assertIn("(2) python3", reason)
+        self.assertNotIn("60 ; python3", reason)
 
     def test_watched_running_team_has_no_w_block(self):
         self._seed_team()

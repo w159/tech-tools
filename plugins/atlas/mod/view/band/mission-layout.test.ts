@@ -152,35 +152,6 @@ describe('mission-layout: the lit phase', () => {
 describe('mission-layout: worker rows', () => {
   const running = (ws: MissionWorker[], over: Partial<MissionModel> = {}) => model({ cols: 100, workers: ws, ...over });
 
-  test('a thinking worker draws the muted spinner frame, not a blank', () => {
-    const m = running([w('thinker', 'thinking', { tool: 'Read' })], { tick: 2 });
-    const line = missionLines(m).find((l) => runsText(l.runs).includes('thinker'))!;
-    expect(line.runs[1]).toMatchObject({ t: spinnerGlyph(2), tone: 'muted' });
-    expect(runsText(line.runs)).toContain('thinking');
-  });
-  test('the name column is the longest name (at least 8) plus two cells: the activity starts at a fixed cell', () => {
-    const m = running([w('abc', 'running', { tool: 'Grep' })], { cols: 80 });
-    const line = rows(m).find((r) => r.includes('abc'))!;
-    expect(line.indexOf('grep')).toBe(3 + 9 + 9); // ` ` mark ` ` then the name padded to 8 and a space, then the 9-cell state word
-    const long = running([w('a-very-long-worker-name-indeed', 'running', { tool: 'Grep' })], { cols: 80 });
-    expect(rows(long).find((r) => r.includes('a-very-long'))!.indexOf('grep')).toBe(3 + 19 + 9); // the name clips at the 18 cell cap, so the field is 18 + 1, then the state word
-  });
-  test('no role column at any width: glyph, name, state word, last action, time (the row the capture scorer reads)', () => {
-    const at = (cols: number) => rows(running([w('abc', 'running', { role: 'implementer', tool: 'Grep' })], { cols })).find((r) => r.includes('abc'))!;
-    for (const cols of [99, 100, 150]) {
-      expect(at(cols)).not.toContain('implementer');
-      expect([cols, /^ [◐◓◑◒] abc +running {2}grep/.test(at(cols))]).toEqual([cols, true]);
-    }
-  });
-  test('attention first: failed, waiting, running, thinking, queued, finished; stable inside a state', () => {
-    const ws = [w('done1', 'done'), w('queued1', 'queued'), w('think1', 'thinking'), w('run1', 'running'), w('run2', 'running'), w('wait1', 'waiting'), w('fail1', 'failed')];
-    const order = rows(running(ws, { maxRows: 20 })).map((r) => /(done1|queued1|think1|run1|run2|wait1|fail1)/.exec(r)?.[1]).filter(Boolean);
-    expect(order).toEqual(['fail1', 'wait1', 'run1', 'run2', 'think1', 'queued1', 'done1']);
-  });
-  test('a waiting worker outranks a running one even when it comes later', () => {
-    const order = rows(running([w('run1', 'running'), w('wait1', 'waiting')])).map((r) => /(run1|wait1)/.exec(r)?.[1]).filter(Boolean);
-    expect(order).toEqual(['wait1', 'run1']);
-  });
 });
 
 describe('mission-layout: the footer', () => {
@@ -217,22 +188,6 @@ describe('mission-layout: the row budget', () => {
     expect(planRows(3, 5, false, false)).toMatchObject({ lanes: 1, more: false }); // one slot: no room for a "+N more" row
     expect(planRows(5, 5, false, false)).toMatchObject({ lanes: 2, more: true });
   });
-  test('three rows while running is already more than the band alone', () => {
-    const m = model({ cols: 100, maxRows: 3, workers: [w('a', 'running', { tool: 'Grep' }), w('b', 'running', { tool: 'Read' })] });
-    expect(missionLines(m).length).toBeGreaterThan(1);
-    expect(missionLines({ ...m, maxRows: 2 })).toHaveLength(1);
-  });
-  test('an expanded board that leaves under four rows below the band takes no slot', () => {
-    const m = model({ cols: 100, maxRows: 3, boardRows: 5, workers: [w('a', 'running', { tool: 'Grep' })] });
-    expect(missionLines(m).some((l) => l.board !== undefined)).toBe(false);
-    const tall = model({ cols: 100, maxRows: 12, boardRows: 5, workers: [w('a', 'running', { tool: 'Grep' })] });
-    expect(missionLines(tall).find((l) => l.board !== undefined)?.board).toBe(5);
-  });
-  test('80 columns is the first width that shows more than the band', () => {
-    const m = model({ cols: 80, workers: [w('a', 'running', { tool: 'Grep' })] });
-    expect(missionLines(m).length).toBeGreaterThan(1);
-    expect(missionLines({ ...m, cols: 79 })).toHaveLength(1);
-  });
 });
 
 describe('mission-layout: a full plan with open store work never reads as all done', () => {
@@ -263,12 +218,4 @@ describe('mission-layout: a full plan with open store work never reads as all do
 
 describe('mission-layout: one ellipsis with the HUD (critic fix 4)', () => {
   const ELLIPSIS = String.fromCharCode(0x2026);
-  test('a cut worker name ends in the HUD ellipsis, never three dots', () => {
-    const lines = rows(model({ cols: 100, workers: [w('a-very-long-worker-name-indeed', 'running', { tool: 'Grep' })] }));
-    const row = lines.find((r) => r.includes('a-very-long'))!;
-    expect(row).toContain(`a-very-long-worke${ELLIPSIS}`);
-    expect(lines.join('\n')).not.toContain('...');
-    const ascii = missionLines(model({ cols: 100, ui: { ...ui, ascii: true }, workers: [w('a-very-long-worker-name-indeed', 'running', { tool: 'Grep' })] })).map((l) => runsText(l.runs));
-    expect(ascii.find((r) => r.includes('a-very-long'))!).toContain('a-very-long-worke~');
-  });
 });

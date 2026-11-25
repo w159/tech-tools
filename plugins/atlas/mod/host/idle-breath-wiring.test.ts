@@ -133,10 +133,11 @@ describe('wire-expert: the pulse', () => {
     const band = textOf(await b.band());
     expect(band).toMatch(/ctx [━─=]+ +6%/);
     expect(band).toMatch(/[▁-█]{8}/); // the events spark (eighth blocks, round 3 E10)
-    await press(button(await b.band(), 'band:health'));
-    const card = textOf(await b.band());
-    expect(card).toContain('64k of 1M');
-    expect(card).toMatch(/── ACTIVITY ─+ \d+ ev · peak \d+ \/ [\d.]+[sm]/);
+    await press(button(await b.band(), 'band:gates#0')); // the band no longer draws the card: the side panel's health tab holds the pulse
+    await press(button(await b.pane(100), 'tab:core'));
+    const card = textOf(await b.pane(100));
+    expect(card).toContain('64k / 1M');
+    expect(card).toMatch(/tools\/min\s+\d+\s+peak \d+/);
   });
   test('(g) a new session resets the pulse and the hook log', async () => {
     const b = await boot();
@@ -146,10 +147,11 @@ describe('wire-expert: the pulse', () => {
     await settle();
     await b.cap.one('session.start')(b.$, { cwd: ROOT, surface: 'terminal', isInteractive: true }, noopNext);
     await settle();
-    await press(button(await b.band(), 'band:health'));
-    const card = textOf(await b.band());
-    expect(card).not.toContain('64k of 1M');
-    expect(card).toMatch(/\b1 ev\b/); // only the new session's own start
+    await press(button(await b.band(), 'band:gates#0'));
+    await press(button(await b.pane(100), 'tab:core'));
+    const card = textOf(await b.pane(100));
+    expect(card).not.toContain('64k / 1M');
+    expect(card).toMatch(/tools\/min\s+1\b/); // only the new session's own start
   });
 });
 
@@ -192,17 +194,6 @@ describe('wire-expert: the close controls', () => {
     const b = await boot();
     expect(walk(await b.pane()).some((n) => n.kind === 'Button' && n.props.key === 'panel:close')).toBe(false);
     expect(textOf(await b.pane())).not.toContain('[✕]');
-  });
-  test('(e) the band chip that opens the card (`▾ health`, selected) closes it, as does the title chip', async () => {
-    const b = await boot();
-    await b.rest();
-    await press(button(await b.band(), 'band:health', 'health'));
-    const open = await b.band();
-    expect(textOf(open)).toContain('HEALTH');
-    expect(textOf(open)).not.toContain('hide');
-    expect(textOf(open)).toContain('▾ health');
-    await press(button(open, 'band:health', 'health'));
-    expect(textOf(await b.band())).not.toContain('HEALTH');
   });
 });
 

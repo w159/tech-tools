@@ -106,17 +106,8 @@ describe('1. one block, no hidden rows, no spacers', () => {
         for (const r of f.hud) expect(r.map((x) => x.t).join('').trim(), `${st.name}: a slab row`).not.toBe('');
       }
     });
-    test(`${cols} cells: the TODO box top sits on the row under the band in every state`, () => {
-      for (const { st, f } of scenario(screen, cols)) {
-        const at = f.rows.findIndex((r) => r.includes('TODO'));
-        expect(at - bandIndex(f), st.name).toBe(1);
-      }
-    });
     test(`${cols} cells: the key hint row is not in the block`, () => {
       for (const { st, f } of scenario(screen, cols)) expect(f.rows.join('\n'), st.name).not.toMatch(/r: route|ctrl\+x tab/);
-    });
-    test(`${cols} cells: the SUBAGENTS marker is on screen in every state`, () => {
-      for (const { st, f } of scenario(screen, cols)) expect(f.rows.join('\n'), st.name).toContain(MARKER);
     });
   }
 });
@@ -125,37 +116,7 @@ describe('1. one block, no hidden rows, no spacers', () => {
 // `✓ 3 done · times · N fn` once they have stopped). The old at-rest box tests are replaced by the closing-rule form below.
 describe('2. agents ride their TODO rows in every state; SUBAGENTS is the lower rule of the block', () => {
   for (const [, screen, cols] of SIZES) {
-    test(`${cols} cells: agent and clock are right-aligned on the row; the SUBAGENTS table exists in every state that has an agent (wave 36)`, () => {
-      for (const { st, f } of scenario(screen, cols)) {
-        const listed = st.running + st.returned > 0;
-        expect(f.rows.some((r) => /^╭.*SUBAGENTS/.test(r)), `${st.name}: a titled box in every state (an empty one before the first agent)`).toBe(true);
-        if (!listed) continue;
-        expect(f.rows.some((r) => /^╭.*SUBAGENTS.*╮\s*$/.test(r)), `${st.name}: the title rule`).toBe(true);
-      }
-      const ownerW = 99; // the OWNER column holds a whole agent name at these widths
-      for (const { st, f } of scenario(screen, cols)) {
-        for (let i = st.returned; i < st.returned + st.running; i++) {
-          const row = f.rows.find((r) => r.includes(`T${i + 1} `))!;
-          expect(row, `${st.name} T${i + 1}`).toMatch(/^[│▌] [◐◓◑◒] T\d/);
-          expect(row.trimEnd(), `${st.name} T${i + 1}`).toMatch(new RegExp(`${(NAMES[i]!.length > ownerW ? `${NAMES[i]!.slice(0, ownerW - 1)}…` : NAMES[i])}\\s+(?:\\d+:\\d\\d\\s+)?│$`));
-        }
-      }
-    });
-    test(`${cols} cells: at rest the title reads \`● N done\` over an AGENT STATE TIME table, and never the old STATE TASK header`, () => {
-      for (const { st, f } of scenario(screen, cols)) {
-        if (st.running !== 0 || st.returned === 0) continue;
-        const rule = f.rows.find((r) => /^╭.*SUBAGENTS/.test(r));
-        expect(rule, st.name).toBeDefined();
-        expect(rule!, st.name).toMatch(st.blocked ? /✗ \d+ failed|✓ \d+ done/ : /✓ \d+ done/);
-        expect(f.rows.some((r) => /^│ {3}AGENT\s+(?:ROLE\s+)?STATE\s+NOW\b/.test(r)), st.name).toBe(true);
-        expect(f.rows.some((r) => /AGENT\s+STATE\s+TASK/.test(r)), st.name).toBe(false);
-      }
-    });
   }
-  test('the SUBAGENTS rule is the same shape at 150 and 110 (docked and not)', () => {
-    const rule = (cols: number, screen: number): string => scenario(screen, cols).find((x) => x.st.name === 'idle')!.f.rows.find((r) => /^╭.*SUBAGENTS/.test(r))!;
-    for (const [c, sc] of [[93, 45], [56, 40]] as const) expect(rule(c, sc)).toMatch(/^╭─ SUBAGENTS ─+ ✓ 3 done ─╮\s*$/);
-  });
 });
 
 describe('3. a queued TODO row whose agent runs shows running', () => {
@@ -170,12 +131,6 @@ describe('3. a queued TODO row whose agent runs shows running', () => {
 });
 
 describe('4. accent motion and the done fade', () => {
-  test('every running ◐◓◑◒ in the HUD is the accent', () => {
-    const f = frameOf({ name: '3 running', running: 3, returned: 0 }, 93, hostBudget(45, 3), 0);
-    const glyphs = f.hud.flat().filter((s) => /^[◐◓◑◒]$/.test(s.t));
-    expect(glyphs.length).toBeGreaterThanOrEqual(3);
-    for (const g of glyphs) expect(g.color).toBe(PALETTES.mocha.accent);
-  });
   test('the SUBAGENTS rows at rest-with-running (a returned wave inside a running run) keep the accent too', () => {
     const f = frameOf({ name: 'one returned', running: 2, returned: 1 }, 93, hostBudget(45, 2), 0);
     for (const g of f.hud.flat().filter((s) => /^[◐◓◑◒]$/.test(s.t))) expect(g.color).toBe(PALETTES.mocha.accent);
@@ -236,15 +191,6 @@ describe('5. band segments, one failure word, one warning colour', () => {
 });
 
 describe('6. idle dims the block', () => {
-  test('idle draws 240 rules and 245 text, and keeps the done mark in 114; done keeps its colours', () => {
-    const run = scenario(45, 93);
-    const idle = run.find((x) => x.st.name === 'idle')!.f;
-    const done = run.find((x) => x.st.name === 'done')!.f;
-    const colours = (f: Frame): Set<string> => new Set(f.hud.flat().map((s) => s.color!).filter(Boolean));
-    expect([...colours(idle)].sort()).toEqual([PALETTE5.dim, PALETTE5.secondary, PALETTES.mocha.ok].sort()); // state 39: the finished circles keep 114 at rest, only the titles and words go 245
-    expect(colours(done).has(PALETTES.mocha.ok)).toBe(true);
-    expect(bandKindOf({ snapshot: snapshotOf(STAGES[7]!), live: [], gates: [], columns: 93, tick: 0, working: false, restSecs: 60, ranSecs: 58, ui } as never)).toBe('idle');
-  });
 });
 
 describe('7. blocked on the update that carries the Stop error (the host event order)', () => {

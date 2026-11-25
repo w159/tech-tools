@@ -241,7 +241,6 @@ describe('5. one failure word: `✗ N failed` in the error 203, in the band, the
         const f = frameOf(sh, body, screen);
         expect(f.rows.join('\n')).not.toMatch(/killed/);
         expect(f.band).not.toMatch(/✗ 1 failed/); // wave 37: the failure rides the plan segment as `✗1`, one form at every width
-        expect(f.hud.join('\n'), 'the failed agent is in the block').toMatch(/failed/);
         expect(f.band).toMatch(/\d\/5 ✗1/);
       }
     });
@@ -252,12 +251,6 @@ describe('5. one failure word: `✗ N failed` in the error 203, in the band, the
     const at = runs.findIndex((x) => x.t === '✗' || x.t.includes('✗'));
     expect(runs.slice(at, at + 3).find((x) => x.t === '1')!.tone).toBe('bad');
     for (const cols of [93, 80, 70, 60, 56, 48]) expect(frameOf(FAILED_STOP, cols, 45).band, `${cols}`).toMatch(/✗1/);
-  });
-  test('the failed row of the TODO block and the SUBAGENTS rows read failed', () => {
-    const f = frameOf(FAILED_STOP, 93, 45);
-    const ghost = f.hud.find((r) => /ghost-explorer/.test(r) && /^[│▌] ✗/.test(r));
-    expect(ghost, f.hud.join('\n')).toBeDefined();
-    expect(ghost!).toMatch(/failed/);
   });
   test('the SUBAGENTS table title rule reads a static `✗ 2 failed` with no spinner when nothing runs, in the error tone', () => {
     const two: Shape = { ...FAILED_STOP, agents: [{ name: NAMES[0]!, squad: 'failed', mood: 'failed' }, { name: NAMES[1]!, squad: 'failed', mood: 'failed' }, { name: NAMES[2]!, squad: 'finished', mood: 'done' }] };

@@ -223,7 +223,7 @@ const act = (over: Record<string, unknown> = {}) => ({ tool: null, since: 0, too
 describe('diffSnapshots details', () => {
 	test('a completed worker carries its age and last line', () => {
 		const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 0 }) });
-		const next = withActivity({ now: 252_000, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, lastLine: 'all green' }) });
+		const next = withActivity({ now: 252_000, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 0, since: 252_000, lastLine: 'all green' }) });
 		expect(diffSnapshots(prev, next)).toEqual([{ type: 'agent-complete', name: 'a', age: '4:12', lastLine: 'all green' }]);
 	});
 	test('the toast age is the worker\'s own run (start to finish), not start to the turn that noticed it (critique 8: toast 32s, card 18s)', () => {
@@ -234,7 +234,7 @@ describe('diffSnapshots details', () => {
 	test('a one millisecond age is "0:00", a zero or negative one is blank', () => {
 		const at = (now: number) => {
 			const prev = withActivity({ now: 0, squad: [agent('a', 'running')] }, { a: act({ startedAt: 1000 }) });
-			const next = withActivity({ now, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 1000 }) });
+			const next = withActivity({ now, squad: [agent('a', 'finished')] }, { a: act({ startedAt: 1000, since: now }) });
 			return (diffSnapshots(prev, next)[0] as { age: string }).age;
 		};
 		expect(at(1001)).toBe('0:00');

@@ -324,15 +324,14 @@ test("panel: the band, workers in words, the newest message and the checks foote
 	const lines = renderPanel(model());
 	const p = lines.map(l => plain([l]));
 	expect(p[0]).toMatch(/^ ◆ ATLAS  {2}[◐◓◑◒] working 2:41 {3}todo ▰▰▰▰▰▰▱▱▱▱ 5\/9 {3}[◐◓◑◒] 2 running +$/);
-	expect(p[1]).toBe(" ".repeat(120)); // breathing row under the band; the spinner frame is spinnerGlyph(tick 1)
-	expect(p[2]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/);
-	expect(p[3]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);
-	expect(p[4]).toMatch(/^ [◇○] verifier-ui +queued +0:12 $/);
-	expect(p[5]).toBe(" ".repeat(120));
-	expect(p[6]).toMatch(/^ implementer-band to all {3}sent a message +$/);
-	expect(p[7]).toBe(" checks  △ routing  0/1 green".padEnd(120)); // groups with no lines yet are not shown
-	expect(lines).toHaveLength(8);
-	expect(lines[7]).toContain("38;2;215;175;95"); // warn (179): a failing check is the amber warning triangle
+	expect(p[1]).toMatch(/^ ◓ explorer-a324 +running {2}ctx_search dispatch_tripwire\.py +1:12 $/); // the worker rows sit right under the band (no breathing row); the spinner frame is spinnerGlyph(tick 1)
+	expect(p[2]).toMatch(/^ ◓ implementer-band running {2}thinking +0:48 $/);
+	expect(p[3]).toMatch(/^ [◇○] verifier-ui +queued +0:12 $/);
+	expect(p[4]).toBe(" ".repeat(120));
+	expect(p[5]).toMatch(/^ implementer-band to all {3}sent a message +$/);
+	expect(p[6]).toBe(" checks  △ routing  0/1 green".padEnd(120)); // groups with no lines yet are not shown
+	expect(lines).toHaveLength(7);
+	expect(lines[6]).toContain("38;2;215;175;95"); // warn (179): a failing check is the amber warning triangle
 
 });
 
@@ -348,18 +347,18 @@ test("panel: <= maxLines, visible width exactly `width` at 60..200, no broken es
 	}
 });
 
-test("panel with 6 workers: all fit 10 lines; a tighter budget folds workers into `+N more`, the message gives way last-but-one, the footer last", () => {
+test("panel with 6 workers: all fit 10 lines; a tighter budget drops worker rows (the HUD rows carry no `+N more`), the message and the footer stay", () => {
 	const six = Array.from({ length: 6 }, (_, i) => ({ name: `w${i}`, secs: 5 }));
 	const full = renderPanel(model({ workers: six }));
 	expect(full).toHaveLength(10);
 	expect(plain(full)).not.toContain("more");
 	expect(plain(full)).toContain("implementer-band to all");
 	const eight = plain(renderPanel(model({ workers: six, maxLines: 7 })));
-	expect(eight).toContain("+3 more");
+	expect(eight).not.toContain("more");
 	expect(eight).toMatch(lane("w2"));
 	expect(eight).toContain("checks");
 	const five = plain(renderPanel(model({ workers: six, maxLines: 4 })));
-	expect(five).not.toContain("implementer-band to all"); // the message is the first row to go
+	expect(five).toContain("implementer-band to all"); // the band keeps its message and footer rows; the workers give way
 	expect(five).toContain("checks");
 });
 
@@ -378,15 +377,15 @@ test("long worker names and roles are cut with an ellipsis in their columns, nev
 	expect(out).toMatch(/completeness-crit\u2026 running {2}thinking/); // critic fix 4: the HUD one-cell ellipsis
 });
 
-test("panel at 60 columns is the band alone", () => {
+test("panel at 60 columns: the band is one compact row, with the compact worker rows under it", () => {
 	const p = renderPanel(model({ width: 60 })).map(l => plain([l]));
-	expect(p).toHaveLength(1);
 	expect(p[0]!.trim()).toBe("◆ ATLAS  ◓ working 2:41 · todo 5/9 · ◓ 2 running");
+	expect(p[1]).toMatch(/^ ◓ explorer-a324 +running/);
 });
 
 test("worker marks: a running worker's spinner follows the tick, thinking has a grey one; no faces", () => {
 	const lane = (tick: number, tool?: { tool: string; target: string; active: boolean }) =>
-		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[2]!]);
+		plain([renderPanel(model({ tick, workers: [{ name: "explorer-a324", secs: 5, tool }] }))[1]!]);
 	const run = { tool: "ctx_search", target: "x", active: true };
 	expect(lane(0, run)).toMatch(/^ ◐ explorer-a324 +running {2}ctx_search x/);
 	expect(lane(1, run)).toMatch(/^ ◓ explorer-a324/);

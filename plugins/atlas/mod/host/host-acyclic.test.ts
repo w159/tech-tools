@@ -2,7 +2,7 @@
 import { expect, test } from 'claude-code/testing';
 import { readFileSync } from 'node:fs';
 
-const MODS = ['atoms', 'agents', 'poll', 'core-tick', 'handlers', 'frame', 'hooks'] as const;
+const MODS = ['atoms', 'agents', 'poll', 'core-tick', 'handlers', 'frame', 'bored', 'hooks'] as const;
 const read = (name: string): string => readFileSync(`${import.meta.dir}/${name}.ts`, 'utf8');
 
 /** The sibling modules a host module imports at runtime (`import type` and all-`type` lists are erased). */

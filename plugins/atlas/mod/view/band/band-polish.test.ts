@@ -26,35 +26,6 @@ const near = (a: number, b: number): boolean => Math.abs(a - b) < 1e-9;
 const NAMES = liveWorkers(busySnap(), NOW).map((w) => w.name);
 
 describe('band beside the Subagents block: counts only', () => {
-  test('without the HUD block the band lists its workers', () => {
-    const all = rowsOf(160).join('\n');
-    for (const n of NAMES) expect(all).toContain(n);
-  });
-  test('with the HUD block the band keeps the counts and lists each worker once, in the compact form, in the rows the HUD left', () => {
-    const rows = rowsOf(160, { workersInHud: true, snapshot: busySnap({ comms: [] }) });
-    const all = rows.join('\n');
-    expect(all).not.toContain('implementer'); // no role column: the HUD block carries it
-    expect(rows[0]).toContain('1 running');
-    expect(rows[0]).toContain('✗1'); // wave 37: the failure rides the plan segment (`todo 1/4 ✗1`)
-    const listed = rows.slice(1).filter((r) => /^\s*[◐◓◑◒◐◓◑◒◐◓○✗▲◉●]\s+\S+\s+[a-z][a-z-]*\s{2,}\S/.test(r));
-    expect(listed).toHaveLength(NAMES.length);
-    for (const n of NAMES) expect(listed.filter((r) => r.includes(n))).toHaveLength(1);
-    expect(rowsOf(160, { workersInHud: true, maxRows: 1, snapshot: busySnap({ comms: [] }) })).toHaveLength(1);
-  });
-  test('the band counts equal the HUD block: a roster member the host does not list is queued in both; a listed worker is running at any age', () => {
-    const base = busySnap();
-    const snapshot = { ...base, members: [...base.members, { name: 'runner-land' }] };
-    const text = (rs: readonly (readonly { t: string }[])[]): string => rs.map((r) => r.map((x) => x.t).join('')).join('\n');
-    const live = liveWorkers(snapshot, NOW);
-    const hud = text(hudRows({ todos: [], agents: hudAgents(live, snapshot.squad, queuedMembers(snapshot)) }, { cols: 160, maxRows: 20, ui: UI }));
-    expect(hud).toContain('1 queued');
-    expect(rowsOf(160, { snapshot, live, workersInHud: true }).join('\n')).toMatch(/○ runner-land +queued/); // wave 31: the queued count rides the worker row, not the four-segment band
-    // age decides nothing: the same workers, started a day ago, are still just running
-    const aged = live.map((w) => ({ ...w, startedAt: NOW - 86_400_000 })) as LiveWorker[];
-    const running = aged.filter((w) => w.state === 'working').length;
-    expect(text(hudRows({ todos: [], agents: hudAgents(aged, snapshot.squad, queuedMembers(snapshot)) }, { cols: 160, maxRows: 20, ui: UI }))).toContain(`${running} running`);
-    expect(rowsOf(160, { snapshot, live: aged, workersInHud: true })[0]).toContain(`${running} running`);
-  });
   test('narrow bands list nothing either way (the single row)', () => {
     expect(rowsOf(60, { workersInHud: true, maxRows: 1 })).toHaveLength(1);
     expect(rowsOf(36, { workersInHud: true })).toHaveLength(1);
