@@ -1,5 +1,9 @@
 # Changelog
 
+## atlas 17.44.1 -- the Stop gate stops re-blocking every turn; the tripwire stops denying test and team commands
+- Fixed, completion gate loop cap: once a letter set has run the full cap (3 identical blocks, then allowed) in a session, a later Stop whose open letters are all among those is allowed at once instead of blocking 3 more times. Before, a turn that dispatched any work reset the count, so pre-existing debt (open ROADMAP items, old todos, stale `worker/*` branches) cost 3 extra model round-trips on every turn: session 440e15dc paid `hiq` x3 on 8 turns, 729d1015 paid `bg` x3 on 4. A new letter still blocks. (`hooks/completion_gate_core.py` `_conceded`, `_block_loop_state(concede=)`; test `hooks/test_gate_friction_2026_11_25.py`.)
+- Fixed, dispatch tripwire inline-op deny: a shell call that runs an atlas team/bookkeeping script (`atlas_mux`, `atlas_crew`, `atlas_todo`, `atlas_finding`, `atlas_resolve`, `atlas_irc`, `atlas_git`, `atlas_wt`) or a test/lint/type-check runner is never counted, whatever its shell shape (variables like `M=.../atlas_mux.py; python3 $M`, `$(...)`, loops, `> /tmp/...`, `atlas_mux.py kill`), as long as it writes no project file (`sed -i`, `mv`/`cp`/`rm`, `tee` or `>` outside `/tmp` and `.atlas/` stay counted). The exact-shape parsers missed 50 of the 53 inline-op denials in the window, so the gate denied the commands the Stop gate demands. (`hooks/dispatch_tripwire_core.py` `_runs_atlas_or_tests`.)
+
 ## atlas 17.44.0 -- crews learn from their own verified check failures
 
 - Added, atlas crew lesson loop (`scripts/atlas_lessons.py`): failures a check printed become lessons, the next run's matching workers see them, and the checks score each one. Runs with lessons used 74% fewer worker tokens on the benchmark fixture (n=8 against n=6, no overlap, 8 of 8 green against 2 of 6). Off with `ATLAS_CREW_LEARN=off`. Audit: `docs/audits/2026-11-25_atlas-17.44.0-crew-lesson-loop.md`.

@@ -1813,6 +1813,38 @@ def _is_bookkeeping_call(tool, tinput):
     return isinstance(command, str) and _is_wrapped_exempt(command)
 
 
+# The exact-shape parsers above miss real lead commands (`M=.../atlas_mux.py; python3 $M spawn-team`,
+# `T=$(... spawn-team ...)`, `pytest > /tmp/out; tail /tmp/out`, `atlas_mux.py kill`): 50 of 53 inline-op
+# denials on 2026-11-21..25 were of that shape, so the gate denied the very commands it demands.
+_ATLAS_OR_TEST_RE = re.compile(
+    r"\batlas_(?:mux|crew|todo|finding|resolve|irc|git|wt)\.py\b"
+    r"|\b(?:pytest|vitest|jest|mypy|pyright|ruff|eslint|tsc)\b"
+    r"|\b(?:bun|npm|pnpm|yarn|go|cargo|swift|deno)\s+(?:run\s+)?test\b"
+)
+# In-place edits and writes outside scratch space keep the command counted.
+_INLINE_WRITE_RE = re.compile(
+    r"\bsed\s+(?:-\S*\s+)*-i|\bperl\s+-\S*i|\b(?:mv|cp|rm|touch|truncate|patch)\s"
+    r"|\btee\s+(?!-a\s+/tmp/|/tmp/|/private/tmp/|\S*\.atlas/)"
+    r"|(?<![0-9&>])>>?(?![>&])(?!\s*(?:/dev/null|/tmp/|/private/tmp/|\$?\S*\.atlas/))"
+)
+_QUOTED_RE = re.compile(r"\"(?:[^\"\\]|\\.)*\"|'[^']*'")
+
+
+def _runs_atlas_or_tests(tool, tinput):
+    """True when a shell call runs atlas bookkeeping/team scripts or a test/lint/type-check runner, whatever
+    its shell shape (variables, substitutions, loops, redirects to /tmp), and writes no project file inline."""
+    command = (tinput or {}).get("command") if _is_shell_tool(tool) else None
+    if not isinstance(command, str):
+        return False
+    command = _unwrap_lean_ctx(command)
+    if "<<" in command or not _ATLAS_OR_TEST_RE.search(command):
+        return False
+    # Quoted text (finding titles, evidence strings) is data, not a write; a quoted redirect target
+    # collapses to `> ""` and still counts.
+    unquoted = _QUOTED_RE.sub('""', command.replace("2>&1", " "))
+    return not _INLINE_WRITE_RE.search(unquoted)
+
+
 def _is_shell_tool(tool):
     """Bash, or lean-ctx's ctx_shell under any MCP server prefix."""
     tool = str(tool or "")
@@ -2319,6 +2351,7 @@ def _pre_tool_use(
         _is_read_only_call(tool, tinput or {})
         or _team_mux_verb(tool, tinput)
         or _is_integration_call(tool, tinput)
+        or _runs_atlas_or_tests(tool, tinput)
     ):
         # A team launch/wait/reap is the dispatch path itself, and atlas bookkeeping
         # (_is_bookkeeping_call: todo/finding/resolve) is what the gates demand: never inline drift.

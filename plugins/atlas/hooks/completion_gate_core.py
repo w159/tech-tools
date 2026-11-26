@@ -2551,7 +2551,7 @@ def _main() -> int:
             # re-invokes it: waiting is not a completion claim ((r) already ran).
             return 0
         count, loop_exhausted = _block_loop_state(
-            session, failed, continuation, _run_dispatch_count(session)
+            session, failed, continuation, _run_dispatch_count(session), concede=True
         )
         if loop_exhausted:
             _note_loop_allowed(count, failed)
@@ -2809,8 +2809,22 @@ def _print_decision(doc: dict) -> None:
         print(json.dumps(doc))
 
 
+def _conceded(path: str, failed: list) -> bool:
+    """True when every letter in `failed` was already allowed through by the loop cap this session."""
+    try:
+        with open(path + ".conceded", encoding="utf-8") as fh:
+            letters = {x for line in fh for x in line.strip().split(",") if x}
+    except OSError:
+        return False
+    return bool(failed) and set(failed) <= letters
+
+
 def _block_loop_state(
-    session_id: str, failed: list, continuation: bool = False, progress=None
+    session_id: str,
+    failed: list,
+    continuation: bool = False,
+    progress=None,
+    concede: bool = False,
 ) -> tuple[int, bool]:
     """Count the identical consecutive blocks and say when the cap is reached.
 
@@ -2846,6 +2860,11 @@ def _block_loop_state(
     except Exception:
         state_dir = None
         path = None
+    if concede and path is not None and _conceded(path, failed):
+        # These letters already ran the full cap once this session and the lead did not clear them:
+        # re-blocking every later turn three more times only taxes unrelated work (live 2026-11-25:
+        # 440e15dc paid hiq x3 on each of 8 turns, 729d1015 bg x3 on each of 4).
+        return _block_loop_limit() + 2, True
     if path is not None and state_dir is not None:
         try:
             with open(path, encoding="utf-8") as fh:
@@ -2877,6 +2896,10 @@ def _block_loop_state(
             return count, False
     if count <= _block_loop_limit():
         return count, False
+    if concede and path is not None:
+        with contextlib.suppress(OSError):
+            with open(path + ".conceded", "a", encoding="utf-8") as fh:
+                fh.write(sig + "\n")
     if count > _block_loop_limit() + 1:
         return count, True  # already recorded at first exhaustion; repeats are one loop
     conn = None

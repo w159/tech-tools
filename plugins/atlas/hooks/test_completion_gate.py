@@ -5023,7 +5023,8 @@ class ContractVisibilityTest(unittest.TestCase):
         # Also reset the session's Stop-burst breaker state: Stops more than
         # STOP_EVENT_DEDUP_SECONDS apart each count, so on a loaded machine the
         # subtests would trip the breaker (silencing the gate) and flake.
-        for name in ("gate-loop-" + self.SID_A, self.SID_A + ".json"):
+        loop = "gate-loop-" + self.SID_A  # .conceded: letters the cap already let through
+        for name in (loop, loop + ".conceded", self.SID_A + ".json"):
             path = os.path.join(state_dir, name)
             if os.path.exists(path):
                 os.remove(path)

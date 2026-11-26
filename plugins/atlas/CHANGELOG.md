@@ -1,5 +1,9 @@
 # Changelog
 
+## 17.44.1 - 2026-11-25
+- Fixed, completion gate: letters the loop cap already allowed through in a session no longer re-block 3 times on every later turn; a new letter still blocks (`hooks/completion_gate_core.py` `_conceded`).
+- Fixed, dispatch tripwire: shell calls that run atlas team/bookkeeping scripts or a test/lint/type-check runner are never counted as inline work, whatever their shell shape, unless they write a project file (`hooks/dispatch_tripwire_core.py` `_runs_atlas_or_tests`).
+
 ## 17.44.0 - 2026-11-26
 
 - Added, crew self-improving loop (`scripts/atlas_lessons.py`, wired into `scripts/atlas_crew.py` and `scripts/atlas_irc.py`): a crew now learns from its own verified check failures across runs. Only pytest failures that a check printed are captured (parsed with no model call, secrets redacted) into `<root>/.atlas/memory/lessons.json`; the next run's worker prompts get the lessons that match their files or tests, fenced as untrusted notes, at most 1,600 chars, and nothing when none match; after the verdict the checks score each shown lesson (win, repeat, loss; retired after 2 losses or when its test file is gone). The lead sees counts only. `ATLAS_CREW_LEARN=off` turns it off; `atlas_lessons.py list|forget`. Measured on a fixture with hidden convention tests (claude-sonnet-5-5, medium): runs with lessons used 74% fewer worker tokens (mean 136,181, n=8, all green) than runs without (mean 524,828, n=6, 2 green), with no overlap; a first-try-green fixture gained 0 bytes. Audit: `docs/audits/2026-11-25_atlas-17.44.0-crew-lesson-loop.md`. Tests: `scripts/test_atlas_lessons.py` (15).

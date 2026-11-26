@@ -3994,10 +3994,12 @@ class TeamMuxDispatchTest(ReadOnlyInvestigationTest):
         for cmd in (
             f"touch x && python3 {self.MUX} wait --team t1",
             f"python3 {self.MUX} spawn-team --class a --effort b > out.json",
-            f"python3 {self.MUX} spawn --run r --name n",
         ):
             r = self._call("PreToolUse", "Bash", {"command": cmd})
             self.assertIn('"permissionDecision": "deny"', r.stdout, cmd)
+        # Every atlas_mux.py verb is the lead's own team command: never denied as inline work.
+        r = self._call("PreToolUse", "Bash", {"command": f"python3 {self.MUX} spawn --run r --name n"})
+        self.assertNotIn('"permissionDecision": "deny"', r.stdout)
 
     def test_guidance_commands_carry_this_plugins_absolute_scripts(self):
         """CLAUDE_PLUGIN_ROOT is unset in the lead's Bash: leads ran the repo's scripts, not the install."""
