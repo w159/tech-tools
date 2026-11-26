@@ -1,0 +1,1356 @@
+{
+ "A0-readable-tests": {
+  "tag": "A1",
+  "learn": "off",
+  "store_in": null,
+  "wall_s": 13.1,
+  "crew_wall_s": 12.6,
+  "ok": true,
+  "final_pytest": "43 passed in 0.02s",
+  "final_rc": 0,
+  "tokens_workers": 75767,
+  "turns": 23,
+  "gate_refusals": 0,
+  "rounds": 1,
+  "check_runs": 7,
+  "check_fails": 1,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11737,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 4,
+    "tokens": 11104,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 5,
+    "tokens": 18508,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 4,
+    "tokens": 11332,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 4,
+    "tokens": 11350,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 2,
+    "tokens": 11736,
+    "gate_refusals": null
+   }
+  ],
+  "lessons": null,
+  "tests_changed": "",
+  "round_times": [
+   [
+    0,
+    12.6,
+    0
+   ]
+  ],
+  "fix_round_workers": []
+ },
+ "A1": {
+  "tag": "A1",
+  "learn": "off",
+  "store_in": null,
+  "wall_s": null,
+  "crew_wall_s": 128.6,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 445750,
+  "turns": 54,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 14,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 10,
+    "tokens": 128340,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 9,
+    "tokens": 47641,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 7,
+    "tokens": 26269,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 10,
+    "tokens": 107635,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 10,
+    "tokens": 98275,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 8,
+    "tokens": 37590,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": null,
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    8.0,
+    1
+   ],
+   [
+    1,
+    118.0,
+    1
+   ],
+   [
+    2,
+    128.6,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "ranges",
+    "slug"
+   ]
+  ]
+ },
+ "A2": {
+  "tag": "A2",
+  "learn": "off",
+  "store_in": null,
+  "wall_s": 133.8,
+  "crew_wall_s": 133.0,
+  "ok": false,
+  "final_pytest": "6 failed, 50 passed in 0.05s",
+  "final_rc": 1,
+  "tokens_workers": 626007,
+  "turns": 65,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 14,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 9,
+    "tokens": 104502,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 12,
+    "tokens": 132553,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 14,
+    "tokens": 150728,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 8,
+    "tokens": 49086,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 11,
+    "tokens": 112798,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 11,
+    "tokens": 76340,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": null,
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    8.7,
+    1
+   ],
+   [
+    1,
+    121.2,
+    1
+   ],
+   [
+    2,
+    133.0,
+    1
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "flags",
+    "money",
+    "slug",
+    "table"
+   ]
+  ]
+ },
+ "A3": {
+  "tag": "A3",
+  "learn": "off",
+  "store_in": null,
+  "wall_s": 135.5,
+  "crew_wall_s": 135.0,
+  "ok": false,
+  "final_pytest": "4 failed, 52 passed in 0.06s",
+  "final_rc": 1,
+  "tokens_workers": 530917,
+  "turns": 65,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 13,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 14,
+    "tokens": 137979,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 11,
+    "tokens": 103291,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 26484,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 9,
+    "tokens": 39275,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 12,
+    "tokens": 147077,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 11,
+    "tokens": 76811,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": null,
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    6.5,
+    1
+   ],
+   [
+    1,
+    120.7,
+    1
+   ],
+   [
+    2,
+    135.0,
+    1
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "flags",
+    "slug",
+    "table"
+   ]
+  ]
+ },
+ "A4": {
+  "tag": "A4",
+  "learn": "off",
+  "store_in": null,
+  "wall_s": 130.1,
+  "crew_wall_s": 129.6,
+  "ok": false,
+  "final_pytest": "8 failed, 48 passed in 0.05s",
+  "final_rc": 1,
+  "tokens_workers": 625752,
+  "turns": 65,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 15,
+  "check_fails": 1,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 11,
+    "tokens": 90832,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 13,
+    "tokens": 114854,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 9,
+    "tokens": 102624,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 11,
+    "tokens": 111700,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 10,
+    "tokens": 128625,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 11,
+    "tokens": 77117,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": null,
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    6.8,
+    1
+   ],
+   [
+    1,
+    116.7,
+    1
+   ],
+   [
+    2,
+    129.6,
+    1
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ]
+  ]
+ },
+ "L1": {
+  "tag": "L1",
+  "learn": "on",
+  "store_in": null,
+  "wall_s": 133.3,
+  "crew_wall_s": 132.9,
+  "ok": false,
+  "final_pytest": "4 failed, 52 passed in 0.04s",
+  "final_rc": 1,
+  "tokens_workers": 546003,
+  "turns": 62,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 14,
+  "check_fails": 1,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 12,
+    "tokens": 131063,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 10,
+    "tokens": 116518,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 34053,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 14,
+    "tokens": 130034,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 10,
+    "tokens": 96595,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 8,
+    "tokens": 37740,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 0,
+   "captured": 17,
+   "wins": 0,
+   "losses": 0,
+   "retired": 0,
+   "store": 17
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    7.2,
+    1
+   ],
+   [
+    1,
+    117.8,
+    1
+   ],
+   [
+    2,
+    132.9,
+    1
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "flags",
+    "ranges",
+    "slug"
+   ]
+  ]
+ },
+ "L2": {
+  "tag": "L2",
+  "learn": "on",
+  "store_in": "L1",
+  "wall_s": 18.4,
+  "crew_wall_s": 17.9,
+  "ok": true,
+  "final_pytest": "56 passed in 0.04s",
+  "final_rc": 0,
+  "tokens_workers": 197654,
+  "turns": 37,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 10,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11842,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 7,
+    "tokens": 49548,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 41313,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 8,
+    "tokens": 39700,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 4,
+    "tokens": 12473,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 6,
+    "tokens": 42778,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 17,
+   "captured": 3,
+   "wins": 14,
+   "losses": 3,
+   "retired": 0,
+   "store": 20
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    9.9,
+    1
+   ],
+   [
+    1,
+    17.9,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money",
+    "ranges",
+    "table"
+   ]
+  ]
+ },
+ "L3": {
+  "tag": "L3",
+  "learn": "on",
+  "store_in": "L2",
+  "wall_s": 18.5,
+  "crew_wall_s": 18.0,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 151150,
+  "turns": 35,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 9,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11978,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 40705,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 39962,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 4,
+    "tokens": 11999,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 4,
+    "tokens": 12632,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 7,
+    "tokens": 33874,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 20,
+   "captured": 1,
+   "wins": 18,
+   "losses": 2,
+   "retired": 2,
+   "store": 21
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    12.2,
+    1
+   ],
+   [
+    1,
+    18.0,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money",
+    "table"
+   ]
+  ]
+ },
+ "L4": {
+  "tag": "L4",
+  "learn": "on",
+  "store_in": "L3",
+  "wall_s": 18.2,
+  "crew_wall_s": 17.7,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 134165,
+  "turns": 33,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 8,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11924,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 39943,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 37994,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 4,
+    "tokens": 11881,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 5,
+    "tokens": 19250,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 13173,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 19,
+   "captured": 0,
+   "wins": 19,
+   "losses": 0,
+   "retired": 0,
+   "store": 21
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    12.6,
+    1
+   ],
+   [
+    1,
+    17.7,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money"
+   ]
+  ]
+ },
+ "L5": {
+  "tag": "L5",
+  "learn": "on",
+  "store_in": "L4",
+  "wall_s": 15.8,
+  "crew_wall_s": 15.3,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 140807,
+  "turns": 34,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 8,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 12017,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 39645,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 38278,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 4,
+    "tokens": 11849,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 6,
+    "tokens": 26042,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 12976,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 19,
+   "captured": 0,
+   "wins": 19,
+   "losses": 0,
+   "retired": 0,
+   "store": 21
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    10.3,
+    1
+   ],
+   [
+    1,
+    15.3,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money"
+   ]
+  ]
+ },
+ "N1": {
+  "tag": "N1",
+  "learn": "on",
+  "store_in": null,
+  "wall_s": 24.8,
+  "crew_wall_s": 24.4,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 374541,
+  "turns": 56,
+  "gate_refusals": 0,
+  "rounds": 3,
+  "check_runs": 13,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 10,
+    "tokens": 108879,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 10,
+    "tokens": 92748,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 9,
+    "tokens": 35399,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 9,
+    "tokens": 39874,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 10,
+    "tokens": 59369,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 8,
+    "tokens": 38272,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 0,
+   "captured": 20,
+   "wins": 0,
+   "repeats": 0,
+   "losses": 0,
+   "retired": 0,
+   "revived": 0,
+   "store": 20
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    6.5,
+    1
+   ],
+   [
+    1,
+    18.5,
+    1
+   ],
+   [
+    2,
+    24.4,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "dur",
+    "flags",
+    "money",
+    "ranges",
+    "slug",
+    "table"
+   ],
+   [
+    "dur",
+    "flags"
+   ]
+  ]
+ },
+ "N2": {
+  "tag": "N2",
+  "learn": "on",
+  "store_in": "N1",
+  "wall_s": 14.8,
+  "crew_wall_s": 14.2,
+  "ok": true,
+  "final_pytest": "56 passed in 0.04s",
+  "final_rc": 0,
+  "tokens_workers": 129479,
+  "turns": 32,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 8,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11890,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 40222,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 39958,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 4,
+    "tokens": 12147,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 4,
+    "tokens": 12779,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 12483,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 20,
+   "captured": 1,
+   "wins": 17,
+   "repeats": 3,
+   "losses": 0,
+   "retired": 0,
+   "revived": 0,
+   "store": 21
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    8.6,
+    1
+   ],
+   [
+    1,
+    14.2,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money"
+   ]
+  ]
+ },
+ "N3": {
+  "tag": "N3",
+  "learn": "on",
+  "store_in": "N2",
+  "wall_s": 24.5,
+  "crew_wall_s": 24.1,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 133283,
+  "turns": 32,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 8,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11917,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 41680,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 8,
+    "tokens": 40133,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 3,
+    "tokens": 6179,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 5,
+    "tokens": 20455,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 12919,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 21,
+   "captured": 2,
+   "wins": 19,
+   "repeats": 2,
+   "losses": 0,
+   "retired": 0,
+   "revived": 0,
+   "store": 23
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    18.9,
+    1
+   ],
+   [
+    1,
+    24.1,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags",
+    "money"
+   ]
+  ]
+ },
+ "N4": {
+  "tag": "N4",
+  "learn": "on",
+  "store_in": "N3",
+  "wall_s": 16.5,
+  "crew_wall_s": 16.1,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 100476,
+  "turns": 28,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 7,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11545,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 8,
+    "tokens": 39009,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 4,
+    "tokens": 11696,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 3,
+    "tokens": 6122,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 5,
+    "tokens": 19471,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 12633,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 23,
+   "captured": 0,
+   "wins": 22,
+   "repeats": 1,
+   "losses": 0,
+   "retired": 0,
+   "revived": 0,
+   "store": 23
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    10.2,
+    1
+   ],
+   [
+    1,
+    16.1,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags"
+   ]
+  ]
+ },
+ "N5": {
+  "tag": "N5",
+  "learn": "on",
+  "store_in": "N4",
+  "wall_s": 18.6,
+  "crew_wall_s": 18.2,
+  "ok": true,
+  "final_pytest": "56 passed in 0.03s",
+  "final_rc": 0,
+  "tokens_workers": 102431,
+  "turns": 28,
+  "gate_refusals": 0,
+  "rounds": 2,
+  "check_runs": 7,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "dur",
+    "turns": 4,
+    "tokens": 11903,
+    "gate_refusals": 0
+   },
+   {
+    "name": "flags",
+    "turns": 9,
+    "tokens": 47421,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 4,
+    "tokens": 11734,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ranges",
+    "turns": 3,
+    "tokens": 6145,
+    "gate_refusals": 0
+   },
+   {
+    "name": "slug",
+    "turns": 4,
+    "tokens": 12575,
+    "gate_refusals": 0
+   },
+   {
+    "name": "table",
+    "turns": 4,
+    "tokens": 12653,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 23,
+   "captured": 0,
+   "wins": 22,
+   "repeats": 1,
+   "losses": 0,
+   "retired": 0,
+   "revived": 0,
+   "store": 23
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    11.4,
+    1
+   ],
+   [
+    1,
+    18.2,
+    0
+   ]
+  ],
+  "fix_round_workers": [
+   [
+    "flags"
+   ]
+  ]
+ },
+ "G1-8b-learn-on": {
+  "tag": "G1-8b-learn-on",
+  "learn": "on",
+  "store_in": null,
+  "wall_s": 15.4,
+  "crew_wall_s": 14.3,
+  "ok": true,
+  "final_pytest": "434 passed in 0.22s",
+  "final_rc": 0,
+  "tokens_workers": 56182,
+  "turns": 24,
+  "gate_refusals": 0,
+  "rounds": 1,
+  "check_runs": 8,
+  "check_fails": 0,
+  "workers": [
+   {
+    "name": "base32",
+    "turns": 3,
+    "tokens": 6641,
+    "gate_refusals": 0
+   },
+   {
+    "name": "bitset",
+    "turns": 3,
+    "tokens": 6896,
+    "gate_refusals": 0
+   },
+   {
+    "name": "cronfield",
+    "turns": 3,
+    "tokens": 6562,
+    "gate_refusals": 0
+   },
+   {
+    "name": "csvlite",
+    "turns": 3,
+    "tokens": 7262,
+    "gate_refusals": 0
+   },
+   {
+    "name": "ini",
+    "turns": 3,
+    "tokens": 8001,
+    "gate_refusals": 0
+   },
+   {
+    "name": "intervals",
+    "turns": 3,
+    "tokens": 6281,
+    "gate_refusals": 0
+   },
+   {
+    "name": "levenshtein",
+    "turns": 3,
+    "tokens": 6548,
+    "gate_refusals": 0
+   },
+   {
+    "name": "money",
+    "turns": 3,
+    "tokens": 7991,
+    "gate_refusals": 0
+   }
+  ],
+  "lessons": {
+   "shown": 0,
+   "captured": 0,
+   "wins": 0,
+   "losses": 0,
+   "retired": 0,
+   "store": 0
+  },
+  "tests_changed": "?? tests/__pycache__/",
+  "round_times": [
+   [
+    0,
+    14.3,
+    0
+   ]
+  ],
+  "fix_round_workers": []
+ }
+}

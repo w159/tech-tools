@@ -2523,7 +2523,10 @@ def _apply_back(root: str, rec: dict) -> tuple:
         if Path(wt["path"]).is_dir() and _git(wt["path"], "status", "--porcelain").stdout.strip():
             skipped.append(dict(row, reason="worker worktree has uncommitted changes"))
             continue
-        lead = _tree_snapshot(root)
+        tree = _tree_snapshot(root)
+        # git before 2.45 refuses a bare tree as a merge-tree side, so wrap it in a commit
+        wrapped = _git(root, *_ATLAS_IDENTITY, "commit-tree", tree, "-m", "atlas reap: lead tree") if tree else None
+        lead = wrapped.stdout.strip() if wrapped is not None and wrapped.returncode == 0 else ""
         if not lead:
             skipped.append(dict(row, reason="could not snapshot the lead tree"))
             continue

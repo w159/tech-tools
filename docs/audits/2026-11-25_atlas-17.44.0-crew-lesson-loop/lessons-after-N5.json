@@ -1,0 +1,350 @@
+{
+ "version": 1,
+ "lessons": [
+  {
+   "id": "9eea4bf1e13b",
+   "test": "../../../trap6/house/tests/test_dur.py::test_parse_rejects_bad",
+   "files": [
+    "kit/dur.py"
+   ],
+   "text": "for bad in (\"\", \"1x\", \"1h1m\", \"1m 1h\", \"1h 1h\", \"h\"): | > with pytest.raises(ValueError): -> Failed: DID NOT RAISE ValueError",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "6a87a0d4c4e8",
+   "test": "../../../trap6/house/tests/test_flags.py::test_reject_message",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "with pytest.raises(ValueError) as e: | parse_bool(\"maybe\") | > assert str(e.value) == \"not a boolean: 'maybe'\" -> assert \"not a boolean word: 'maybe'\" == \"not a boolean: 'maybe'\"",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 3,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:34Z",
+   "repeats": 0
+  },
+  {
+   "id": "aef778aca80a",
+   "test": "../../../trap6/house/tests/test_flags.py::test_reject_others",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "for w in (\"\", \"y\", \"n\", \"t\", \"2\"): | > with pytest.raises(ValueError): -> Failed: DID NOT RAISE ValueError",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "cc1b2c18c214",
+   "test": "../../../trap6/house/tests/test_flags.py::test_format",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "> assert format_bool(True) == \"yes\" -> AssertionError: assert 'true' == 'yes'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 0,
+   "losses": 0,
+   "status": "candidate",
+   "last_seen": "2026-11-25T08:27:35Z",
+   "repeats": 4
+  },
+  {
+   "id": "8d1b55004297",
+   "test": "../../../trap6/house/tests/test_money.py::test_format_negative_parens",
+   "files": [
+    "kit/money.py"
+   ],
+   "text": "> assert format_cents(-123450) == \"($1,234.50)\" -> AssertionError: assert '-$1,234.50' == '($1,234.50)'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 2,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:59Z",
+   "repeats": 0
+  },
+  {
+   "id": "83fba3b29069",
+   "test": "../../../trap6/house/tests/test_money.py::test_bool_rejected",
+   "files": [
+    "kit/money.py"
+   ],
+   "text": "with pytest.raises(TypeError): | > to_cents(True) -> decimal.InvalidOperation: [<class 'decimal.ConversionSyntax'>]",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "98265cb4bab5",
+   "test": "../../../trap6/house/tests/test_ranges.py::test_parse_sorted_unique_whitespace",
+   "files": [
+    "kit/ranges.py"
+   ],
+   "text": "> assert parse_ranges(\" 5, 1-3 ,2 \") == [1, 2, 3, 5] -> assert [5, 1, 2, 3, 2] == [1, 2, 3, 5]",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "f93633085bea",
+   "test": "../../../trap6/house/tests/test_ranges.py::test_parse_reversed_raises",
+   "files": [
+    "kit/ranges.py"
+   ],
+   "text": "> with pytest.raises(ValueError): -> Failed: DID NOT RAISE ValueError",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "e35edc6815e5",
+   "test": "../../../trap6/house/tests/test_ranges.py::test_format_pairs_not_ranges",
+   "files": [
+    "kit/ranges.py"
+   ],
+   "text": "> assert format_ranges([1, 2, 4, 5, 6]) == \"1,2,4-6\" -> AssertionError: assert '1-2,4-6' == '1,2,4-6'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "1703b2fd4d3e",
+   "test": "../../../trap6/house/tests/test_ranges.py::test_format_unsorted_dupes",
+   "files": [
+    "kit/ranges.py"
+   ],
+   "text": "> assert format_ranges([5, 3, 4, 3, 9]) == \"3-5,9\" -> AssertionError: assert '5,3-4,3,9' == '3-5,9'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "dce57635e9de",
+   "test": "../../../trap6/house/tests/test_slug.py::test_basic",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "> assert slugify(\"Hello World\") == \"hello_world\" -> AssertionError: assert 'hello-world' == 'hello_world'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "9fdf483e45c6",
+   "test": "../../../trap6/house/tests/test_slug.py::test_punctuation_splits",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "> assert slugify(\"C'est la vie, mon ami!\") == \"c_est_la_vie_mon_ami\" -> AssertionError: assert 'c-est-la-vie-mon-ami' == 'c_est_la_vie_mon_ami'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "9092697e29ab",
+   "test": "../../../trap6/house/tests/test_slug.py::test_digits",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "> assert slugify(\"Release 2.0 notes\") == \"release_2_0_notes\" -> AssertionError: assert 'release-2-0-notes' == 'release_2_0_notes'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "ee7d131020c2",
+   "test": "../../../trap6/house/tests/test_slug.py::test_long_cut_at_word",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "s = slugify(\"the quick brown fox jumps over the lazy dog again\") | > assert s == \"the_quick_brown_fox_jumps_over\" -> AssertionError: assert 'the-quick-br...azy-dog-again' == 'the_quick_br...ox_jumps_over'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "456fcb55d5c9",
+   "test": "../../../trap6/house/tests/test_slug.py::test_single_long_word",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "> assert slugify(\"a\" * 50) == \"a\" * 32 -> AssertionError: assert 'aaaaaaaaaaaa...aaaaaaaaaaaaa' == 'aaaaaaaaaaaa...aaaaaaaaaaaaa'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "d12944f21935",
+   "test": "../../../trap6/house/tests/test_slug.py::test_exactly_32",
+   "files": [
+    "kit/slug.py"
+   ],
+   "text": "t = \"abcdefghij klmnopqrst uvwxyzabcd\" | > assert slugify(t) == \"abcdefghij_klmnopqrst_uvwxyzabcd\" -> AssertionError: assert 'abcdefghij-k...st-uvwxyzabcd' == 'abcdefghij_k...st_uvwxyzabcd'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "e4e5c11fc049",
+   "test": "../../../trap6/house/tests/test_table.py::test_basic",
+   "files": [
+    "kit/table.py"
+   ],
+   "text": "out = render([\"name\", \"qty\"], [[\"apple\", 3], [\"kiwi\", 12]]) | > assert out == ( \"name  | qty\\n\" \"------+----\\n\" \"apple |   3\\n\" \"kiwi  |  12\" ) -> AssertionError: assert 'name   qty\\n... 3\\nkiwi   12' == 'name  | qty\\...\\nkiwi  |  12'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "0a5c285edddc",
+   "test": "../../../trap6/house/tests/test_table.py::test_strings_left",
+   "files": [
+    "kit/table.py"
+   ],
+   "text": "out = render([\"a\", \"b\"], [[\"x\", \"yy\"], [\"zzz\", \"w\"]]) | > assert out == ( \"a   | b\\n\" \"----+---\\n\" \"x   | yy\\n\" \"zzz | w\" ) -> AssertionError: assert 'a    b\\n--- ...   yy\\nzzz  w' == 'a   | b\\n---...| yy\\nzzz | w'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "131f23a5cc60",
+   "test": "../../../trap6/house/tests/test_table.py::test_no_rows",
+   "files": [
+    "kit/table.py"
+   ],
+   "text": "> assert render([\"h1\", \"h2\"], []) == \"h1 | h2\\n---+---\" -> AssertionError: assert 'h1  h2\\n--  --' == 'h1 | h2\\n---+---'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "95cffa4c734a",
+   "test": "../../../trap6/house/tests/test_table.py::test_floats_right",
+   "files": [
+    "kit/table.py"
+   ],
+   "text": "out = render([\"p\"], [[1.5], [10.25]]) | > assert out == \"    p\\n-----\\n  1.5\\n10.25\" -> AssertionError: assert 'p\\n-----\\n1.5\\n10.25' == '    p\\n-----\\n  1.5\\n10.25'",
+   "first_seen": "2026-11-25T08:26:19Z",
+   "shown": 4,
+   "wins": 4,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:19Z",
+   "repeats": 0
+  },
+  {
+   "id": "3cb7ac5c389a",
+   "test": "../../../trap6/house/tests/test_flags.py::test_non_str",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "with pytest.raises(TypeError): | > parse_bool(1) -> ValueError: not a boolean word: 1",
+   "first_seen": "2026-11-25T08:26:34Z",
+   "shown": 3,
+   "wins": 3,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:34Z",
+   "repeats": 0
+  },
+  {
+   "id": "a773d4582929",
+   "test": "../../../trap6/house/tests/test_flags.py::test_true_words",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "for w in (\"true\", \"yes\", \"on\", \"1\", \" TRUE \", \"Yes\"): | > assert parse_bool(w) is True -> ValueError: not a boolean: '1'",
+   "first_seen": "2026-11-25T08:26:59Z",
+   "shown": 2,
+   "wins": 2,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:59Z",
+   "repeats": 0
+  },
+  {
+   "id": "267cc54e2bd0",
+   "test": "../../../trap6/house/tests/test_flags.py::test_false_words",
+   "files": [
+    "kit/flags.py"
+   ],
+   "text": "for w in (\"false\", \"no\", \"off\", \"0\", \"OFF\"): | > assert parse_bool(w) is False -> ValueError: not a boolean: '0'",
+   "first_seen": "2026-11-25T08:26:59Z",
+   "shown": 2,
+   "wins": 2,
+   "losses": 0,
+   "status": "proven",
+   "last_seen": "2026-11-25T08:26:59Z",
+   "repeats": 0
+  }
+ ]
+}

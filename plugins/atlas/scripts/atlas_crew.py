@@ -54,6 +54,7 @@ PLUGIN_ROOT = SCRIPTS.parent
 sys.path.insert(0, str(SCRIPTS))
 import atlas_crew_seal  # noqa: E402
 import atlas_irc  # noqa: E402
+import atlas_lessons  # noqa: E402
 import atlas_provider  # noqa: E402
 import atlas_resolve  # noqa: E402
 
@@ -382,7 +383,8 @@ def _needs_closure(plan: dict, w: dict) -> list:
     return closure
 
 
-def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
+def worker_prompt(plan: dict, w: dict, run_id: str, root: str, lessons: str = "") -> str:
+    """`lessons` is atlas_lessons.prompt_block text: earlier verified check failures for this worker's files."""
     peers = [
         f"- {p['name']} owns {', '.join(p['owns'])}"
         for p in plan["workers"]
@@ -422,7 +424,8 @@ def worker_prompt(plan: dict, w: dict, run_id: str, root: str) -> str:
         + f"## Peers on #{run_id}\n" + ("\n".join(peers) or "(none)") + "\n"
         "A file whose owner has exited (`irc leases`) is yours to take: run `irc claim <path>`, then edit it.\n\n"
         f"## Done when\n{done_when}\n\n"
-        f"## Context\n{ctx}\n"
+        + lessons
+        + f"## Context\n{ctx}\n"
     )
 
 
@@ -1522,10 +1525,16 @@ def cmd_run(a) -> int:
     meta["worker_tiers"] = {
         w["name"]: {"model": worker_model(w, meta), "effort": worker_effort(w, meta)} for w in plan["workers"]
     }
+    shown = {}  # the self-improving loop: lessons from earlier verified check failures (atlas_lessons)
     for w in plan["workers"]:
+        block, ids = atlas_lessons.prompt_block(root, w)
+        if ids:
+            shown[w["name"]] = ids
         (rundir / "prompts" / f"{w['name']}.md").write_text(
-            worker_prompt(plan, w, run_id, root), encoding="utf-8"
+            worker_prompt(plan, w, run_id, root, block), encoding="utf-8"
         )
+    if shown:
+        atlas_lessons.record_shown(rundir, shown)
     if os.environ.get("ATLAS_CREW_PRIORITY", "on") == "off":
         meta["launch"] = [{"name": n, "nice": 0, "slack": None, "delay": 0} for n in nicks]
     else:
@@ -1792,7 +1801,7 @@ def _run_check(cmd, root, timeout=900):
     return code, out
 
 
-SHARD_TAIL_CHARS = 6000  # per failing shard; a passing shard keeps 200 (summarize reads check_tail from the end)
+SHARD_TAIL_CHARS = 24000  # per failing shard (6000 cut the detail of early failures atlas_lessons learns from); a passing shard keeps 200 (summarize reads check_tail from the end)
 _PLAIN_PYTEST = re.compile(r"\bpytest\b")
 _SHELL_OPS = re.compile(r"[|&;<>`$()\n]")
 
@@ -2387,8 +2396,16 @@ def cmd_supervise(a) -> int:
             "t": round(time.time() - meta["started"], 1),
         }
 
+    learned: dict = {}
+
     def publish():
         summary = summarize(rundir, meta, rounds, code, out, stale=stale)
+        if code:
+            atlas_lessons.note_failure(rundir, "global", out)
+        if "v" not in learned:  # score and capture once per run, after the verdict is known
+            learned["v"] = atlas_lessons.learn(rundir, plan, root)
+        if learned["v"] is not None:
+            summary["lessons"] = learned["v"]
         if code == 0 and meta.get("changelog"):
             summary["changelog"] = write_changelog(root, meta["changelog"])
         _write_summary(rundir, summary)
@@ -2427,6 +2444,7 @@ def cmd_supervise(a) -> int:
             break
         if _killed(rundir):
             return finish_killed()
+        atlas_lessons.note_failure(rundir, "global", out)  # this round's failures are lessons for the next run
         routed = route_failures(plan, out, atlas_irc.leases(rundir / "irc"))
         if not routed:
             for w in plan["workers"]:
@@ -2853,6 +2871,9 @@ def lead_view(obj: dict, rundir: Path) -> dict:
     for k in _LEAD_IF_SET:
         if obj.get(k):
             out[k] = obj[k]
+    les = obj.get("lessons")
+    if isinstance(les, dict) and (les.get("captured") or les.get("shown") or les.get("error")):
+        out["lessons"] = {k: v for k, v in les.items() if v and k != "store"}  # counts only: lessons stay in tmux
     out["summary"] = str(rundir / "summary.json")
     return out
 

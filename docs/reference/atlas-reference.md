@@ -371,6 +371,7 @@ so a plugin update no longer leaves the statusline on an old version folder.
 | `ATLAS_NOTE_MAX_BYTES` | largest board note body (default 8192 bytes); a longer `report`, `wrapup` or `kickoff` note keeps its start and closing `exit` line and names the full copy saved under `.atlas/.run/board/reports/`; any other note kind is refused with `body_too_large` |
 | `ATLAS_NOTE_ARCHIVE_BYTES` | size an owner's note file may reach before notes older than 14 days move to `board/archive` (default 2097152 bytes) |
 | `ATLAS_CHECK_INSTALL_PARITY=1` | opt in to the two contract tests that compare the repo with the installed plugin cache (default off, so a suite run never depends on the install) |
+| `ATLAS_CREW_LEARN` | `off` stops the crew's lesson loop (`scripts/atlas_lessons.py`): no capture of failing check output, no lessons in worker prompts, no scoring (default on; store `.atlas/memory/lessons.json`) |
 | `ATLAS_CREW_MAX_BLOCKS` | times a crew worker's Stop is refused (unread messages, failing `irc check`) before it is let go with the failure recorded (default 3; `atlas_crew.py` sets it from the plan's `max_blocks`; read by `hooks/crew_worker.py`) |
 | `ATLAS_PROMPT_JUDGE_TIMEOUT` | seconds the prompt-judge subprocess (`atlas_prompt_judge.py`) may run (default 120; a non-integer value falls back to 120) |
 | `ATLAS_SECURITY_REFRESH_HOURS` | hours before the cached security alerts are stale and a detached background refresh runs (default 12; needs `gh` on PATH; a non-number falls back to 12; `atlas_security.py`) |
@@ -513,7 +514,7 @@ messages to a worker), and `validate-readonly-query.sh` (helper).
 
 ## Scripts
 
-Source: `plugins/atlas/scripts/`: 92 non-test Python scripts (counted as `*.py`
+Source: `plugins/atlas/scripts/`: 93 non-test Python scripts (counted as `*.py`
 excluding `test_*.py` and the `_test_isolation.py` helper); unit tests sit beside
 them. The table lists the main entry points, not every module.
 
@@ -996,7 +997,7 @@ tech-tools/
 |  |  |- skills/             # 27 skills
 |  |  |- agents/             # 11 agents
 |  |  |- hooks/              # 20 hook programs / 26 bindings (19 in hooks/; atlas_doctor.py, the 20th, is in scripts/), incl. event_dispatch.py, helpers, hooks.json, tests
-|  |  |- scripts/            # 92 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
+|  |  |- scripts/            # 93 non-test Python scripts + tests; dashboard_ui/ holds the Workboard v2 static assets
 |  |  |- contracts/          # shared JSON contracts (Python hooks + omp modules)
 |  |  |- omp/                # omp extension package incl. generated agents/
 |  |  |- output-styles/      # atlas-orchestrator

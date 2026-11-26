@@ -415,6 +415,9 @@ class LaunchWindow(unittest.TestCase):
     def _launch(self, env, opener_rc=0, has_session=1, wins=""):
         a = mock.Mock(project="/p", all=False, fixture=None)
         calls, out = [], io.StringIO()
+        # launch() lazily imports atlas_mux; a first import under the faked darwin platform below pulls
+        # urllib.request -> _scproxy (macOS only) and fails, so import it for real first.
+        import atlas_mux  # noqa: F401
 
         def fake(cmd, **kw):
             calls.append(list(cmd))

@@ -1,5 +1,11 @@
 # Changelog
 
+## atlas 17.44.0 -- crews learn from their own verified check failures
+
+- Added, atlas crew lesson loop (`scripts/atlas_lessons.py`): failures a check printed become lessons, the next run's matching workers see them, and the checks score each one. Runs with lessons used 74% fewer worker tokens on the benchmark fixture (n=8 against n=6, no overlap, 8 of 8 green against 2 of 6). Off with `ATLAS_CREW_LEARN=off`. Audit: `docs/audits/2026-11-25_atlas-17.44.0-crew-lesson-loop.md`.
+- Changed, atlas crew: a failing check shard keeps 24,000 chars of output (was 6,000).
+- Fixed, atlas `reap`: worktree merge-back works on git before 2.45 (the lead snapshot is a commit, not a bare tree), so a clean merge is no longer reported as a conflict (`scripts/atlas_mux.py`).
+
 ## atlas 17.43.1 -- the band and side panel are back to 17.42.0
 - Reverted, atlas mod: the 17.43.0 band and side-panel redesign is rolled back to the 17.42.0 mod (TODO rows, subagent and worker lanes, gates tab, phase and gate headers). The bored tab goes with it. The Stop-gate fixes from 17.43.0 stay (`hooks/completion_gate_core.py`, `scripts/atlas_mux.py`).
 

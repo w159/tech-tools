@@ -973,6 +973,12 @@ def _run_unit_check(d, nick: str, quiet: bool = False, capture: list | None = No
             f"unverified {nick}: `{cmd}` exited {code}",
             kind="unverified",
         )
+        try:  # a verified failure is what the crew learns from (atlas_lessons); never fails the check itself
+            import atlas_lessons
+
+            atlas_lessons.note_failure(Path(d).parent, nick, out)
+        except Exception:
+            pass
     return code
 
 

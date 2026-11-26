@@ -369,6 +369,17 @@ tmux attach -t atlas-<run>          # watch: one window per worker, plus the cha
 - Workers are lean: their own session id, no MCP servers, project settings
   only, tools `Bash,Edit`, a short system prompt. The lead's context gets one
   JSON summary (tokens, cost, wall time, gate refusals, channel counts).
+- Crews learn from their own failures (17.44.0, `scripts/atlas_lessons.py`).
+  A failure that a check printed (worker `irc check` or the global check) is
+  parsed into a lesson with no model call; the next run's workers whose files
+  or tests match get those lessons in their prompt (untrusted notes, at most
+  1,600 chars, nothing when none match), and the checks score each one after
+  the verdict. The lead sees only counts. Store:
+  `.atlas/memory/lessons.json`; `atlas_lessons.py list|forget`; off with
+  `ATLAS_CREW_LEARN=off`. On a fixture with hidden convention tests, runs with
+  lessons used 74% fewer worker tokens (n=8, all green) than runs without (n=6,
+  2 green), with no overlap. One fixture, one model: see
+  [2026-11-25_atlas-17.44.0-crew-lesson-loop.md](../../docs/audits/2026-11-25_atlas-17.44.0-crew-lesson-loop.md).
 
 Latest measured figures (Atlas 17.21.0, n=3 per cell, claude-sonnet-5-5 at effort medium on the same
 harness, 4 CPUs, spec-driven module fixtures with 434 and 869 tests, every run green). Percentages are of

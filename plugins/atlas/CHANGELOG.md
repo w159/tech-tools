@@ -1,5 +1,12 @@
 # Changelog
 
+## 17.44.0 - 2026-11-26
+
+- Added, crew self-improving loop (`scripts/atlas_lessons.py`, wired into `scripts/atlas_crew.py` and `scripts/atlas_irc.py`): a crew now learns from its own verified check failures across runs. Only pytest failures that a check printed are captured (parsed with no model call, secrets redacted) into `<root>/.atlas/memory/lessons.json`; the next run's worker prompts get the lessons that match their files or tests, fenced as untrusted notes, at most 1,600 chars, and nothing when none match; after the verdict the checks score each shown lesson (win, repeat, loss; retired after 2 losses or when its test file is gone). The lead sees counts only. `ATLAS_CREW_LEARN=off` turns it off; `atlas_lessons.py list|forget`. Measured on a fixture with hidden convention tests (claude-sonnet-5-5, medium): runs with lessons used 74% fewer worker tokens (mean 136,181, n=8, all green) than runs without (mean 524,828, n=6, 2 green), with no overlap; a first-try-green fixture gained 0 bytes. Audit: `docs/audits/2026-11-25_atlas-17.44.0-crew-lesson-loop.md`. Tests: `scripts/test_atlas_lessons.py` (15).
+- Changed, crew global check: a failing shard keeps the last 24,000 chars of output (was 6,000, which cut the detail of the first failures).
+- Fixed, `atlas_mux reap` worktree merge-back (`scripts/atlas_mux.py`): the lead tree snapshot is wrapped in a commit before `git merge-tree --write-tree`, which refuses a bare tree on git before 2.45 ("expected commit type"); before, every merge-back on such git was reported as a conflict with no files. Tests: `test_atlas_mux_worktree_hygiene.py` (2 failed before, pass now).
+- Fixed, test isolation (`scripts/test_atlas_tui.py`): the launch tests import `atlas_mux` before faking the darwin platform, so the omp hint test no longer fails under `scripts/gate.sh` (the lazy import pulled the macOS-only `_scproxy`).
+
 ## 17.43.1 - 2026-11-25
 - Reverted, `mod/`, `omp/` panel files, `contracts/panel-golden.ts`, `types/index.d.ts`: restored to 17.42.0; the band slim-down removed TODO rows, subagent lanes and the gates tab. Hook fixes from 17.43.0 kept.
 
